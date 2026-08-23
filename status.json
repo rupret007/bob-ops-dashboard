@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-08-22T21:01:45.692523-05:00",
-  "generated_at_display": "Sat Aug 22, 2026 \u00b7 9:01 PM CDT",
+  "generated_at": "2026-08-22T21:05:31.777183-05:00",
+  "generated_at_display": "Sat Aug 22, 2026 \u00b7 9:05 PM CDT",
   "timezone": "America/Chicago",
   "owner": "rupret007",
   "dashboard": "bob-ops-dashboard",
@@ -339,7 +339,7 @@
           "name": "Codex",
           "status": "green",
           "chip": "Running",
-          "notes": "AdoptIQ PID 26928 \u00b7 gpt-5.6-sol goals \u00b7 codex-local :3210 ready \u00b7 checked 2026-08-22T20:45:00-05:00",
+          "notes": "PID 26928 \u00b7 codex exec \u00b7 codex-local :3210 ready \u00b7 checked 2026-08-22T21:04:55-05:00",
           "agent_id": "codex",
           "agent_state": "running"
         },
@@ -347,7 +347,7 @@
           "name": "Cursor",
           "status": "green",
           "chip": "Running",
-          "notes": "Cursor.app present and running \u00b7 checked 2026-08-22T20:45:00-05:00",
+          "notes": "Cursor.app running \u00b7 checked 2026-08-22T21:04:55-05:00",
           "agent_id": "cursor",
           "agent_state": "running"
         },
@@ -355,7 +355,7 @@
           "name": "Claude",
           "status": "parked",
           "chip": "Installed",
-          "notes": "Claude.app + claude 2.1.216 installed \u00b7 checked 2026-08-22T20:45:00-05:00",
+          "notes": "Claude.app + 2.1.216 (Claude Code) \u00b7 checked 2026-08-22T21:04:55-05:00",
           "agent_id": "claude",
           "agent_state": "installed"
         },
@@ -389,22 +389,22 @@
       "id": "codex",
       "name": "Codex",
       "state": "running",
-      "detail": "AdoptIQ PID 26928 \u00b7 gpt-5.6-sol goals \u00b7 codex-local :3210 ready",
-      "checked_at": "2026-08-22T20:45:00-05:00"
+      "detail": "PID 26928 \u00b7 codex exec \u00b7 codex-local :3210 ready",
+      "checked_at": "2026-08-22T21:04:55-05:00"
     },
     {
       "id": "cursor",
       "name": "Cursor",
       "state": "running",
-      "detail": "Cursor.app present and running",
-      "checked_at": "2026-08-22T20:45:00-05:00"
+      "detail": "Cursor.app running",
+      "checked_at": "2026-08-22T21:04:55-05:00"
     },
     {
       "id": "claude",
       "name": "Claude",
       "state": "installed",
-      "detail": "Claude.app + claude 2.1.216 installed",
-      "checked_at": "2026-08-22T20:45:00-05:00"
+      "detail": "Claude.app + 2.1.216 (Claude Code)",
+      "checked_at": "2026-08-22T21:04:55-05:00"
     }
   ],
   "agents_source": "file:/workspace/bob-ops-dashboard/agents-status.json",
