@@ -108,7 +108,17 @@ from zoneinfo import ZoneInfo
 
 root = Path(sys.argv[1])
 sys.path.insert(0, str(root))
-from board_meta import CONTROL_ACTIONS, drop_leftover_verify, merge_first_class, visible_chip
+from board_meta import (
+    CONTROL_ACTIONS,
+    attention_rank,
+    compact_signal,
+    drop_leftover_verify,
+    is_quiet_lane,
+    merge_first_class,
+    presentation,
+    short_note,
+    visible_chip,
+)
 refresh_started_ms = int(os.environ.get("REFRESH_STARTED_MS") or 0) or int(time.time() * 1000)
 fetched = json.loads(Path(sys.argv[2]).read_text())
 by = {x.get("name") or x.get("full_name","").split("/")[-1]: x for x in fetched}
@@ -428,7 +438,130 @@ for sec in status["sections"]:
         sec["title"] = "Active agents NOW"
         break
 
-# HTML render (same dark mobile layout)
+# Decisions inbox (needed before first paint -- Jeff should see pending immediately)
+prev = prev_early if isinstance(prev_early, dict) else {}
+if drop_leftover_verify(prev):
+    print("ignored previous verify challenge (public board, no OTP)")
+if drop_leftover_verify(status):
+    print("drop leftover verify: public board has no OTP gate")
+
+decisions = []
+if isinstance(prev.get("decisions"), list):
+    decisions = [d for d in prev["decisions"] if isinstance(d, dict)]
+
+resolved = set()
+for d in decisions:
+    if d.get("id") and d.get("decision") in ("approve", "deny"):
+        resolved.add(str(d["id"]).lower())
+
+try:
+    raw = subprocess.check_output(
+        [
+            "gh", "issue", "list", "-R", "rupret007/bob-ops-dashboard",
+            "--state", "open", "--limit", "40",
+            "--json", "number,title,author,createdAt,url",
+        ],
+        text=True,
+        stderr=subprocess.DEVNULL,
+    )
+    issues = json.loads(raw or "[]")
+except Exception:
+    issues = []
+
+for iss in issues:
+    title = (iss.get("title") or "").strip()
+    author = ((iss.get("author") or {}).get("login") or "").lower()
+    if author != "rupret007":
+        continue
+    m = re.match(r"^BOB-(APPROVE|DENY|HOLD):\s*([a-z0-9._-]+)\s*$", title, re.I)
+    if not m:
+        continue
+    verb = m.group(1).lower()
+    pid = m.group(2).lower()
+    decision = "approve" if verb == "approve" else ("deny" if verb == "deny" else "hold")
+    entry = {
+        "id": pid,
+        "decision": decision,
+        "issue": iss.get("number"),
+        "url": iss.get("url"),
+        "at": iss.get("createdAt"),
+        "author": author,
+    }
+    decisions = [d for d in decisions if str(d.get("id", "")).lower() != pid]
+    decisions.append(entry)
+    if decision in ("approve", "deny"):
+        resolved.add(pid)
+    try:
+        subprocess.check_call(
+            [
+                "gh", "issue", "close", str(iss["number"]),
+                "-R", "rupret007/bob-ops-dashboard",
+                "--comment", f"Recorded as {decision} for Bob.",
+            ],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+    except Exception:
+        pass
+
+standing = [
+    {
+        "id": "webjam-exploratory",
+        "title": "WebJam tip exploratory click-through",
+        "kind": "jeff-gate",
+        "detail": "You walk the installed tip; Bob keeps the checklist ready.",
+        "risk": "low",
+    },
+    {
+        "id": "dashboard-refresh",
+        "title": "Force dashboard refresh + push",
+        "kind": "ops",
+        "detail": "Safe. Rebuilds status from live gh and pushes Pages.",
+        "risk": "low",
+    },
+    {
+        "id": "adoptiq-cloud-relaunch",
+        "title": "Relaunch AdoptIQ Cloud Agent",
+        "kind": "cloud-agent",
+        "detail": "Needs Cursor on-demand on. Stays inside $10 hard ceiling.",
+        "risk": "medium",
+    },
+    {
+        "id": "codex-goal-launch",
+        "title": "Launch next Codex goal on Mac",
+        "kind": "codex-launch",
+        "detail": "High risk. Bob still shows the exact goal before acting.",
+        "risk": "high",
+    },
+    {
+        "id": "text-send",
+        "title": "Send a drafted text via Andrea",
+        "kind": "text-send",
+        "detail": "High risk. Never auto-send. Draft must already exist.",
+        "risk": "high",
+    },
+]
+
+pending_out = [s for s in standing if s["id"] not in resolved]
+if isinstance(prev.get("pending"), list):
+    for item in prev["pending"]:
+        if not isinstance(item, dict):
+            continue
+        iid = str(item.get("id") or "").lower()
+        if not iid or iid in resolved or any(s["id"] == iid for s in pending_out):
+            continue
+        pending_out.append(item)
+
+status["pending"] = pending_out
+status["decisions"] = decisions[-40:]
+status["control"] = {
+    "mode": "github-issue-inbox",
+    "jeff_github": "rupret007",
+    "prefixes": ["BOB-APPROVE:", "BOB-DENY:", "BOB-HOLD:"],
+    "note": "Public board. Real authority is a GitHub issue from rupret007.",
+}
+
+# HTML render -- pulse strip + compact lanes (status-page feel, not a card wall)
 CHIP_COLORS = {
   "green": ("#16a34a", "#052e16", "#bbf7d0"),
   "yellow": ("#ca8a04", "#422006", "#fef08a"),
@@ -463,27 +596,84 @@ def control_btn(p):
     if act not in CONTROL_ACTIONS:
         return ""
     label = h(p.get("action_label") or p.get("name") or "Do")
-    return f'<div class="ctrl"><button type="button" data-action="{h(act)}">{label}</button></div>'
+    return f'<button type="button" data-action="{h(act)}">{label}</button>'
 
 def chip_html(st, label):
     border, bg, fg = CHIP_COLORS.get(st, CHIP_COLORS["parked"])
     return f'<span class="chip" style="--c:{border};--bg:{bg};--fg:{fg}">{h(label)}</span>'
 
-def ci_badge(ci):
-    if not ci:
+def pending_item_html(it):
+    if not isinstance(it, dict):
         return ""
-    concl = ci.get("conclusion") or "unknown"
-    color = {"success":"#16a34a","failure":"#dc2626","cancelled":"#64748b"}.get(concl, "#ca8a04")
-    return f'<span class="ci" style="color:{color}">&#9679; {h(ci.get("name","CI"))}: {h(concl)}</span>'
+    pid = str(it.get("id") or "")
+    if not re.match(r"^[a-zA-Z0-9._-]+$", pid):
+        return ""
+    title = it.get("title") or pid
+    risk = str(it.get("risk") or "low").lower()
+    if risk not in ("high", "medium", "low"):
+        risk = "low"
+    kind = str(it.get("kind") or "ops")
+    detail = short_note(it.get("detail") or "", 72)
+    return (
+        f'<div class="pending-item" data-id="{h(pid)}" data-title="{h(title)}">'
+        f'<div class="ptitle">{h(title)}</div>'
+        f'<div class="pdetail">{h(detail)}</div>'
+        f'<div class="prow">'
+        f'<span class="prisk {h(risk)}">{h(risk)} &#183; {h(kind)}</span>'
+        f'<button type="button" data-dec="APPROVE">Approve</button>'
+        f'<button type="button" class="warn" data-dec="HOLD">Hold</button>'
+        f'<button type="button" class="danger" data-dec="DENY">Deny</button>'
+        f'</div></div>'
+    )
 
-def pending_shell():
-    return '''<div id="pending-box" class="pending-box">
-        <h3>Pending decisions</h3>
-        <p class="pending-help">Approve / Hold / Deny opens a GitHub issue. Submit while logged in as <code>rupret007</code> -- that login is the real yes.</p>
-        <div id="pending-list"></div>
-      </div>'''
+def pending_shell(items):
+    rows = [pending_item_html(it) for it in (items or [])]
+    rows = [r for r in rows if r]
+    hidden = "" if rows else " hidden"
+    return (
+        f'<div id="pending-box" class="pending-box"{hidden}>'
+        f'<p class="pending-help">Public board -- Approve opens a GitHub issue. Submit while logged in as <code>rupret007</code> -- that login is the real yes.</p>'
+        f'<div id="pending-list">{"".join(rows)}</div></div>'
+    )
+
+def tools_row(projects):
+    btns = []
+    for p in projects or []:
+        if not isinstance(p, dict):
+            continue
+        html_btn = control_btn(p)
+        if html_btn:
+            btns.append(html_btn)
+    if not btns:
+        return ""
+    return '<div class="tools">' + "".join(btns) + "</div>"
+
+def lane_html(p):
+    chip_label = visible_chip(p)
+    chip = chip_html(p.get("status") or "parked", chip_label) if chip_label else ""
+    title = h(p.get("name") or "project")
+    url = safe_href(p.get("url"))
+    title_html = f'<a href="{h(url)}" target="_blank" rel="noopener">{title}</a>' if url else title
+    signal = compact_signal(p)
+    signal_html = f'<span class="signal">{h(signal)}</span>' if signal else ""
+    note = short_note(p.get("notes") or "", 88)
+    notes_html = f'<p class="notes">{h(note)}</p>' if note else ""
+    quiet = " is-quiet" if is_quiet_lane(p) else ""
+    return (
+        f'<article class="lane{quiet}">'
+        f'<h3>{title_html}</h3>'
+        f'<div class="lane-end">{chip}{signal_html}</div>'
+        f'{notes_html}</article>'
+    )
+
+def lanes_html(projects, *, sort_attention=False):
+    rows = [p for p in (projects or []) if isinstance(p, dict)]
+    if sort_attention:
+        rows = sorted(rows, key=attention_rank)
+    return '<div class="lanes">' + "".join(lane_html(p) for p in rows) + "</div>"
 
 sections_html = []
+control_projects = []
 
 def agents_strip_html(agents_list):
     pills = []
@@ -494,84 +684,63 @@ def agents_strip_html(agents_list):
         detail = h(a.get("detail") or "")
         aid = h(a.get("id") or a.get("name") or "agent")
         pills.append(
-            f'<div class="agent-pill" data-agent-id="{aid}">'
-            f'<div class="top"><span class="name">{name}</span>{chip}</div>'
-            f'<div class="detail" title="{detail}">{detail}</div></div>'
+            f'<div class="agent-pill" data-agent-id="{aid}" title="{detail}">'
+            f'<span class="name">{name}</span>{chip}</div>'
         )
     return (
         '<div class="agents-strip" id="agents-strip">'
-        '<span class="agents-label">Live</span>'
         + "".join(pills)
         + "</div>"
     )
 
 for sec in status["sections"]:
-    cards = []
-    for p in sec["projects"]:
-        # Agents strip already shows Codex/Cursor/Claude -- skip duplicate cards.
-        if sec.get("id") == "active-agents" and p.get("agent_id"):
-            continue
-        chip_label = visible_chip(p)
-        chip = chip_html(p.get("status") or "parked", chip_label) if chip_label else ""
-        title = h(p.get("name") or "project")
-        url = safe_href(p.get("url"))
-        title_html = f'<a href="{h(url)}" target="_blank" rel="noopener">{title}</a>' if url else title
-        bits = []
-        if p.get("tip_sha"):
-            bits.append(f'<code>{h(p["tip_sha"])}</code>')
-        if p.get("product_sha"):
-            bits.append(f'product <code>{h(p["product_sha"])}</code>')
-        if p.get("release"):
-            bits.append(f'release <strong>{h(p["release"])}</strong>')
-        if p.get("open_prs") is not None:
-            try:
-                n = int(p["open_prs"])
-            except (TypeError, ValueError):
-                n = None
-            if n is not None:
-                bits.append(f"{n} open PR" + ("s" if n != 1 else ""))
-        if p.get("private"):
-            bits.append("private")
-        if p.get("accessible") is False and p.get("repo"):
-            bits.append("inaccessible")
-        meta = " · ".join(bits)
-        ci = ci_badge(p.get("ci"))
-        rows = ""
-        if meta:
-            rows += f'<div class="row">{meta}</div>'
-        if ci:
-            rows += f'<div class="row">{ci}</div>'
-        cards.append(f'''
-        <article class="card">
-          <header><h3>{title_html}</h3>{chip}</header>
-          {rows}
-          <p class="notes">{h(p.get("notes",""))}</p>
-          {control_btn(p)}
-        </article>''')
-    strip = ""
-    if sec.get("id") == "active-agents":
-        strip = agents_strip_html(status.get("agents"))
-    sid = h(sec.get("id") or "")
-    grid = f'<div class="grid">{"".join(cards)}</div>'
-    if sec.get("id") == "controls":
-        body = pending_shell() + grid
+    sid_raw = str(sec.get("id") or "")
+    kind = presentation(sid_raw)
+    if kind == "pulse":
+        continue
+    if sid_raw == "controls":
+        control_projects = list(sec.get("projects") or [])
+        items = status.get("pending") or []
+        hidden_sec = "" if items else " hidden"
         heading = f'<h2>{h(sec.get("title") or "Decisions")}</h2>'
-    elif sec.get("id") == "features":
-        heading = ""
+        body = pending_shell(items)
+        sections_html.append(
+            f'<section id="{h(sid_raw)}" class="block pending"{hidden_sec}>'
+            f'{heading}{body}</section>'
+        )
+        continue
+    projects = [p for p in (sec.get("projects") or []) if isinstance(p, dict)]
+    if sid_raw == "features":
         body = (
             '<details class="how-board"><summary>How this board works</summary>'
             '<p class="pending-help">Engineer notes -- not the daily ops list.</p>'
-            + grid
+            '<p class="pending-help">Public board -- Approve opens a GitHub issue; submit while logged in as <code>rupret007</code>.</p>'
+            + tools_row(control_projects)
+            + lanes_html(projects)
             + "</details>"
         )
-    else:
-        heading = f'<h2>{h(sec.get("title") or "")}</h2>'
-        body = strip + grid
-    sections_html.append(f'''
-    <section id="{sid}" class="block">
-      {heading}
-      {body}
-    </section>''')
+        sections_html.append(
+            f'<section id="{h(sid_raw)}" class="block foot">{body}</section>'
+        )
+        continue
+    if sid_raw == "abilities":
+        body = (
+            '<details class="abilities-foot"><summary>What Bob can do</summary>'
+            '<p class="pending-help">Texts / food after Jeff yes. No send button. Honest: there is no order button on this board.</p>'
+            + lanes_html(projects)
+            + "</details>"
+        )
+        sections_html.append(
+            f'<section id="{h(sid_raw)}" class="block foot">{body}</section>'
+        )
+        continue
+    heading = f'<h2>{h(sec.get("title") or "")}</h2>'
+    sort_attn = kind == "primary"
+    body = lanes_html(projects, sort_attention=sort_attn)
+    cls = "primary" if kind == "primary" else "secondary"
+    sections_html.append(
+        f'<section id="{h(sid_raw)}" class="block {cls}">{heading}{body}</section>'
+    )
 
 
 html = f'''<!DOCTYPE html>
@@ -583,165 +752,138 @@ html = f'''<!DOCTYPE html>
 <title>Bob Ops Dashboard -- Jeff Story</title>
 <style>
   :root {{
-    --bg:#0a0a0a; --panel:#141414; --panel2:#1c1c1c; --text:#f5f5f5; --muted:#a3a3a3;
-    --border:#2a2a2a; --accent:#d97757; --link:#e8a080; --orange:#d97757;
-    --orange-dim:#2a1510; --ok:#16a34a; --warn:#ca8a04;
+    --bg:#0a0a0a; --panel:#141414; --panel2:#1c1c1c; --text:#f5f5f5; --muted:#8a8a8a;
+    --border:#262626; --accent:#d97757; --link:#e8a080; --orange:#d97757;
+    --orange-dim:#2a1510; --ok:#16a34a; --warn:#ca8a04; --hair:rgba(255,255,255,.07);
   }}
   * {{ box-sizing:border-box; }}
   html,body {{ margin:0; padding:0; background:var(--bg); color:var(--text);
-    font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif; line-height:1.45; }}
+    font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;
+    font-size:16px; line-height:1.4; }}
   a {{ color:var(--link); text-decoration:none; }} a:hover {{ text-decoration:underline; }}
-  .wrap {{ max-width:1100px; margin:0 auto; padding:1.35rem 1.1rem 4rem; }}
-  header.hero {{
-    background:linear-gradient(145deg,#0a0a0a 0%,#141414 50%,#1a120e 100%);
-    border:1px solid var(--border); border-radius:16px; padding:1.35rem 1.4rem 1.5rem; margin-bottom:1.75rem;
-    box-shadow:0 0 0 1px rgba(217,119,87,.12), 0 12px 40px rgba(0,0,0,.45);
+  .wrap {{ max-width:40rem; margin:0 auto; padding:1rem 1rem 3.25rem; }}
+  header.pulse {{ padding:0 0 1rem; margin:0 0 1.35rem; border:0; background:transparent; }}
+  header.pulse h1 {{ margin:0; font-size:1.05rem; font-weight:700; letter-spacing:-.01em; }}
+  header.pulse h1 .mark {{ color:var(--orange); }}
+  .pulse-row {{ display:flex; flex-direction:column; gap:.55rem; margin-top:.7rem; }}
+  .chip {{ display:inline-flex; align-items:center; color:var(--c);
+    background:transparent; border:0; padding:0; font-size:.68rem; font-weight:700;
+    text-transform:uppercase; letter-spacing:.04em; white-space:nowrap; }}
+  section.block {{ margin:0 0 1.75rem; padding:0; border:0; }}
+  section.block[hidden] {{ display:none !important; }}
+  section.block.pending {{ margin-bottom:2rem; }}
+  section.block.primary {{ margin-bottom:2.1rem; }}
+  section.block.secondary {{ margin-bottom:1.35rem; }}
+  section.block.foot {{ margin:2rem 0 0; }}
+  section.pending h2, section.primary h2 {{
+    margin:0 0 .65rem; padding:0; border:0;
+    font-size:1.7rem; font-weight:800; letter-spacing:-.03em; line-height:1.1; color:#fff;
   }}
-  header.hero h1 {{ margin:0 0 .5rem; font-size:clamp(1.45rem,4vw,1.9rem); }}
-  header.hero h1 .mark {{ color:var(--orange); }}
-  .sub {{ color:var(--muted); font-size:.95rem; }}
-  .board-note {{ margin:1rem 0 0; color:var(--muted); font-size:.9rem; line-height:1.5; }}
-  .legend {{ display:flex; flex-wrap:wrap; gap:.65rem; margin-top:1.15rem; }}
-  .chip {{ display:inline-flex; align-items:center; gap:.35rem; border:1px solid var(--c);
-    background:var(--bg); color:var(--fg); border-radius:999px; padding:.2rem .65rem;
-    font-size:.72rem; font-weight:700; text-transform:uppercase; white-space:nowrap; }}
-  .chip::before {{ content:""; width:.45rem; height:.45rem; border-radius:50%; background:var(--c); }}
-  nav.toc {{ display:flex; flex-wrap:wrap; gap:.65rem; margin:0 0 2rem; }}
-  nav.toc a {{ background:var(--panel); border:1px solid var(--border); color:var(--text);
-    padding:.5rem .8rem; border-radius:999px; font-size:.82rem; }}
-  nav.toc a:hover {{ border-color:var(--orange); color:var(--orange); }}
-  section.block {{ margin:0 0 3.5rem; padding-top:2.1rem; border-top:1px solid var(--border); }}
-  section.block:first-child {{ border-top:0; padding-top:0; }}
-  section h2 {{ margin:0 0 1.15rem; font-size:1.28rem; border-left:3px solid var(--accent);
-    padding:.15rem 0 .15rem .7rem; letter-spacing:.01em; }}
-  .grid {{ display:grid; grid-template-columns:1fr; gap:1.25rem; }}
-  .card {{ background:var(--panel); border:1px solid var(--border); border-radius:14px;
-    padding:1.15rem 1.2rem; display:flex; flex-direction:column; gap:.5rem; }}
-  .card:hover {{ border-color:#3f3f3f; }}
-  .card header {{ display:flex; justify-content:space-between; align-items:flex-start; gap:.65rem; }}
-  .card h3 {{ margin:0; font-size:1.05rem; }}
-  .row {{ color:var(--muted); font-size:.8rem; }}
-  .notes {{ margin:.15rem 0 0; color:#e5e5e5; font-size:.9rem; line-height:1.45; }}
+  section.secondary h2 {{
+    margin:0 0 .35rem; padding:0; border:0;
+    font-size:.7rem; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:var(--muted);
+  }}
+  .lanes {{ display:flex; flex-direction:column; }}
+  .lane {{
+    display:grid; grid-template-columns:minmax(0,1fr) auto; column-gap:.75rem; row-gap:.15rem;
+    padding:.72rem 0; border:0; border-bottom:1px solid var(--hair); background:transparent; border-radius:0;
+  }}
+  .lane:last-child {{ border-bottom:0; }}
+  .lane h3 {{ margin:0; font-size:.95rem; font-weight:600; letter-spacing:-.01em; }}
+  .lane-end {{ display:flex; align-items:center; gap:.45rem; justify-self:end; }}
+  .lane .signal {{ color:var(--muted); font-size:.75rem; font-variant-numeric:tabular-nums; }}
+  .lane .notes {{
+    grid-column:1 / -1; margin:0; color:var(--muted); font-size:.78rem; line-height:1.35;
+    display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:1; overflow:hidden;
+  }}
+  .lane.is-quiet .notes {{ display:none; }}
   code {{ background:var(--panel2); padding:.05rem .35rem; border-radius:6px; font-size:.78rem; }}
-  .ci {{ font-weight:600; font-size:.8rem; }}
-  footer {{ margin-top:1rem; padding-top:1.5rem; border-top:1px solid var(--border); color:var(--muted); font-size:.82rem; }}
-  .banner {{ background:var(--orange-dim); border:1px solid rgba(217,119,87,.45); color:#f5c4b3;
-    border-radius:12px; padding:.9rem 1.1rem; margin-bottom:1.5rem; font-size:.88rem; }}
-  .status {{
-    font-size:.82rem; min-height:1.25em; margin-top:.55rem;
-    color:var(--muted); letter-spacing:.01em;
-  }}
+  footer {{ margin-top:1.25rem; padding-top:1rem; border-top:1px solid var(--hair); color:var(--muted); font-size:.75rem; }}
+  .status {{ font-size:.78rem; min-height:1.1em; margin-top:.4rem; color:var(--muted); }}
   .status.ok {{ color:var(--ok); }}
   .status.bad {{ color:#f87171; }}
   .status.warn {{ color:var(--warn); }}
   .status.hint {{ color:var(--muted); }}
-  .pending-box {{ margin:0 0 1.5rem; }}
+  .pending-box {{ margin:0; }}
   .pending-box[hidden] {{ display:none !important; }}
-  .pending-box h3 {{ margin:0 0 .45rem; font-size:1.02rem; color:var(--orange); }}
-  .pending-help {{ margin:0 0 .85rem; color:var(--muted); font-size:.86rem; line-height:1.45; }}
+  .pending-help {{ margin:0 0 .7rem; color:var(--muted); font-size:.8rem; line-height:1.4; }}
   .pending-item {{
-    border:1px solid var(--border); border-radius:12px; padding:.9rem 1rem; margin:.85rem 0;
-    background:#0d0d0d;
+    border:0; border-left:3px solid var(--orange); border-radius:0 10px 10px 0;
+    padding:.75rem .85rem; margin:0 0 .7rem; background:#141010;
   }}
-  .pending-item .ptitle {{ font-weight:600; margin:0 0 .2rem; }}
-  .pending-item .pdetail {{ color:var(--muted); font-size:.8rem; margin:0 0 .5rem; }}
+  .pending-item .ptitle {{ font-weight:700; font-size:1rem; margin:0 0 .15rem; }}
+  .pending-item .pdetail {{ color:var(--muted); font-size:.78rem; margin:0 0 .5rem;
+    display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:1; overflow:hidden; }}
   .pending-item .prisk {{
-    display:inline-block; font-size:.7rem; text-transform:uppercase; letter-spacing:.04em;
-    border:1px solid var(--border); border-radius:999px; padding:.1rem .45rem; margin-right:.35rem;
+    display:inline-block; font-size:.65rem; text-transform:uppercase; letter-spacing:.04em;
+    color:var(--muted); padding:.1rem 0; margin-right:.15rem;
   }}
-  .pending-item .prisk.high {{ border-color:#dc2626; color:#fca5a5; }}
-  .pending-item .prisk.medium {{ border-color:#ca8a04; color:#fde68a; }}
-  .pending-item .prisk.low {{ border-color:#16a34a; color:#86efac; }}
-  .pending-item .prow {{ display:flex; flex-wrap:wrap; gap:.55rem; }}
-  .pending-item button {{
-    background:#1c1c1c; color:var(--text); border:1px solid var(--border);
-    border-radius:8px; padding:.5rem .8rem; font-size:.82rem; cursor:pointer;
+  .pending-item .prisk.high {{ color:#fca5a5; }}
+  .pending-item .prisk.medium {{ color:#fde68a; }}
+  .pending-item .prisk.low {{ color:#86efac; }}
+  .pending-item .prow {{ display:flex; flex-wrap:wrap; gap:.45rem; align-items:center; }}
+  .pending-item button, .tools button {{
+    background:transparent; color:var(--text); border:1px solid var(--border);
+    border-radius:8px; padding:.45rem .7rem; font-size:.8rem; cursor:pointer;
     min-height:44px; touch-action:manipulation;
   }}
-  .pending-item button:hover {{ border-color:var(--orange); color:var(--orange); }}
+  .pending-item button:hover, .tools button:hover {{ border-color:var(--orange); color:var(--orange); }}
   .pending-item button.warn {{ border-color:#ca8a04; }}
   .pending-item button.danger {{ border-color:#dc2626; color:#fecaca; }}
-  .live-stamp {{ display:flex; flex-wrap:wrap; align-items:center; gap:.45rem; margin-top:.55rem; }}
-  .live-dot {{ width:.55rem; height:.55rem; border-radius:50%; background:var(--orange);
+  .live-stamp {{ display:flex; flex-wrap:wrap; align-items:center; gap:.4rem; color:var(--muted); font-size:.8rem; }}
+  .live-stamp .when {{ color:var(--muted); font-weight:500; }}
+  .live-dot {{ width:.5rem; height:.5rem; border-radius:50%; background:var(--orange);
     box-shadow:0 0 0 0 rgba(217,119,87,.55); animation:pulse 2s infinite; }}
   .live-dot.stale {{ background:#64748b; animation:none; }}
   .live-dot.poll {{ background:var(--ok); }}
   @keyframes pulse {{ 0% {{ box-shadow:0 0 0 0 rgba(217,119,87,.55); }}
     70% {{ box-shadow:0 0 0 8px rgba(217,119,87,0); }} 100% {{ box-shadow:0 0 0 0 rgba(217,119,87,0); }} }}
-  #freshness {{ color:var(--orange); font-weight:700; font-size:.85rem; }}
+  #freshness {{ color:var(--orange); font-weight:700; font-size:.8rem; }}
   #freshness.stale {{ color:var(--muted); font-weight:600; }}
   #silence-banner {{
-    display:none; margin-bottom:1rem; padding:.9rem 1.1rem;
-    background:#2a0a0a; border:2px solid #dc2626; border-radius:12px;
-    color:#fecaca; font-size:.95rem; font-weight:600; line-height:1.4;
+    display:none; margin-bottom:1rem; padding:.75rem .9rem;
+    background:#2a0a0a; border:1px solid #dc2626; border-radius:8px;
+    color:#fecaca; font-size:.88rem; font-weight:600; line-height:1.35;
   }}
   #silence-banner.show {{ display:block; }}
   #board {{ min-height:2rem; }}
-  .agents-strip {{
-    display:flex; flex-wrap:wrap; gap:.5rem; align-items:center;
-    margin:0 0 1.35rem; padding:.85rem .9rem; border-radius:12px;
-    background:var(--panel); border:1px solid var(--border);
+  #active-agents {{ margin:0; }}
+  .agents-strip {{ display:flex; flex-wrap:wrap; gap:.55rem .85rem; align-items:center; margin:0; padding:0; border:0; background:transparent; }}
+  .agent-pill {{ display:inline-flex; align-items:center; gap:.35rem; border:0; background:transparent; padding:0; }}
+  .agent-pill .name {{ font-weight:600; font-size:.8rem; }}
+  .tools {{ display:flex; flex-wrap:wrap; gap:.45rem; margin:0 0 .85rem; }}
+  .how-board, .abilities-foot {{ margin:0; }}
+  .how-board summary, .abilities-foot summary {{
+    cursor:pointer; font-size:.85rem; font-weight:600; color:var(--muted);
+    padding:.2rem 0; list-style:outside disclosure-closed;
   }}
-  .agents-strip .agents-label {{
-    color:var(--muted); font-size:.75rem; font-weight:700; text-transform:uppercase;
-    letter-spacing:.04em; margin-right:.25rem;
-  }}
-  .agents-strip .agent-pill {{
-    display:inline-flex; flex-direction:column; gap:.1rem; max-width:100%;
-    border:1px solid var(--border); border-radius:10px; padding:.35rem .55rem;
-    background:var(--panel2); min-width:7.5rem;
-  }}
-  .agents-strip .agent-pill .top {{ display:flex; align-items:center; gap:.4rem; }}
-  .agents-strip .agent-pill .name {{ font-weight:700; font-size:.85rem; }}
-  .agents-strip .agent-pill .detail {{
-    color:var(--muted); font-size:.72rem; line-height:1.3;
-    overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:22rem;
-  }}
-  .card .ctrl {{ margin-top:.4rem; display:flex; flex-wrap:wrap; gap:.4rem; }}
-  .card .ctrl button {{
-    background:#1c1c1c; color:var(--text); border:1px solid var(--border);
-    border-radius:8px; padding:.45rem .75rem; font-size:.82rem; cursor:pointer;
-    min-height:44px; touch-action:manipulation;
-  }}
-  .card .ctrl button:hover {{ border-color:var(--orange); color:var(--orange); }}
-  .how-board {{ margin:0; }}
-  .how-board summary {{
-    cursor:pointer; font-size:1.2rem; font-weight:700; color:var(--orange);
-    padding:.35rem 0 0.85rem; list-style:outside disclosure-closed;
-  }}
-  .how-board .grid {{ margin-top:.35rem; }}
+  .how-board[open] summary, .abilities-foot[open] summary {{ color:var(--orange); margin-bottom:.55rem; }}
   @media (min-width:720px) {{
-    .wrap {{ padding:1.75rem 1.35rem 4.5rem; }}
-    section.block {{ margin-bottom:4.25rem; padding-top:2.6rem; }}
-    .grid {{ grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); gap:1.5rem; }}
+    .wrap {{ padding:1.5rem 1.25rem 3.75rem; }}
+    .lane .notes {{ -webkit-line-clamp:2; }}
+    .pending-item .pdetail {{ -webkit-line-clamp:2; }}
+    .lane.is-quiet .notes {{ display:-webkit-box; }}
+    section.pending h2, section.primary h2 {{ font-size:1.85rem; }}
   }}
 </style>
 </head>
 <body>
 <div class="wrap">
-  <header class="hero">
-    <h1><span class="mark">Bob</span> Ops Dashboard</h1>
-    <div class="sub">Projects Bob is working on for Jeff Story · live music/apps focus · closet parked</div>
-    <div class="sub live-stamp" id="live-stamp" data-generated-at="{h(updated_iso)}" data-display="{h(updated_ct)}"><span class="live-dot" id="live-dot" aria-hidden="true"></span>Last updated: <strong id="updated-display">{h(updated_ct)}</strong> · <span id="freshness">Live - starting</span> · polls status.json every 30s</div>
-    <div class="legend">
-      {chip_html("green","Green")}{chip_html("yellow","Yellow")}{chip_html("red","Red")}{chip_html("parked","Parked")}{chip_html("jeff-gate","Jeff-gate")}
+  <header class="pulse">
+    <h1><span class="mark">Bob</span> Ops</h1>
+    <div class="pulse-row">
+      <div class="live-stamp" id="live-stamp" data-generated-at="{h(updated_iso)}" data-display="{h(updated_ct)}"><span class="live-dot" id="live-dot" aria-hidden="true"></span><span id="freshness">Live - starting</span><span class="when"> · <strong id="updated-display">{h(updated_ct)}</strong></span></div>
+      <div id="active-agents">{agents_strip_html(status.get("agents"))}</div>
     </div>
-    <p class="board-note">Public board -- Approve opens a GitHub issue; submit while logged in as <code>rupret007</code>.</p>
     <div class="status hint" id="panel-status"></div>
   </header>
-  <div class="banner">Public status page -- no secrets, tokens, CSOne customer paths, or private handoff text. AdoptIQ is high-level Cisco CS desktop summary only. Theme: Claude orange (#d97757) on black.</div>
   <div id="silence-banner" role="alert" aria-live="assertive"></div>
-  <nav class="toc">
-    <a href="#controls">Decisions</a><a href="#live-shipping">Live shipping</a><a href="#active-agents">Agents</a>
-    <a href="#cisco">Cisco</a><a href="#messaging">Messaging</a><a href="#music-producer">Music</a>
-    <a href="#parked">Parked</a><a href="#abilities">Abilities</a><a href="#features">How this board works</a>
-  </nav>
   <div id="board">
   {''.join(sections_html)}
   </div>
   <footer>
-    <p>Source: <a href="https://github.com/rupret007/bob-ops-dashboard">rupret007/bob-ops-dashboard</a>
-    · <a href="./status.json">status.json</a> · Refresh: <code>./refresh.sh</code> + Actions cron every 15m · client poll 30s · soft-paint (no full reload).</p>
+    <p><a href="https://github.com/rupret007/bob-ops-dashboard">rupret007/bob-ops-dashboard</a>
+    · <a href="./status.json">status.json</a></p>
     <p id="fetched-line">Live CI via <code>gh</code>: {h(', '.join(status.get('fetched_repos') or []))}.</p>
   </footer>
 </div>
@@ -808,15 +950,19 @@ html = f'''<!DOCTYPE html>
   function renderPending(items) {{
     var els = pendingEls();
     if (!els.box || !els.list) return;
-    els.box.hidden = false;
+    var rows = (items || []).filter(function (it) {{
+      return it && /^[a-zA-Z0-9._-]+$/.test(String(it.id || ""));
+    }});
     els.list.innerHTML = "";
-    if (!items || !items.length) {{
-      els.list.innerHTML = '<p class="pending-help">Nothing pending. Bob will park new asks here.</p>';
-      return;
-    }}
-    items.forEach(function (it) {{
+    els.box.hidden = rows.length === 0;
+    var sec = document.getElementById("controls");
+    if (sec) sec.hidden = rows.length === 0;
+    if (!rows.length) return;
+    rows.forEach(function (it) {{
       var div = document.createElement("div");
       div.className = "pending-item";
+      div.setAttribute("data-id", String(it.id));
+      div.setAttribute("data-title", String(it.title || it.id));
       div.innerHTML =
         '<div class="ptitle"></div>' +
         '<div class="pdetail"></div>' +
@@ -827,18 +973,16 @@ html = f'''<!DOCTYPE html>
           '<button type="button" class="danger" data-dec="DENY">Deny</button>' +
         '</div>';
       div.querySelector(".ptitle").textContent = it.title || it.id;
-      div.querySelector(".pdetail").textContent = it.detail || "";
+      var detail = String(it.detail || "");
+      if (detail.length > 72) {{
+        var cut = detail.slice(0, 71);
+        var sp = cut.lastIndexOf(" ");
+        detail = (sp > 24 ? cut.slice(0, sp) : cut).replace(/[.,;:]$/, "") + "...";
+      }}
+      div.querySelector(".pdetail").textContent = detail;
       var rk = div.querySelector(".prisk");
       rk.textContent = (it.risk || "low") + " \\u00b7 " + (it.kind || "ops");
       rk.classList.add(riskClass(it.risk));
-      div.querySelectorAll("button[data-dec]").forEach(function (b) {{
-        b.addEventListener("click", function () {{
-          if (b.disabled) return;
-          b.disabled = true;
-          openDecisionIssue(b.getAttribute("data-dec"), it.id, it.title);
-          setTimeout(function () {{ b.disabled = false; }}, 2000);
-        }});
-      }});
       els.list.appendChild(div);
     }});
   }}
@@ -856,9 +1000,21 @@ html = f'''<!DOCTYPE html>
       }})
       .catch(function () {{
         if (seq !== pendingSeq) return;
-        renderPending([]);
+        // Keep first-paint pending. Do not claim the inbox is empty.
       }});
   }}
+
+  document.addEventListener("click", function (ev) {{
+    var decBtn = ev.target.closest("button[data-dec]");
+    if (!decBtn) return;
+    ev.preventDefault();
+    if (decBtn.disabled) return;
+    var item = decBtn.closest(".pending-item");
+    if (!item) return;
+    decBtn.disabled = true;
+    openDecisionIssue(decBtn.getAttribute("data-dec"), item.getAttribute("data-id"), item.getAttribute("data-title"));
+    setTimeout(function () {{ decBtn.disabled = false; }}, 2000);
+  }});
 
   var CONTROL_ACTIONS = {{ "refresh-hint": 1, "open-repo": 1, "mark-reviewed": 1 }};
   function handleJeffAction(act) {{
@@ -964,7 +1120,7 @@ html = f'''<!DOCTYPE html>
     var act = String((p && p.control_action) || "");
     if (!PAINT_CONTROL_ACTIONS[act]) return "";
     var label = esc(p.action_label || p.name || "Do");
-    return '<div class="ctrl"><button type="button" data-action="' + esc(act) + '">' + label + "</button></div>";
+    return '<button type="button" data-action="' + esc(act) + '">' + label + "</button>";
   }}
 
   function chipHtml(st, label) {{
@@ -972,22 +1128,98 @@ html = f'''<!DOCTYPE html>
     return '<span class="chip" style="--c:' + c[0] + ';--bg:' + c[1] + ';--fg:' + c[2] + '">' + esc(label) + '</span>';
   }}
 
-  function ciBadge(ci) {{
-    if (!ci) return "";
-    var concl = ci.conclusion || "unknown";
-    var color = ({{ success: "#16a34a", failure: "#dc2626", cancelled: "#64748b" }})[concl] || "#ca8a04";
-    return '<span class="ci" style="color:' + color + '">\\u25cf ' + esc(ci.name || "CI") + ': ' + esc(concl) + '</span>';
-  }}
   var SECTION_TYPE_CHIPS = {{ Ability: 1, Control: 1, Feature: 1 }};
   function visibleChipLabel(p) {{
     var label = String((p && p.chip) || "").trim();
     if (!label || SECTION_TYPE_CHIPS[label]) return "";
     return label;
   }}
-  function pendingShell() {{
-    return '<div id="pending-box" class="pending-box"><h3>Pending decisions</h3>' +
-      '<p class="pending-help">Approve / Hold / Deny opens a GitHub issue. Submit while logged in as <code>rupret007</code> -- that login is the real yes.</p>' +
-      '<div id="pending-list"></div></div>';
+  function compactSignal(p) {{
+    if (!p) return "";
+    var rel = String(p.release || "").trim();
+    if (rel) return rel;
+    if (typeof p.open_prs === "number" && isFinite(p.open_prs) && p.open_prs > 0) {{
+      return p.open_prs + (p.open_prs === 1 ? " open PR" : " open PRs");
+    }}
+    var ci = p.ci;
+    if (ci && typeof ci === "object") {{
+      var concl = String(ci.conclusion || "").toLowerCase();
+      if (concl === "failure") return "CI fail";
+      if (concl && concl !== "success" && concl !== "skipped" && concl !== "cancelled") return concl;
+    }}
+    return "";
+  }}
+  function shortNote(notes, limit) {{
+    var text = String(notes || "").replace(/\\s+/g, " ").trim();
+    var n = limit || 88;
+    if (text.length <= n) return text;
+    var cut = text.slice(0, n - 1);
+    var sp = cut.lastIndexOf(" ");
+    if (sp > 24) cut = cut.slice(0, sp);
+    return cut.replace(/[.,;:]$/, "") + "...";
+  }}
+  function attentionRank(p) {{
+    var map = {{ red: 0, "jeff-gate": 1, yellow: 2, green: 3, parked: 4 }};
+    var st = p && p.status;
+    return map.hasOwnProperty(st) ? map[st] : 5;
+  }}
+  function isQuietLane(p) {{
+    return !!(p && p.status === "green");
+  }}
+  function sectionKind(id) {{
+    if (id === "controls") return "pending";
+    if (id === "active-agents") return "pulse";
+    if (id === "live-shipping") return "primary";
+    if (id === "abilities" || id === "features") return "footer";
+    return "secondary";
+  }}
+  function pendingShell(items) {{
+    var rows = (items || []).filter(function (it) {{
+      return it && /^[a-zA-Z0-9._-]+$/.test(String(it.id || ""));
+    }});
+    var list = "";
+    rows.forEach(function (it) {{
+      var risk = String(it.risk || "low").toLowerCase();
+      if (risk !== "high" && risk !== "medium") risk = "low";
+      list += '<div class="pending-item" data-id="' + esc(it.id) + '" data-title="' + esc(it.title || it.id) + '">' +
+        '<div class="ptitle">' + esc(it.title || it.id) + "</div>" +
+        '<div class="pdetail">' + esc(shortNote(it.detail || "", 72)) + "</div>" +
+        '<div class="prow"><span class="prisk ' + esc(risk) + '">' + esc(risk) + " \\u00b7 " + esc(it.kind || "ops") + "</span>" +
+        '<button type="button" data-dec="APPROVE">Approve</button>' +
+        '<button type="button" class="warn" data-dec="HOLD">Hold</button>' +
+        '<button type="button" class="danger" data-dec="DENY">Deny</button></div></div>';
+    }});
+    return '<div id="pending-box" class="pending-box"' + (rows.length ? "" : " hidden") + ">" +
+      '<p class="pending-help">Public board -- Approve opens a GitHub issue. Submit while logged in as <code>rupret007</code> -- that login is the real yes.</p>' +
+      '<div id="pending-list">' + list + "</div></div>";
+  }}
+  function toolsRow(projects) {{
+    var btns = "";
+    (projects || []).forEach(function (p) {{ btns += controlBtnHtml(p); }});
+    return btns ? '<div class="tools">' + btns + "</div>" : "";
+  }}
+  function laneHtml(p) {{
+    var chipLabel = visibleChipLabel(p);
+    var chip = chipLabel ? chipHtml(p.status || "parked", chipLabel) : "";
+    var title = p.name || "project";
+    var href = safeHref(p.url);
+    var titleHtml = href
+      ? '<a href="' + esc(href) + '" target="_blank" rel="noopener">' + esc(title) + "</a>"
+      : esc(title);
+    var signal = compactSignal(p);
+    var signalHtml = signal ? '<span class="signal">' + esc(signal) + "</span>" : "";
+    var note = shortNote(p.notes || "", 88);
+    var notesHtml = note ? '<p class="notes">' + esc(note) + "</p>" : "";
+    var quiet = isQuietLane(p) ? " is-quiet" : "";
+    return '<article class="lane' + quiet + '"><h3>' + titleHtml + '</h3><div class="lane-end">' +
+      chip + signalHtml + "</div>" + notesHtml + "</article>";
+  }}
+  function lanesHtml(projects, sortAttn) {{
+    var rows = (projects || []).filter(function (p) {{ return p && typeof p === "object"; }});
+    if (sortAttn) rows = rows.slice().sort(function (a, b) {{ return attentionRank(a) - attentionRank(b); }});
+    var html = "";
+    rows.forEach(function (p) {{ html += laneHtml(p); }});
+    return '<div class="lanes">' + html + "</div>";
   }}
 
   function showSilence(msg) {{
@@ -1041,65 +1273,52 @@ html = f'''<!DOCTYPE html>
     (agents || []).forEach(function (a) {{
       var name = a.name || a.id || "agent";
       var detail = a.detail || "";
-      pills += '<div class="agent-pill" data-agent-id="' + esc(a.id || name) + '">' +
-        '<div class="top"><span class="name">' + esc(name) + '</span>' + agentStateChip(a.state) +
-        '</div><div class="detail" title="' + esc(detail) + '">' + esc(detail) + '</div></div>';
+      pills += '<div class="agent-pill" data-agent-id="' + esc(a.id || name) + '" title="' + esc(detail) + '">' +
+        '<span class="name">' + esc(name) + "</span>" + agentStateChip(a.state) + "</div>";
     }});
-    return '<div class="agents-strip" id="agents-strip"><span class="agents-label">Live</span>' +
-      pills + '</div>';
+    return '<div class="agents-strip" id="agents-strip">' + pills + "</div>";
   }}
 
   function renderBoard(data) {{
     if (!boardEl || !data || !Array.isArray(data.sections)) return;
+    var host = document.getElementById("active-agents");
+    if (host) host.innerHTML = agentsStripHtml(data.agents || []);
+    var controlProjects = [];
     var html = "";
     data.sections.forEach(function (sec) {{
-      var cards = "";
-      (sec.projects || []).forEach(function (p) {{
-        if (sec.id === "active-agents" && p.agent_id) return;
-        var chipLabel = visibleChipLabel(p);
-        var chip = chipLabel ? chipHtml(p.status || "parked", chipLabel) : "";
-        var title = p.name || "project";
-        var href = safeHref(p.url);
-        var titleHtml = href
-          ? '<a href="' + esc(href) + '" target="_blank" rel="noopener">' + esc(title) + '</a>'
-          : esc(title);
-        var bits = [];
-        if (p.tip_sha) bits.push("<code>" + esc(p.tip_sha) + "</code>");
-        if (p.product_sha) bits.push("product <code>" + esc(p.product_sha) + "</code>");
-        if (p.release) bits.push("release <strong>" + esc(p.release) + "</strong>");
-        if (typeof p.open_prs === "number" && isFinite(p.open_prs)) {{
-          bits.push(p.open_prs + " open PR" + (p.open_prs === 1 ? "" : "s"));
-        }}
-        if (p.private) bits.push("private");
-        if (p.accessible === false && p.repo) bits.push("inaccessible");
-        var rows = "";
-        if (bits.length) rows += '<div class="row">' + bits.join(" \\u00b7 ") + "</div>";
-        var ci = ciBadge(p.ci);
-        if (ci) rows += '<div class="row">' + ci + "</div>";
-        cards += '<article class="card"><header><h3>' + titleHtml + '</h3>' + chip +
-          "</header>" + rows + '<p class="notes">' + esc(p.notes || "") + "</p>" +
-          controlBtnHtml(p) + "</article>";
-      }});
-      var strip = "";
-      if (sec.id === "active-agents") strip = agentsStripHtml(data.agents || []);
-      var grid = '<div class="grid">' + cards + "</div>";
-      var heading = "";
-      var body = "";
+      var kind = sectionKind(sec.id);
+      if (kind === "pulse") return;
       if (sec.id === "controls") {{
-        heading = "<h2>" + esc(sec.title || "Decisions") + "</h2>";
-        body = pendingShell() + grid;
-      }} else if (sec.id === "features") {{
-        body = '<details class="how-board"><summary>How this board works</summary>' +
-          '<p class="pending-help">Engineer notes -- not the daily ops list.</p>' + grid + "</details>";
-      }} else {{
-        heading = "<h2>" + esc(sec.title || "") + "</h2>";
-        body = strip + grid;
+        controlProjects = sec.projects || [];
+        var items = data.pending || [];
+        var hide = items.length ? "" : " hidden";
+        html += '<section id="controls" class="block pending"' + hide + ">" +
+          "<h2>" + esc(sec.title || "Decisions") + "</h2>" + pendingShell(items) + "</section>";
+        return;
       }}
-      html += '<section id="' + esc(sec.id || "") + '" class="block">' + heading + body + "</section>";
+      if (sec.id === "features") {{
+        html += '<section id="features" class="block foot">' +
+          '<details class="how-board"><summary>How this board works</summary>' +
+          '<p class="pending-help">Engineer notes -- not the daily ops list.</p>' +
+          '<p class="pending-help">Public board -- Approve opens a GitHub issue; submit while logged in as <code>rupret007</code>.</p>' +
+          toolsRow(controlProjects) + lanesHtml(sec.projects || []) + "</details></section>";
+        return;
+      }}
+      if (sec.id === "abilities") {{
+        html += '<section id="abilities" class="block foot">' +
+          '<details class="abilities-foot"><summary>What Bob can do</summary>' +
+          '<p class="pending-help">Texts / food after Jeff yes. No send button. Honest: there is no order button on this board.</p>' +
+          lanesHtml(sec.projects || []) + "</details></section>";
+        return;
+      }}
+      var cls = kind === "primary" ? "primary" : "secondary";
+      html += '<section id="' + esc(sec.id || "") + '" class="block ' + cls + '">' +
+        "<h2>" + esc(sec.title || "") + "</h2>" +
+        lanesHtml(sec.projects || [], kind === "primary") + "</section>";
     }});
     boardEl.innerHTML = html;
     if (fetchedLine && Array.isArray(data.fetched_repos)) {{
-      fetchedLine.innerHTML = 'Live CI via <code>gh</code>: ' + esc(data.fetched_repos.join(", ")) + '.';
+      fetchedLine.innerHTML = 'Live CI via <code>gh</code>: ' + esc(data.fetched_repos.join(", ")) + ".";
     }}
     window.dispatchEvent(new CustomEvent("bob-ops-painted"));
   }}
@@ -1180,131 +1399,6 @@ html = f'''<!DOCTYPE html>
 '''
 
 # Public board: never emit OTP verify. Fail-closed on leftover hashes.
-prev = {}
-try:
-    prev = json.loads((root / "status.json").read_text())
-except Exception:
-    prev = {}
-if drop_leftover_verify(prev):
-    print("ignored previous verify challenge (public board, no OTP)")
-if drop_leftover_verify(status):
-    print("drop leftover verify: public board has no OTP gate")
-
-decisions = []
-if isinstance(prev, dict) and isinstance(prev.get("decisions"), list):
-    decisions = [d for d in prev["decisions"] if isinstance(d, dict)]
-
-resolved = set()
-for d in decisions:
-    if d.get("id") and d.get("decision") in ("approve", "deny"):
-        resolved.add(str(d["id"]).lower())
-
-try:
-    raw = subprocess.check_output(
-        [
-            "gh", "issue", "list", "-R", "rupret007/bob-ops-dashboard",
-            "--state", "open", "--limit", "40",
-            "--json", "number,title,author,createdAt,url",
-        ],
-        text=True,
-        stderr=subprocess.DEVNULL,
-    )
-    issues = json.loads(raw or "[]")
-except Exception:
-    issues = []
-
-for iss in issues:
-    title = (iss.get("title") or "").strip()
-    author = ((iss.get("author") or {}).get("login") or "").lower()
-    if author != "rupret007":
-        continue
-    m = re.match(r"^BOB-(APPROVE|DENY|HOLD):\s*([a-z0-9._-]+)\s*$", title, re.I)
-    if not m:
-        continue
-    verb = m.group(1).lower()
-    pid = m.group(2).lower()
-    decision = "approve" if verb == "approve" else ("deny" if verb == "deny" else "hold")
-    entry = {
-        "id": pid,
-        "decision": decision,
-        "issue": iss.get("number"),
-        "url": iss.get("url"),
-        "at": iss.get("createdAt"),
-        "author": author,
-    }
-    decisions = [d for d in decisions if str(d.get("id", "")).lower() != pid]
-    decisions.append(entry)
-    if decision in ("approve", "deny"):
-        resolved.add(pid)
-    try:
-        subprocess.check_call(
-            [
-                "gh", "issue", "close", str(iss["number"]),
-                "-R", "rupret007/bob-ops-dashboard",
-                "--comment", f"Recorded as {decision} for Bob.",
-            ],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-        )
-    except Exception:
-        pass
-
-standing = [
-    {
-        "id": "webjam-exploratory",
-        "title": "WebJam tip exploratory click-through",
-        "kind": "jeff-gate",
-        "detail": "You walk the installed tip; Bob keeps the checklist ready.",
-        "risk": "low",
-    },
-    {
-        "id": "dashboard-refresh",
-        "title": "Force dashboard refresh + push",
-        "kind": "ops",
-        "detail": "Safe. Rebuilds status from live gh and pushes Pages.",
-        "risk": "low",
-    },
-    {
-        "id": "adoptiq-cloud-relaunch",
-        "title": "Relaunch AdoptIQ Cloud Agent",
-        "kind": "cloud-agent",
-        "detail": "Needs Cursor on-demand on. Stays inside $10 hard ceiling.",
-        "risk": "medium",
-    },
-    {
-        "id": "codex-goal-launch",
-        "title": "Launch next Codex goal on Mac",
-        "kind": "codex-launch",
-        "detail": "High risk. Bob still shows the exact goal before acting.",
-        "risk": "high",
-    },
-    {
-        "id": "text-send",
-        "title": "Send a drafted text via Andrea",
-        "kind": "text-send",
-        "detail": "High risk. Never auto-send. Draft must already exist.",
-        "risk": "high",
-    },
-]
-
-pending_out = [s for s in standing if s["id"] not in resolved]
-if isinstance(prev, dict) and isinstance(prev.get("pending"), list):
-    for item in prev["pending"]:
-        if not isinstance(item, dict):
-            continue
-        iid = str(item.get("id") or "").lower()
-        if not iid or iid in resolved or any(s["id"] == iid for s in pending_out):
-            continue
-        pending_out.append(item)
-
-status["pending"] = pending_out
-status["decisions"] = decisions[-40:]
-status["control"] = {
-    "mode": "github-issue-inbox",
-    "jeff_github": "rupret007",
-    "prefixes": ["BOB-APPROVE:", "BOB-DENY:", "BOB-HOLD:"],
-    "note": "Public board. Real authority is a GitHub issue from rupret007.",
-}
 if drop_leftover_verify(status):
     print("drop leftover verify at write (fail-closed)")
 

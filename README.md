@@ -7,7 +7,7 @@ Public, mobile-friendly status board for projects Bob is working on (Jeff Story 
 ## What's here
 
 - `index.html` -- human dashboard (Claude orange `#d97757` on near-black `#0a0a0a`)
-- Phone-first board: **Decisions** (pending Approve/Hold/Deny), **Live shipping**, **Agents**, then the other ops lanes. **Abilities** sit lower. Engineer notes are behind collapsed **How this board works**.
+- Phone-first board: one **pulse strip** (freshness + agents) → **Decisions** only if something is pending → **Live shipping** as compact status lanes → quieter secondary lanes. **Abilities** are a collapsed footer. Engineer notes stay behind collapsed **How this board works**.
 - `status.json` -- machine-readable snapshot (client polls every ~30s)
 - `.github/workflows/refresh-dashboard.yml` -- Actions cron every 15 minutes
 - No secrets, tokens, CSOne customer paths, Keeper material, or private handoff text

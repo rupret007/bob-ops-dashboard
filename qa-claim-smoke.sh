@@ -129,16 +129,31 @@ grep -q 'pollSeq' "$INDEX" || fail "pollSeq missing"
 grep -q 'decideBusy' "$INDEX" || fail "decideBusy missing"
 grep -q 'pendingSeq' "$INDEX" || fail "pendingSeq missing"
 grep -q 'id="pending-box"' "$INDEX" || fail "pending-box missing"
-if grep -E 'id="pending-box"[^>]*\bhidden\b' "$INDEX"; then
-  fail "pending-box must not start hidden"
-fi
+grep -q 'class="pulse"' "$INDEX" || fail "pulse strip missing"
+grep -q 'class="lane"' "$INDEX" || fail "compact lanes missing"
+grep -q 'class="abilities-foot"' "$INDEX" || fail "abilities footer collapse missing"
 grep -q 'Public board -- Approve opens a GitHub issue' "$INDEX" || fail "public-board note missing"
 grep -q 'BOB-APPROVE' "$INDEX" || fail "BOB-APPROVE missing"
 grep -q 'How this board works' "$INDEX" || fail "collapsed how-board missing"
 grep -q 'class="how-board"' "$INDEX" || fail "how-board details missing"
 grep -q 'section.block' "$INDEX" || fail "section.block spacing missing"
+if grep -q 'class="card"' "$INDEX"; then
+  fail "essay cards still on page -- lanes only"
+fi
+if grep -q 'nav class="toc"' "$INDEX" || grep -q '<nav class="toc">' "$INDEX"; then
+  fail "TOC chip forest still on page"
+fi
+if grep -q 'class="legend"' "$INDEX"; then
+  fail "legend chrome still on default board"
+fi
+if grep -q 'class="banner"' "$INDEX"; then
+  fail "banner chrome still on default board"
+fi
 if grep -q 'No Actions' "$INDEX"; then
   fail "redundant No Actions chrome still on page"
+fi
+if grep -q 'Nothing pending' "$INDEX"; then
+  fail "empty-pending chrome still on page"
 fi
 if grep -q 'How to ask' "$INDEX" || grep -q 'Ask Bob for a new code' "$INDEX"; then
   fail "ask-code leftover still on page"
@@ -322,6 +337,14 @@ if "No Actions" in html:
     raise SystemExit("generated page still has No Actions chrome")
 if "how-board" not in html:
     raise SystemExit("generated page missing collapsed how-board")
+if "abilities-foot" not in html:
+    raise SystemExit("generated page missing collapsed abilities footer")
+if "header.pulse" not in html and 'class="pulse"' not in html:
+    raise SystemExit("generated page missing pulse strip")
+if 'class="lane"' not in html:
+    raise SystemExit("generated page missing compact lanes")
+if 'class="card"' in html:
+    raise SystemExit("generated page still paints essay cards")
 print("refresh.sh e2e stripped leftover verify")
 PY
   pass "refresh.sh e2e stripped leftover verify"
@@ -329,41 +352,61 @@ else
   echo "SKIP: refresh.sh e2e (gh not available)"
 fi
 
-# 11) Decisions first, plumbing Features collapsed
+# 11) Pulse + pending + live lanes; abilities / how-board collapsed
 for id in abilities controls features live-shipping active-agents; do
-  grep -q "id=\"$id\"" "$INDEX" || fail "index.html missing section #$id"
-  grep -q "href=\"#$id\"" "$INDEX" || fail "index.html TOC missing #$id"
+  grep -q "id=\"$id\"" "$INDEX" || fail "index.html missing #$id"
 done
-grep -q 'href="#abilities"' "$REFRESH" || fail "refresh.sh TOC missing abilities"
-python3 - "$INDEX" <<'PY' || fail "ops-first / collapsed features honesty"
+grep -q 'id="active-agents"' "$REFRESH" || fail "refresh.sh missing agents pulse host"
+grep -q 'class="abilities-foot"' "$REFRESH" || fail "refresh.sh missing collapsed abilities"
+python3 - "$INDEX" "$STATUS" <<'PY' || fail "hierarchy / collapsed honesty"
 from pathlib import Path
-import sys
+import json, sys
 html = Path(sys.argv[1]).read_text()
+st = json.loads(Path(sys.argv[2]).read_text()) if Path(sys.argv[2]).is_file() else {}
 for needle in ("Decisions", "Live shipping", "How this board works", "No send button", "no order button"):
     if needle not in html:
         raise SystemExit("missing " + needle)
 if "<details" not in html or "how-board" not in html:
     raise SystemExit("features must be collapsed details")
-# Soft-paint must not lead the default phone view (only inside collapsed details).
-pre = html.split('<details class="how-board">', 1)[0]
-if "Soft-paint poll" in pre:
+if "abilities-foot" not in html:
+    raise SystemExit("abilities must be collapsed details")
+# Soft-paint / engineer cards must not lead the default phone view.
+pre_how = html.split('<details class="how-board">', 1)[0]
+if "Soft-paint poll" in pre_how:
     raise SystemExit("plumbing Features leaked above collapsed details")
-if "Agents strip" in pre:
+if "Agents strip" in pre_how:
     raise SystemExit("Agents strip Feature card leaked above collapsed details")
+if "Copy refresh command" in pre_how or "Mark board reviewed" in pre_how:
+    raise SystemExit("engineer control cards leaked onto the default scroll")
+pre_ab = html.split('<details class="abilities-foot">', 1)[0]
+if "Rebuild this board" in pre_ab or "Life-ops" in pre_ab:
+    raise SystemExit("Abilities card grid leaked onto the default phone scroll")
 if "javascript:" in html.lower():
     raise SystemExit("javascript url in page")
 if "6-digit" in html or "Jeff verify" in html:
     raise SystemExit("OTP copy still on page")
+if "font-size:1.7rem" not in html:
+    raise SystemExit("section H2 must be distinctly larger than lane titles")
+if "font-size:.95rem" not in html:
+    raise SystemExit("lane titles must stay smaller than section H2")
 board = html.split('id="board"', 1)[-1]
-# First board section should be decisions/controls, not Features.
 idx_c = board.find('id="controls"')
 idx_f = board.find('id="features"')
 idx_l = board.find('id="live-shipping"')
-if idx_c < 0 or idx_l < 0 or idx_f < 0:
+idx_a = board.find('id="abilities"')
+if idx_c < 0 or idx_l < 0 or idx_f < 0 or idx_a < 0:
     raise SystemExit("missing ordered sections")
-if not (idx_c < idx_l < idx_f):
-    raise SystemExit("board order must be decisions, live shipping, then how-board")
-print("ops-first sections present")
+if not (idx_c < idx_l < idx_a < idx_f):
+    raise SystemExit("board order must be decisions, live shipping, abilities, how-board")
+if 'id="active-agents"' in board:
+    raise SystemExit("active-agents must live in the pulse strip, not the board card list")
+pending = st.get("pending") if isinstance(st, dict) else None
+if isinstance(pending, list) and pending:
+    if "pending-item" not in html:
+        raise SystemExit("pending items must paint on first load")
+    if 'id="pending-box" class="pending-box" hidden' in html or 'id="pending-box" class="pending-box"hidden' in html:
+        raise SystemExit("pending-box hidden while status.json has pending")
+print("ops-first pulse + collapsed footers present")
 PY
 pass "ops-first board + collapsed how-board"
 

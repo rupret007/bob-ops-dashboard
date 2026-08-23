@@ -7,9 +7,14 @@ import unittest
 from board_meta import (
     CONTROL_ACTIONS,
     FIRST_CLASS_IDS,
+    attention_rank,
+    compact_signal,
     drop_leftover_verify,
     first_class_sections,
+    is_quiet_lane,
     merge_first_class,
+    presentation,
+    short_note,
     visible_chip,
 )
 
@@ -90,6 +95,42 @@ class BoardMetaTests(unittest.TestCase):
         self.assertEqual(visible_chip({"chip": "Jeff-gate"}), "Jeff-gate")
         self.assertEqual(visible_chip({"chip": "Green"}), "Green")
         self.assertIsNone(visible_chip({}))
+
+    def test_presentation_hierarchy(self):
+        self.assertEqual(presentation("controls"), "pending")
+        self.assertEqual(presentation("active-agents"), "pulse")
+        self.assertEqual(presentation("live-shipping"), "primary")
+        self.assertEqual(presentation("cisco"), "secondary")
+        self.assertEqual(presentation("parked"), "secondary")
+        self.assertEqual(presentation("abilities"), "footer")
+        self.assertEqual(presentation("features"), "footer")
+
+    def test_compact_signal_skips_sha_and_zero_prs(self):
+        self.assertEqual(compact_signal({"release": "v0.26.0", "tip_sha": "abc1234", "open_prs": 0}), "v0.26.0")
+        self.assertEqual(compact_signal({"open_prs": 1, "tip_sha": "abc1234"}), "1 open PR")
+        self.assertEqual(compact_signal({"open_prs": 4}), "4 open PRs")
+        self.assertIsNone(compact_signal({"tip_sha": "abc1234", "open_prs": 0, "product_sha": "deadbee"}))
+        self.assertIsNone(compact_signal({"ci": {"name": "CI", "conclusion": "success"}, "open_prs": 0}))
+        self.assertEqual(compact_signal({"ci": {"conclusion": "failure"}}), "CI fail")
+        self.assertIsNone(compact_signal({}))
+        self.assertIsNone(compact_signal(None))
+
+    def test_quiet_lane_and_attention(self):
+        self.assertTrue(is_quiet_lane({"status": "green"}))
+        self.assertFalse(is_quiet_lane({"status": "jeff-gate"}))
+        self.assertLess(attention_rank({"status": "jeff-gate"}), attention_rank({"status": "green"}))
+        self.assertLess(attention_rank({"status": "red"}), attention_rank({"status": "yellow"}))
+        self.assertEqual(attention_rank(None), 9)
+
+    def test_short_note_phone_safe(self):
+        self.assertEqual(short_note("Quiet green unless CI says otherwise."), "Quiet green unless CI says otherwise.")
+        long = "PR #21 merged (docs on 5ca6ba5). Release stays v0.26.0 until Jeff names v0.27. Exploratory click-through Jeff-gated."
+        out = short_note(long, 88)
+        self.assertLessEqual(len(out), 91)
+        self.assertTrue(out.endswith("..."))
+        self.assertNotIn("\n", out)
+        self.assertEqual(short_note(""), "")
+        self.assertEqual(short_note(None), "")
 
     def test_drop_leftover_verify_fail_closed(self):
         status = {
