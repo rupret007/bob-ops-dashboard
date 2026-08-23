@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-08-22T20:00:01.868366-05:00",
-  "generated_at_display": "Sat Aug 22, 2026 \u00b7 8:00 PM CDT",
+  "generated_at": "2026-08-22T20:18:19.136002-05:00",
+  "generated_at_display": "Sat Aug 22, 2026 \u00b7 8:18 PM CDT",
   "timezone": "America/Chicago",
   "owner": "rupret007",
   "dashboard": "bob-ops-dashboard",
@@ -18,16 +18,19 @@
           "chip": "Jeff-gate",
           "default_branch": "master",
           "tip_sha": "c51751d",
-          "product_sha": "5ca6ba5",
           "tip_date": "2026-08-23T00:11:49Z",
           "open_prs": 0,
           "ci": {
             "name": "WebJam CI",
             "conclusion": "success",
-            "branch": "master"
+            "branch": "master",
+            "sha": "c51751d",
+            "created": "2026-08-23T00:11:52Z"
           },
           "release": "v0.26.0",
-          "notes": "PR #21 merged (docs release round for 5ca6ba5). Master CI green. Release stays v0.26.0 until Jeff names v0.27. Exploratory click-through Jeff-gated."
+          "notes": "PR #21 merged (docs on 5ca6ba5). Release stays v0.26.0 until Jeff names v0.27. Exploratory click-through Jeff-gated.",
+          "accessible": true,
+          "product_sha": "5ca6ba5"
         },
         {
           "name": "StoryLiner",
@@ -43,9 +46,13 @@
           "ci": {
             "name": "CI",
             "conclusion": "success",
-            "branch": "main"
+            "branch": "main",
+            "sha": "669e98d",
+            "created": "2026-08-23T00:11:41Z"
           },
-          "notes": "PR #1 lint fix merged. Main CI success (lint+typecheck+build)."
+          "release": null,
+          "notes": "PR #1 lint fix merged; confirm main CI from live fetch.",
+          "accessible": true
         },
         {
           "name": "StoryBoard",
@@ -61,9 +68,13 @@
           "ci": {
             "name": "Quality",
             "conclusion": "success",
-            "branch": "main"
+            "branch": "main",
+            "sha": "da92aeb",
+            "created": "2026-07-13T22:33:07Z"
           },
-          "notes": "Quiet green. No open PRs."
+          "release": null,
+          "notes": "Quiet green unless CI says otherwise.",
+          "accessible": true
         },
         {
           "name": "Rad Dad Merch",
@@ -79,9 +90,13 @@
           "ci": {
             "name": "Release integrity",
             "conclusion": "success",
-            "branch": "main"
+            "branch": "main",
+            "sha": "b949c7c",
+            "created": "2026-08-21T12:44:32Z"
           },
-          "notes": "History import #1 landed. Quiet green."
+          "release": null,
+          "notes": "Merch lane; watch Release integrity.",
+          "accessible": true
         },
         {
           "name": "RadDadSite",
@@ -97,37 +112,45 @@
           "ci": {
             "name": "Test Site",
             "conclusion": "success",
-            "branch": "main"
+            "branch": "main",
+            "sha": "a56c44f",
+            "created": "2026-08-21T04:38:00Z"
           },
-          "notes": "Tip + Pages green. Draft PR #6 (prod deploy) conflicting \u2014 parked/Jeff-gate."
+          "release": null,
+          "notes": "Tip green typical; draft #6 prod deploy parked/Jeff-gate if still open.",
+          "accessible": true
         },
         {
           "name": "Show Night",
           "repo": "rupret007/rad-dad-show-night",
           "url": "https://github.com/rupret007/rad-dad-show-night",
           "private": false,
-          "status": "green",
-          "chip": "Green",
+          "status": "yellow",
+          "chip": "Yellow",
           "default_branch": "main",
           "tip_sha": "710e765",
           "tip_date": "2026-08-14T18:07:17Z",
           "open_prs": 0,
           "ci": null,
-          "notes": "Flyer update present. No Actions workflows."
+          "release": null,
+          "notes": "Show-night run sheet / flyer. No CI is OK.",
+          "accessible": true
         },
         {
           "name": "AI Music Vault",
           "repo": "rupret007/AI-Music-Vault",
           "url": "https://github.com/rupret007/AI-Music-Vault",
           "private": true,
-          "status": "green",
-          "chip": "Green",
+          "status": "yellow",
+          "chip": "Yellow",
           "default_branch": "main",
           "tip_sha": "61bbc78",
           "tip_date": "2026-08-21T04:30:57Z",
           "open_prs": 0,
           "ci": null,
-          "notes": "Private docs/index. No Actions. High-level only on public page."
+          "release": null,
+          "notes": "Private docs/index. High-level only on public page.",
+          "accessible": true
         },
         {
           "name": "Turdanoid",
@@ -137,15 +160,19 @@
           "status": "yellow",
           "chip": "Yellow",
           "default_branch": "main",
-          "tip_sha": "bc03f6c",
-          "tip_date": "2026-07-05T17:04:06Z",
-          "open_prs": 3,
+          "tip_sha": "a0ef856",
+          "tip_date": "2026-08-23T01:02:17Z",
+          "open_prs": 0,
           "ci": {
             "name": "CI",
             "conclusion": "success",
-            "branch": "main"
+            "branch": "main",
+            "sha": "a0ef856",
+            "created": "2026-08-23T01:02:20Z"
           },
-          "notes": "Tip CI+Pages green. Stale open PRs #5/#4/#2 \u2014 hygiene in flight."
+          "release": null,
+          "notes": "Tip usually green; stale open PRs \u2192 hygiene.",
+          "accessible": true
         }
       ]
     },
@@ -168,9 +195,12 @@
             "name": "Build AdoptIQ",
             "conclusion": "failure",
             "branch": "main",
-            "note": "last default-branch run older; work continues offline"
+            "sha": "9b41475",
+            "created": "2026-08-05T01:57:27Z"
           },
-          "notes": "Cisco CS desktop \u2014 Build 115 in progress (Codex + Cloud Agent). No secrets on this page."
+          "release": null,
+          "notes": "Cisco CS desktop \u2014 Build 115 in progress (Codex + Cloud Agent). No secrets on this page.",
+          "accessible": true
         },
         {
           "name": "TACTrack",
@@ -184,17 +214,18 @@
           "tip_date": "2026-08-16T20:52:47Z",
           "open_prs": 2,
           "ci": {
-            "name": "CI",
+            "name": "Windows release gate (non-production)",
             "conclusion": "failure",
-            "branch": "main"
+            "branch": "main",
+            "sha": "5432348",
+            "created": "2026-08-16T20:53:04Z"
           },
-          "notes": "Private. Main CI red; open fix/validation PRs. High-level only."
+          "release": null,
+          "notes": "Private. High-level only \u2014 CI / open PRs from live fetch.",
+          "accessible": true
         },
         {
           "name": "AdoptIQ notes",
-          "repo": null,
-          "url": null,
-          "private": true,
           "status": "parked",
           "chip": "Parked",
           "notes": "High-level only: manager-decision UX + Build 115 candidate path. No CSOne paths, customer rows, or tokens."
@@ -219,27 +250,25 @@
           "ci": {
             "name": "Security",
             "conclusion": "failure",
-            "branch": "main"
+            "branch": "main",
+            "sha": "7fbfc9a",
+            "created": "2026-08-17T07:45:36Z"
           },
-          "notes": "BB AppleScript send preferred. Private API OFF (do not re-enable). Approval-fenced sends only."
+          "release": null,
+          "notes": "BB AppleScript send preferred. Private API OFF. Approval-fenced sends only.",
+          "accessible": true
         },
         {
           "name": "Telegram Bot the Bot",
-          "repo": null,
-          "url": null,
-          "private": false,
           "status": "green",
           "chip": "Green",
-          "notes": "Whisper + Chrome NATURAL_UX mop shipped. Bob front-door via Telegram."
+          "notes": "Whisper + Chrome mop shipped. Bob front-door via Telegram."
         },
         {
           "name": "Codex local goals",
-          "repo": null,
-          "url": null,
-          "private": false,
           "status": "green",
           "chip": "Green",
-          "notes": "goals=true fixed. Local Codex loop continues for AdoptIQ/ops lanes."
+          "notes": "goals=true fixed. Local Codex loop for AdoptIQ/ops lanes."
         }
       ]
     },
@@ -251,13 +280,13 @@
           "name": "Logic Pro home",
           "status": "green",
           "chip": "Green",
-          "notes": "Logic Pro 12.3.1 on Mac mini \u2014 primary producer home. Logic-first file drop."
+          "notes": "Logic Pro 12.3.1 on Mac mini \u2014 primary producer home."
         },
         {
           "name": "LogicProMCP",
           "status": "jeff-gate",
           "chip": "Jeff-gate",
-          "notes": "Installed (v3.14.0). Pending Accessibility / Automation GUI grants from Jeff."
+          "notes": "Installed. Pending Accessibility / Automation GUI grants from Jeff."
         },
         {
           "name": "Moises / Suno",
@@ -278,23 +307,27 @@
           "private": false,
           "status": "parked",
           "chip": "Parked",
+          "default_branch": "main",
           "tip_sha": "1c3cab3",
+          "tip_date": "2026-08-19T06:34:19Z",
           "open_prs": 4,
-          "notes": "Parked. Open PRs ignored unless Jeff unparks."
+          "ci": null,
+          "release": null,
+          "notes": "Parked. Open PRs ignored unless Jeff unparks.",
+          "accessible": true
         },
         {
           "name": "Stalemate / Trailer Swift",
           "status": "parked",
           "chip": "Parked",
-          "notes": "Catalog/voice feel only \u2014 no live show push. Parked catalog lane."
+          "notes": "Catalog/voice feel only \u2014 parked catalog lane."
         },
         {
           "name": "RadDadSite #6",
-          "repo": "rupret007/RadDadSite",
-          "url": "https://github.com/rupret007/RadDadSite/pull/6",
           "status": "parked",
           "chip": "Parked",
-          "notes": "Draft prod deploy pipeline \u2014 CONFLICTING. Keep parked pending Che/server facts."
+          "url": "https://github.com/rupret007/RadDadSite/pull/6",
+          "notes": "Draft prod deploy \u2014 keep parked pending Che/server facts."
         }
       ]
     },
@@ -306,19 +339,13 @@
           "name": "AdoptIQ Cloud Agent",
           "status": "yellow",
           "chip": "Yellow",
-          "notes": "Cloud Agent in flight elsewhere (Build 115 / Codex+Cloud). Left alone by music/ops pass."
+          "notes": "Cloud Agent + Build 115 path in flight elsewhere."
         },
         {
           "name": "Local Codex fix",
           "status": "yellow",
           "chip": "Yellow",
-          "notes": "AdoptIQ local Codex continuation in progress (Build 115 path)."
-        },
-        {
-          "name": "Turdanoid hygiene",
-          "status": "yellow",
-          "chip": "Yellow",
-          "notes": "Cloud Agent launched to close stale conflicting/off-topic PRs #2/#4/#5."
+          "notes": "AdoptIQ local Codex continuation in progress."
         }
       ]
     }
@@ -337,5 +364,6 @@
     "Andrea_NanoBot",
     "story-corner-shelf"
   ],
+  "inaccessible": [],
   "publish_notes": "Public repo \u2014 no secrets, no CSOne customer paths, AdoptIQ high-level only."
 }
