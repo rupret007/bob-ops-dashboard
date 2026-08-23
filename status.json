@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-08-22T21:05:31.777183-05:00",
-  "generated_at_display": "Sat Aug 22, 2026 \u00b7 9:05 PM CDT",
+  "generated_at": "2026-08-22T21:47:06.725376-05:00",
+  "generated_at_display": "Sat Aug 22, 2026 \u00b7 9:47 PM CDT",
   "timezone": "America/Chicago",
   "owner": "rupret007",
   "dashboard": "bob-ops-dashboard",
@@ -19,7 +19,7 @@
           "default_branch": "master",
           "tip_sha": "c51751d",
           "tip_date": "2026-08-23T00:11:49Z",
-          "open_prs": 0,
+          "open_prs": 1,
           "ci": {
             "name": "WebJam CI",
             "conclusion": "success",
@@ -37,12 +37,12 @@
           "repo": "rupret007/StoryLiner",
           "url": "https://github.com/rupret007/StoryLiner",
           "private": false,
-          "status": "green",
-          "chip": "Green",
+          "status": "yellow",
+          "chip": "Yellow",
           "default_branch": "main",
           "tip_sha": "669e98d",
           "tip_date": "2026-08-23T00:11:39Z",
-          "open_prs": 0,
+          "open_prs": 1,
           "ci": {
             "name": "CI",
             "conclusion": "success",
@@ -59,12 +59,12 @@
           "repo": "rupret007/StoryBoard",
           "url": "https://github.com/rupret007/StoryBoard",
           "private": false,
-          "status": "green",
-          "chip": "Green",
+          "status": "yellow",
+          "chip": "Yellow",
           "default_branch": "main",
           "tip_sha": "da92aeb",
           "tip_date": "2026-07-13T22:33:00Z",
-          "open_prs": 0,
+          "open_prs": 1,
           "ci": {
             "name": "Quality",
             "conclusion": "success",
@@ -138,19 +138,19 @@
         },
         {
           "name": "AI Music Vault",
-          "repo": "rupret007/AI-Music-Vault",
-          "url": "https://github.com/rupret007/AI-Music-Vault",
-          "private": true,
-          "status": "yellow",
-          "chip": "Yellow",
-          "default_branch": "main",
-          "tip_sha": "61bbc78",
-          "tip_date": "2026-08-21T04:30:57Z",
-          "open_prs": 0,
+          "repo": null,
+          "url": null,
+          "private": null,
+          "status": "parked",
+          "chip": "Parked",
+          "default_branch": null,
+          "tip_sha": null,
+          "tip_date": null,
+          "open_prs": null,
           "ci": null,
           "release": null,
           "notes": "Private docs/index. High-level only on public page.",
-          "accessible": true
+          "accessible": false
         },
         {
           "name": "Turdanoid",
@@ -182,47 +182,35 @@
       "projects": [
         {
           "name": "AdoptIQ",
-          "repo": "rupret007/AdoptIQ",
-          "url": "https://github.com/rupret007/AdoptIQ",
-          "private": true,
+          "repo": null,
+          "url": null,
+          "private": null,
           "status": "yellow",
           "chip": "Yellow",
-          "default_branch": "main",
-          "tip_sha": "87e0cb7",
-          "tip_date": "2026-08-14T00:03:49Z",
-          "open_prs": 0,
-          "ci": {
-            "name": "Build AdoptIQ",
-            "conclusion": "failure",
-            "branch": "main",
-            "sha": "9b41475",
-            "created": "2026-08-05T01:57:27Z"
-          },
+          "default_branch": null,
+          "tip_sha": null,
+          "tip_date": null,
+          "open_prs": null,
+          "ci": null,
           "release": null,
           "notes": "Cisco CS desktop -- Build 115 in progress (Codex + Cloud Agent). No secrets on this page.",
-          "accessible": true
+          "accessible": false
         },
         {
           "name": "TACTrack",
-          "repo": "rupret007/TACTrack",
-          "url": "https://github.com/rupret007/TACTrack",
-          "private": true,
+          "repo": null,
+          "url": null,
+          "private": null,
           "status": "yellow",
           "chip": "Yellow",
-          "default_branch": "main",
-          "tip_sha": "5432348",
-          "tip_date": "2026-08-16T20:52:47Z",
-          "open_prs": 2,
-          "ci": {
-            "name": "Windows release gate (non-production)",
-            "conclusion": "failure",
-            "branch": "main",
-            "sha": "5432348",
-            "created": "2026-08-16T20:53:04Z"
-          },
+          "default_branch": null,
+          "tip_sha": null,
+          "tip_date": null,
+          "open_prs": null,
+          "ci": null,
           "release": null,
           "notes": "Private. High-level only -- CI / open PRs from live fetch.",
-          "accessible": true
+          "accessible": false
         },
         {
           "name": "AdoptIQ notes",
@@ -246,7 +234,7 @@
           "default_branch": "main",
           "tip_sha": "7fbfc9a",
           "tip_date": "2026-07-21T22:13:17Z",
-          "open_prs": 0,
+          "open_prs": 2,
           "ci": {
             "name": "Security",
             "conclusion": "failure",
@@ -339,7 +327,7 @@
           "name": "Codex",
           "status": "green",
           "chip": "Running",
-          "notes": "PID 26928 \u00b7 codex exec \u00b7 codex-local :3210 ready \u00b7 checked 2026-08-22T21:04:55-05:00",
+          "notes": "AdoptIQ PID 26928 \u00b7 gpt-5.6-sol goals \u00b7 codex-local :3210 ready \u00b7 checked 2026-08-22T20:45:00-05:00",
           "agent_id": "codex",
           "agent_state": "running"
         },
@@ -347,7 +335,7 @@
           "name": "Cursor",
           "status": "green",
           "chip": "Running",
-          "notes": "Cursor.app running \u00b7 checked 2026-08-22T21:04:55-05:00",
+          "notes": "Cursor.app present and running \u00b7 checked 2026-08-22T20:45:00-05:00",
           "agent_id": "cursor",
           "agent_state": "running"
         },
@@ -355,7 +343,7 @@
           "name": "Claude",
           "status": "parked",
           "chip": "Installed",
-          "notes": "Claude.app + 2.1.216 (Claude Code) \u00b7 checked 2026-08-22T21:04:55-05:00",
+          "notes": "Claude.app + claude 2.1.216 installed \u00b7 checked 2026-08-22T20:45:00-05:00",
           "agent_id": "claude",
           "agent_state": "installed"
         },
@@ -375,45 +363,40 @@
     "Rad-Dad-Merch",
     "RadDadSite",
     "Turdanoid",
-    "AdoptIQ",
-    "TACTrack",
-    "AI-Music-Vault",
     "rad-dad-show-night",
     "Andrea_NanoBot",
     "story-corner-shelf"
   ],
-  "inaccessible": [],
+  "inaccessible": [
+    "AdoptIQ",
+    "TACTrack",
+    "AI-Music-Vault"
+  ],
   "publish_notes": "Public repo -- no secrets, no CSOne customer paths, AdoptIQ high-level only.",
   "agents": [
     {
       "id": "codex",
       "name": "Codex",
       "state": "running",
-      "detail": "PID 26928 \u00b7 codex exec \u00b7 codex-local :3210 ready",
-      "checked_at": "2026-08-22T21:04:55-05:00"
+      "detail": "AdoptIQ PID 26928 \u00b7 gpt-5.6-sol goals \u00b7 codex-local :3210 ready",
+      "checked_at": "2026-08-22T20:45:00-05:00"
     },
     {
       "id": "cursor",
       "name": "Cursor",
       "state": "running",
-      "detail": "Cursor.app running",
-      "checked_at": "2026-08-22T21:04:55-05:00"
+      "detail": "Cursor.app present and running",
+      "checked_at": "2026-08-22T20:45:00-05:00"
     },
     {
       "id": "claude",
       "name": "Claude",
       "state": "installed",
-      "detail": "Claude.app + 2.1.216 (Claude Code)",
-      "checked_at": "2026-08-22T21:04:55-05:00"
+      "detail": "Claude.app + claude 2.1.216 installed",
+      "checked_at": "2026-08-22T20:45:00-05:00"
     }
   ],
-  "agents_source": "file:/workspace/bob-ops-dashboard/agents-status.json",
-  "verify": {
-    "email": "jeffstory007@gmail.com",
-    "sha256": "7279ca15b19e5e2c525a0869a27bb7808e80ab7592323b020cf27c39d84429f7",
-    "exp": 1787453223207,
-    "issued_at": 1787452323207
-  },
+  "agents_source": "file:/home/runner/work/bob-ops-dashboard/bob-ops-dashboard/agents-status.json",
   "pending": [
     {
       "id": "webjam-exploratory",
