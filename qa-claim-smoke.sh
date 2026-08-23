@@ -128,6 +128,9 @@ grep -q 'function safeHref' "$INDEX" || fail "safeHref missing"
 grep -q 'pollSeq' "$INDEX" || fail "pollSeq missing"
 grep -q 'decideBusy' "$INDEX" || fail "decideBusy missing"
 grep -q 'pendingSeq' "$INDEX" || fail "pendingSeq missing"
+grep -q 'function boardFingerprint' "$INDEX" || fail "boardFingerprint missing"
+grep -q 'function ageGateAgents' "$INDEX" || fail "ageGateAgents missing"
+grep -q 'data-checked-at' "$INDEX" || fail "agent data-checked-at missing"
 grep -q 'id="pending-box"' "$INDEX" || fail "pending-box missing"
 grep -q 'class="pulse"' "$INDEX" || fail "pulse strip missing"
 grep -q 'class="lane"' "$INDEX" || fail "compact lanes missing"
@@ -169,6 +172,11 @@ grep -q 'pollSeq' "$REFRESH" || fail "refresh.sh missing pollSeq"
 grep -q 'decideBusy' "$REFRESH" || fail "refresh.sh missing decideBusy"
 grep -q 'drop_leftover_verify' "$REFRESH" || fail "refresh.sh missing drop_leftover_verify"
 grep -q 'merge_first_class' "$REFRESH" || fail "refresh.sh missing merge_first_class"
+grep -q 'resolve_agents' "$REFRESH" || fail "refresh.sh missing resolve_agents"
+grep -q 'status_from_fetch' "$REFRESH" || fail "refresh.sh missing status_from_fetch"
+grep -q 'pending-more' "$REFRESH" || fail "refresh.sh missing pending-more"
+grep -q 'boardFingerprint' "$REFRESH" || fail "refresh.sh missing boardFingerprint"
+grep -q 'ageGateAgents' "$REFRESH" || fail "refresh.sh missing ageGateAgents"
 if grep -q 'from preserve_verify' "$REFRESH"; then
   fail "refresh.sh still imports preserve_verify"
 fi
@@ -188,6 +196,9 @@ pass "board_meta unit tests"
 [[ -f "$ROOT/test_open_decision.js" ]] || fail "missing test_open_decision.js"
 node "$ROOT/test_open_decision.js" "$INDEX" || fail "open-decision smoke"
 pass "open-decision smoke"
+[[ -f "$ROOT/test_soft_paint.js" ]] || fail "missing test_soft_paint.js"
+node "$ROOT/test_soft_paint.js" "$INDEX" || fail "soft-paint / agent age-gate smoke"
+pass "soft-paint / agent age-gate smoke"
 
 # 7) status.json must not carry a verify challenge
 if [[ -f "$STATUS" ]]; then
@@ -203,6 +214,15 @@ if "unlock" in str(ctrl).lower() or "verified ui" in str(ctrl).lower():
     raise SystemExit("control metadata still claims a verify gate")
 if ctrl.get("jeff_github") != "rupret007":
     raise SystemExit("control.jeff_github must stay rupret007")
+agents = st.get("agents") if isinstance(st, dict) else None
+if isinstance(agents, list):
+    for a in agents:
+        if not isinstance(a, dict):
+            raise SystemExit("agent row must be an object")
+        if str(a.get("id") or "") not in ("codex", "cursor", "claude"):
+            raise SystemExit("invented agent id: " + str(a.get("id")))
+        if str(a.get("state") or "") == "running" and not a.get("checked_at"):
+            raise SystemExit("Running without checked_at is invented status")
 print("status.json has no verify")
 PY
   pass "status.json has no verify"
@@ -243,6 +263,7 @@ if (safeHref("https://github.com/rupret007/webjam") !== "https://github.com/rupr
 if (safeHref('https://x.com/"onclick="') !== "") throw new Error("quoted url");
 if (safeHref("./status.json") !== "./status.json") throw new Error("relative url");
 if (safeHref("./evil:foo") !== "") throw new Error("colon relative");
+if (safeHref("./ok\\\\x") !== "") throw new Error("backslash relative");
 if (!src.includes("pollSeq") || !src.includes("decideBusy")) {
   throw new Error("guards missing in extracted JS");
 }
@@ -291,6 +312,7 @@ assert safe_href("https://github.com/rupret007/webjam") == "https://github.com/r
 assert safe_href('https://x.com/"x') == ""
 assert safe_href("./status.json") == "./status.json"
 assert safe_href("./evil:foo") == ""
+assert safe_href("./ok\\foo") == ""
 print("py helpers ok")
 PY
 pass "python html helpers"
@@ -314,6 +336,19 @@ Path(sys.argv[1]).write_text(json.dumps({
     },
 }, indent=2) + "\n")
 print("seeded leftover verify")
+PY
+  python3 - "$E2E/agents-status.json" <<'PY' || fail "e2e stale agents seed failed"
+import json, sys
+from pathlib import Path
+Path(sys.argv[1]).write_text(json.dumps({
+    "agents": [
+        {"id": "codex", "name": "Codex", "state": "running", "detail": "seed PID", "checked_at": "2020-01-01T00:00:00Z"},
+        {"id": "cursor", "name": "Cursor", "state": "running", "detail": "seed app", "checked_at": "2020-01-01T00:00:00Z"},
+        {"id": "claude", "name": "Claude", "state": "installed", "detail": "seed app", "checked_at": "2020-01-01T00:00:00Z"},
+        {"id": "ghost", "name": "Ghost", "state": "running", "detail": "invented"},
+    ]
+}, indent=2) + "\n")
+print("seeded stale Running agents")
 PY
   (cd "$E2E" && ./refresh.sh) || fail "refresh.sh e2e failed"
   python3 - "$E2E/status.json" "$E2E/index.html" <<'PY' || fail "refresh.sh did not strip verify / public board"
@@ -345,6 +380,25 @@ if 'class="lane"' not in html:
     raise SystemExit("generated page missing compact lanes")
 if 'class="card"' in html:
     raise SystemExit("generated page still paints essay cards")
+if "pending-more" not in html:
+    raise SystemExit("generated page missing collapsed lower-risk pending")
+if "function boardFingerprint" not in html or "function ageGateAgents" not in html:
+    raise SystemExit("generated page missing no-flash / age-gate helpers")
+agents = st.get("agents") or []
+if any(str(a.get("state") or "") == "running" for a in agents):
+    raise SystemExit("stale seed Running leaked into agents")
+if any(str(a.get("id") or "") not in ("codex", "cursor", "claude") for a in agents):
+    raise SystemExit("invented extra agent id leaked")
+if any(str(a.get("state") or "") != "unknown" for a in agents):
+    raise SystemExit("stale probe must fail closed to unknown")
+names = []
+for sec in st.get("sections") or []:
+    if sec.get("id") == "active-agents":
+        names = [p.get("name") for p in (sec.get("projects") or [])]
+if "AdoptIQ Cloud Agent" in names:
+    raise SystemExit("invented Cloud Agent yellow card leaked into pulse data")
+if "Running" in html.split('id="active-agents"', 1)[-1].split('id="silence-banner"', 1)[0]:
+    raise SystemExit("pulse strip still claims Running from stale seed")
 print("refresh.sh e2e stripped leftover verify")
 PY
   pass "refresh.sh e2e stripped leftover verify"

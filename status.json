@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-08-23T00:13:55.497806-05:00",
-  "generated_at_display": "Sun Aug 23, 2026 \u00b7 12:13 AM CDT",
+  "generated_at": "2026-08-23T00:20:15.578111-05:00",
+  "generated_at_display": "Sun Aug 23, 2026 \u00b7 12:20 AM CDT",
   "timezone": "America/Chicago",
   "owner": "rupret007",
   "dashboard": "bob-ops-dashboard",
@@ -50,7 +50,7 @@
           "default_branch": "master",
           "tip_sha": "ebbaad8",
           "tip_date": "2026-08-23T05:07:36Z",
-          "open_prs": 0,
+          "open_prs": 1,
           "ci": {
             "name": "WebJam CI",
             "conclusion": "success",
@@ -68,12 +68,12 @@
           "repo": "rupret007/StoryLiner",
           "url": "https://github.com/rupret007/StoryLiner",
           "private": false,
-          "status": "green",
-          "chip": "Green",
+          "status": "yellow",
+          "chip": "Yellow",
           "default_branch": "main",
           "tip_sha": "c68f4cb",
           "tip_date": "2026-08-23T04:37:29Z",
-          "open_prs": 0,
+          "open_prs": 1,
           "ci": {
             "name": "CI",
             "conclusion": "success",
@@ -90,12 +90,12 @@
           "repo": "rupret007/StoryBoard",
           "url": "https://github.com/rupret007/StoryBoard",
           "private": false,
-          "status": "yellow",
-          "chip": "Yellow",
+          "status": "green",
+          "chip": "Green",
           "default_branch": "main",
-          "tip_sha": "8acac10",
-          "tip_date": "2026-08-23T04:53:20Z",
-          "open_prs": 1,
+          "tip_sha": "78e020c",
+          "tip_date": "2026-08-23T05:18:53Z",
+          "open_prs": 0,
           "ci": {
             "name": "Quality",
             "conclusion": "success",
@@ -156,8 +156,8 @@
           "repo": "rupret007/rad-dad-show-night",
           "url": "https://github.com/rupret007/rad-dad-show-night",
           "private": false,
-          "status": "yellow",
-          "chip": "Yellow",
+          "status": "green",
+          "chip": "Green",
           "default_branch": "main",
           "tip_sha": "710e765",
           "tip_date": "2026-08-14T18:07:17Z",
@@ -177,8 +177,14 @@
           "default_branch": "main",
           "tip_sha": "9a9f42e",
           "tip_date": "2026-08-23T05:13:42Z",
-          "open_prs": 0,
-          "ci": null,
+          "open_prs": 1,
+          "ci": {
+            "name": "catalog-validate",
+            "conclusion": "success",
+            "branch": "main",
+            "sha": "9a9f42e",
+            "created": "2026-08-23T05:13:44Z"
+          },
           "release": null,
           "notes": "Private docs/index. High-level only on public page.",
           "accessible": true
@@ -188,8 +194,8 @@
           "repo": "rupret007/Turdanoid",
           "url": "https://github.com/rupret007/Turdanoid",
           "private": false,
-          "status": "yellow",
-          "chip": "Yellow",
+          "status": "green",
+          "chip": "Green",
           "default_branch": "main",
           "tip_sha": "a0ef856",
           "tip_date": "2026-08-23T01:02:17Z",
@@ -213,33 +219,27 @@
       "projects": [
         {
           "name": "Codex",
-          "status": "green",
-          "chip": "Running",
-          "notes": "AdoptIQ PID 26928 \u00b7 gpt-5.6-sol goals \u00b7 codex-local :3210 ready \u00b7 checked 2026-08-22T20:45:00-05:00",
+          "status": "parked",
+          "chip": "Unknown",
+          "notes": "No Mac probe in this clone \u00b7 probe stale (>45m)",
           "agent_id": "codex",
-          "agent_state": "running"
+          "agent_state": "unknown"
         },
         {
           "name": "Cursor",
-          "status": "green",
-          "chip": "Running",
-          "notes": "Cursor.app present and running \u00b7 checked 2026-08-22T20:45:00-05:00",
+          "status": "parked",
+          "chip": "Unknown",
+          "notes": "No Mac probe in this clone \u00b7 probe stale (>45m)",
           "agent_id": "cursor",
-          "agent_state": "running"
+          "agent_state": "unknown"
         },
         {
           "name": "Claude",
           "status": "parked",
-          "chip": "Installed",
-          "notes": "Claude.app + claude 2.1.216 installed \u00b7 checked 2026-08-22T20:45:00-05:00",
+          "chip": "Unknown",
+          "notes": "No Mac probe in this clone \u00b7 probe stale (>45m)",
           "agent_id": "claude",
-          "agent_state": "installed"
-        },
-        {
-          "name": "AdoptIQ Cloud Agent",
-          "status": "yellow",
-          "chip": "Yellow",
-          "notes": "Cloud Agent + Build 115 path in flight elsewhere (Cursor Cloud). High-level only."
+          "agent_state": "unknown"
         }
       ]
     },
@@ -299,15 +299,15 @@
           "status": "yellow",
           "chip": "Yellow",
           "default_branch": "main",
-          "tip_sha": "17168d7",
-          "tip_date": "2026-08-23T04:49:06Z",
+          "tip_sha": "fce8380",
+          "tip_date": "2026-08-23T05:18:39Z",
           "open_prs": 1,
           "ci": {
             "name": "Update token count",
             "conclusion": "skipped",
             "branch": "main",
-            "sha": "17168d7",
-            "created": "2026-08-23T04:49:09Z"
+            "sha": "fce8380",
+            "created": "2026-08-23T05:18:42Z"
           },
           "release": null,
           "notes": "BB AppleScript send preferred. Private API OFF. Approval-fenced sends only.",
@@ -454,19 +454,19 @@
           "name": "Soft-paint poll",
           "status": "green",
           "chip": "Feature",
-          "notes": "Client fetches status.json every 30s (pauses when the tab is hidden). Repaints the board when generated_at changes. No full reload."
+          "notes": "Client fetches status.json every 30s (pauses when the tab is hidden). Repaints when board content changes -- not on every 15m Actions timestamp. No full reload."
         },
         {
           "name": "Agents strip",
           "status": "green",
           "chip": "Feature",
-          "notes": "Codex / Cursor / Claude state from a Mac probe. Public fields only. Token-like words redacted."
+          "notes": "Codex / Cursor / Claude from a Mac probe. Stale or untimestamped probes paint Unknown. Never invent Running. Token-like words redacted."
         },
         {
           "name": "Silence banner",
           "status": "green",
           "chip": "Feature",
-          "notes": "If refresh is quiet for ~45m the page warns that chips may be stale."
+          "notes": "Actions cadence is ~15m. If refresh is quiet for ~45m the page warns that chips may be stale."
         },
         {
           "name": "XSS-safe cards",
@@ -506,31 +506,31 @@
     "TACTrack"
   ],
   "publish_notes": "Public repo -- no secrets, no CSOne customer paths, AdoptIQ high-level only.",
-  "refresh_started_ms": 1787462020760,
+  "refresh_started_ms": 1787462399130,
   "agents": [
     {
       "id": "codex",
       "name": "Codex",
-      "state": "running",
-      "detail": "AdoptIQ PID 26928 \u00b7 gpt-5.6-sol goals \u00b7 codex-local :3210 ready",
-      "checked_at": "2026-08-22T20:45:00-05:00"
+      "state": "unknown",
+      "detail": "No Mac probe in this clone \u00b7 probe stale (>45m)",
+      "checked_at": null
     },
     {
       "id": "cursor",
       "name": "Cursor",
-      "state": "running",
-      "detail": "Cursor.app present and running",
-      "checked_at": "2026-08-22T20:45:00-05:00"
+      "state": "unknown",
+      "detail": "No Mac probe in this clone \u00b7 probe stale (>45m)",
+      "checked_at": null
     },
     {
       "id": "claude",
       "name": "Claude",
-      "state": "installed",
-      "detail": "Claude.app + claude 2.1.216 installed",
-      "checked_at": "2026-08-22T20:45:00-05:00"
+      "state": "unknown",
+      "detail": "No Mac probe in this clone \u00b7 probe stale (>45m)",
+      "checked_at": null
     }
   ],
-  "agents_source": "file:/home/runner/work/bob-ops-dashboard/bob-ops-dashboard/agents-status.json",
+  "agents_source": "file:/workspace/agents-status.json:stale->unknown",
   "pending": [
     {
       "id": "webjam-exploratory",

@@ -1,7 +1,7 @@
 name: Refresh Bob Ops Dashboard
 
 # Near-realtime data: rebuild index.html + status.json from live gh every 15 minutes.
-# Client also polls status.json every 30s (pauses when tab hidden) and reloads when generated_at changes.
+# Client also polls status.json every 30s (pauses when tab hidden) and soft-paints when board content changes (not on timestamp-only refreshes).
 # Theme source of truth: refresh.sh (Claude orange #d97757 on black -- never blue).
 on:
   schedule:

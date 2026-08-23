@@ -7,7 +7,7 @@ Public, mobile-friendly status board for projects Bob is working on (Jeff Story 
 ## What's here
 
 - `index.html` -- human dashboard (Claude orange `#d97757` on near-black `#0a0a0a`)
-- Phone-first board: one **pulse strip** (freshness + agents) → **Decisions** only if something is pending → **Live shipping** as compact status lanes → quieter secondary lanes. **Abilities** are a collapsed footer. Engineer notes stay behind collapsed **How this board works**.
+- Phone-first board: one **pulse strip** (freshness + agents) → **Decisions** (high/medium first; lower-risk collapsed) → **Live shipping** as compact status lanes → quieter secondary lanes. **Abilities** are a collapsed footer. Engineer notes stay behind collapsed **How this board works**.
 - `status.json` -- machine-readable snapshot (client polls every ~30s)
 - `.github/workflows/refresh-dashboard.yml` -- Actions cron every 15 minutes
 - No secrets, tokens, CSOne customer paths, Keeper material, or private handoff text
@@ -26,7 +26,7 @@ Pending **Approve / Hold / Deny** opens a GitHub issue titled `BOB-APPROVE: <id>
 | Layer | Cadence | What it does |
 |-------|---------|--------------|
 | GitHub Actions | every **15 minutes** (+ manual `workflow_dispatch`) | runs `./refresh.sh`, commits `index.html` + `status.json` to `main` |
-| Browser client | every **30 seconds** (pauses when tab hidden) | fetches `./status.json`; if `generated_at` changes, soft-reloads; shows `Live - updated N ago` |
+| Browser client | every **30 seconds** (pauses when tab hidden) | fetches `./status.json`; soft-paints only when board content changes (not on every 15m timestamp); freshness says `Live` only inside the ~15m Actions window |
 | Manual | on demand | `./refresh.sh` or `./refresh.sh --push` from a box with `gh` |
 
 Optional: a Bob / Grok routine can also call `./refresh.sh --push` on meaningful events (merge, release, CI red). That is additive -- Actions remains the baseline; do not block shipping on the routine.
@@ -41,7 +41,8 @@ Workflow uses default `GITHUB_TOKEN` (`permissions: contents: write`) plus `gh a
 - Pages served from `main` / root.
 - Theme + public Controls/pending + client poll live in `refresh.sh` (source of truth) so they survive rebuilds.
 - Board HTML is escaped (`html.escape` / JS `esc` + `safeHref`). Do not render raw notes/URLs.
-- Soft-paint keeps `pollSeq` / `pendingSeq` / `decideBusy` race guards.
+- Soft-paint keeps `pollSeq` / `pendingSeq` / `decideBusy` race guards and a content fingerprint so timestamp-only refreshes do not flash the board.
+- Agents strip is fail-closed: stale or untimestamped Codex/Cursor/Claude probes paint **Unknown**. Never invent Running.
 - Do not merge unrelated PRs as part of a refresh.
 
 ## refresh.sh
