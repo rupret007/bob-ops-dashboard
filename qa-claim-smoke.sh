@@ -184,6 +184,9 @@ grep -q 'boardFingerprint' "$REFRESH" || fail "refresh.sh missing boardFingerpri
 grep -q 'ageGateAgents' "$REFRESH" || fail "refresh.sh missing ageGateAgents"
 grep -q 'decisionHref' "$REFRESH" || fail "refresh.sh missing decisionHref"
 grep -q 'pick_tip_ci' "$REFRESH" || fail "refresh.sh missing pick_tip_ci"
+grep -q 'actions/runs?per_page=20&branch=' "$REFRESH" || fail "refresh.sh must fetch default-branch CI only"
+grep -q 'is_ci_noise' "$ROOT/board_meta.py" || fail "board_meta.py missing is_ci_noise"
+grep -q 'CI pending' "$REFRESH" || fail "refresh.sh missing CI pending signal"
 grep -q 'AbortController' "$REFRESH" || fail "refresh.sh missing AbortController"
 grep -q 'pageshow' "$REFRESH" || fail "refresh.sh missing pageshow"
 if grep -q 'from preserve_verify' "$REFRESH"; then
@@ -395,6 +398,8 @@ if "function boardFingerprint" not in html or "function ageGateAgents" not in ht
     raise SystemExit("generated page missing no-flash / age-gate helpers")
 if "function decisionHref" not in html or "pageshow" not in html or "AbortController" not in html:
     raise SystemExit("generated page missing phone decision / poll helpers")
+if "CI pending" not in html:
+    raise SystemExit("generated page missing CI pending signal")
 if 'rel="noopener noreferrer"' not in html:
     raise SystemExit("generated page missing noreferrer decision links")
 agents = st.get("agents") or []

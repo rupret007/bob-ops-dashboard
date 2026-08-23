@@ -67,7 +67,19 @@ CI_FAIL_CONCLUSIONS = frozenset(
 CI_ACTIVE_CONCLUSIONS = frozenset(
     {"in_progress", "queued", "waiting", "pending", "requested"}
 )
+CI_RUNNING_CONCLUSIONS = frozenset({"in_progress", "waiting"})
+CI_PENDING_CONCLUSIONS = frozenset({"queued", "pending", "requested"})
 CI_OK_CONCLUSIONS = frozenset({"", "success", "skipped", "cancelled"})
+# Pages / docs deploys are not test CI. They must not hide a tip fail.
+CI_NOISE_MARKERS = (
+    "pages-build-deployment",
+    "pages build and deployment",
+    "github-pages",
+    "github pages",
+    "deploy-pages",
+    "deploy pages",
+)
+CI_NOISE_FILENAMES = frozenset({"pages.yml", "pages.yaml"})
 DECISION_VERBS = frozenset({"APPROVE", "HOLD", "DENY"})
 DECISION_ISSUE_NEW = "https://github.com/rupret007/bob-ops-dashboard/issues/new"
 PENDING_ID_RE = re.compile(r"^[a-zA-Z0-9._-]+$")
@@ -131,32 +143,125 @@ def ci_conclusion(repo: Any) -> str:
     return str(ci.get("conclusion") or "").strip().lower()
 
 
-def pick_tip_ci(runs: Any, branch: Any) -> dict[str, Any] | None:
-    """Latest default-branch run wins, including in_progress / queued.
+def is_ci_noise(run: Any) -> bool:
+    """True for Pages / docs deploy runs that are not test CI."""
+    if not isinstance(run, dict):
+        return True
+    name = str(run.get("name") or "").strip().lower()
+    path = str(run.get("path") or "").strip().lower()
+    text = name + " " + path
+    if any(marker in text for marker in CI_NOISE_MARKERS):
+        return True
+    base = path.rsplit("/", 1)[-1]
+    return base in CI_NOISE_FILENAMES
 
-    Do not skip an in-flight tip run to show an older completed success or
-    failure. Phone scan should say CI running when master is still painting.
+
+def _run_sha7(run: Any) -> str:
+    if not isinstance(run, dict):
+        return ""
+    return str(run.get("head_sha") or "").strip().lower()[:7]
+
+
+def sha_matches_tip(run: Any, tip_sha: Any) -> bool:
+    """True when the run is for this tip. Empty tip matches any run."""
+    want = str(tip_sha or "").strip().lower()
+    if not want:
+        return True
+    got = str((run or {}).get("head_sha") if isinstance(run, dict) else "").strip().lower()
+    if not got:
+        return False
+    return got.startswith(want) or want.startswith(got[:7])
+
+
+def _normalize_run(run: dict[str, Any], branch: str) -> dict[str, Any]:
+    status = str(run.get("status") or "").strip().lower()
+    concl = str(run.get("conclusion") or "").strip().lower()
+    if status and status != "completed":
+        concl = status
+    return {
+        "name": run.get("name"),
+        "conclusion": concl or None,
+        "branch": branch,
+        "sha": (run.get("head_sha") or "")[:7] or None,
+        "created": run.get("created_at"),
+    }
+
+
+def _conclusion_rank(concl: Any) -> int:
+    """Lower is worse for a phone scan. Fail beats running beats other."""
+    c = str(concl or "").strip().lower()
+    if c in CI_FAIL_CONCLUSIONS:
+        return 0
+    if c in CI_ACTIVE_CONCLUSIONS:
+        return 1
+    if c in CI_OK_CONCLUSIONS:
+        return 3
+    return 2
+
+
+def _latest_per_workflow(runs: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Newest-first list → one row per workflow path/name."""
+    seen: set[str] = set()
+    out: list[dict[str, Any]] = []
+    for run in runs:
+        key = str(run.get("path") or run.get("name") or run.get("id") or "")
+        if not key or key in seen:
+            continue
+        seen.add(key)
+        out.append(run)
+    return out
+
+
+def _worst_normalized(runs: list[dict[str, Any]], branch: str) -> dict[str, Any] | None:
+    best: dict[str, Any] | None = None
+    best_rank = 99
+    for run in runs:
+        row = _normalize_run(run, branch)
+        rank = _conclusion_rank(row.get("conclusion"))
+        if rank < best_rank:
+            best = row
+            best_rank = rank
+    return best
+
+
+def pick_tip_ci(runs: Any, branch: Any, tip_sha: Any = None) -> dict[str, Any] | None:
+    """Real test CI on the current tip SHA.
+
+    Pages / docs deploys are noise. A skipped bump-version helper must not
+    hide a failing ``CI`` workflow on the same SHA. When the repo has test
+    CI but none yet for this tip, return ``pending`` so a release tag cannot
+    claim the new commit is green.
     """
     want = str(branch or "")
     if not want:
         return None
+    branch_runs: list[dict[str, Any]] = []
     for run in runs or []:
         if not isinstance(run, dict):
             continue
         if str(run.get("head_branch") or "") != want:
             continue
-        status = str(run.get("status") or "").strip().lower()
-        concl = str(run.get("conclusion") or "").strip().lower()
-        if status and status != "completed":
-            concl = status
-        return {
-            "name": run.get("name"),
-            "conclusion": concl or None,
-            "branch": want,
-            "sha": (run.get("head_sha") or "")[:7] or None,
-            "created": run.get("created_at"),
-        }
-    return None
+        branch_runs.append(run)
+    real = [run for run in branch_runs if not is_ci_noise(run)]
+    if not real:
+        return None
+    tip = str(tip_sha or "").strip()
+    if tip:
+        scoped = [run for run in real if sha_matches_tip(run, tip)]
+        if not scoped:
+            return {
+                "name": real[0].get("name") or "CI",
+                "conclusion": "pending",
+                "branch": want,
+                "sha": tip[:7],
+                "created": None,
+            }
+        pool = _latest_per_workflow(scoped)
+    else:
+        newest = _run_sha7(real[0])
+        same_sha = [run for run in real if _run_sha7(run) == newest] if newest else real
+        pool = _latest_per_workflow(same_sha or real)
+    return _worst_normalized(pool, want)
 
 
 def status_from_fetch(
@@ -167,10 +272,11 @@ def status_from_fetch(
 ) -> str:
     """Lane status from live gh. Missing CI is OK (green). Inaccessible is parked.
 
-    Parked override still wins (ignored PRs stay parked). Live CI fail or an
-    in-flight tip run beat jeff_gate so WebJam cannot hide Red behind
-    Jeff-gate + a release tag. Empty ``ci: {}`` stays green. Cisco
-    high-level notes keep an explicit yellow override when inaccessible.
+    Parked override still wins (ignored PRs stay parked). Live CI fail,
+    in-flight, or pending-for-this-tip beat jeff_gate so WebJam cannot hide
+    Red behind Jeff-gate + a release tag. Empty ``ci: {}`` stays green
+    (Show Night). Cisco high-level notes keep an explicit yellow override
+    when inaccessible.
     """
     if override == "parked":
         return "parked"
@@ -198,14 +304,16 @@ def status_from_fetch(
 
 
 def compact_signal(project: Any) -> str | None:
-    """One scan signal. Live CI fail/running beat a release tag."""
+    """One scan signal. Live CI fail/running/pending beat a release tag."""
     if not isinstance(project, dict):
         return None
     concl = ci_conclusion(project)
     if concl in CI_FAIL_CONCLUSIONS:
         return "CI fail"
-    if concl in CI_ACTIVE_CONCLUSIONS:
+    if concl in CI_RUNNING_CONCLUSIONS:
         return "CI running"
+    if concl in CI_PENDING_CONCLUSIONS:
+        return "CI pending"
     rel = str(project.get("release") or "").strip()
     if rel:
         return rel
@@ -461,6 +569,8 @@ def board_content_fingerprint(data: Any) -> str:
             p.get("release"),
             p.get("tip_sha"),
             ci.get("conclusion") if ci else None,
+            ci.get("sha") if ci else None,
+            ci.get("name") if ci else None,
         ]
 
     sections = []
@@ -612,7 +722,7 @@ def first_class_sections() -> list[dict[str, Any]]:
                 ),
                 _card(
                     "Soft-paint poll",
-                    "Client fetches status.json every 30s (pauses when the tab is hidden). Immediate poll on pageshow / visible. Fetch aborts after 8s. Repaints when board content changes -- not on every 15m Actions timestamp.",
+                    "Client fetches status.json every 30s (pauses when the tab is hidden). Immediate poll on pageshow / visible. Fetch aborts after 8s. Repaints when board content changes -- not on every 15m Actions timestamp. Tip CI is the current SHA; Pages / skipped helpers cannot hide a fail.",
                     chip="Feature",
                 ),
                 _card(
