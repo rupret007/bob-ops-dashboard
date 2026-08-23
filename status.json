@@ -410,9 +410,9 @@
   "agents_source": "file:/workspace/bob-ops-dashboard/agents-status.json",
   "verify": {
     "email": "jeffstory007@gmail.com",
-    "sha256": "54f49bb7ea02c1380e7566cae76e22f4e144903f70dd78d1d63989abf2381a31",
-    "exp": 1787451104370,
-    "issued_at": 1787450204370
+    "sha256": "7279ca15b19e5e2c525a0869a27bb7808e80ab7592323b020cf27c39d84429f7",
+    "exp": 1787453223207,
+    "issued_at": 1787452323207
   },
   "pending": [
     {
