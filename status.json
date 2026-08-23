@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-08-22T23:32:58.363749-05:00",
-  "generated_at_display": "Sat Aug 22, 2026 \u00b7 11:32 PM CDT",
+  "generated_at": "2026-08-22T23:40:24.745580-05:00",
+  "generated_at_display": "Sat Aug 22, 2026 \u00b7 11:40 PM CDT",
   "timezone": "America/Chicago",
   "owner": "rupret007",
   "dashboard": "bob-ops-dashboard",
@@ -50,7 +50,7 @@
           "default_branch": "master",
           "tip_sha": "b5dbdd6",
           "tip_date": "2026-08-23T04:24:18Z",
-          "open_prs": 0,
+          "open_prs": 1,
           "ci": {
             "name": "WebJam CI",
             "conclusion": "success",
@@ -71,15 +71,15 @@
           "status": "green",
           "chip": "Green",
           "default_branch": "main",
-          "tip_sha": "b2251ff",
-          "tip_date": "2026-08-23T04:09:29Z",
+          "tip_sha": "c68f4cb",
+          "tip_date": "2026-08-23T04:37:29Z",
           "open_prs": 0,
           "ci": {
             "name": "CI",
             "conclusion": "success",
             "branch": "main",
-            "sha": "b2251ff",
-            "created": "2026-08-23T04:09:32Z"
+            "sha": "c68f4cb",
+            "created": "2026-08-23T04:37:32Z"
           },
           "release": null,
           "notes": "PR #1 lint fix merged; confirm main CI from live fetch.",
@@ -90,12 +90,12 @@
           "repo": "rupret007/StoryBoard",
           "url": "https://github.com/rupret007/StoryBoard",
           "private": false,
-          "status": "green",
-          "chip": "Green",
+          "status": "yellow",
+          "chip": "Yellow",
           "default_branch": "main",
           "tip_sha": "35110c6",
           "tip_date": "2026-08-23T03:04:32Z",
-          "open_prs": 0,
+          "open_prs": 1,
           "ci": {
             "name": "Quality",
             "conclusion": "success",
@@ -301,7 +301,7 @@
           "default_branch": "main",
           "tip_sha": "4f7d13b",
           "tip_date": "2026-08-23T04:15:21Z",
-          "open_prs": 0,
+          "open_prs": 1,
           "ci": {
             "name": "Update token count",
             "conclusion": "skipped",
@@ -506,7 +506,7 @@
     "AI-Music-Vault"
   ],
   "publish_notes": "Public repo -- no secrets, no CSOne customer paths, AdoptIQ high-level only.",
-  "refresh_started_ms": 1787459556755,
+  "refresh_started_ms": 1787460010036,
   "agents": [
     {
       "id": "codex",
