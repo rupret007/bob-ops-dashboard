@@ -1,9 +1,13 @@
 #!/usr/bin/env bash
 # Rebuild Bob ops dashboard from live gh data, then optionally push to Pages.
+# Noninteractive: safe for GitHub Actions (gh uses GH_TOKEN / GITHUB_TOKEN).
 # Usage:
 #   ./refresh.sh              # write index.html + status.json in this dir
 #   ./refresh.sh --push       # also commit+push to rupret007/bob-ops-dashboard main
 set -euo pipefail
+if [[ -n "${GH_TOKEN:-}" || -n "${GITHUB_TOKEN:-}" ]]; then
+  export GH_TOKEN="${GH_TOKEN:-${GITHUB_TOKEN}}"
+fi
 
 ROOT="$(cd "$(dirname "$0")" && pwd)"
 OWNER="${OWNER:-rupret007}"
@@ -394,6 +398,15 @@ html = f'''<!DOCTYPE html>
   .actions button:hover {{ border-color:var(--orange); color:var(--orange); }}
   body:not(.jeff-verified) .gated {{ opacity:.55; }}
   body.jeff-verified .gated {{ opacity:1; box-shadow:inset 0 0 0 1px rgba(217,119,87,.25); }}
+  .live-stamp {{ display:flex; flex-wrap:wrap; align-items:center; gap:.45rem; margin-top:.35rem; }}
+  .live-dot {{ width:.55rem; height:.55rem; border-radius:50%; background:var(--orange);
+    box-shadow:0 0 0 0 rgba(217,119,87,.55); animation:pulse 2s infinite; }}
+  .live-dot.stale {{ background:#64748b; animation:none; }}
+  .live-dot.poll {{ background:var(--ok); }}
+  @keyframes pulse {{ 0% {{ box-shadow:0 0 0 0 rgba(217,119,87,.55); }}
+    70% {{ box-shadow:0 0 0 8px rgba(217,119,87,0); }} 100% {{ box-shadow:0 0 0 0 rgba(217,119,87,0); }} }}
+  #freshness {{ color:var(--orange); font-weight:700; font-size:.85rem; }}
+  #freshness.stale {{ color:var(--muted); font-weight:600; }}
 </style>
 </head>
 <body>
@@ -401,7 +414,7 @@ html = f'''<!DOCTYPE html>
   <header class="hero">
     <h1><span class="mark">Bob</span> Ops Dashboard</h1>
     <div class="sub">Projects Bob is working on for Jeff Story · live music/apps focus · closet parked</div>
-    <div class="sub" style="margin-top:.35rem">Last updated: <strong>{updated_ct}</strong></div>
+    <div class="sub live-stamp" id="live-stamp" data-generated-at="{updated_iso}" data-display="{updated_ct}"><span class="live-dot" id="live-dot" aria-hidden="true"></span>Last updated: <strong id="updated-display">{updated_ct}</strong> · <span id="freshness">Live - starting</span> · polls status.json every 30s</div>
     <div class="legend">
       {chip_html("green","Green")}{chip_html("yellow","Yellow")}{chip_html("red","Red")}{chip_html("parked","Parked")}{chip_html("jeff-gate","Jeff-gate")}
     </div>
@@ -433,7 +446,7 @@ html = f'''<!DOCTYPE html>
   {''.join(sections_html)}
   <footer>
     <p>Source: <a href="https://github.com/rupret007/bob-ops-dashboard">rupret007/bob-ops-dashboard</a>
-    · <a href="./status.json">status.json</a> · Refresh: <code>./refresh.sh</code> (weekday morning).</p>
+    · <a href="./status.json">status.json</a> · Refresh: <code>./refresh.sh</code> + Actions cron every 15m · client poll 30s.</p>
     <p>Live CI via <code>gh</code>: {', '.join(status.get('fetched_repos') or [])}.</p>
   </footer>
 </div>
@@ -572,6 +585,108 @@ html = f'''<!DOCTYPE html>
 
   applyVerified(loadAuth());
 }})();
+
+(function () {{
+  // Near-realtime: poll status.json every 30s; reload when generated_at changes.
+  var POLL_MS = 30000;
+  var stamp = document.getElementById("live-stamp");
+  var freshness = document.getElementById("freshness");
+  var dot = document.getElementById("live-dot");
+  var displayEl = document.getElementById("updated-display");
+  if (!stamp || !freshness) return;
+
+  var known = stamp.getAttribute("data-generated-at") || "";
+  var knownMs = Date.parse(known) || Date.now();
+  var lastPollOk = Date.now();
+  var reloading = false;
+
+  function fmtAge(ms) {{
+    var s = Math.max(0, Math.floor(ms / 1000));
+    if (s < 8) return "Live - just now";
+    if (s < 60) return "Live - updated " + s + "s ago";
+    var m = Math.floor(s / 60);
+    if (m < 60) return "Live - updated " + m + "m ago";
+    var h = Math.floor(m / 60);
+    return "Live - updated " + h + "h ago";
+  }}
+
+  function paint() {{
+    var age = Date.now() - knownMs;
+    var label = fmtAge(age);
+    freshness.textContent = label;
+    var stale = age > 20 * 60 * 1000;
+    freshness.classList.toggle("stale", stale);
+    if (dot) {{
+      dot.classList.toggle("stale", stale);
+      // brief green flash after successful poll handled elsewhere
+    }}
+  }}
+
+  function softReload() {{
+    if (reloading) return;
+    reloading = true;
+    freshness.textContent = "refreshing...";
+    // Soft reload keeps auth localStorage; bust caches.
+    var u = new URL(window.location.href);
+    u.searchParams.set("r", String(Date.now()));
+    window.location.replace(u.toString());
+  }}
+
+  function poll() {{
+    var url = "./status.json?ts=" + Date.now();
+    fetch(url, {{ cache: "no-store" }})
+      .then(function (res) {{
+        if (!res.ok) throw new Error("HTTP " + res.status);
+        return res.json();
+      }})
+      .then(function (data) {{
+        lastPollOk = Date.now();
+        if (dot) {{
+          dot.classList.add("poll");
+          setTimeout(function () {{ dot.classList.remove("poll"); }}, 600);
+        }}
+        var next = data && data.generated_at;
+        if (next && known && next !== known) {{
+          softReload();
+          return;
+        }}
+        if (next) {{
+          known = next;
+          knownMs = Date.parse(next) || knownMs;
+          stamp.setAttribute("data-generated-at", known);
+        }}
+        if (data && data.generated_at_display && displayEl) {{
+          displayEl.textContent = data.generated_at_display;
+          stamp.setAttribute("data-display", data.generated_at_display);
+        }}
+        paint();
+      }})
+      .catch(function () {{
+        freshness.textContent = "poll failed -- retrying";
+        freshness.classList.add("stale");
+      }});
+  }}
+
+  var pollTimer = null;
+  function startPolling() {{
+    if (pollTimer) clearInterval(pollTimer);
+    poll();
+    pollTimer = setInterval(poll, POLL_MS);
+  }}
+  function stopPolling() {{
+    if (pollTimer) {{ clearInterval(pollTimer); pollTimer = null; }}
+  }}
+  document.addEventListener("visibilitychange", function () {{
+    if (document.visibilityState === "hidden") stopPolling();
+    else startPolling();
+  }});
+
+  paint();
+  setInterval(paint, 1000);
+  // Pause polls when tab hidden; resume on visible.
+  if (document.visibilityState !== "hidden") startPolling();
+  else setTimeout(function () {{ if (document.visibilityState !== "hidden") startPolling(); }}, 5000);
+}})();
 </script>
 </body>
 </html>
@@ -596,10 +711,15 @@ fi
 if [[ $PUSH -eq 1 ]]; then
   WORK="$(mktemp -d)"
   gh repo clone "$OWNER/bob-ops-dashboard" "$WORK" -- --quiet
+  mkdir -p "$WORK/.github/workflows"
   cp "$ROOT/index.html" "$ROOT/status.json" "$ROOT/README.md" "$ROOT/refresh.sh" "$WORK/"
+  if [[ -f "$ROOT/.github/workflows/refresh-dashboard.yml" ]]; then
+    cp "$ROOT/.github/workflows/refresh-dashboard.yml" "$WORK/.github/workflows/"
+  fi
   chmod +x "$WORK/refresh.sh"
   cd "$WORK"
   git add index.html status.json README.md refresh.sh
+  [[ -f .github/workflows/refresh-dashboard.yml ]] && git add .github/workflows/refresh-dashboard.yml
   if git diff --cached --quiet; then
     echo "No changes to push."
   else

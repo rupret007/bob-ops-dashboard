@@ -1,0 +1,52 @@
+name: Refresh Bob Ops Dashboard
+
+# Near-realtime data: rebuild index.html + status.json from live gh every 15 minutes.
+# Client also polls status.json every 30s (pauses when tab hidden) and reloads when generated_at changes.
+# Theme source of truth: refresh.sh (Claude orange #d97757 on black -- never blue).
+on:
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: bob-ops-dashboard-refresh
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          # Optional repo secret BOB_OPS_GH_TOKEN (repo scope) so private rupret007/*
+          # tips/CI are visible. Falls back to GITHUB_TOKEN (public data only).
+          token: ${{ secrets.BOB_OPS_GH_TOKEN || github.token }}
+
+      - name: Rebuild dashboard
+        env:
+          GH_TOKEN: ${{ secrets.BOB_OPS_GH_TOKEN || github.token }}
+          OWNER: rupret007
+        run: |
+          set -euo pipefail
+          gh auth status || true
+          chmod +x ./refresh.sh
+          ./refresh.sh
+
+      - name: Commit and push if changed
+        env:
+          GH_TOKEN: ${{ secrets.BOB_OPS_GH_TOKEN || github.token }}
+        run: |
+          set -euo pipefail
+          git config user.name "bob-ops-dashboard[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add index.html status.json
+          if git diff --cached --quiet; then
+            echo "No dashboard changes."
+            exit 0
+          fi
+          git commit -m "chore: refresh ops dashboard $(date -u +%Y-%m-%dT%H:%MZ)"
+          git push origin HEAD:main
