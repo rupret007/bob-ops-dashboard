@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-08-22T23:40:24.745580-05:00",
-  "generated_at_display": "Sat Aug 22, 2026 \u00b7 11:40 PM CDT",
+  "generated_at": "2026-08-23T00:13:55.497806-05:00",
+  "generated_at_display": "Sun Aug 23, 2026 \u00b7 12:13 AM CDT",
   "timezone": "America/Chicago",
   "owner": "rupret007",
   "dashboard": "bob-ops-dashboard",
@@ -48,15 +48,15 @@
           "status": "jeff-gate",
           "chip": "Jeff-gate",
           "default_branch": "master",
-          "tip_sha": "b5dbdd6",
-          "tip_date": "2026-08-23T04:24:18Z",
-          "open_prs": 1,
+          "tip_sha": "ebbaad8",
+          "tip_date": "2026-08-23T05:07:36Z",
+          "open_prs": 0,
           "ci": {
             "name": "WebJam CI",
             "conclusion": "success",
             "branch": "master",
-            "sha": "ca0d3b3",
-            "created": "2026-08-23T03:05:04Z"
+            "sha": "b5dbdd6",
+            "created": "2026-08-23T04:24:21Z"
           },
           "release": "v0.26.0",
           "notes": "PR #21 merged (docs on 5ca6ba5). Release stays v0.26.0 until Jeff names v0.27. Exploratory click-through Jeff-gated.",
@@ -93,15 +93,15 @@
           "status": "yellow",
           "chip": "Yellow",
           "default_branch": "main",
-          "tip_sha": "35110c6",
-          "tip_date": "2026-08-23T03:04:32Z",
+          "tip_sha": "8acac10",
+          "tip_date": "2026-08-23T04:53:20Z",
           "open_prs": 1,
           "ci": {
             "name": "Quality",
             "conclusion": "success",
             "branch": "main",
-            "sha": "35110c6",
-            "created": "2026-08-23T03:04:35Z"
+            "sha": "8acac10",
+            "created": "2026-08-23T04:53:23Z"
           },
           "release": null,
           "notes": "Quiet green unless CI says otherwise.",
@@ -169,19 +169,19 @@
         },
         {
           "name": "AI Music Vault",
-          "repo": null,
-          "url": null,
-          "private": null,
-          "status": "parked",
-          "chip": "Parked",
-          "default_branch": null,
-          "tip_sha": null,
-          "tip_date": null,
-          "open_prs": null,
+          "repo": "rupret007/AI-Music-Vault",
+          "url": "https://github.com/rupret007/AI-Music-Vault",
+          "private": false,
+          "status": "yellow",
+          "chip": "Yellow",
+          "default_branch": "main",
+          "tip_sha": "9a9f42e",
+          "tip_date": "2026-08-23T05:13:42Z",
+          "open_prs": 0,
           "ci": null,
           "release": null,
           "notes": "Private docs/index. High-level only on public page.",
-          "accessible": false
+          "accessible": true
         },
         {
           "name": "Turdanoid",
@@ -299,15 +299,15 @@
           "status": "yellow",
           "chip": "Yellow",
           "default_branch": "main",
-          "tip_sha": "4f7d13b",
-          "tip_date": "2026-08-23T04:15:21Z",
+          "tip_sha": "17168d7",
+          "tip_date": "2026-08-23T04:49:06Z",
           "open_prs": 1,
           "ci": {
             "name": "Update token count",
             "conclusion": "skipped",
             "branch": "main",
-            "sha": "4f7d13b",
-            "created": "2026-08-23T04:15:24Z"
+            "sha": "17168d7",
+            "created": "2026-08-23T04:49:09Z"
           },
           "release": null,
           "notes": "BB AppleScript send preferred. Private API OFF. Approval-fenced sends only.",
@@ -496,17 +496,17 @@
     "Rad-Dad-Merch",
     "RadDadSite",
     "Turdanoid",
+    "AI-Music-Vault",
     "rad-dad-show-night",
     "Andrea_NanoBot",
     "story-corner-shelf"
   ],
   "inaccessible": [
     "AdoptIQ",
-    "TACTrack",
-    "AI-Music-Vault"
+    "TACTrack"
   ],
   "publish_notes": "Public repo -- no secrets, no CSOne customer paths, AdoptIQ high-level only.",
-  "refresh_started_ms": 1787460010036,
+  "refresh_started_ms": 1787462020760,
   "agents": [
     {
       "id": "codex",
