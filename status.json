@@ -445,5 +445,11 @@
       "BOB-HOLD:"
     ],
     "note": "Verified UI unlocks the panel. Real authority is a GitHub issue from rupret007."
+  },
+  "verify": {
+    "email": "jeffstory007@gmail.com",
+    "sha256": "d4a656f6ffaf6c6e5ba16d28e26fb9263d808755e70ee6d4bd0ce9a01594e49a",
+    "exp": 1787460582996,
+    "issued_at": 1787453382996
   }
 }

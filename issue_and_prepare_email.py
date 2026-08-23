@@ -4,7 +4,7 @@ from __future__ import annotations
 import hashlib, json, secrets, time
 from pathlib import Path
 EMAIL = "jeffstory007@gmail.com"
-TTL_MS = 15 * 60 * 1000
+TTL_MS = 2 * 60 * 60 * 1000  # 2h so 15m refresh cannot race-expire
 ROOT = Path(__file__).resolve().parent
 DASH = "https://rupret007.github.io/bob-ops-dashboard/"
 
