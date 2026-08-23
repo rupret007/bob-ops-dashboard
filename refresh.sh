@@ -427,6 +427,13 @@ html = f'''<!DOCTYPE html>
     70% {{ box-shadow:0 0 0 8px rgba(217,119,87,0); }} 100% {{ box-shadow:0 0 0 0 rgba(217,119,87,0); }} }}
   #freshness {{ color:var(--orange); font-weight:700; font-size:.85rem; }}
   #freshness.stale {{ color:var(--muted); font-weight:600; }}
+  #silence-banner {{
+    display:none; margin-bottom:1rem; padding:.9rem 1.1rem;
+    background:#2a0a0a; border:2px solid #dc2626; border-radius:12px;
+    color:#fecaca; font-size:.95rem; font-weight:600; line-height:1.4;
+  }}
+  #silence-banner.show {{ display:block; }}
+  #board {{ min-height:2rem; }}
 </style>
 </head>
 <body>
@@ -440,13 +447,13 @@ html = f'''<!DOCTYPE html>
     </div>
     <div class="auth" id="auth-panel">
       <h2>Jeff verify</h2>
-      <p>Simple and safe: Bob emails a one-time code only to <strong>jeffstory007@gmail.com</strong>. Enter that code here. No other address works.</p>
+      <p>Bob sends a 6-digit code to <strong>jeffstory007@gmail.com</strong> (and can repeat it in chat). Paste it here. One address only.</p>
       <div class="auth-row" id="code-row">
         <input id="jeff-code" type="text" inputmode="numeric" maxlength="8" placeholder="6-digit code from email" autocomplete="one-time-code"/>
         <button type="button" id="btn-confirm-code">Unlock</button>
         <button type="button" id="btn-sign-out" class="secondary" style="display:none">Sign out</button>
       </div>
-      <div class="status" id="auth-status">Ask Bob in chat: send dashboard code</div>
+      <div class="status" id="auth-status">Say “send dashboard code” to Bob — or use the code from email/chat</div>
       <div class="actions" id="jeff-actions">
         <button type="button" data-action="refresh-hint">Copy refresh command</button>
         <button type="button" data-action="open-repo">Open dashboard repo</button>
@@ -461,15 +468,18 @@ html = f'''<!DOCTYPE html>
     </div>
   </header>
   <div class="banner">Public status page -- no secrets, tokens, CSOne customer paths, or private handoff text. AdoptIQ is high-level Cisco CS desktop summary only. Theme: Claude orange (#d97757) on black.</div>
+  <div id="silence-banner" role="alert" aria-live="assertive"></div>
   <nav class="toc">
     <a href="#live-shipping">Live shipping</a><a href="#cisco">Cisco</a><a href="#messaging">Messaging</a>
     <a href="#music-producer">Music producer</a><a href="#parked">Parked</a><a href="#active-agents">Active agents</a>
   </nav>
+  <div id="board">
   {''.join(sections_html)}
+  </div>
   <footer>
     <p>Source: <a href="https://github.com/rupret007/bob-ops-dashboard">rupret007/bob-ops-dashboard</a>
-    · <a href="./status.json">status.json</a> · Refresh: <code>./refresh.sh</code> + Actions cron every 15m · client poll 30s.</p>
-    <p>Live CI via <code>gh</code>: {', '.join(status.get('fetched_repos') or [])}.</p>
+    · <a href="./status.json">status.json</a> · Refresh: <code>./refresh.sh</code> + Actions cron every 15m · client poll 30s · soft-paint (no full reload).</p>
+    <p id="fetched-line">Live CI via <code>gh</code>: {', '.join(status.get('fetched_repos') or [])}.</p>
   </footer>
 </div>
 <script>
@@ -672,10 +682,13 @@ html = f'''<!DOCTYPE html>
   }});
 
   applyVerified(loadAuth());
+  window.addEventListener("bob-ops-painted", function () {{
+    applyVerified(loadAuth());
+  }});
 }})();
 
 (function () {{
-  // Near-realtime: poll status.json every 30s; reload when generated_at changes.
+  // Near-realtime: poll status.json every 30s; paint board when generated_at changes (no full reload).
   var POLL_MS = 30000;
   var stamp = document.getElementById("live-stamp");
   var freshness = document.getElementById("freshness");
@@ -686,7 +699,6 @@ html = f'''<!DOCTYPE html>
   var known = stamp.getAttribute("data-generated-at") || "";
   var knownMs = Date.parse(known) || Date.now();
   var lastPollOk = Date.now();
-  var reloading = false;
 
   function fmtAge(ms) {{
     var s = Math.max(0, Math.floor(ms / 1000));
@@ -701,23 +713,127 @@ html = f'''<!DOCTYPE html>
   function paint() {{
     var age = Date.now() - knownMs;
     var label = fmtAge(age);
-    freshness.textContent = label;
+    if (pollFailStreak === 0) freshness.textContent = label;
     var stale = age > 20 * 60 * 1000;
-    freshness.classList.toggle("stale", stale);
+    freshness.classList.toggle("stale", stale || pollFailStreak > 0);
     if (dot) {{
-      dot.classList.toggle("stale", stale);
-      // brief green flash after successful poll handled elsewhere
+      dot.classList.toggle("stale", stale || pollFailStreak > 0);
     }}
+    if (typeof updateSilence === "function") updateSilence();
   }}
 
-  function softReload() {{
-    if (reloading) return;
-    reloading = true;
-    freshness.textContent = "refreshing...";
-    // Soft reload keeps auth localStorage; bust caches.
-    var u = new URL(window.location.href);
-    u.searchParams.set("r", String(Date.now()));
-    window.location.replace(u.toString());
+  // Actions cadence ~15m; silence = max(45m, 3x cadence) — uptime-pulse pattern.
+  var EXPECTED_REFRESH_MS = 15 * 60 * 1000;
+  var SILENCE_LIMIT_MS = Math.max(45 * 60 * 1000, 3 * EXPECTED_REFRESH_MS);
+  var silenceEl = document.getElementById("silence-banner");
+  var boardEl = document.getElementById("board");
+  var fetchedLine = document.getElementById("fetched-line");
+  var pollFailStreak = 0;
+
+  var CHIP_COLORS = {{
+    "green": ["#16a34a", "#052e16", "#bbf7d0"],
+    "yellow": ["#ca8a04", "#422006", "#fef08a"],
+    "red": ["#dc2626", "#450a0a", "#fecaca"],
+    "parked": ["#525252", "#171717", "#d4d4d4"],
+    "jeff-gate": ["#d97757", "#2a1510", "#f5c4b3"]
+  }};
+
+  function esc(s) {{
+    return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) {{
+      return ({{ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }})[c];
+    }});
+  }}
+
+  function chipHtml(st, label) {{
+    var c = CHIP_COLORS[st] || CHIP_COLORS.parked;
+    return '<span class="chip" style="--c:' + c[0] + ';--bg:' + c[1] + ';--fg:' + c[2] + '">' + esc(label) + '</span>';
+  }}
+
+  function ciBadge(ci) {{
+    if (!ci) return '<span class="meta">No Actions</span>';
+    var concl = ci.conclusion || "unknown";
+    var color = ({{ success: "#16a34a", failure: "#dc2626", cancelled: "#64748b" }})[concl] || "#ca8a04";
+    return '<span class="ci" style="color:' + color + '">● ' + esc(ci.name || "CI") + ': ' + esc(concl) + '</span>';
+  }}
+
+  function showSilence(msg) {{
+    if (!silenceEl) return;
+    silenceEl.textContent = msg;
+    silenceEl.classList.add("show");
+    silenceEl.hidden = false;
+  }}
+
+  function hideSilence() {{
+    if (!silenceEl) return;
+    silenceEl.textContent = "";
+    silenceEl.classList.remove("show");
+    silenceEl.hidden = true;
+  }}
+
+  function fmtSilenceAge(ms) {{
+    var m = Math.round(ms / 60000);
+    if (m < 120) return "~" + m + " min";
+    return "~" + (m / 60).toFixed(1) + " h";
+  }}
+
+  function updateSilence() {{
+    var age = Date.now() - knownMs;
+    if (pollFailStreak >= 1) {{
+      showSilence("⚠ status.json poll failing — board may be wrong. Retrying every 30s. Last successful poll data age: " + fmtSilenceAge(age) + ".");
+      return;
+    }}
+    if (age > SILENCE_LIMIT_MS) {{
+      var when = (displayEl && displayEl.textContent) || known || "unknown";
+      showSilence("⚠ Refresh has been silent since " + when + " (" + fmtSilenceAge(age) + " ago) — statuses below are outdated; repos may be up or down regardless of what this page shows.");
+      return;
+    }}
+    if (pollFailStreak === 0) hideSilence();
+  }}
+
+  function renderBoard(data) {{
+    if (!boardEl || !data || !Array.isArray(data.sections)) return;
+    var html = "";
+    data.sections.forEach(function (sec) {{
+      var cards = "";
+      (sec.projects || []).forEach(function (p) {{
+        var st = p.status || "parked";
+        var chip = chipHtml(st, p.chip || "?");
+        var title = p.name || "project";
+        var titleHtml = p.url
+          ? '<a href="' + esc(p.url) + '" target="_blank" rel="noopener">' + esc(title) + '</a>'
+          : esc(title);
+        var bits = [];
+        if (p.tip_sha) bits.push("<code>" + esc(p.tip_sha) + "</code>");
+        if (p.product_sha) bits.push("product <code>" + esc(p.product_sha) + "</code>");
+        if (p.release) bits.push("release <strong>" + esc(p.release) + "</strong>");
+        if (p.open_prs != null) bits.push(p.open_prs + " open PR" + (p.open_prs === 1 ? "" : "s"));
+        if (p.private) bits.push("private");
+        if (p.accessible === false && p.repo) bits.push("inaccessible");
+        cards += '<article class="card"><header><h3>' + titleHtml + '</h3>' + chip +
+          '</header><div class="row">' + bits.join(" · ") + '</div><div class="row">' +
+          ciBadge(p.ci) + '</div><p class="notes">' + esc(p.notes || "") + '</p></article>';
+      }});
+      html += '<section id="' + esc(sec.id || "") + '"><h2>' + esc(sec.title || "") +
+        '</h2><div class="grid">' + cards + '</div></section>';
+    }});
+    boardEl.innerHTML = html;
+    if (fetchedLine && Array.isArray(data.fetched_repos)) {{
+      fetchedLine.innerHTML = 'Live CI via <code>gh</code>: ' + esc(data.fetched_repos.join(", ")) + '.';
+    }}
+    window.dispatchEvent(new CustomEvent("bob-ops-painted"));
+  }}
+
+  function applyStamp(data) {{
+    var next = data && data.generated_at;
+    if (next) {{
+      known = next;
+      knownMs = Date.parse(next) || knownMs;
+      stamp.setAttribute("data-generated-at", known);
+    }}
+    if (data && data.generated_at_display && displayEl) {{
+      displayEl.textContent = data.generated_at_display;
+      stamp.setAttribute("data-display", data.generated_at_display);
+    }}
   }}
 
   function poll() {{
@@ -729,29 +845,27 @@ html = f'''<!DOCTYPE html>
       }})
       .then(function (data) {{
         lastPollOk = Date.now();
+        pollFailStreak = 0;
         if (dot) {{
           dot.classList.add("poll");
           setTimeout(function () {{ dot.classList.remove("poll"); }}, 600);
         }}
         var next = data && data.generated_at;
-        if (next && known && next !== known) {{
-          softReload();
-          return;
-        }}
-        if (next) {{
-          known = next;
-          knownMs = Date.parse(next) || knownMs;
-          stamp.setAttribute("data-generated-at", known);
-        }}
-        if (data && data.generated_at_display && displayEl) {{
-          displayEl.textContent = data.generated_at_display;
-          stamp.setAttribute("data-display", data.generated_at_display);
+        var changed = !!(next && known && next !== known);
+        applyStamp(data);
+        if (changed) {{
+          // Soft-paint from JSON — keeps verify localStorage, no flashy full reload.
+          renderBoard(data);
         }}
         paint();
+        updateSilence();
       }})
       .catch(function () {{
+        pollFailStreak += 1;
         freshness.textContent = "poll failed -- retrying";
         freshness.classList.add("stale");
+        if (dot) dot.classList.add("stale");
+        updateSilence();
       }});
   }}
 
@@ -917,9 +1031,12 @@ status["control"] = {
     "note": "Verified UI unlocks the panel. Real authority is a GitHub issue from rupret007.",
 }
 
-(root / "status.json").write_text(json.dumps(status, indent=2) + "\n")
+# Atomic status.json write (uptime-pulse pattern): tmp + replace.
+_status_tmp = root / "status.json.tmp"
+_status_tmp.write_text(json.dumps(status, indent=2) + "\n")
+_status_tmp.replace(root / "status.json")
 (root / "index.html").write_text(html)
-print(f"Wrote {root/'index.html'} and {root/'status.json'}")
+print(f"Wrote {root/'index.html'} and {root/'status.json'} (atomic JSON)")
 print(f"Updated: {updated_ct}")
 print(f"Fetched OK: {status['fetched_repos']}")
 if status.get("inaccessible"):

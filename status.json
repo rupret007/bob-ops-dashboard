@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-08-22T20:37:23.822559-05:00",
-  "generated_at_display": "Sat Aug 22, 2026 \u00b7 8:37 PM CDT",
+  "generated_at": "2026-08-22T20:41:23.154803-05:00",
+  "generated_at_display": "Sat Aug 22, 2026 \u00b7 8:41 PM CDT",
   "timezone": "America/Chicago",
   "owner": "rupret007",
   "dashboard": "bob-ops-dashboard",
@@ -368,9 +368,9 @@
   "publish_notes": "Public repo -- no secrets, no CSOne customer paths, AdoptIQ high-level only.",
   "verify": {
     "email": "jeffstory007@gmail.com",
-    "sha256": "64b5452efb8d8a3eda0fd0fc537f9ebb8c4193114aacd1c8939252180fcc053c",
-    "exp": 1787449913779,
-    "issued_at": 1787449013779
+    "sha256": "95418792fc8b127fce9ddfa90009faa846740606922526fa8a0b20256e77c4a0",
+    "exp": 1787450143283,
+    "issued_at": 1787449243283
   },
   "pending": [
     {
