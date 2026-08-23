@@ -84,7 +84,7 @@ PY
 }
 
 need_gh
-echo "Fetching ${#REPOS[@]} repos as $OWNER …"
+echo "Fetching ${#REPOS[@]} repos as $OWNER ..."
 TMP="$(mktemp)"
 echo '[' > "$TMP"
 first=1
@@ -552,9 +552,9 @@ html = f'''<!DOCTYPE html>
       setStatus("Need all 6 digits", "bad");
       return;
     }}
-    setStatus("Checking…", "warn");
+    setStatus("Checking...", "warn");
     if (!window.crypto || !crypto.subtle) {{
-      setStatus("This browser can’t verify here. Try Safari again.", "bad");
+      setStatus("This browser cannot verify here. Try Safari again.", "bad");
       return;
     }}
     try {{
@@ -576,13 +576,13 @@ html = f'''<!DOCTYPE html>
       }}
       var hex = await sha256Hex(code + ":" + JEFF_EMAIL);
       if (hex !== String(v.sha256).toLowerCase()) {{
-        setStatus("That code doesn’t match. Try again.", "bad");
+        setStatus("That code does not match. Try again.", "bad");
         return;
       }}
       saveAuth({{ email: JEFF_EMAIL, verifiedAt: new Date().toISOString() }});
       applyVerified(loadAuth());
     }} catch (e) {{
-      setStatus("Couldn’t reach status. Pull to refresh, then Unlock.", "bad");
+      setStatus("Could not reach status. Pull to refresh, then Unlock.", "bad");
     }}
   }}
 
@@ -631,7 +631,7 @@ html = f'''<!DOCTYPE html>
       "at: " + new Date().toISOString(),
       "",
       "Bob: treat this as a one-shot inbox item. High-risk still needs the draft shown in chat before acting."
-    ].join("\n");
+    ].join(String.fromCharCode(10));
     var url = "https://github.com/rupret007/bob-ops-dashboard/issues/new?title=" +
       encodeURIComponent(t) + "&body=" + encodeURIComponent(body);
     window.open(url, "_blank", "noopener");
@@ -712,7 +712,7 @@ html = f'''<!DOCTYPE html>
       localStorage.setItem("bobOpsLastReviewed", new Date().toISOString());
       setStatus("Board marked reviewed locally at " + new Date().toLocaleString(), "ok");
     }} else if (act === "ask-code") {{
-      setStatus("Say “send dashboard code” in chat", "hint");
+      setStatus("Say send dashboard code in chat", "hint");
     }}
   }});
 
@@ -757,7 +757,7 @@ html = f'''<!DOCTYPE html>
     if (typeof updateSilence === "function") updateSilence();
   }}
 
-  // Actions cadence ~15m; silence = max(45m, 3x cadence) — uptime-pulse pattern.
+  // Actions cadence ~15m; silence = max(45m, 3x cadence) - uptime-pulse pattern.
   var EXPECTED_REFRESH_MS = 15 * 60 * 1000;
   var SILENCE_LIMIT_MS = Math.max(45 * 60 * 1000, 3 * EXPECTED_REFRESH_MS);
   var silenceEl = document.getElementById("silence-banner");
@@ -814,12 +814,12 @@ html = f'''<!DOCTYPE html>
   function updateSilence() {{
     var age = Date.now() - knownMs;
     if (pollFailStreak >= 1) {{
-      showSilence("⚠ status.json poll failing — board may be wrong. Retrying every 30s. Last successful poll data age: " + fmtSilenceAge(age) + ".");
+      showSilence("⚠ status.json poll failing - board may be wrong. Retrying every 30s. Last successful poll data age: " + fmtSilenceAge(age) + ".");
       return;
     }}
     if (age > SILENCE_LIMIT_MS) {{
       var when = (displayEl && displayEl.textContent) || known || "unknown";
-      showSilence("⚠ Refresh has been silent since " + when + " (" + fmtSilenceAge(age) + " ago) — statuses below are outdated; repos may be up or down regardless of what this page shows.");
+      showSilence("⚠ Refresh has been silent since " + when + " (" + fmtSilenceAge(age) + " ago) - statuses below are outdated; repos may be up or down regardless of what this page shows.");
       return;
     }}
     if (pollFailStreak === 0) hideSilence();
@@ -889,7 +889,7 @@ html = f'''<!DOCTYPE html>
         var changed = !!(next && known && next !== known);
         applyStamp(data);
         if (changed) {{
-          // Soft-paint from JSON — keeps verify localStorage, no flashy full reload.
+          // Soft-paint from JSON - keeps verify localStorage, no flashy full reload.
           renderBoard(data);
         }}
         paint();
