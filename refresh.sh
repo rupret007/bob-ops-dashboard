@@ -653,14 +653,14 @@ html = f'''<!DOCTYPE html>
       var div = document.createElement("div");
       div.className = "pending-item";
       div.innerHTML =
-        "<div class=\"ptitle\"></div>" +
-        "<div class=\"pdetail\"></div>" +
-        "<div class=\"prow\">" +
-          "<span class=\"prisk\"></span>" +
-          "<button type=\"button\" data-dec=\"APPROVE\">Approve</button>" +
-          "<button type=\"button\" class=\"warn\" data-dec=\"HOLD\">Hold</button>" +
-          "<button type=\"button\" class=\"danger\" data-dec=\"DENY\">Deny</button>" +
-        "</div>";
+        '<div class="ptitle"></div>' +
+        '<div class="pdetail"></div>' +
+        '<div class="prow">' +
+          '<span class="prisk"></span>' +
+          '<button type="button" data-dec="APPROVE">Approve</button>' +
+          '<button type="button" class="warn" data-dec="HOLD">Hold</button>' +
+          '<button type="button" class="danger" data-dec="DENY">Deny</button>' +
+        '</div>';
       div.querySelector(".ptitle").textContent = it.title || it.id;
       div.querySelector(".pdetail").textContent = it.detail || "";
       var rk = div.querySelector(".prisk");

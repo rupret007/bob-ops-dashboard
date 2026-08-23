@@ -368,9 +368,9 @@
   "publish_notes": "Public repo -- no secrets, no CSOne customer paths, AdoptIQ high-level only.",
   "verify": {
     "email": "jeffstory007@gmail.com",
-    "sha256": "5e0f3f14066fbfbdfbb297ee5fbb2c80c0e5c174277fcac9cae36cb201a35095",
-    "exp": 1787451083323,
-    "issued_at": 1787450183323
+    "sha256": "54f49bb7ea02c1380e7566cae76e22f4e144903f70dd78d1d63989abf2381a31",
+    "exp": 1787451104370,
+    "issued_at": 1787450204370
   },
   "pending": [
     {
