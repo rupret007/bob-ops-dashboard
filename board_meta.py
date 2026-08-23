@@ -29,6 +29,7 @@ ATTENTION_ORDER = {
     "green": 3,
     "parked": 4,
 }
+PENDING_RISK_ORDER = {"high": 0, "medium": 1, "low": 2}
 
 
 def drop_leftover_verify(status: Any) -> bool:
@@ -101,6 +102,19 @@ def compact_signal(project: Any) -> str | None:
         if concl and concl not in ("success", "skipped", "cancelled"):
             return concl
     return None
+
+
+def pending_risk_rank(item: Any) -> int:
+    """Lower = needs Jeff sooner. Unknown risk sorts last."""
+    if not isinstance(item, dict):
+        return 9
+    return PENDING_RISK_ORDER.get(str(item.get("risk") or "").lower(), 5)
+
+
+def sort_pending(items: Any) -> list[dict[str, Any]]:
+    """High-risk first so the inbox is a ten-second scan, not a card stack."""
+    rows = [it for it in (items or []) if isinstance(it, dict)]
+    return sorted(rows, key=pending_risk_rank)
 
 
 def short_note(notes: Any, limit: int = 88) -> str:

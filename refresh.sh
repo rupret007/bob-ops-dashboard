@@ -117,6 +117,7 @@ from board_meta import (
     merge_first_class,
     presentation,
     short_note,
+    sort_pending,
     visible_chip,
 )
 refresh_started_ms = int(os.environ.get("REFRESH_STARTED_MS") or 0) or int(time.time() * 1000)
@@ -616,10 +617,10 @@ def pending_item_html(it):
     detail = short_note(it.get("detail") or "", 72)
     return (
         f'<div class="pending-item" data-id="{h(pid)}" data-title="{h(title)}">'
-        f'<div class="ptitle">{h(title)}</div>'
+        f'<div class="pending-head"><div class="ptitle">{h(title)}</div>'
+        f'<span class="prisk {h(risk)}">{h(risk)}</span></div>'
         f'<div class="pdetail">{h(detail)}</div>'
         f'<div class="prow">'
-        f'<span class="prisk {h(risk)}">{h(risk)} &#183; {h(kind)}</span>'
         f'<button type="button" data-dec="APPROVE">Approve</button>'
         f'<button type="button" class="warn" data-dec="HOLD">Hold</button>'
         f'<button type="button" class="danger" data-dec="DENY">Deny</button>'
@@ -627,12 +628,12 @@ def pending_item_html(it):
     )
 
 def pending_shell(items):
-    rows = [pending_item_html(it) for it in (items or [])]
+    rows = [pending_item_html(it) for it in sort_pending(items)]
     rows = [r for r in rows if r]
     hidden = "" if rows else " hidden"
     return (
         f'<div id="pending-box" class="pending-box"{hidden}>'
-        f'<p class="pending-help">Public board -- Approve opens a GitHub issue. Submit while logged in as <code>rupret007</code> -- that login is the real yes.</p>'
+        f'<p class="pending-help">Public board -- Approve opens a GitHub issue as <code>rupret007</code>.</p>'
         f'<div id="pending-list">{"".join(rows)}</div></div>'
     )
 
@@ -808,24 +809,25 @@ html = f'''<!DOCTYPE html>
   .pending-box[hidden] {{ display:none !important; }}
   .pending-help {{ margin:0 0 .7rem; color:var(--muted); font-size:.8rem; line-height:1.4; }}
   .pending-item {{
-    border:0; border-left:3px solid var(--orange); border-radius:0 10px 10px 0;
-    padding:.75rem .85rem; margin:0 0 .7rem; background:#141010;
+    border:0; border-bottom:1px solid var(--hair); border-radius:0;
+    padding:.65rem 0; margin:0; background:transparent;
   }}
-  .pending-item .ptitle {{ font-weight:700; font-size:1rem; margin:0 0 .15rem; }}
-  .pending-item .pdetail {{ color:var(--muted); font-size:.78rem; margin:0 0 .5rem;
-    display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:1; overflow:hidden; }}
+  .pending-item:last-child {{ border-bottom:0; }}
+  .pending-item .ptitle {{ font-weight:600; font-size:.95rem; margin:0; }}
+  .pending-head {{ display:flex; align-items:baseline; justify-content:space-between; gap:.6rem; }}
+  .pending-item .pdetail {{ display:none; }}
   .pending-item .prisk {{
     display:inline-block; font-size:.65rem; text-transform:uppercase; letter-spacing:.04em;
-    color:var(--muted); padding:.1rem 0; margin-right:.15rem;
+    color:var(--muted); padding:0; margin:0; flex:0 0 auto;
   }}
   .pending-item .prisk.high {{ color:#fca5a5; }}
   .pending-item .prisk.medium {{ color:#fde68a; }}
   .pending-item .prisk.low {{ color:#86efac; }}
-  .pending-item .prow {{ display:flex; flex-wrap:wrap; gap:.45rem; align-items:center; }}
+  .pending-item .prow {{ display:grid; grid-template-columns:1fr 1fr 1fr; gap:.4rem; margin-top:.45rem; }}
   .pending-item button, .tools button {{
     background:transparent; color:var(--text); border:1px solid var(--border);
-    border-radius:8px; padding:.45rem .7rem; font-size:.8rem; cursor:pointer;
-    min-height:44px; touch-action:manipulation;
+    border-radius:8px; padding:.4rem .35rem; font-size:.78rem; cursor:pointer;
+    min-height:44px; touch-action:manipulation; width:100%;
   }}
   .pending-item button:hover, .tools button:hover {{ border-color:var(--orange); color:var(--orange); }}
   .pending-item button.warn {{ border-color:#ca8a04; }}
@@ -861,7 +863,10 @@ html = f'''<!DOCTYPE html>
   @media (min-width:720px) {{
     .wrap {{ padding:1.5rem 1.25rem 3.75rem; }}
     .lane .notes {{ -webkit-line-clamp:2; }}
-    .pending-item .pdetail {{ -webkit-line-clamp:2; }}
+    .pending-item .pdetail {{
+      display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:2; overflow:hidden;
+      color:var(--muted); font-size:.78rem; margin:.15rem 0 0;
+    }}
     .lane.is-quiet .notes {{ display:-webkit-box; }}
     section.pending h2, section.primary h2 {{ font-size:1.85rem; }}
   }}
@@ -950,8 +955,13 @@ html = f'''<!DOCTYPE html>
   function renderPending(items) {{
     var els = pendingEls();
     if (!els.box || !els.list) return;
+    var rank = {{ high: 0, medium: 1, low: 2 }};
     var rows = (items || []).filter(function (it) {{
       return it && /^[a-zA-Z0-9._-]+$/.test(String(it.id || ""));
+    }}).slice().sort(function (a, b) {{
+      var ra = rank.hasOwnProperty(String(a.risk || "").toLowerCase()) ? rank[String(a.risk).toLowerCase()] : 5;
+      var rb = rank.hasOwnProperty(String(b.risk || "").toLowerCase()) ? rank[String(b.risk).toLowerCase()] : 5;
+      return ra - rb;
     }});
     els.list.innerHTML = "";
     els.box.hidden = rows.length === 0;
@@ -964,10 +974,9 @@ html = f'''<!DOCTYPE html>
       div.setAttribute("data-id", String(it.id));
       div.setAttribute("data-title", String(it.title || it.id));
       div.innerHTML =
-        '<div class="ptitle"></div>' +
+        '<div class="pending-head"><div class="ptitle"></div><span class="prisk"></span></div>' +
         '<div class="pdetail"></div>' +
         '<div class="prow">' +
-          '<span class="prisk"></span>' +
           '<button type="button" data-dec="APPROVE">Approve</button>' +
           '<button type="button" class="warn" data-dec="HOLD">Hold</button>' +
           '<button type="button" class="danger" data-dec="DENY">Deny</button>' +
@@ -981,7 +990,7 @@ html = f'''<!DOCTYPE html>
       }}
       div.querySelector(".pdetail").textContent = detail;
       var rk = div.querySelector(".prisk");
-      rk.textContent = (it.risk || "low") + " \\u00b7 " + (it.kind || "ops");
+      rk.textContent = it.risk || "low";
       rk.classList.add(riskClass(it.risk));
       els.list.appendChild(div);
     }});
@@ -1174,23 +1183,29 @@ html = f'''<!DOCTYPE html>
     return "secondary";
   }}
   function pendingShell(items) {{
+    var rank = {{ high: 0, medium: 1, low: 2 }};
     var rows = (items || []).filter(function (it) {{
       return it && /^[a-zA-Z0-9._-]+$/.test(String(it.id || ""));
+    }}).slice().sort(function (a, b) {{
+      var ra = rank.hasOwnProperty(String(a.risk || "").toLowerCase()) ? rank[String(a.risk).toLowerCase()] : 5;
+      var rb = rank.hasOwnProperty(String(b.risk || "").toLowerCase()) ? rank[String(b.risk).toLowerCase()] : 5;
+      return ra - rb;
     }});
     var list = "";
     rows.forEach(function (it) {{
       var risk = String(it.risk || "low").toLowerCase();
       if (risk !== "high" && risk !== "medium") risk = "low";
       list += '<div class="pending-item" data-id="' + esc(it.id) + '" data-title="' + esc(it.title || it.id) + '">' +
-        '<div class="ptitle">' + esc(it.title || it.id) + "</div>" +
+        '<div class="pending-head"><div class="ptitle">' + esc(it.title || it.id) + "</div>" +
+        '<span class="prisk ' + esc(risk) + '">' + esc(risk) + "</span></div>" +
         '<div class="pdetail">' + esc(shortNote(it.detail || "", 72)) + "</div>" +
-        '<div class="prow"><span class="prisk ' + esc(risk) + '">' + esc(risk) + " \\u00b7 " + esc(it.kind || "ops") + "</span>" +
+        '<div class="prow">' +
         '<button type="button" data-dec="APPROVE">Approve</button>' +
         '<button type="button" class="warn" data-dec="HOLD">Hold</button>' +
         '<button type="button" class="danger" data-dec="DENY">Deny</button></div></div>';
     }});
     return '<div id="pending-box" class="pending-box"' + (rows.length ? "" : " hidden") + ">" +
-      '<p class="pending-help">Public board -- Approve opens a GitHub issue. Submit while logged in as <code>rupret007</code> -- that login is the real yes.</p>' +
+      '<p class="pending-help">Public board -- Approve opens a GitHub issue as <code>rupret007</code>.</p>' +
       '<div id="pending-list">' + list + "</div></div>";
   }}
   function toolsRow(projects) {{

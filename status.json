@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-08-22T22:45:59.951280-05:00",
-  "generated_at_display": "Sat Aug 22, 2026 \u00b7 10:45 PM CDT",
+  "generated_at": "2026-08-22T22:58:23.779968-05:00",
+  "generated_at_display": "Sat Aug 22, 2026 \u00b7 10:58 PM CDT",
   "timezone": "America/Chicago",
   "owner": "rupret007",
   "dashboard": "bob-ops-dashboard",
@@ -50,7 +50,7 @@
           "default_branch": "master",
           "tip_sha": "ca0d3b3",
           "tip_date": "2026-08-23T03:05:01Z",
-          "open_prs": 0,
+          "open_prs": 1,
           "ci": {
             "name": "WebJam CI",
             "conclusion": "success",
@@ -301,7 +301,7 @@
           "default_branch": "main",
           "tip_sha": "3d4657f",
           "tip_date": "2026-08-23T03:04:41Z",
-          "open_prs": 0,
+          "open_prs": 1,
           "ci": {
             "name": "Update token count",
             "conclusion": "skipped",
@@ -506,7 +506,7 @@
     "AI-Music-Vault"
   ],
   "publish_notes": "Public repo -- no secrets, no CSOne customer paths, AdoptIQ high-level only.",
-  "refresh_started_ms": 1787456744093,
+  "refresh_started_ms": 1787457487610,
   "agents": [
     {
       "id": "codex",

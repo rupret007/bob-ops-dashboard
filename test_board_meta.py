@@ -13,8 +13,10 @@ from board_meta import (
     first_class_sections,
     is_quiet_lane,
     merge_first_class,
+    pending_risk_rank,
     presentation,
     short_note,
+    sort_pending,
     visible_chip,
 )
 
@@ -121,6 +123,18 @@ class BoardMetaTests(unittest.TestCase):
         self.assertLess(attention_rank({"status": "jeff-gate"}), attention_rank({"status": "green"}))
         self.assertLess(attention_rank({"status": "red"}), attention_rank({"status": "yellow"}))
         self.assertEqual(attention_rank(None), 9)
+
+    def test_pending_sorts_high_risk_first(self):
+        self.assertLess(pending_risk_rank({"risk": "high"}), pending_risk_rank({"risk": "low"}))
+        out = sort_pending(
+            [
+                {"id": "a", "risk": "low"},
+                {"id": "b", "risk": "high"},
+                {"id": "c", "risk": "medium"},
+            ]
+        )
+        self.assertEqual([p["id"] for p in out], ["b", "c", "a"])
+        self.assertEqual(sort_pending(None), [])
 
     def test_short_note_phone_safe(self):
         self.assertEqual(short_note("Quiet green unless CI says otherwise."), "Quiet green unless CI says otherwise.")
