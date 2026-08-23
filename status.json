@@ -1,10 +1,193 @@
 {
-  "generated_at": "2026-08-22T21:47:06.725376-05:00",
-  "generated_at_display": "Sat Aug 22, 2026 \u00b7 9:47 PM CDT",
+  "generated_at": "2026-08-22T22:12:09.879772-05:00",
+  "generated_at_display": "Sat Aug 22, 2026 \u00b7 10:12 PM CDT",
   "timezone": "America/Chicago",
   "owner": "rupret007",
   "dashboard": "bob-ops-dashboard",
   "sections": [
+    {
+      "id": "abilities",
+      "title": "Abilities",
+      "projects": [
+        {
+          "name": "Rebuild this board",
+          "status": "green",
+          "chip": "Ability",
+          "notes": "Actions cron every 15m plus ./refresh.sh. Live gh SHAs/CI. No secrets on the public page."
+        },
+        {
+          "name": "Email Unlock codes",
+          "status": "green",
+          "chip": "Ability",
+          "notes": "6-digit OTP only to jeffstory007@gmail.com. Issuer TTL 2h. Refresh must not wipe a still-live verify."
+        },
+        {
+          "name": "Cursor Cloud Agents",
+          "status": "green",
+          "chip": "Ability",
+          "notes": "Repo work in Cursor Cloud. Jeff-gated / cost ceiling. High-level only here."
+        },
+        {
+          "name": "Local Codex goals",
+          "status": "green",
+          "chip": "Ability",
+          "notes": "Mac Codex loop for AdoptIQ and ops lanes. High-risk goals still shown in chat before launch."
+        },
+        {
+          "name": "Texts via Andrea",
+          "status": "jeff-gate",
+          "chip": "After yes",
+          "notes": "After Jeff yes only. Never auto-send. Draft must already exist. No send button on this page."
+        },
+        {
+          "name": "Life-ops / Domino's",
+          "status": "jeff-gate",
+          "chip": "After yes",
+          "notes": "Food, errands, Domino's: chat yes only. Honest: there is no order button on this board."
+        },
+        {
+          "name": "Music producer help",
+          "status": "jeff-gate",
+          "chip": "Jeff-gate",
+          "notes": "Logic Pro is home. Moises / Suno need Jeff login. LogicProMCP needs Jeff GUI grants."
+        },
+        {
+          "name": "Cisco CS desktop (high-level)",
+          "status": "parked",
+          "chip": "High-level",
+          "notes": "AdoptIQ / TACTrack appear as high-level Cisco CS desktop only. No CSOne paths or customer rows."
+        },
+        {
+          "name": "GitHub issue inbox",
+          "status": "jeff-gate",
+          "chip": "Authority",
+          "notes": "BOB-APPROVE / BOB-DENY / BOB-HOLD from rupret007 is the real yes. The board only opens the draft."
+        }
+      ]
+    },
+    {
+      "id": "controls",
+      "title": "Controls",
+      "projects": [
+        {
+          "name": "Unlock this phone",
+          "status": "jeff-gate",
+          "chip": "Control",
+          "notes": "Enter the emailed 6-digit code in Jeff verify above. Allowlist is jeffstory007@gmail.com only."
+        },
+        {
+          "name": "Approve / Hold / Deny",
+          "status": "jeff-gate",
+          "chip": "Control",
+          "notes": "Unlock first. Pending items open a GitHub issue as rupret007. That issue is the real yes. No silent act."
+        },
+        {
+          "name": "Copy refresh command",
+          "status": "green",
+          "chip": "Control",
+          "notes": "Copies ./refresh.sh --push. Does not run it. Safe to copy before Unlock.",
+          "control_action": "refresh-hint",
+          "action_label": "Copy command"
+        },
+        {
+          "name": "Open dashboard repo",
+          "status": "green",
+          "chip": "Control",
+          "notes": "Public repo. Real merge/authority stays on GitHub as rupret007.",
+          "url": "https://github.com/rupret007/bob-ops-dashboard",
+          "control_action": "open-repo",
+          "action_label": "Open repo"
+        },
+        {
+          "name": "Mark board reviewed",
+          "status": "green",
+          "chip": "Control",
+          "notes": "Local timestamp on this phone only. Does not notify Bob or change GitHub.",
+          "control_action": "mark-reviewed",
+          "action_label": "Mark reviewed"
+        },
+        {
+          "name": "Ask Bob for a new code",
+          "status": "green",
+          "chip": "Control",
+          "notes": "Say send dashboard code in chat. This page does not send mail.",
+          "control_action": "ask-code",
+          "action_label": "How to ask"
+        }
+      ]
+    },
+    {
+      "id": "features",
+      "title": "Features",
+      "projects": [
+        {
+          "name": "Soft-paint poll",
+          "status": "green",
+          "chip": "Feature",
+          "notes": "Client fetches status.json every 30s (pauses when the tab is hidden). Repaints the board when generated_at changes. No full reload."
+        },
+        {
+          "name": "Agents strip",
+          "status": "green",
+          "chip": "Feature",
+          "notes": "Codex / Cursor / Claude state from a Mac probe. Public fields only. Token-like words redacted."
+        },
+        {
+          "name": "Live shipping chips",
+          "status": "green",
+          "chip": "Feature",
+          "notes": "Green / yellow / red / parked / Jeff-gate from live gh tips, open PRs, and Actions."
+        },
+        {
+          "name": "Cisco high-level",
+          "status": "green",
+          "chip": "Feature",
+          "notes": "AdoptIQ Build 115 and TACTrack as public summaries. No CSOne, no customer paths."
+        },
+        {
+          "name": "Music producer gates",
+          "status": "green",
+          "chip": "Feature",
+          "notes": "Logic home is green. LogicProMCP and Moises / Suno stay Jeff-gate until Jeff grants access."
+        },
+        {
+          "name": "Parked lane",
+          "status": "parked",
+          "chip": "Feature",
+          "notes": "Closet shelf and catalog lanes stay parked unless Jeff unparks."
+        },
+        {
+          "name": "Silence banner",
+          "status": "green",
+          "chip": "Feature",
+          "notes": "If refresh is quiet for ~45m the page warns that chips may be stale."
+        },
+        {
+          "name": "Unlock + cache fallback",
+          "status": "green",
+          "chip": "Feature",
+          "notes": "SHA-256 against status.json.verify. Fail-closed: Jeff email + 64-hex sha. If Pages/Fastly serves a stale empty verify, Unlock tries raw main (no-store)."
+        },
+        {
+          "name": "XSS-safe cards",
+          "status": "green",
+          "chip": "Feature",
+          "notes": "html.escape + safeHref on server render. Soft-paint uses esc/safeHref. ASCII-safe JS (no smart quotes)."
+        },
+        {
+          "name": "Unlock race guards",
+          "status": "green",
+          "chip": "Feature",
+          "notes": "unlockBusy + unlockTouchAt stop iOS double-submit. pollSeq / pendingSeq drop stale fetches. decideBusy gates Approve."
+        },
+        {
+          "name": "Public Pages",
+          "status": "green",
+          "chip": "Feature",
+          "notes": "Free-plan GitHub Pages from main. No secrets, tokens, Keeper material, or private handoff text."
+        }
+      ]
+    },
     {
       "id": "live-shipping",
       "title": "Live shipping",
@@ -17,9 +200,9 @@
           "status": "jeff-gate",
           "chip": "Jeff-gate",
           "default_branch": "master",
-          "tip_sha": "c51751d",
-          "tip_date": "2026-08-23T00:11:49Z",
-          "open_prs": 1,
+          "tip_sha": "ca0d3b3",
+          "tip_date": "2026-08-23T03:05:01Z",
+          "open_prs": 0,
           "ci": {
             "name": "WebJam CI",
             "conclusion": "success",
@@ -37,18 +220,18 @@
           "repo": "rupret007/StoryLiner",
           "url": "https://github.com/rupret007/StoryLiner",
           "private": false,
-          "status": "yellow",
-          "chip": "Yellow",
+          "status": "green",
+          "chip": "Green",
           "default_branch": "main",
-          "tip_sha": "669e98d",
-          "tip_date": "2026-08-23T00:11:39Z",
-          "open_prs": 1,
+          "tip_sha": "5f380b7",
+          "tip_date": "2026-08-23T03:04:28Z",
+          "open_prs": 0,
           "ci": {
             "name": "CI",
             "conclusion": "success",
             "branch": "main",
-            "sha": "669e98d",
-            "created": "2026-08-23T00:11:41Z"
+            "sha": "5f380b7",
+            "created": "2026-08-23T03:04:31Z"
           },
           "release": null,
           "notes": "PR #1 lint fix merged; confirm main CI from live fetch.",
@@ -59,18 +242,18 @@
           "repo": "rupret007/StoryBoard",
           "url": "https://github.com/rupret007/StoryBoard",
           "private": false,
-          "status": "yellow",
-          "chip": "Yellow",
+          "status": "green",
+          "chip": "Green",
           "default_branch": "main",
-          "tip_sha": "da92aeb",
-          "tip_date": "2026-07-13T22:33:00Z",
-          "open_prs": 1,
+          "tip_sha": "35110c6",
+          "tip_date": "2026-08-23T03:04:32Z",
+          "open_prs": 0,
           "ci": {
             "name": "Quality",
             "conclusion": "success",
             "branch": "main",
-            "sha": "da92aeb",
-            "created": "2026-07-13T22:33:07Z"
+            "sha": "35110c6",
+            "created": "2026-08-23T03:04:35Z"
           },
           "release": null,
           "notes": "Quiet green unless CI says otherwise.",
@@ -171,7 +354,7 @@
             "created": "2026-08-23T01:02:20Z"
           },
           "release": null,
-          "notes": "Tip usually green; stale open PRs \u2192 hygiene.",
+          "notes": "Tip usually green; stale open PRs -> hygiene.",
           "accessible": true
         }
       ]
@@ -232,15 +415,15 @@
           "status": "yellow",
           "chip": "Yellow",
           "default_branch": "main",
-          "tip_sha": "7fbfc9a",
-          "tip_date": "2026-07-21T22:13:17Z",
-          "open_prs": 2,
+          "tip_sha": "3d4657f",
+          "tip_date": "2026-08-23T03:04:41Z",
+          "open_prs": 0,
           "ci": {
-            "name": "Security",
-            "conclusion": "failure",
+            "name": "Update token count",
+            "conclusion": "skipped",
             "branch": "main",
-            "sha": "7fbfc9a",
-            "created": "2026-08-17T07:45:36Z"
+            "sha": "3d4657f",
+            "created": "2026-08-23T03:04:43Z"
           },
           "release": null,
           "notes": "BB AppleScript send preferred. Private API OFF. Approval-fenced sends only.",
@@ -373,6 +556,7 @@
     "AI-Music-Vault"
   ],
   "publish_notes": "Public repo -- no secrets, no CSOne customer paths, AdoptIQ high-level only.",
+  "refresh_started_ms": 1787454713557,
   "agents": [
     {
       "id": "codex",
@@ -396,7 +580,13 @@
       "checked_at": "2026-08-22T20:45:00-05:00"
     }
   ],
-  "agents_source": "file:/home/runner/work/bob-ops-dashboard/bob-ops-dashboard/agents-status.json",
+  "agents_source": "file:/workspace/agents-status.json",
+  "verify": {
+    "email": "jeffstory007@gmail.com",
+    "sha256": "d4a656f6ffaf6c6e5ba16d28e26fb9263d808755e70ee6d4bd0ce9a01594e49a",
+    "exp": 1787460582996,
+    "issued_at": 1787453382996
+  },
   "pending": [
     {
       "id": "webjam-exploratory",
@@ -445,11 +635,5 @@
       "BOB-HOLD:"
     ],
     "note": "Verified UI unlocks the panel. Real authority is a GitHub issue from rupret007."
-  },
-  "verify": {
-    "email": "jeffstory007@gmail.com",
-    "sha256": "d4a656f6ffaf6c6e5ba16d28e26fb9263d808755e70ee6d4bd0ce9a01594e49a",
-    "exp": 1787460582996,
-    "issued_at": 1787453382996
   }
 }
