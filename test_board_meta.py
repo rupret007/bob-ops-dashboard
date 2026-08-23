@@ -16,6 +16,7 @@ from board_meta import (
     decision_href,
     drop_leftover_verify,
     first_class_sections,
+    is_ci_noise,
     is_quiet_lane,
     merge_first_class,
     parse_agents_blob,
@@ -23,6 +24,7 @@ from board_meta import (
     pick_tip_ci,
     presentation,
     resolve_agents,
+    sha_matches_tip,
     short_note,
     sort_pending,
     split_pending,
@@ -98,6 +100,7 @@ class BoardMetaTests(unittest.TestCase):
         self.assertIn("Never invent Running", blob)
         self.assertIn("Actions cadence is ~15m", blob)
         self.assertIn("real GitHub links", blob)
+        self.assertIn("Pages / skipped helpers cannot hide a fail", blob)
 
     def test_security_features_from_pr1_survive_without_unlock(self):
         blob = str(first_class_sections())
@@ -142,7 +145,11 @@ class BoardMetaTests(unittest.TestCase):
         )
         self.assertEqual(
             compact_signal({"release": "v0.26.0", "ci": {"conclusion": "queued"}}),
-            "CI running",
+            "CI pending",
+        )
+        self.assertEqual(
+            compact_signal({"release": "v0.26.0", "ci": {"conclusion": "pending"}}),
+            "CI pending",
         )
         self.assertIsNone(compact_signal({}))
         self.assertIsNone(compact_signal(None))
@@ -231,6 +238,7 @@ class BoardMetaTests(unittest.TestCase):
                 "status": "in_progress",
                 "conclusion": None,
                 "name": "WebJam CI",
+                "path": ".github/workflows/ci.yml",
                 "head_sha": "abc1234dead",
                 "created_at": "2026-08-23T05:50:00Z",
             },
@@ -239,6 +247,7 @@ class BoardMetaTests(unittest.TestCase):
                 "status": "completed",
                 "conclusion": "failure",
                 "name": "WebJam CI",
+                "path": ".github/workflows/ci.yml",
                 "head_sha": "5280686",
             },
         ]
@@ -249,6 +258,144 @@ class BoardMetaTests(unittest.TestCase):
         self.assertEqual(picked["sha"], "abc1234")
         self.assertEqual(pick_tip_ci(runs, "main"), None)
         self.assertIsNone(pick_tip_ci(None, "master"))
+
+    def test_pages_success_cannot_hide_test_fail_on_same_sha(self):
+        # Live RadDadSite 6762fe3: pages listed first, Test Site failed.
+        runs = [
+            {
+                "head_branch": "main",
+                "status": "completed",
+                "conclusion": "success",
+                "name": "pages build and deployment",
+                "path": "dynamic/pages/pages-build-deployment",
+                "head_sha": "6762fe3aaaa",
+            },
+            {
+                "head_branch": "main",
+                "status": "completed",
+                "conclusion": "failure",
+                "name": "Test Site",
+                "path": ".github/workflows/test.yml",
+                "head_sha": "6762fe3aaaa",
+            },
+        ]
+        picked = pick_tip_ci(runs, "main", "6762fe3")
+        self.assertIsNotNone(picked)
+        assert picked is not None
+        self.assertEqual(picked["conclusion"], "failure")
+        self.assertEqual(picked["name"], "Test Site")
+        self.assertTrue(is_ci_noise(runs[0]))
+        self.assertFalse(is_ci_noise(runs[1]))
+
+    def test_skipped_helper_cannot_hide_ci_fail_on_same_sha(self):
+        # Live Andrea 770fd47: newest runs are skipped bump/token helpers.
+        runs = [
+            {
+                "head_branch": "main",
+                "status": "completed",
+                "conclusion": "skipped",
+                "name": "Bump version",
+                "path": ".github/workflows/bump-version.yml",
+                "head_sha": "770fd47dead",
+            },
+            {
+                "head_branch": "main",
+                "status": "completed",
+                "conclusion": "skipped",
+                "name": "Update token count",
+                "path": ".github/workflows/update-tokens.yml",
+                "head_sha": "770fd47dead",
+            },
+            {
+                "head_branch": "main",
+                "status": "completed",
+                "conclusion": "success",
+                "name": "AGI Layer CI",
+                "path": ".github/workflows/agi-ci.yml",
+                "head_sha": "770fd47dead",
+            },
+            {
+                "head_branch": "main",
+                "status": "completed",
+                "conclusion": "failure",
+                "name": "CI",
+                "path": ".github/workflows/ci.yml",
+                "head_sha": "770fd47dead",
+            },
+        ]
+        picked = pick_tip_ci(runs, "main", "770fd47")
+        self.assertIsNotNone(picked)
+        assert picked is not None
+        self.assertEqual(picked["conclusion"], "failure")
+        self.assertEqual(picked["name"], "CI")
+
+    def test_new_tip_without_matching_ci_is_pending_not_last_sha_green(self):
+        runs = [
+            {
+                "head_branch": "master",
+                "status": "completed",
+                "conclusion": "success",
+                "name": "WebJam CI",
+                "path": ".github/workflows/ci.yml",
+                "head_sha": "4a24c8cold",
+            }
+        ]
+        picked = pick_tip_ci(runs, "master", "a4e95cb")
+        self.assertIsNotNone(picked)
+        assert picked is not None
+        self.assertEqual(picked["conclusion"], "pending")
+        self.assertEqual(picked["sha"], "a4e95cb")
+        self.assertEqual(
+            compact_signal({"release": "v0.26.0", "ci": picked}),
+            "CI pending",
+        )
+        self.assertEqual(
+            status_from_fetch(
+                {"accessible": True, "open_prs": 0, "ci": picked},
+                jeff_gate=True,
+            ),
+            "yellow",
+        )
+        self.assertIsNone(pick_tip_ci([], "master", "a4e95cb"))
+        self.assertTrue(sha_matches_tip(runs[0], "4a24c8c"))
+        self.assertFalse(sha_matches_tip(runs[0], "a4e95cb"))
+
+    def test_latest_same_workflow_success_beats_older_fail(self):
+        runs = [
+            {
+                "head_branch": "main",
+                "status": "completed",
+                "conclusion": "success",
+                "name": "Test Site",
+                "path": ".github/workflows/test.yml",
+                "head_sha": "a56c44fbbbb",
+            },
+            {
+                "head_branch": "main",
+                "status": "completed",
+                "conclusion": "failure",
+                "name": "Test Site",
+                "path": ".github/workflows/test.yml",
+                "head_sha": "a56c44fbbbb",
+            },
+        ]
+        picked = pick_tip_ci(runs, "main", "a56c44f")
+        self.assertIsNotNone(picked)
+        assert picked is not None
+        self.assertEqual(picked["conclusion"], "success")
+
+    def test_pages_only_repo_is_no_ci(self):
+        runs = [
+            {
+                "head_branch": "main",
+                "status": "completed",
+                "conclusion": "success",
+                "name": "pages build and deployment",
+                "path": "dynamic/pages/pages-build-deployment",
+                "head_sha": "abc1234eeee",
+            }
+        ]
+        self.assertIsNone(pick_tip_ci(runs, "main", "abc1234"))
 
     def test_decision_href_is_safe_and_stable(self):
         from urllib.parse import parse_qs, urlparse
@@ -390,6 +537,21 @@ class BoardMetaTests(unittest.TestCase):
         c = dict(a)
         c["pending"] = [{"id": "text-send", "risk": "high", "title": "Send", "detail": "changed"}]
         self.assertNotEqual(board_content_fingerprint(a), board_content_fingerprint(c))
+        d = dict(a)
+        d["sections"] = [
+            {
+                "id": "live-shipping",
+                "title": "Live",
+                "projects": [
+                    {
+                        "name": "WebJam",
+                        "status": "yellow",
+                        "ci": {"conclusion": "pending", "sha": "a4e95cb"},
+                    }
+                ],
+            }
+        ]
+        self.assertNotEqual(board_content_fingerprint(a), board_content_fingerprint(d))
 
     def test_drop_leftover_verify_fail_closed(self):
         status = {

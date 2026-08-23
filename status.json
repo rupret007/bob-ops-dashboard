@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-08-23T00:55:17.133156-05:00",
-  "generated_at_display": "Sun Aug 23, 2026 \u00b7 12:55 AM CDT",
+  "generated_at": "2026-08-23T01:24:06.719307-05:00",
+  "generated_at_display": "Sun Aug 23, 2026 \u00b7 1:24 AM CDT",
   "timezone": "America/Chicago",
   "owner": "rupret007",
   "dashboard": "bob-ops-dashboard",
@@ -48,15 +48,15 @@
           "status": "yellow",
           "chip": "Yellow",
           "default_branch": "master",
-          "tip_sha": "4a24c8c",
-          "tip_date": "2026-08-23T05:50:58Z",
-          "open_prs": 0,
+          "tip_sha": "a4e95cb",
+          "tip_date": "2026-08-23T06:08:12Z",
+          "open_prs": 1,
           "ci": {
             "name": "WebJam CI",
             "conclusion": "in_progress",
             "branch": "master",
-            "sha": "4a24c8c",
-            "created": "2026-08-23T05:51:01Z"
+            "sha": "a4e95cb",
+            "created": "2026-08-23T06:08:15Z"
           },
           "release": "v0.26.0",
           "notes": "PR #21 merged (docs on 5ca6ba5). Release stays v0.26.0 until Jeff names v0.27. Exploratory click-through Jeff-gated.",
@@ -68,18 +68,18 @@
           "repo": "rupret007/StoryLiner",
           "url": "https://github.com/rupret007/StoryLiner",
           "private": false,
-          "status": "green",
-          "chip": "Green",
+          "status": "yellow",
+          "chip": "Yellow",
           "default_branch": "main",
-          "tip_sha": "553f1a3",
-          "tip_date": "2026-08-23T05:41:38Z",
-          "open_prs": 0,
+          "tip_sha": "5a303d9",
+          "tip_date": "2026-08-23T06:05:45Z",
+          "open_prs": 1,
           "ci": {
             "name": "CI",
             "conclusion": "success",
             "branch": "main",
-            "sha": "553f1a3",
-            "created": "2026-08-23T05:41:41Z"
+            "sha": "5a303d9",
+            "created": "2026-08-23T06:05:48Z"
           },
           "release": null,
           "notes": "PR #1 lint fix merged; confirm main CI from live fetch.",
@@ -90,18 +90,18 @@
           "repo": "rupret007/StoryBoard",
           "url": "https://github.com/rupret007/StoryBoard",
           "private": false,
-          "status": "green",
-          "chip": "Green",
+          "status": "yellow",
+          "chip": "Yellow",
           "default_branch": "main",
-          "tip_sha": "605f837",
-          "tip_date": "2026-08-23T05:41:51Z",
+          "tip_sha": "8972ffc",
+          "tip_date": "2026-08-23T06:19:20Z",
           "open_prs": 0,
           "ci": {
             "name": "Quality",
-            "conclusion": "success",
+            "conclusion": "in_progress",
             "branch": "main",
-            "sha": "605f837",
-            "created": "2026-08-23T05:41:53Z"
+            "sha": "8972ffc",
+            "created": "2026-08-23T06:19:23Z"
           },
           "release": null,
           "notes": "Quiet green unless CI says otherwise.",
@@ -175,15 +175,15 @@
           "status": "green",
           "chip": "Green",
           "default_branch": "main",
-          "tip_sha": "aa58f12",
-          "tip_date": "2026-08-23T05:24:57Z",
+          "tip_sha": "64b2322",
+          "tip_date": "2026-08-23T06:02:12Z",
           "open_prs": 0,
           "ci": {
             "name": "catalog-validate",
             "conclusion": "success",
             "branch": "main",
-            "sha": "aa58f12",
-            "created": "2026-08-23T05:24:59Z"
+            "sha": "64b2322",
+            "created": "2026-08-23T06:02:14Z"
           },
           "release": null,
           "notes": "Private docs/index. High-level only on public page.",
@@ -296,18 +296,18 @@
           "repo": "rupret007/Andrea_NanoBot",
           "url": "https://github.com/rupret007/Andrea_NanoBot",
           "private": false,
-          "status": "green",
-          "chip": "Green",
+          "status": "red",
+          "chip": "Red",
           "default_branch": "main",
-          "tip_sha": "0a795a3",
-          "tip_date": "2026-08-23T05:40:57Z",
+          "tip_sha": "770fd47",
+          "tip_date": "2026-08-23T06:07:47Z",
           "open_prs": 0,
           "ci": {
-            "name": "AGI Layer CI",
-            "conclusion": "success",
+            "name": "CI",
+            "conclusion": "failure",
             "branch": "main",
-            "sha": "0a795a3",
-            "created": "2026-08-23T05:40:59Z"
+            "sha": "770fd47",
+            "created": "2026-08-23T06:07:49Z"
           },
           "release": null,
           "notes": "BB AppleScript send preferred. Private API OFF. Approval-fenced sends only.",
@@ -366,7 +366,13 @@
           "tip_sha": "1c3cab3",
           "tip_date": "2026-08-19T06:34:19Z",
           "open_prs": 4,
-          "ci": null,
+          "ci": {
+            "name": "Validate shelf artifacts",
+            "conclusion": "success",
+            "branch": "main",
+            "sha": "1c3cab3",
+            "created": "2026-08-19T06:34:22Z"
+          },
           "release": null,
           "notes": "Parked. Open PRs ignored unless Jeff unparks.",
           "accessible": true
@@ -454,7 +460,7 @@
           "name": "Soft-paint poll",
           "status": "green",
           "chip": "Feature",
-          "notes": "Client fetches status.json every 30s (pauses when the tab is hidden). Immediate poll on pageshow / visible. Fetch aborts after 8s. Repaints when board content changes -- not on every 15m Actions timestamp."
+          "notes": "Client fetches status.json every 30s (pauses when the tab is hidden). Immediate poll on pageshow / visible. Fetch aborts after 8s. Repaints when board content changes -- not on every 15m Actions timestamp. Tip CI is the current SHA; Pages / skipped helpers cannot hide a fail."
         },
         {
           "name": "Agents strip",
@@ -506,7 +512,7 @@
     "TACTrack"
   ],
   "publish_notes": "Public repo -- no secrets, no CSOne customer paths, AdoptIQ high-level only.",
-  "refresh_started_ms": 1787464498950,
+  "refresh_started_ms": 1787466228934,
   "agents": [
     {
       "id": "codex",

@@ -56,8 +56,9 @@ date = ((c.get("committer") or {}).get("date")) or ((c.get("author") or {}).get(
 msg = (c.get("message") or "").split("\n", 1)[0]
 
 prs = api(f"repos/{full}/pulls?state=open&per_page=100", []) or []
-runs = api(f"repos/{full}/actions/runs?per_page=20", {}) or {}
-ci = pick_tip_ci(runs.get("workflow_runs") or [], branch)
+# Default-branch only so PR runs cannot push tip CI out of the window.
+runs = api(f"repos/{full}/actions/runs?per_page=20&branch={branch}", {}) or {}
+ci = pick_tip_ci(runs.get("workflow_runs") or [], branch, sha)
 
 rels = api(f"repos/{full}/releases?per_page=1", []) or []
 release = (rels[0].get("tag_name") if rels else None)
@@ -1118,8 +1119,11 @@ html = f'''<!DOCTYPE html>
     if (concl === "failure" || concl === "timed_out" || concl === "action_required" || concl === "startup_failure") {{
       return "CI fail";
     }}
-    if (concl === "in_progress" || concl === "queued" || concl === "waiting" || concl === "pending" || concl === "requested") {{
+    if (concl === "in_progress" || concl === "waiting") {{
       return "CI running";
+    }}
+    if (concl === "queued" || concl === "pending" || concl === "requested") {{
+      return "CI pending";
     }}
     var rel = String(p.release || "").trim();
     if (rel) return rel;
@@ -1316,7 +1320,7 @@ html = f'''<!DOCTYPE html>
     function projectKey(p) {{
       if (!p) return [];
       var ci = p.ci && typeof p.ci === "object" ? p.ci : {{}};
-      return [p.name, p.status, p.chip, p.notes, p.open_prs, p.release, p.tip_sha, ci.conclusion || ""];
+      return [p.name, p.status, p.chip, p.notes, p.open_prs, p.release, p.tip_sha, ci.conclusion || "", ci.sha || "", ci.name || ""];
     }}
     var sections = (data.sections || []).map(function (sec) {{
       if (!sec) return [];

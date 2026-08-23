@@ -127,6 +127,12 @@ function run() {
   if (compactSignal({ release: "v0.26.0", ci: { conclusion: "in_progress" } }) !== "CI running") {
     fail("in-progress tip CI must say CI running");
   }
+  if (compactSignal({ release: "v0.26.0", ci: { conclusion: "queued" } }) !== "CI pending") {
+    fail("queued tip CI must say CI pending");
+  }
+  if (compactSignal({ release: "v0.26.0", ci: { conclusion: "pending" } }) !== "CI pending") {
+    fail("unstarted tip CI must say CI pending, not the release tag");
+  }
   if (compactSignal({ release: "v0.26.0", ci: { conclusion: "success" }, open_prs: 0 }) !== "v0.26.0") {
     fail("green release still shows the tag");
   }
