@@ -1239,7 +1239,8 @@ html = f'''<!DOCTYPE html>
     var repo = safeRepoUrl(p.repo_url || p.html_url) || safeRepoUrl(p.url);
     var pr = safePrUrl(p.open_pr_url) || safePrUrl(p.url);
     var agent = safeAgentUrl(p.agent_url) || safeAgentUrl(p.url);
-    var actions = safeActionsUrl(ci.html_url || p.ci_url);
+    var concl = String(ci.conclusion || "").toLowerCase();
+    var actions = (concl === "skipped" || concl === "cancelled") ? "" : safeActionsUrl(ci.html_url || p.ci_url);
     var out = {{ title: pr || repo || "" }};
     if (agent) out.agent = agent;
     if (pr) out.pr = pr;

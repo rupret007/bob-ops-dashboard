@@ -112,6 +112,7 @@ class BoardMetaTests(unittest.TestCase):
         self.assertIn("Actions cadence is ~15m", blob)
         self.assertIn("real GitHub links", blob)
         self.assertIn("Pages / skipped helpers cannot hide a fail", blob)
+        self.assertIn("cannot beat a success or become Open CI", blob)
         self.assertIn("not a failed poll", blob)
         self.assertIn("cannot rewind", blob)
         self.assertIn("stopPolling bumps pollSeq", blob)
@@ -306,6 +307,67 @@ class BoardMetaTests(unittest.TestCase):
         self.assertEqual(picked["name"], "Test Site")
         self.assertTrue(is_ci_noise(runs[0]))
         self.assertFalse(is_ci_noise(runs[1]))
+
+    def test_skipped_helper_cannot_beat_success_or_become_open_ci(self):
+        # Live Andrea ff13dc0: newest runs are skipped bump/token; CI succeeded.
+        runs = [
+            {
+                "head_branch": "main",
+                "status": "completed",
+                "conclusion": "skipped",
+                "name": "Bump version",
+                "path": ".github/workflows/bump-version.yml",
+                "head_sha": "ff13dc0dead",
+                "html_url": "https://github.com/rupret007/Andrea_NanoBot/actions/runs/32624035652",
+            },
+            {
+                "head_branch": "main",
+                "status": "completed",
+                "conclusion": "skipped",
+                "name": "Update token count",
+                "path": ".github/workflows/update-tokens.yml",
+                "head_sha": "ff13dc0dead",
+                "html_url": "https://github.com/rupret007/Andrea_NanoBot/actions/runs/32624035682",
+            },
+            {
+                "head_branch": "main",
+                "status": "completed",
+                "conclusion": "success",
+                "name": "CI",
+                "path": ".github/workflows/ci.yml",
+                "head_sha": "ff13dc0dead",
+                "html_url": "https://github.com/rupret007/Andrea_NanoBot/actions/runs/32624035660",
+            },
+            {
+                "head_branch": "main",
+                "status": "completed",
+                "conclusion": "success",
+                "name": "AGI Layer CI",
+                "path": ".github/workflows/agi-ci.yml",
+                "head_sha": "ff13dc0dead",
+                "html_url": "https://github.com/rupret007/Andrea_NanoBot/actions/runs/32624035653",
+            },
+        ]
+        picked = pick_tip_ci(runs, "main", "ff13dc0")
+        self.assertIsNotNone(picked)
+        assert picked is not None
+        self.assertEqual(picked["conclusion"], "success")
+        self.assertEqual(picked["name"], "CI")
+        self.assertEqual(
+            picked["html_url"],
+            "https://github.com/rupret007/Andrea_NanoBot/actions/runs/32624035660",
+        )
+        self.assertNotEqual(compact_signal({"ci": picked}), "CI pending")
+        hrefs = lane_hrefs(
+            {
+                "url": "https://github.com/rupret007/Andrea_NanoBot",
+                "ci": picked,
+            }
+        )
+        self.assertEqual(
+            hrefs.get("ci"),
+            "https://github.com/rupret007/Andrea_NanoBot/actions/runs/32624035660",
+        )
 
     def test_skipped_helper_cannot_hide_ci_fail_on_same_sha(self):
         # Live Andrea 770fd47: newest runs are skipped bump/token helpers.
@@ -713,6 +775,26 @@ class BoardMetaTests(unittest.TestCase):
         bare = lane_hrefs({"name": "Show Night", "url": None, "ci": {}})
         self.assertEqual(bare, {"title": ""})
         self.assertEqual(lane_hrefs(None), {})
+        skipped = lane_hrefs(
+            {
+                "url": "https://github.com/rupret007/Andrea_NanoBot",
+                "ci": {
+                    "conclusion": "skipped",
+                    "html_url": "https://github.com/rupret007/Andrea_NanoBot/actions/runs/32624035652",
+                },
+            }
+        )
+        self.assertNotIn("ci", skipped)
+        cancelled = lane_hrefs(
+            {
+                "url": "https://github.com/rupret007/Andrea_NanoBot",
+                "ci": {
+                    "conclusion": "cancelled",
+                    "html_url": "https://github.com/rupret007/Andrea_NanoBot/actions/runs/9",
+                },
+            }
+        )
+        self.assertNotIn("ci", cancelled)
 
     def test_pick_tip_ci_keeps_run_url_and_pending_has_none(self):
         runs = [

@@ -136,6 +136,8 @@ grep -q 'noopener noreferrer' "$INDEX" || fail "decision links missing noreferre
 grep -q 'function safeHref' "$INDEX" || fail "safeHref missing"
 grep -q 'function safeAgentUrl' "$INDEX" || fail "safeAgentUrl missing"
 grep -q 'function laneHrefs' "$INDEX" || fail "laneHrefs missing"
+grep -q 'concl === "skipped"' "$INDEX" || fail "laneHrefs must drop skipped Open CI"
+grep -q 'concl === "skipped"' "$REFRESH" || fail "refresh.sh laneHrefs must drop skipped Open CI"
 grep -q 'data-open="work"' "$REFRESH" || fail "refresh.sh missing work-link taps"
 grep -q 'Open agent' "$REFRESH" || fail "refresh.sh missing Open agent"
 grep -q 'Open repo' "$REFRESH" || fail "refresh.sh missing Open repo"

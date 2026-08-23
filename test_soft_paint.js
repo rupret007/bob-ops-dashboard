@@ -238,6 +238,22 @@ function run() {
   if (hrefs.agent !== goodAgent) fail("lane agent href missing");
   const empty = laneHrefs({ name: "Show Night" });
   if (empty.pr || empty.agent || empty.ci) fail("missing URLs must not invent taps");
+  const skipped = laneHrefs({
+    url: "https://github.com/rupret007/Andrea_NanoBot",
+    ci: {
+      html_url: "https://github.com/rupret007/Andrea_NanoBot/actions/runs/32624035652",
+      conclusion: "skipped",
+    },
+  });
+  if (skipped.ci) fail("skipped helper must not become Open CI");
+  const cancelled = laneHrefs({
+    url: "https://github.com/rupret007/Andrea_NanoBot",
+    ci: {
+      html_url: "https://github.com/rupret007/Andrea_NanoBot/actions/runs/9",
+      conclusion: "cancelled",
+    },
+  });
+  if (cancelled.ci) fail("cancelled helper must not become Open CI");
 
   console.log("soft-paint / agent age-gate smoke ok");
 }
