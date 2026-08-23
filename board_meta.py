@@ -71,6 +71,9 @@ CI_ACTIVE_CONCLUSIONS = frozenset(
 CI_RUNNING_CONCLUSIONS = frozenset({"in_progress", "waiting"})
 CI_PENDING_CONCLUSIONS = frozenset({"queued", "pending", "requested"})
 CI_OK_CONCLUSIONS = frozenset({"", "success", "skipped", "cancelled"})
+# Skipped / cancelled helpers are "OK" for lane color, but they are not the
+# tip test run. Success must beat them, and they must not become Open CI.
+CI_SKIP_CONCLUSIONS = frozenset({"skipped", "cancelled"})
 # Pages / docs deploys are not test CI. They must not hide a tip fail.
 CI_NOISE_MARKERS = (
     "pages-build-deployment",
@@ -343,7 +346,10 @@ def lane_hrefs(project: Any) -> dict[str, str]:
         repo = safe_repo_url(raw)
     pr = safe_pr_url(project.get("open_pr_url")) or safe_pr_url(project.get("url"))
     agent = safe_agent_url(project.get("agent_url")) or agent_url_from_fields(project)
-    actions = safe_actions_url(ci.get("html_url") or project.get("ci_url"))
+    concl = str(ci.get("conclusion") or "").strip().lower()
+    actions = ""
+    if concl not in CI_SKIP_CONCLUSIONS:
+        actions = safe_actions_url(ci.get("html_url") or project.get("ci_url"))
     title = pr or repo
     out = {"title": title}
     if agent:
@@ -453,12 +459,14 @@ def _normalize_run(run: dict[str, Any], branch: str) -> dict[str, Any]:
 
 
 def _conclusion_rank(concl: Any) -> int:
-    """Lower is worse for a phone scan. Fail beats running beats other."""
+    """Lower is worse for a phone scan. Fail beats running beats success beats skip."""
     c = str(concl or "").strip().lower()
     if c in CI_FAIL_CONCLUSIONS:
         return 0
     if c in CI_ACTIVE_CONCLUSIONS:
         return 1
+    if c in CI_SKIP_CONCLUSIONS:
+        return 4
     if c in CI_OK_CONCLUSIONS:
         return 3
     return 2
@@ -998,7 +1006,7 @@ def first_class_sections() -> list[dict[str, Any]]:
                 ),
                 _card(
                     "Soft-paint poll",
-                    "Client fetches status.json every 30s (pauses when the tab is hidden). Immediate poll on pageshow / visible. Fetch aborts after 8s. Hide / iOS-return abort is not a failed poll. A stale cached status.json cannot rewind the board. Repaints when board content changes -- not on every 15m Actions timestamp. Tip CI is the current SHA; Pages / skipped helpers cannot hide a fail. Lanes prefer the open PR; CI fail/running taps the Actions run when a run URL is known.",
+                    "Client fetches status.json every 30s (pauses when the tab is hidden). Immediate poll on pageshow / visible. Fetch aborts after 8s. Hide / iOS-return abort is not a failed poll. A stale cached status.json cannot rewind the board. Repaints when board content changes -- not on every 15m Actions timestamp. Tip CI is the current SHA; Pages / skipped helpers cannot hide a fail. A skipped or cancelled helper cannot beat a success or become Open CI. Lanes prefer the open PR; CI fail/running taps the Actions run when a run URL is known.",
                     chip="Feature",
                 ),
                 _card(

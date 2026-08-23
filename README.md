@@ -43,7 +43,7 @@ Workflow uses default `GITHUB_TOKEN` (`permissions: contents: write`) plus `gh a
 - Theme + public Controls/pending + client poll live in `refresh.sh` (source of truth) so they survive rebuilds.
 - Board HTML is escaped (`html.escape` / JS `esc` + `safeHref`). Do not render raw notes/URLs.
 - Soft-paint keeps `pollSeq` / `pendingSeq` / `decideBusy` race guards and a content fingerprint so timestamp-only refreshes do not flash the board. Tab-hide / bfcache abort invalidates the in-flight seq (not a fail). A stale cached `status.json` cannot rewind freshness or rewrite lanes. Work taps keep a real href and use `openBlank` when native `_blank` is not available.
-- Tip CI is the current default-branch SHA. Pages / docs deploys and a skipped helper cannot hide a failing test workflow. A new tip with no matching run yet paints **CI pending**, not last-SHA green + a release tag.
+- Tip CI is the current default-branch SHA. Pages / docs deploys and a skipped helper cannot hide a failing test workflow. A skipped or cancelled helper cannot beat a success on the same SHA or become **Open CI**. A new tip with no matching run yet paints **CI pending**, not last-SHA green + a release tag.
 - Agents strip is fail-closed: stale or untimestamped Codex/Cursor/Claude probes paint **Unknown**. Never invent Running. Cloud pills require a real `cursor.com/agents/bc-` URL from probe or an open PR body.
 - Do not merge unrelated PRs as part of a refresh.
 
