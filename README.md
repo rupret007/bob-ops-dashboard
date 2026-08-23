@@ -8,6 +8,7 @@ Public, mobile-friendly status board for projects Bob is working on (Jeff Story 
 
 - `index.html` -- human dashboard (Claude orange `#d97757` on near-black `#0a0a0a`)
 - Phone-first board: one **pulse strip** (freshness + agents) → **Decisions** (high/medium first; lower-risk collapsed) → **Live shipping** as compact status lanes → quieter secondary lanes. **Abilities** are a collapsed footer. Engineer notes stay behind collapsed **How this board works**.
+- Tap-to-open: Cloud Agent pills with a real `cursor.com/agents/bc-…` URL (never invented) → Open agent / Open PR. Lanes prefer the open PR, plus Open repo / Open CI when those URLs are known. iOS-safe: real `<a target=_blank>` plus `openBlank` fallback. Never invent a bc-id or a green status.
 - `status.json` -- machine-readable snapshot (client polls every ~30s)
 - `.github/workflows/refresh-dashboard.yml` -- Actions cron every 15 minutes
 - No secrets, tokens, CSOne customer paths, Keeper material, or private handoff text
@@ -41,9 +42,9 @@ Workflow uses default `GITHUB_TOKEN` (`permissions: contents: write`) plus `gh a
 - Pages served from `main` / root.
 - Theme + public Controls/pending + client poll live in `refresh.sh` (source of truth) so they survive rebuilds.
 - Board HTML is escaped (`html.escape` / JS `esc` + `safeHref`). Do not render raw notes/URLs.
-- Soft-paint keeps `pollSeq` / `pendingSeq` / `decideBusy` race guards and a content fingerprint so timestamp-only refreshes do not flash the board. Tab-hide / bfcache abort invalidates the in-flight seq (not a fail). A stale cached `status.json` cannot rewind freshness or rewrite lanes.
+- Soft-paint keeps `pollSeq` / `pendingSeq` / `decideBusy` race guards and a content fingerprint so timestamp-only refreshes do not flash the board. Tab-hide / bfcache abort invalidates the in-flight seq (not a fail). A stale cached `status.json` cannot rewind freshness or rewrite lanes. Work taps keep a real href and use `openBlank` when native `_blank` is not available.
 - Tip CI is the current default-branch SHA. Pages / docs deploys and a skipped helper cannot hide a failing test workflow. A new tip with no matching run yet paints **CI pending**, not last-SHA green + a release tag.
-- Agents strip is fail-closed: stale or untimestamped Codex/Cursor/Claude probes paint **Unknown**. Never invent Running.
+- Agents strip is fail-closed: stale or untimestamped Codex/Cursor/Claude probes paint **Unknown**. Never invent Running. Cloud pills require a real `cursor.com/agents/bc-` URL from probe or an open PR body.
 - Do not merge unrelated PRs as part of a refresh.
 
 ## refresh.sh

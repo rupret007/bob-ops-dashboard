@@ -134,6 +134,15 @@ grep -q 'function pollPaintDecision' "$INDEX" || fail "pollPaintDecision missing
 grep -q 'pollSeq += 1' "$INDEX" || fail "stopPolling must bump pollSeq before abort"
 grep -q 'noopener noreferrer' "$INDEX" || fail "decision links missing noreferrer"
 grep -q 'function safeHref' "$INDEX" || fail "safeHref missing"
+grep -q 'function safeAgentUrl' "$INDEX" || fail "safeAgentUrl missing"
+grep -q 'function laneHrefs' "$INDEX" || fail "laneHrefs missing"
+grep -q 'data-open="work"' "$REFRESH" || fail "refresh.sh missing work-link taps"
+grep -q 'Open agent' "$REFRESH" || fail "refresh.sh missing Open agent"
+grep -q 'Open repo' "$REFRESH" || fail "refresh.sh missing Open repo"
+grep -q 'Open CI' "$REFRESH" || fail "refresh.sh missing Open CI"
+grep -q 'function handleWorkClick' "$INDEX" || fail "handleWorkClick missing"
+grep -q 'function openWorkLink' "$INDEX" || fail "openWorkLink missing"
+grep -q 'window.openBlank = openBlank' "$INDEX" || fail "openBlank not exposed"
 grep -q 'pollSeq' "$INDEX" || fail "pollSeq missing"
 grep -q 'decideBusy' "$INDEX" || fail "decideBusy missing"
 grep -q 'pendingSeq' "$INDEX" || fail "pendingSeq missing"
@@ -197,6 +206,13 @@ grep -q 'pollFailureCounts' "$REFRESH" || fail "refresh.sh missing pollFailureCo
 grep -q 'pollPaintDecision' "$REFRESH" || fail "refresh.sh missing pollPaintDecision"
 grep -q 'pollSeq += 1' "$REFRESH" || fail "refresh.sh stopPolling must bump pollSeq"
 grep -q 'pageshow' "$REFRESH" || fail "refresh.sh missing pageshow"
+grep -q 'safe_agent_url' "$ROOT/board_meta.py" || fail "board_meta.py missing safe_agent_url"
+grep -q 'lane_hrefs' "$ROOT/board_meta.py" || fail "board_meta.py missing lane_hrefs"
+grep -q 'merge_cloud_agents' "$REFRESH" || fail "refresh.sh missing merge_cloud_agents"
+grep -q 'pick_open_pr' "$REFRESH" || fail "refresh.sh missing pick_open_pr"
+grep -q 'function handleWorkClick' "$REFRESH" || fail "refresh.sh missing handleWorkClick"
+grep -q 'function openWorkLink' "$REFRESH" || fail "refresh.sh missing openWorkLink"
+grep -q 'window.openBlank = openBlank' "$REFRESH" || fail "refresh.sh must expose openBlank"
 if grep -q 'from preserve_verify' "$REFRESH"; then
   fail "refresh.sh still imports preserve_verify"
 fi
@@ -219,6 +235,9 @@ pass "open-decision smoke"
 [[ -f "$ROOT/test_soft_paint.js" ]] || fail "missing test_soft_paint.js"
 node "$ROOT/test_soft_paint.js" "$INDEX" || fail "soft-paint / agent age-gate smoke"
 pass "soft-paint / agent age-gate smoke"
+[[ -f "$ROOT/test_open_links.js" ]] || fail "missing test_open_links.js"
+node "$ROOT/test_open_links.js" "$INDEX" || fail "open-links smoke"
+pass "open-links smoke"
 
 # 7) status.json must not carry a verify challenge
 if [[ -f "$STATUS" ]]; then
@@ -243,6 +262,19 @@ if isinstance(agents, list):
             raise SystemExit("invented agent id: " + str(a.get("id")))
         if str(a.get("state") or "") == "running" and not a.get("checked_at"):
             raise SystemExit("Running without checked_at is invented status")
+cloud = st.get("cloud_agents") if isinstance(st, dict) else None
+if isinstance(cloud, list):
+    for a in cloud:
+        if not isinstance(a, dict):
+            raise SystemExit("cloud agent row must be an object")
+        url = str(a.get("url") or "")
+        if "https://cursor.com/agents/bc-" not in url:
+            raise SystemExit("cloud agent missing real cursor.com/agents/bc- url")
+        if str(a.get("state") or "") == "running":
+            raise SystemExit("cloud agent invented Running")
+        bc = url.rsplit("/", 1)[-1].split("?")[0].lower()
+        if str(a.get("id") or "").lower() != bc:
+            raise SystemExit("cloud agent id must match url bc-id")
 print("status.json has no verify")
 PY
   pass "status.json has no verify"
@@ -366,7 +398,16 @@ Path(sys.argv[1]).write_text(json.dumps({
         {"id": "cursor", "name": "Cursor", "state": "running", "detail": "seed app", "checked_at": "2020-01-01T00:00:00Z"},
         {"id": "claude", "name": "Claude", "state": "installed", "detail": "seed app", "checked_at": "2020-01-01T00:00:00Z"},
         {"id": "ghost", "name": "Ghost", "state": "running", "detail": "invented"},
-    ]
+    ],
+    "cloud_agents": [
+        {
+            "name": "Seed",
+            "state": "running",
+            "url": "https://cursor.com/agents/bc-12345678-1234-1234-1234-123456789abc",
+            "pr_url": "https://github.com/rupret007/bob-ops-dashboard/pull/8",
+        },
+        {"name": "Fake", "url": "https://evil.example/agents/bc-12345678-1234-1234-1234-123456789abc"},
+    ],
 }, indent=2) + "\n")
 print("seeded stale Running agents")
 PY
@@ -410,10 +451,20 @@ if "function pollIsNewer" not in html or "function pollFailureCounts" not in htm
     raise SystemExit("generated page missing poll no-flash helpers")
 if "pollSeq += 1" not in html:
     raise SystemExit("generated page stopPolling must bump pollSeq")
+if "function safeAgentUrl" not in html or "function laneHrefs" not in html:
+    raise SystemExit("generated page missing work-link helpers")
+if "function handleWorkClick" not in html or "function openWorkLink" not in html:
+    raise SystemExit("generated page missing iOS work-link fallback")
+if "window.openBlank = openBlank" not in html:
+    raise SystemExit("generated page missing window.openBlank")
 if "CI pending" not in html:
     raise SystemExit("generated page missing CI pending signal")
 if 'rel="noopener noreferrer"' not in html:
     raise SystemExit("generated page missing noreferrer decision links")
+if "Open agent" not in html:
+    raise SystemExit("generated page missing Open agent tap")
+if "lane-links" not in html and "data-open=\"work\"" not in html:
+    raise SystemExit("generated page missing work links")
 agents = st.get("agents") or []
 if any(str(a.get("state") or "") == "running" for a in agents):
     raise SystemExit("stale seed Running leaked into agents")
@@ -421,6 +472,17 @@ if any(str(a.get("id") or "") not in ("codex", "cursor", "claude") for a in agen
     raise SystemExit("invented extra agent id leaked")
 if any(str(a.get("state") or "") != "unknown" for a in agents):
     raise SystemExit("stale probe must fail closed to unknown")
+cloud = st.get("cloud_agents") or []
+if not any(
+    str(a.get("url") or "") == "https://cursor.com/agents/bc-12345678-1234-1234-1234-123456789abc"
+    for a in cloud
+    if isinstance(a, dict)
+):
+    raise SystemExit("seeded cloud agent URL missing")
+if any("evil.example" in str(a.get("url") or "") for a in cloud if isinstance(a, dict)):
+    raise SystemExit("evil cloud agent URL leaked")
+if any(str(a.get("state") or "") == "running" for a in cloud if isinstance(a, dict)):
+    raise SystemExit("cloud agent invented Running")
 names = []
 for sec in st.get("sections") or []:
     if sec.get("id") == "active-agents":

@@ -56,6 +56,16 @@ function run() {
   if (src.indexOf("function pollIsNewer") === -1) fail("pollIsNewer missing");
   if (src.indexOf("function pollFailureCounts") === -1) fail("pollFailureCounts missing");
   if (src.indexOf("function pollPaintDecision") === -1) fail("pollPaintDecision missing");
+  if (src.indexOf("function safeAgentUrl") === -1) fail("safeAgentUrl missing");
+  if (src.indexOf("function laneHrefs") === -1) fail("laneHrefs missing");
+  if (src.indexOf("data-open=\"work\"") === -1 && src.indexOf("data-open=\\\"work\\\"") === -1) {
+    if (html.indexOf("data-open=\"work\"") === -1 && html.indexOf("Open agent") === -1) {
+      // Generator must know how to paint work links even if this snapshot has none.
+      if (fs.readFileSync(path.join(ROOT, "refresh.sh"), "utf8").indexOf("data-open=\"work\"") === -1) {
+        fail("work-link taps missing from refresh.sh");
+      }
+    }
+  }
 
   const boardFingerprint = eval("(" + extractFn(src, "boardFingerprint") + ")");
   const a = {
@@ -86,11 +96,30 @@ function run() {
   }
 
   const parseCheckedAt = eval("(" + extractFn(src, "parseCheckedAt") + ")");
+  const cleanPublicUrl = eval("(" + extractFn(src, "cleanPublicUrl") + ")");
+  const isBcId = eval("(" + extractFn(src, "isBcId") + ")");
+  const safeAgentUrl = eval(
+    "(function (cleanPublicUrl, isBcId) { return " + extractFn(src, "safeAgentUrl") + "; })"
+  )(cleanPublicUrl, isBcId);
+  const safePrUrl = eval(
+    "(function (cleanPublicUrl) { return " + extractFn(src, "safePrUrl") + "; })"
+  )(cleanPublicUrl);
+  const safeActionsUrl = eval(
+    "(function (cleanPublicUrl) { return " + extractFn(src, "safeActionsUrl") + "; })"
+  )(cleanPublicUrl);
+  const safeRepoUrl = eval(
+    "(function (cleanPublicUrl) { return " + extractFn(src, "safeRepoUrl") + "; })"
+  )(cleanPublicUrl);
+  const laneHrefs = eval(
+    "(function (safeAgentUrl, safePrUrl, safeActionsUrl, safeRepoUrl) { return " +
+      extractFn(src, "laneHrefs") +
+      "; })"
+  )(safeAgentUrl, safePrUrl, safeActionsUrl, safeRepoUrl);
   const ageGateAgents = eval(
-    "(function (parseCheckedAt) { var AGENT_FRESH_MS = 45 * 60 * 1000; return " +
+    "(function (parseCheckedAt, safeAgentUrl, safePrUrl) { var AGENT_FRESH_MS = 45 * 60 * 1000; return " +
       extractFn(src, "ageGateAgents") +
       "; })"
-  )(parseCheckedAt);
+  )(parseCheckedAt, safeAgentUrl, safePrUrl);
   const stale = ageGateAgents([
     {
       id: "codex",
@@ -188,6 +217,27 @@ function run() {
   if (incAt < 0 || abortAt < 0 || incAt > abortAt) {
     fail("stopPolling must bump pollSeq before abort");
   }
+
+  const goodBc = "bc-8e16f06d-f73f-482c-987f-e13f2d3b9fb1";
+  const goodAgent = "https://cursor.com/agents/" + goodBc;
+  if (safeAgentUrl(goodAgent + "?cursor_ref=x") !== goodAgent) fail("agent url must canonicalize");
+  if (safeAgentUrl("https://evil.example/agents/" + goodBc)) fail("foreign agent host must drop");
+  if (safeAgentUrl("https://cursor.com/agents/bc-nope")) fail("invented bc-id must drop");
+  if (safePrUrl("https://github.com/evil/webjam/pull/1")) fail("foreign PR must drop");
+  if (safeActionsUrl("https://github.com/rupret007/webjam/actions") ) fail("actions index is not a run");
+  const hrefs = laneHrefs({
+    url: "https://github.com/rupret007/webjam",
+    open_pr_url: "https://github.com/rupret007/webjam/pull/21",
+    agent_url: goodAgent,
+    ci: { html_url: "https://github.com/rupret007/webjam/actions/runs/9", conclusion: "failure" },
+  });
+  if (hrefs.title !== "https://github.com/rupret007/webjam/pull/21") fail("lane title must prefer open PR");
+  if (hrefs.pr !== "https://github.com/rupret007/webjam/pull/21") fail("lane PR href missing");
+  if (hrefs.repo !== "https://github.com/rupret007/webjam") fail("lane repo href missing");
+  if (hrefs.ci !== "https://github.com/rupret007/webjam/actions/runs/9") fail("lane CI href missing");
+  if (hrefs.agent !== goodAgent) fail("lane agent href missing");
+  const empty = laneHrefs({ name: "Show Night" });
+  if (empty.pr || empty.agent || empty.ci) fail("missing URLs must not invent taps");
 
   console.log("soft-paint / agent age-gate smoke ok");
 }

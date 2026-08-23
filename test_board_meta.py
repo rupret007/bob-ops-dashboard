@@ -10,20 +10,31 @@ from board_meta import (
     CONTROL_ACTIONS,
     FIRST_CLASS_IDS,
     age_gate_agents,
+    agent_url_from_fields,
     attention_rank,
     board_content_fingerprint,
     compact_signal,
     decision_href,
     drop_leftover_verify,
+    extract_agent_url,
+    extract_cloud_agents_from_prs,
     first_class_sections,
     is_ci_noise,
     is_quiet_lane,
+    lane_hrefs,
+    merge_cloud_agents,
     merge_first_class,
     parse_agents_blob,
+    parse_cloud_agents,
     pending_risk_rank,
+    pick_open_pr,
     pick_tip_ci,
     presentation,
     resolve_agents,
+    safe_actions_url,
+    safe_agent_url,
+    safe_pr_url,
+    safe_repo_url,
     sha_matches_tip,
     short_note,
     sort_pending,
@@ -104,6 +115,12 @@ class BoardMetaTests(unittest.TestCase):
         self.assertIn("not a failed poll", blob)
         self.assertIn("cannot rewind", blob)
         self.assertIn("stopPolling bumps pollSeq", blob)
+        self.assertIn("Open agent", blob)
+        self.assertIn("never invent", blob.lower())
+        self.assertIn("open pr", blob.lower())
+        self.assertIn("openBlank", blob)
+        self.assertIn("Open repo", blob)
+        self.assertIn("Open CI", blob)
 
     def test_security_features_from_pr1_survive_without_unlock(self):
         blob = str(first_class_sections())
@@ -555,6 +572,183 @@ class BoardMetaTests(unittest.TestCase):
             }
         ]
         self.assertNotEqual(board_content_fingerprint(a), board_content_fingerprint(d))
+        e = dict(d)
+        e["cloud_agents"] = [
+            {
+                "id": "bc-12345678-1234-1234-1234-123456789abc",
+                "url": "https://cursor.com/agents/bc-12345678-1234-1234-1234-123456789abc",
+            }
+        ]
+        self.assertNotEqual(board_content_fingerprint(d), board_content_fingerprint(e))
+
+    def test_agent_and_work_urls_are_fail_closed(self):
+        good_bc = "bc-8e16f06d-f73f-482c-987f-e13f2d3b9fb1"
+        good = "https://cursor.com/agents/" + good_bc
+        self.assertEqual(safe_agent_url(good + "?cursor_ref=x"), good)
+        self.assertEqual(safe_agent_url("https://evil.example/agents/" + good_bc), "")
+        self.assertEqual(safe_agent_url("javascript:alert(1)"), "")
+        self.assertEqual(safe_agent_url("https://cursor.com/agents/bc-nope"), "")
+        self.assertEqual(safe_agent_url(""), "")
+        self.assertEqual(
+            extract_agent_url(
+                '<a href="https://cursor.com/agents/' + good_bc + '?cursor_ref=pr_footer">x</a>'
+            ),
+            good,
+        )
+        self.assertEqual(
+            extract_agent_url("https://cursor.com/background-agent?bcId=" + good_bc + "&x=1"),
+            good,
+        )
+        self.assertEqual(extract_agent_url("no agent here"), "")
+        self.assertEqual(agent_url_from_fields({"bc_id": good_bc}), good)
+        self.assertEqual(agent_url_from_fields({"bc_id": "bc-invented"}), "")
+        self.assertEqual(agent_url_from_fields({"url": "https://example/nope"}), "")
+        self.assertEqual(
+            safe_pr_url("https://github.com/rupret007/webjam/pull/21?foo=1"),
+            "https://github.com/rupret007/webjam/pull/21",
+        )
+        self.assertEqual(safe_pr_url("https://github.com/evil/webjam/pull/21"), "")
+        self.assertEqual(safe_pr_url("https://github.com/rupret007/webjam"), "")
+        self.assertEqual(
+            safe_actions_url("https://github.com/rupret007/Andrea_NanoBot/actions/runs/99"),
+            "https://github.com/rupret007/Andrea_NanoBot/actions/runs/99",
+        )
+        self.assertEqual(safe_actions_url("https://github.com/rupret007/Andrea_NanoBot/actions"), "")
+        self.assertEqual(safe_repo_url("https://github.com/rupret007/webjam/"), "https://github.com/rupret007/webjam")
+        self.assertEqual(safe_repo_url("https://github.com/rupret007/webjam/issues"), "")
+
+    def test_pick_open_pr_prefers_ready_and_is_safe(self):
+        picked = pick_open_pr(
+            [
+                {
+                    "html_url": "https://github.com/rupret007/webjam/pull/9",
+                    "number": 9,
+                    "title": "draft",
+                    "draft": True,
+                    "updated_at": "2026-08-23T07:00:00Z",
+                },
+                {
+                    "html_url": "https://github.com/rupret007/webjam/pull/21",
+                    "number": 21,
+                    "title": "ready",
+                    "draft": False,
+                    "updated_at": "2026-08-23T06:00:00Z",
+                },
+            ]
+        )
+        self.assertIsNotNone(picked)
+        assert picked is not None
+        self.assertEqual(picked["url"], "https://github.com/rupret007/webjam/pull/21")
+        self.assertEqual(picked["number"], 21)
+        self.assertFalse(picked["draft"])
+        self.assertIsNone(pick_open_pr([{"html_url": "https://evil.example/pull/1"}]))
+        self.assertIsNone(pick_open_pr(None))
+
+    def test_cloud_agents_never_invent_bc_or_running(self):
+        good_bc = "bc-8e16f06d-f73f-482c-987f-e13f2d3b9fb1"
+        good = "https://cursor.com/agents/" + good_bc
+        blob = {
+            "agents": [
+                {"id": "codex", "state": "idle", "detail": "ok"},
+                {
+                    "id": "ghost",
+                    "state": "running",
+                    "url": "https://evil.example/agents/" + good_bc,
+                },
+            ],
+            "cloud_agents": [
+                {
+                    "name": "Seed",
+                    "state": "running",
+                    "url": good,
+                    "pr_url": "https://github.com/rupret007/bob-ops-dashboard/pull/8",
+                },
+                {"name": "Fake", "bc_id": "not-a-bc", "url": "https://cursor.com/agents/nope"},
+            ],
+        }
+        mac = parse_agents_blob(blob)
+        self.assertIsNotNone(mac)
+        assert mac is not None
+        self.assertEqual([a["id"] for a in mac], ["codex", "cursor", "claude"])
+        cloud = parse_cloud_agents(blob)
+        self.assertEqual(len(cloud), 1)
+        self.assertEqual(cloud[0]["id"], good_bc)
+        self.assertEqual(cloud[0]["url"], good)
+        self.assertEqual(cloud[0]["state"], "unknown")
+        self.assertEqual(cloud[0]["pr_url"], "https://github.com/rupret007/bob-ops-dashboard/pull/8")
+        self.assertEqual(merge_cloud_agents([{"url": "https://example.invalid"}]), [])
+        found = extract_cloud_agents_from_prs(
+            [
+                {
+                    "number": 8,
+                    "title": "poll honesty",
+                    "html_url": "https://github.com/rupret007/bob-ops-dashboard/pull/8",
+                    "body": "See " + good + "?cursor_ref=pr_footer",
+                    "updated_at": "2026-08-23T06:48:00Z",
+                }
+            ]
+        )
+        self.assertEqual(len(found), 1)
+        self.assertEqual(found[0]["url"], good)
+        self.assertEqual(found[0]["name"], "PR #8")
+        self.assertEqual(found[0]["state"], "unknown")
+
+    def test_lane_hrefs_prefer_pr_and_skip_missing(self):
+        hrefs = lane_hrefs(
+            {
+                "url": "https://github.com/rupret007/webjam",
+                "open_pr_url": "https://github.com/rupret007/webjam/pull/21",
+                "agent_url": "https://cursor.com/agents/bc-8e16f06d-f73f-482c-987f-e13f2d3b9fb1",
+                "ci": {
+                    "conclusion": "failure",
+                    "html_url": "https://github.com/rupret007/webjam/actions/runs/44",
+                },
+            }
+        )
+        self.assertEqual(hrefs["title"], "https://github.com/rupret007/webjam/pull/21")
+        self.assertEqual(hrefs["pr"], "https://github.com/rupret007/webjam/pull/21")
+        self.assertEqual(hrefs["repo"], "https://github.com/rupret007/webjam")
+        self.assertEqual(hrefs["ci"], "https://github.com/rupret007/webjam/actions/runs/44")
+        self.assertTrue(hrefs["agent"].startswith("https://cursor.com/agents/bc-"))
+        bare = lane_hrefs({"name": "Show Night", "url": None, "ci": {}})
+        self.assertEqual(bare, {"title": ""})
+        self.assertEqual(lane_hrefs(None), {})
+
+    def test_pick_tip_ci_keeps_run_url_and_pending_has_none(self):
+        runs = [
+            {
+                "head_branch": "main",
+                "status": "completed",
+                "conclusion": "failure",
+                "name": "CI",
+                "path": ".github/workflows/ci.yml",
+                "head_sha": "770fd47dead",
+                "html_url": "https://github.com/rupret007/Andrea_NanoBot/actions/runs/77",
+            }
+        ]
+        picked = pick_tip_ci(runs, "main", "770fd47")
+        self.assertIsNotNone(picked)
+        assert picked is not None
+        self.assertEqual(picked["html_url"], "https://github.com/rupret007/Andrea_NanoBot/actions/runs/77")
+        pending = pick_tip_ci(
+            [
+                {
+                    "head_branch": "master",
+                    "status": "completed",
+                    "conclusion": "success",
+                    "name": "WebJam CI",
+                    "path": ".github/workflows/ci.yml",
+                    "head_sha": "4a24c8cold",
+                    "html_url": "https://github.com/rupret007/webjam/actions/runs/1",
+                }
+            ],
+            "master",
+            "a4e95cb",
+        )
+        self.assertIsNotNone(pending)
+        assert pending is not None
+        self.assertEqual(pending["conclusion"], "pending")
+        self.assertIsNone(pending.get("html_url"))
 
     def test_drop_leftover_verify_fail_closed(self):
         status = {

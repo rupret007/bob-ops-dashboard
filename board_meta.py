@@ -2,6 +2,7 @@
 """First-class Abilities / Decisions / How-this-board cards (honest, no fake buttons)."""
 from __future__ import annotations
 
+import html as html_lib
 import json
 import re
 import time
@@ -83,6 +84,36 @@ CI_NOISE_FILENAMES = frozenset({"pages.yml", "pages.yaml"})
 DECISION_VERBS = frozenset({"APPROVE", "HOLD", "DENY"})
 DECISION_ISSUE_NEW = "https://github.com/rupret007/bob-ops-dashboard/issues/new"
 PENDING_ID_RE = re.compile(r"^[a-zA-Z0-9._-]+$")
+BC_ID_RE = re.compile(
+    r"^bc-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+    re.I,
+)
+BC_ID_FIND_RE = re.compile(
+    r"bc-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}",
+    re.I,
+)
+AGENT_HREF_RE = re.compile(
+    r"https://cursor\.com/agents/(bc-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})",
+    re.I,
+)
+AGENT_BCID_QUERY_RE = re.compile(
+    r"https://cursor\.com/background-agent\?[^\s\"'<>]*bcId="
+    r"(bc-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})",
+    re.I,
+)
+PR_URL_RE = re.compile(
+    r"^https://github\.com/rupret007/[A-Za-z0-9._-]+/pull/[1-9][0-9]*$",
+    re.I,
+)
+ACTIONS_URL_RE = re.compile(
+    r"^https://github\.com/rupret007/[A-Za-z0-9._-]+/actions/runs/[1-9][0-9]*$",
+    re.I,
+)
+REPO_URL_RE = re.compile(
+    r"^https://github\.com/rupret007/[A-Za-z0-9._-]+$",
+    re.I,
+)
+CLOUD_AGENT_LIMIT = 3
 
 
 def drop_leftover_verify(status: Any) -> bool:
@@ -91,6 +122,239 @@ def drop_leftover_verify(status: Any) -> bool:
         return False
     status.pop("verify", None)
     return True
+
+
+def _clean_public_url(url: Any) -> str:
+    """Strip, unescape, drop query/hash. Empty when unsafe characters remain."""
+    if url is None:
+        return ""
+    s = html_lib.unescape(str(url).strip())
+    if not s or any(c in s for c in (" ", "\n", "\r", "\t", "<", ">", '"', "'", "\\")):
+        return ""
+    s = s.split("#", 1)[0].split("?", 1)[0].rstrip("/")
+    return s
+
+
+def safe_agent_url(url: Any) -> str:
+    """Only https://cursor.com/agents/bc-<uuid>. Never invent a bc-id."""
+    s = _clean_public_url(url)
+    m = AGENT_HREF_RE.match(s)
+    if not m:
+        return ""
+    return "https://cursor.com/agents/" + m.group(1).lower()
+
+
+def safe_pr_url(url: Any) -> str:
+    """Only a rupret007 pull request URL."""
+    s = _clean_public_url(url)
+    return s if PR_URL_RE.match(s) else ""
+
+
+def safe_actions_url(url: Any) -> str:
+    """Only a rupret007 Actions run URL."""
+    s = _clean_public_url(url)
+    return s if ACTIONS_URL_RE.match(s) else ""
+
+
+def safe_repo_url(url: Any) -> str:
+    """Only a rupret007 repository home URL."""
+    s = _clean_public_url(url)
+    return s if REPO_URL_RE.match(s) else ""
+
+
+def extract_agent_url(text: Any) -> str:
+    """First real cursor.com agent URL or bcId= in text. Empty if none."""
+    raw = html_lib.unescape(str(text or ""))
+    m = AGENT_HREF_RE.search(raw)
+    if m:
+        return "https://cursor.com/agents/" + m.group(1).lower()
+    q = AGENT_BCID_QUERY_RE.search(raw)
+    if q:
+        return "https://cursor.com/agents/" + q.group(1).lower()
+    return ""
+
+
+def agent_url_from_fields(raw: Any) -> str:
+    """URL from url/agent_url or a provided bc_id. Does not mint UUIDs."""
+    if not isinstance(raw, dict):
+        return ""
+    direct = safe_agent_url(raw.get("url") or raw.get("agent_url"))
+    if direct:
+        return direct
+    extracted = extract_agent_url(raw.get("url") or raw.get("agent_url") or raw.get("detail") or "")
+    if extracted:
+        return extracted
+    bc = str(raw.get("bc_id") or raw.get("bcId") or "").strip().lower()
+    if BC_ID_RE.match(bc):
+        return "https://cursor.com/agents/" + bc
+    return ""
+
+
+def pick_open_pr(prs: Any) -> dict[str, Any] | None:
+    """Newest open PR. Prefer non-draft. Fail-closed when none is a safe URL."""
+    parsed: list[dict[str, Any]] = []
+    for p in prs or []:
+        if not isinstance(p, dict):
+            continue
+        url = safe_pr_url(p.get("html_url") or p.get("url"))
+        if not url:
+            continue
+        draft = bool(p.get("draft") if "draft" in p else p.get("isDraft"))
+        ts = str(
+            p.get("updated_at")
+            or p.get("updatedAt")
+            or p.get("created_at")
+            or p.get("createdAt")
+            or ""
+        )
+        num = p.get("number")
+        try:
+            number = int(num) if num is not None else None
+        except (TypeError, ValueError):
+            number = None
+        parsed.append(
+            {
+                "url": url,
+                "number": number,
+                "title": str(p.get("title") or "")[:160],
+                "draft": draft,
+                "updated": ts,
+            }
+        )
+    if not parsed:
+        return None
+    ready = [p for p in parsed if not p["draft"]]
+    pool = ready or parsed
+    pool = sorted(pool, key=lambda p: p.get("updated") or "", reverse=True)
+    top = dict(pool[0])
+    top.pop("updated", None)
+    return top
+
+
+def parse_cloud_agent_row(raw: Any) -> dict[str, Any] | None:
+    """One cloud-agent row. Requires a real agent URL. State is never invented Running."""
+    if not isinstance(raw, dict):
+        return None
+    url = agent_url_from_fields(raw)
+    if not url:
+        return None
+    bc = url.rsplit("/", 1)[-1].lower()
+    name = str(raw.get("name") or "Cloud").strip()[:32] or "Cloud"
+    detail = _redact_agent_detail(str(raw.get("detail") or "Cloud Agent"))
+    return {
+        "id": bc,
+        "name": name,
+        "state": "unknown",
+        "detail": detail,
+        "url": url,
+        "pr_url": safe_pr_url(raw.get("pr_url") or raw.get("pr")),
+        "checked_at": raw.get("checked_at"),
+    }
+
+
+def merge_cloud_agents(*groups: Any, limit: int = CLOUD_AGENT_LIMIT) -> list[dict[str, Any]]:
+    """Dedupe by agent URL. Only rows with a real bc-id URL. Cap the pulse strip."""
+    seen: set[str] = set()
+    out: list[dict[str, Any]] = []
+    for group in groups:
+        for raw in group or []:
+            row = parse_cloud_agent_row(raw)
+            if not row or row["url"] in seen:
+                continue
+            seen.add(row["url"])
+            out.append(row)
+            if len(out) >= limit:
+                return out
+    return out
+
+
+def extract_cloud_agents_from_prs(prs: Any, *, limit: int = CLOUD_AGENT_LIMIT) -> list[dict[str, Any]]:
+    """Cloud agents mentioned in open PR bodies. Newest first. No invented bc-ids."""
+    rows: list[dict[str, Any]] = []
+    items = [p for p in (prs or []) if isinstance(p, dict)]
+    items.sort(
+        key=lambda p: str(p.get("updated_at") or p.get("updatedAt") or ""),
+        reverse=True,
+    )
+    for p in items:
+        url = extract_agent_url(
+            " ".join(
+                [
+                    str(p.get("body") or ""),
+                    str(p.get("title") or ""),
+                    str(p.get("html_url") or ""),
+                ]
+            )
+        )
+        if not url:
+            continue
+        num = p.get("number")
+        name = "PR #" + str(num) if num not in (None, "") else "Cloud"
+        title = str(p.get("title") or "").strip()
+        rows.append(
+            {
+                "name": name,
+                "detail": title[:160] or "Open Cloud Agent",
+                "url": url,
+                "pr_url": safe_pr_url(p.get("html_url") or p.get("url")),
+            }
+        )
+    return merge_cloud_agents(rows, limit=limit)
+
+
+def parse_cloud_agents(blob: Any) -> list[dict[str, Any]]:
+    """Probe/status cloud_agents plus extra agent rows that already have a valid URL."""
+    if blob is None:
+        return []
+    if isinstance(blob, str):
+        blob = blob.strip()
+        if not blob:
+            return []
+        try:
+            blob = json.loads(blob)
+        except (TypeError, ValueError, json.JSONDecodeError):
+            return []
+    groups: list[Any] = []
+    if isinstance(blob, dict):
+        if isinstance(blob.get("cloud_agents"), list):
+            groups.append(blob["cloud_agents"])
+        extra = []
+        for row in blob.get("agents") or []:
+            if not isinstance(row, dict):
+                continue
+            if str(row.get("id") or "").strip().lower() in AGENT_IDS:
+                continue
+            extra.append(row)
+        if extra:
+            groups.append(extra)
+    elif isinstance(blob, list):
+        groups.append(blob)
+    return merge_cloud_agents(*groups)
+
+
+def lane_hrefs(project: Any) -> dict[str, str]:
+    """Fail-closed lane taps. Missing URLs stay empty — no fake PR/CI/agent."""
+    if not isinstance(project, dict):
+        return {}
+    ci = project.get("ci") if isinstance(project.get("ci"), dict) else {}
+    repo = safe_repo_url(project.get("repo_url") or project.get("html_url"))
+    if not repo:
+        raw = project.get("url")
+        repo = safe_repo_url(raw)
+    pr = safe_pr_url(project.get("open_pr_url")) or safe_pr_url(project.get("url"))
+    agent = safe_agent_url(project.get("agent_url")) or agent_url_from_fields(project)
+    actions = safe_actions_url(ci.get("html_url") or project.get("ci_url"))
+    title = pr or repo
+    out = {"title": title}
+    if agent:
+        out["agent"] = agent
+    if pr:
+        out["pr"] = pr
+    if repo:
+        out["repo"] = repo
+    if actions:
+        out["ci"] = actions
+    return out
 
 
 def visible_chip(project: Any) -> str | None:
@@ -184,6 +448,7 @@ def _normalize_run(run: dict[str, Any], branch: str) -> dict[str, Any]:
         "branch": branch,
         "sha": (run.get("head_sha") or "")[:7] or None,
         "created": run.get("created_at"),
+        "html_url": safe_actions_url(run.get("html_url")),
     }
 
 
@@ -255,6 +520,7 @@ def pick_tip_ci(runs: Any, branch: Any, tip_sha: Any = None) -> dict[str, Any] |
                 "branch": want,
                 "sha": tip[:7],
                 "created": None,
+                "html_url": None,
             }
         pool = _latest_per_workflow(scoped)
     else:
@@ -439,12 +705,18 @@ def safe_agent(raw: Any, fallback_id: str) -> dict[str, Any]:
     if state not in AGENT_STATES:
         state = "unknown"
     detail = _redact_agent_detail(str(raw.get("detail") or ""))
+    url = agent_url_from_fields(raw) if aid in AGENT_IDS else ""
+    # Mac pills may carry a real agent/PR URL. Extra ids are not invented here.
+    if aid not in AGENT_IDS:
+        url = ""
     return {
         "id": aid,
         "name": name,
         "state": state,
         "detail": detail,
         "checked_at": raw.get("checked_at"),
+        "url": url or None,
+        "pr_url": safe_pr_url(raw.get("pr_url") or raw.get("pr")) or None,
     }
 
 
@@ -549,7 +821,7 @@ def board_content_fingerprint(data: Any) -> str:
     def agent_key(a: Any) -> list[Any]:
         if not isinstance(a, dict):
             return []
-        return [a.get("id"), a.get("state"), a.get("detail")]
+        return [a.get("id"), a.get("state"), a.get("detail"), a.get("url"), a.get("pr_url")]
 
     def pending_key(it: Any) -> list[Any]:
         if not isinstance(it, dict):
@@ -566,11 +838,14 @@ def board_content_fingerprint(data: Any) -> str:
             p.get("chip"),
             p.get("notes"),
             p.get("open_prs"),
+            p.get("open_pr_url"),
             p.get("release"),
             p.get("tip_sha"),
+            p.get("agent_url"),
             ci.get("conclusion") if ci else None,
             ci.get("sha") if ci else None,
             ci.get("name") if ci else None,
+            ci.get("html_url") if ci else None,
         ]
 
     sections = []
@@ -587,6 +862,7 @@ def board_content_fingerprint(data: Any) -> str:
     payload = {
         "pending": [pending_key(it) for it in (data.get("pending") or [])],
         "agents": [agent_key(a) for a in (data.get("agents") or [])],
+        "cloud": [agent_key(a) for a in (data.get("cloud_agents") or [])],
         "sections": sections,
         "fetched": data.get("fetched_repos") or [],
     }
@@ -722,12 +998,12 @@ def first_class_sections() -> list[dict[str, Any]]:
                 ),
                 _card(
                     "Soft-paint poll",
-                    "Client fetches status.json every 30s (pauses when the tab is hidden). Immediate poll on pageshow / visible. Fetch aborts after 8s. Hide / iOS-return abort is not a failed poll. A stale cached status.json cannot rewind the board. Repaints when board content changes -- not on every 15m Actions timestamp. Tip CI is the current SHA; Pages / skipped helpers cannot hide a fail.",
+                    "Client fetches status.json every 30s (pauses when the tab is hidden). Immediate poll on pageshow / visible. Fetch aborts after 8s. Hide / iOS-return abort is not a failed poll. A stale cached status.json cannot rewind the board. Repaints when board content changes -- not on every 15m Actions timestamp. Tip CI is the current SHA; Pages / skipped helpers cannot hide a fail. Lanes prefer the open PR; CI fail/running taps the Actions run when a run URL is known.",
                     chip="Feature",
                 ),
                 _card(
                     "Agents strip",
-                    "Codex / Cursor / Claude from a Mac probe. Stale or untimestamped probes paint Unknown. Never invent Running. Token-like words redacted.",
+                    "Codex / Cursor / Claude from a Mac probe. Stale or untimestamped probes paint Unknown. Never invent Running. Cloud pills appear only with a real cursor.com/agents/bc- UUID (from probe or an open PR body). Tap Open agent / Open PR (real target=_blank plus openBlank fallback). Token-like words redacted.",
                     chip="Feature",
                 ),
                 _card(
@@ -742,7 +1018,7 @@ def first_class_sections() -> list[dict[str, Any]]:
                 ),
                 _card(
                     "Poll / decide race guards",
-                    "pollSeq / pendingSeq drop stale fetches. stopPolling bumps pollSeq before abort so tab-hide is not a fail. Approve / Hold / Deny are real GitHub links so iOS cannot swallow a popup. decideBusy still debounce double-taps.",
+                    "pollSeq / pendingSeq drop stale fetches. stopPolling bumps pollSeq before abort so tab-hide is not a fail. Approve / Hold / Deny are real GitHub links so iOS cannot swallow a popup. Open agent / Open PR / Open repo / Open CI use the same real target=_blank plus openBlank fallback. decideBusy still debounce double-taps.",
                     chip="Feature",
                 ),
                 _card(
