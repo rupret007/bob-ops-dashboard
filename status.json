@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-08-23T01:24:06.719307-05:00",
-  "generated_at_display": "Sun Aug 23, 2026 \u00b7 1:24 AM CDT",
+  "generated_at": "2026-08-23T01:46:00.686393-05:00",
+  "generated_at_display": "Sun Aug 23, 2026 \u00b7 1:46 AM CDT",
   "timezone": "America/Chicago",
   "owner": "rupret007",
   "dashboard": "bob-ops-dashboard",
@@ -95,10 +95,10 @@
           "default_branch": "main",
           "tip_sha": "8972ffc",
           "tip_date": "2026-08-23T06:19:20Z",
-          "open_prs": 0,
+          "open_prs": 1,
           "ci": {
             "name": "Quality",
-            "conclusion": "in_progress",
+            "conclusion": "success",
             "branch": "main",
             "sha": "8972ffc",
             "created": "2026-08-23T06:19:23Z"
@@ -172,12 +172,12 @@
           "repo": "rupret007/AI-Music-Vault",
           "url": "https://github.com/rupret007/AI-Music-Vault",
           "private": false,
-          "status": "green",
-          "chip": "Green",
+          "status": "yellow",
+          "chip": "Yellow",
           "default_branch": "main",
           "tip_sha": "64b2322",
           "tip_date": "2026-08-23T06:02:12Z",
-          "open_prs": 0,
+          "open_prs": 1,
           "ci": {
             "name": "catalog-validate",
             "conclusion": "success",
@@ -301,7 +301,7 @@
           "default_branch": "main",
           "tip_sha": "770fd47",
           "tip_date": "2026-08-23T06:07:47Z",
-          "open_prs": 0,
+          "open_prs": 1,
           "ci": {
             "name": "CI",
             "conclusion": "failure",
@@ -512,7 +512,7 @@
     "TACTrack"
   ],
   "publish_notes": "Public repo -- no secrets, no CSOne customer paths, AdoptIQ high-level only.",
-  "refresh_started_ms": 1787466228934,
+  "refresh_started_ms": 1787467544970,
   "agents": [
     {
       "id": "codex",
@@ -536,7 +536,7 @@
       "checked_at": null
     }
   ],
-  "agents_source": "file:/workspace/agents-status.json:stale->unknown",
+  "agents_source": "file:/home/runner/work/bob-ops-dashboard/bob-ops-dashboard/agents-status.json:stale->unknown",
   "pending": [
     {
       "id": "webjam-exploratory",
