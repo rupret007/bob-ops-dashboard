@@ -1,0 +1,22 @@
+{
+  "updated": "2026-08-22 07:59 PM CT",
+  "timezone": "America/Chicago",
+  "projects": [
+    {"id":"webjam","name":"WebJam","group":"live","ci":"success","note":"Tip green; #21 docs merged; release still v0.26.0 until you name v0.27; exploratory click-through is your walk","url":"https://github.com/rupret007/webjam","gate":"jeff"},
+    {"id":"storyliner","name":"StoryLiner","group":"live","ci":"success","note":"Lint PR #1 merged; main CI green","url":"https://github.com/rupret007/StoryLiner","gate":null},
+    {"id":"storyboard","name":"StoryBoard","group":"live","ci":"success","note":"Quality CI green (older); needs Postgres + Vault import for Manager","url":"https://github.com/rupret007/StoryBoard","gate":"jeff"},
+    {"id":"merch","name":"Rad Dad Merch","group":"live","ci":"success","note":"Release integrity green","url":"https://github.com/rupret007/Rad-Dad-Merch","gate":null},
+    {"id":"radsite","name":"RadDadSite","group":"live","ci":"success","note":"Site tests green; draft #6 production deploy parked","url":"https://github.com/rupret007/RadDadSite","gate":"parked"},
+    {"id":"shownight","name":"Show Night","group":"live","ci":"none","note":"Repo active; no Actions runs seen","url":"https://github.com/rupret007/rad-dad-show-night","gate":null},
+    {"id":"vault","name":"AI Music Vault","group":"live","ci":"none","note":"Private; song source of truth","url":"https://github.com/rupret007/AI-Music-Vault","gate":null},
+    {"id":"turdanoid","name":"Turdanoid","group":"live","ci":"success","note":"Tip green; stale draft PRs 4/5 (+2) hygiene leftover","url":"https://github.com/rupret007/Turdanoid","gate":"jeff"},
+    {"id":"adoptiq","name":"AdoptIQ","group":"cisco","ci":"failure","note":"Build 115 continuation; Codex + Cloud Agent in flight; no secrets on this board","url":"https://github.com/rupret007/AdoptIQ","gate":"active"},
+    {"id":"tactrack","name":"TACTrack","group":"cisco","ci":"failure","note":"CI red; open harness/validation PRs","url":"https://github.com/rupret007/TACTrack","gate":null},
+    {"id":"andrea","name":"Andrea NanoBot","group":"infra","ci":"failure","note":"Texts engine; BB apple-script send; Private API OFF; AGI Layer CI red on branch","url":"https://github.com/rupret007/Andrea_NanoBot","gate":null},
+    {"id":"telegram","name":"Bot the Bot","group":"infra","ci":"none","note":"Phone Bob channel; short replies","url":null,"gate":null},
+    {"id":"codex","name":"Codex local","group":"infra","ci":"none","note":"goals=true enabled; ~/bin/codex linked; AdoptIQ launch being fixed","url":null,"gate":"active"},
+    {"id":"logic","name":"Logic Pro + MCP","group":"music","ci":"none","note":"Logic 12.3.1 installed; MCP ready; needs Accessibility + Cursor restart","url":null,"gate":"jeff"},
+    {"id":"moises","name":"Moises / Suno","group":"music","ci":"none","note":"Producer suite ready; needs your logins for hands-on","url":null,"gate":"jeff"},
+    {"id":"shelf","name":"Closet shelf","group":"parked","ci":"none","note":"Parked — buying shelf instead","url":"https://github.com/rupret007/story-corner-shelf","gate":"parked"}
+  ]
+}
