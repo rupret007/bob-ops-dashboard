@@ -37,7 +37,25 @@ jobs:
         run: |
           set -euo pipefail
           chmod +x ./refresh.sh
+          # Snapshot verify so a mid-TTL rebuild cannot silently wipe Unlock.
+          cp status.json /tmp/status.before.json
           ./refresh.sh
+          python3 - <<'PY'
+          import json, time
+          from preserve_verify import apply_preserved_verify
+          before = json.loads(open("/tmp/status.before.json", encoding="utf-8").read())
+          after = json.loads(open("status.json", encoding="utf-8").read())
+          now = int(time.time() * 1000)
+          expect = {}
+          kept = apply_preserved_verify(expect, before, now_ms=now, log=print)
+          if kept is None:
+              print("no live allowlisted verify before refresh")
+          else:
+              got = (after.get("verify") or {}) if isinstance(after, dict) else {}
+              if (got.get("sha256") or "").lower() != kept["sha256"]:
+                  raise SystemExit("refresh wiped a still-in-window verify (Unlock race)")
+              print("verify survived refresh")
+          PY
 
       - name: QA claim smoke (generated page)
         run: |

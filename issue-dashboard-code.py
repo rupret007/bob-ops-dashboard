@@ -3,8 +3,7 @@
 from __future__ import annotations
 import hashlib, json, secrets, sys, time
 from pathlib import Path
-EMAIL = "jeffstory007@gmail.com"
-TTL_MS = 2 * 60 * 60 * 1000  # 2h so 15m refresh cannot race-expire
+from preserve_verify import JEFF_EMAIL as EMAIL, TTL_MS
 ROOT = Path(__file__).resolve().parent
 
 def main() -> int:

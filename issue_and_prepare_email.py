@@ -3,8 +3,7 @@
 from __future__ import annotations
 import hashlib, json, secrets, time
 from pathlib import Path
-EMAIL = "jeffstory007@gmail.com"
-TTL_MS = 2 * 60 * 60 * 1000  # 2h so 15m refresh cannot race-expire
+from preserve_verify import JEFF_EMAIL as EMAIL, TTL_MS
 ROOT = Path(__file__).resolve().parent
 DASH = "https://rupret007.github.io/bob-ops-dashboard/"
 
@@ -16,9 +15,10 @@ def main() -> int:
     data = json.loads(path.read_text()) if path.exists() else {}
     data["verify"] = {"email": EMAIL, "sha256": digest, "exp": now + TTL_MS, "issued_at": now}
     path.write_text(json.dumps(data, indent=2) + "\n")
+    hours = max(1, TTL_MS // (60 * 60 * 1000))
     body = (
         f"Jeff — your Bob Ops Dashboard unlock code is:\n\n{code}\n\n"
-        f"Enter it at {DASH}\nExpires in about 15 minutes.\n\n— Bob\n"
+        f"Enter it at {DASH}\nExpires in about {hours} hours.\n\n— Bob\n"
     )
     assert code in body and "{{" not in body
     out = {"email": EMAIL, "code": code, "subject": "Bob Ops dashboard unlock code", "body": body, "dashboard": DASH, "exp": now + TTL_MS}

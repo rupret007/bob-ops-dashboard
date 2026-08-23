@@ -149,6 +149,13 @@
     color:var(--muted); font-size:.72rem; line-height:1.3;
     overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:22rem;
   }
+  .card .ctrl { margin-top:.4rem; display:flex; flex-wrap:wrap; gap:.4rem; }
+  .card .ctrl button {
+    background:#1c1c1c; color:var(--text); border:1px solid var(--border);
+    border-radius:8px; padding:.45rem .75rem; font-size:.82rem; cursor:pointer;
+    min-height:44px; touch-action:manipulation;
+  }
+  .card .ctrl button:hover { border-color:var(--orange); color:var(--orange); }
 </style>
 </head>
 <body>
@@ -156,7 +163,7 @@
   <header class="hero">
     <h1><span class="mark">Bob</span> Ops Dashboard</h1>
     <div class="sub">Projects Bob is working on for Jeff Story · live music/apps focus · closet parked</div>
-    <div class="sub live-stamp" id="live-stamp" data-generated-at="2026-08-22T21:47:06.725376-05:00" data-display="Sat Aug 22, 2026 · 9:47 PM CDT"><span class="live-dot" id="live-dot" aria-hidden="true"></span>Last updated: <strong id="updated-display">Sat Aug 22, 2026 · 9:47 PM CDT</strong> · <span id="freshness">Live - starting</span> · polls status.json every 30s</div>
+    <div class="sub live-stamp" id="live-stamp" data-generated-at="2026-08-22T22:12:09.879772-05:00" data-display="Sat Aug 22, 2026 · 10:12 PM CDT"><span class="live-dot" id="live-dot" aria-hidden="true"></span>Last updated: <strong id="updated-display">Sat Aug 22, 2026 · 10:12 PM CDT</strong> · <span id="freshness">Live - starting</span> · polls status.json every 30s</div>
     <div class="legend">
       <span class="chip" style="--c:#16a34a;--bg:#052e16;--fg:#bbf7d0">Green</span><span class="chip" style="--c:#ca8a04;--bg:#422006;--fg:#fef08a">Yellow</span><span class="chip" style="--c:#dc2626;--bg:#450a0a;--fg:#fecaca">Red</span><span class="chip" style="--c:#525252;--bg:#171717;--fg:#d4d4d4">Parked</span><span class="chip" style="--c:#d97757;--bg:#2a1510;--fg:#f5c4b3">Jeff-gate</span>
     </div>
@@ -185,62 +192,268 @@
   <div class="banner">Public status page -- no secrets, tokens, CSOne customer paths, or private handoff text. AdoptIQ is high-level Cisco CS desktop summary only. Theme: Claude orange (#d97757) on black.</div>
   <div id="silence-banner" role="alert" aria-live="assertive"></div>
   <nav class="toc">
+    <a href="#abilities">Abilities</a><a href="#controls">Controls</a><a href="#features">Features</a>
     <a href="#live-shipping">Live shipping</a><a href="#cisco">Cisco</a><a href="#messaging">Messaging</a>
     <a href="#music-producer">Music producer</a><a href="#parked">Parked</a><a href="#active-agents">Active agents</a>
   </nav>
   <div id="board">
   
+    <section id="abilities">
+      <h2>Abilities</h2>
+      
+      <div class="grid">
+        <article class="card">
+          <header><h3>Rebuild this board</h3><span class="chip" style="--c:#16a34a;--bg:#052e16;--fg:#bbf7d0">Ability</span></header>
+          <div class="row"></div>
+          <div class="row"><span class="meta">No Actions</span></div>
+          <p class="notes">Actions cron every 15m plus ./refresh.sh. Live gh SHAs/CI. No secrets on the public page.</p>
+          
+        </article>
+        <article class="card">
+          <header><h3>Email Unlock codes</h3><span class="chip" style="--c:#16a34a;--bg:#052e16;--fg:#bbf7d0">Ability</span></header>
+          <div class="row"></div>
+          <div class="row"><span class="meta">No Actions</span></div>
+          <p class="notes">6-digit OTP only to jeffstory007@gmail.com. Issuer TTL 2h. Refresh must not wipe a still-live verify.</p>
+          
+        </article>
+        <article class="card">
+          <header><h3>Cursor Cloud Agents</h3><span class="chip" style="--c:#16a34a;--bg:#052e16;--fg:#bbf7d0">Ability</span></header>
+          <div class="row"></div>
+          <div class="row"><span class="meta">No Actions</span></div>
+          <p class="notes">Repo work in Cursor Cloud. Jeff-gated / cost ceiling. High-level only here.</p>
+          
+        </article>
+        <article class="card">
+          <header><h3>Local Codex goals</h3><span class="chip" style="--c:#16a34a;--bg:#052e16;--fg:#bbf7d0">Ability</span></header>
+          <div class="row"></div>
+          <div class="row"><span class="meta">No Actions</span></div>
+          <p class="notes">Mac Codex loop for AdoptIQ and ops lanes. High-risk goals still shown in chat before launch.</p>
+          
+        </article>
+        <article class="card">
+          <header><h3>Texts via Andrea</h3><span class="chip" style="--c:#d97757;--bg:#2a1510;--fg:#f5c4b3">After yes</span></header>
+          <div class="row"></div>
+          <div class="row"><span class="meta">No Actions</span></div>
+          <p class="notes">After Jeff yes only. Never auto-send. Draft must already exist. No send button on this page.</p>
+          
+        </article>
+        <article class="card">
+          <header><h3>Life-ops / Domino&#x27;s</h3><span class="chip" style="--c:#d97757;--bg:#2a1510;--fg:#f5c4b3">After yes</span></header>
+          <div class="row"></div>
+          <div class="row"><span class="meta">No Actions</span></div>
+          <p class="notes">Food, errands, Domino&#x27;s: chat yes only. Honest: there is no order button on this board.</p>
+          
+        </article>
+        <article class="card">
+          <header><h3>Music producer help</h3><span class="chip" style="--c:#d97757;--bg:#2a1510;--fg:#f5c4b3">Jeff-gate</span></header>
+          <div class="row"></div>
+          <div class="row"><span class="meta">No Actions</span></div>
+          <p class="notes">Logic Pro is home. Moises / Suno need Jeff login. LogicProMCP needs Jeff GUI grants.</p>
+          
+        </article>
+        <article class="card">
+          <header><h3>Cisco CS desktop (high-level)</h3><span class="chip" style="--c:#525252;--bg:#171717;--fg:#d4d4d4">High-level</span></header>
+          <div class="row"></div>
+          <div class="row"><span class="meta">No Actions</span></div>
+          <p class="notes">AdoptIQ / TACTrack appear as high-level Cisco CS desktop only. No CSOne paths or customer rows.</p>
+          
+        </article>
+        <article class="card">
+          <header><h3>GitHub issue inbox</h3><span class="chip" style="--c:#d97757;--bg:#2a1510;--fg:#f5c4b3">Authority</span></header>
+          <div class="row"></div>
+          <div class="row"><span class="meta">No Actions</span></div>
+          <p class="notes">BOB-APPROVE / BOB-DENY / BOB-HOLD from rupret007 is the real yes. The board only opens the draft.</p>
+          
+        </article></div>
+    </section>
+    <section id="controls">
+      <h2>Controls</h2>
+      
+      <div class="grid">
+        <article class="card">
+          <header><h3>Unlock this phone</h3><span class="chip" style="--c:#d97757;--bg:#2a1510;--fg:#f5c4b3">Control</span></header>
+          <div class="row"></div>
+          <div class="row"><span class="meta">No Actions</span></div>
+          <p class="notes">Enter the emailed 6-digit code in Jeff verify above. Allowlist is jeffstory007@gmail.com only.</p>
+          
+        </article>
+        <article class="card">
+          <header><h3>Approve / Hold / Deny</h3><span class="chip" style="--c:#d97757;--bg:#2a1510;--fg:#f5c4b3">Control</span></header>
+          <div class="row"></div>
+          <div class="row"><span class="meta">No Actions</span></div>
+          <p class="notes">Unlock first. Pending items open a GitHub issue as rupret007. That issue is the real yes. No silent act.</p>
+          
+        </article>
+        <article class="card">
+          <header><h3>Copy refresh command</h3><span class="chip" style="--c:#16a34a;--bg:#052e16;--fg:#bbf7d0">Control</span></header>
+          <div class="row"></div>
+          <div class="row"><span class="meta">No Actions</span></div>
+          <p class="notes">Copies ./refresh.sh --push. Does not run it. Safe to copy before Unlock.</p>
+          <div class="ctrl"><button type="button" data-action="refresh-hint">Copy command</button></div>
+        </article>
+        <article class="card">
+          <header><h3><a href="https://github.com/rupret007/bob-ops-dashboard" target="_blank" rel="noopener">Open dashboard repo</a></h3><span class="chip" style="--c:#16a34a;--bg:#052e16;--fg:#bbf7d0">Control</span></header>
+          <div class="row"></div>
+          <div class="row"><span class="meta">No Actions</span></div>
+          <p class="notes">Public repo. Real merge/authority stays on GitHub as rupret007.</p>
+          <div class="ctrl"><button type="button" data-action="open-repo">Open repo</button></div>
+        </article>
+        <article class="card">
+          <header><h3>Mark board reviewed</h3><span class="chip" style="--c:#16a34a;--bg:#052e16;--fg:#bbf7d0">Control</span></header>
+          <div class="row"></div>
+          <div class="row"><span class="meta">No Actions</span></div>
+          <p class="notes">Local timestamp on this phone only. Does not notify Bob or change GitHub.</p>
+          <div class="ctrl"><button type="button" data-action="mark-reviewed">Mark reviewed</button></div>
+        </article>
+        <article class="card">
+          <header><h3>Ask Bob for a new code</h3><span class="chip" style="--c:#16a34a;--bg:#052e16;--fg:#bbf7d0">Control</span></header>
+          <div class="row"></div>
+          <div class="row"><span class="meta">No Actions</span></div>
+          <p class="notes">Say send dashboard code in chat. This page does not send mail.</p>
+          <div class="ctrl"><button type="button" data-action="ask-code">How to ask</button></div>
+        </article></div>
+    </section>
+    <section id="features">
+      <h2>Features</h2>
+      
+      <div class="grid">
+        <article class="card">
+          <header><h3>Soft-paint poll</h3><span class="chip" style="--c:#16a34a;--bg:#052e16;--fg:#bbf7d0">Feature</span></header>
+          <div class="row"></div>
+          <div class="row"><span class="meta">No Actions</span></div>
+          <p class="notes">Client fetches status.json every 30s (pauses when the tab is hidden). Repaints the board when generated_at changes. No full reload.</p>
+          
+        </article>
+        <article class="card">
+          <header><h3>Agents strip</h3><span class="chip" style="--c:#16a34a;--bg:#052e16;--fg:#bbf7d0">Feature</span></header>
+          <div class="row"></div>
+          <div class="row"><span class="meta">No Actions</span></div>
+          <p class="notes">Codex / Cursor / Claude state from a Mac probe. Public fields only. Token-like words redacted.</p>
+          
+        </article>
+        <article class="card">
+          <header><h3>Live shipping chips</h3><span class="chip" style="--c:#16a34a;--bg:#052e16;--fg:#bbf7d0">Feature</span></header>
+          <div class="row"></div>
+          <div class="row"><span class="meta">No Actions</span></div>
+          <p class="notes">Green / yellow / red / parked / Jeff-gate from live gh tips, open PRs, and Actions.</p>
+          
+        </article>
+        <article class="card">
+          <header><h3>Cisco high-level</h3><span class="chip" style="--c:#16a34a;--bg:#052e16;--fg:#bbf7d0">Feature</span></header>
+          <div class="row"></div>
+          <div class="row"><span class="meta">No Actions</span></div>
+          <p class="notes">AdoptIQ Build 115 and TACTrack as public summaries. No CSOne, no customer paths.</p>
+          
+        </article>
+        <article class="card">
+          <header><h3>Music producer gates</h3><span class="chip" style="--c:#16a34a;--bg:#052e16;--fg:#bbf7d0">Feature</span></header>
+          <div class="row"></div>
+          <div class="row"><span class="meta">No Actions</span></div>
+          <p class="notes">Logic home is green. LogicProMCP and Moises / Suno stay Jeff-gate until Jeff grants access.</p>
+          
+        </article>
+        <article class="card">
+          <header><h3>Parked lane</h3><span class="chip" style="--c:#525252;--bg:#171717;--fg:#d4d4d4">Feature</span></header>
+          <div class="row"></div>
+          <div class="row"><span class="meta">No Actions</span></div>
+          <p class="notes">Closet shelf and catalog lanes stay parked unless Jeff unparks.</p>
+          
+        </article>
+        <article class="card">
+          <header><h3>Silence banner</h3><span class="chip" style="--c:#16a34a;--bg:#052e16;--fg:#bbf7d0">Feature</span></header>
+          <div class="row"></div>
+          <div class="row"><span class="meta">No Actions</span></div>
+          <p class="notes">If refresh is quiet for ~45m the page warns that chips may be stale.</p>
+          
+        </article>
+        <article class="card">
+          <header><h3>Unlock + cache fallback</h3><span class="chip" style="--c:#16a34a;--bg:#052e16;--fg:#bbf7d0">Feature</span></header>
+          <div class="row"></div>
+          <div class="row"><span class="meta">No Actions</span></div>
+          <p class="notes">SHA-256 against status.json.verify. Fail-closed: Jeff email + 64-hex sha. If Pages/Fastly serves a stale empty verify, Unlock tries raw main (no-store).</p>
+          
+        </article>
+        <article class="card">
+          <header><h3>XSS-safe cards</h3><span class="chip" style="--c:#16a34a;--bg:#052e16;--fg:#bbf7d0">Feature</span></header>
+          <div class="row"></div>
+          <div class="row"><span class="meta">No Actions</span></div>
+          <p class="notes">html.escape + safeHref on server render. Soft-paint uses esc/safeHref. ASCII-safe JS (no smart quotes).</p>
+          
+        </article>
+        <article class="card">
+          <header><h3>Unlock race guards</h3><span class="chip" style="--c:#16a34a;--bg:#052e16;--fg:#bbf7d0">Feature</span></header>
+          <div class="row"></div>
+          <div class="row"><span class="meta">No Actions</span></div>
+          <p class="notes">unlockBusy + unlockTouchAt stop iOS double-submit. pollSeq / pendingSeq drop stale fetches. decideBusy gates Approve.</p>
+          
+        </article>
+        <article class="card">
+          <header><h3>Public Pages</h3><span class="chip" style="--c:#16a34a;--bg:#052e16;--fg:#bbf7d0">Feature</span></header>
+          <div class="row"></div>
+          <div class="row"><span class="meta">No Actions</span></div>
+          <p class="notes">Free-plan GitHub Pages from main. No secrets, tokens, Keeper material, or private handoff text.</p>
+          
+        </article></div>
+    </section>
     <section id="live-shipping">
       <h2>Live shipping</h2>
       
       <div class="grid">
         <article class="card">
           <header><h3><a href="https://github.com/rupret007/webjam" target="_blank" rel="noopener">WebJam</a></h3><span class="chip" style="--c:#d97757;--bg:#2a1510;--fg:#f5c4b3">Jeff-gate</span></header>
-          <div class="row"><code>c51751d</code> · product <code>5ca6ba5</code> · release <strong>v0.26.0</strong> · 1 open PR</div>
-          <div class="row"><span class="ci" style="color:#16a34a">● WebJam CI: success</span></div>
+          <div class="row"><code>ca0d3b3</code> · product <code>5ca6ba5</code> · release <strong>v0.26.0</strong> · 0 open PRs</div>
+          <div class="row"><span class="ci" style="color:#16a34a">&#9679; WebJam CI: success</span></div>
           <p class="notes">PR #21 merged (docs on 5ca6ba5). Release stays v0.26.0 until Jeff names v0.27. Exploratory click-through Jeff-gated.</p>
+          
         </article>
         <article class="card">
-          <header><h3><a href="https://github.com/rupret007/StoryLiner" target="_blank" rel="noopener">StoryLiner</a></h3><span class="chip" style="--c:#ca8a04;--bg:#422006;--fg:#fef08a">Yellow</span></header>
-          <div class="row"><code>669e98d</code> · 1 open PR</div>
-          <div class="row"><span class="ci" style="color:#16a34a">● CI: success</span></div>
+          <header><h3><a href="https://github.com/rupret007/StoryLiner" target="_blank" rel="noopener">StoryLiner</a></h3><span class="chip" style="--c:#16a34a;--bg:#052e16;--fg:#bbf7d0">Green</span></header>
+          <div class="row"><code>5f380b7</code> · 0 open PRs</div>
+          <div class="row"><span class="ci" style="color:#16a34a">&#9679; CI: success</span></div>
           <p class="notes">PR #1 lint fix merged; confirm main CI from live fetch.</p>
+          
         </article>
         <article class="card">
-          <header><h3><a href="https://github.com/rupret007/StoryBoard" target="_blank" rel="noopener">StoryBoard</a></h3><span class="chip" style="--c:#ca8a04;--bg:#422006;--fg:#fef08a">Yellow</span></header>
-          <div class="row"><code>da92aeb</code> · 1 open PR</div>
-          <div class="row"><span class="ci" style="color:#16a34a">● Quality: success</span></div>
+          <header><h3><a href="https://github.com/rupret007/StoryBoard" target="_blank" rel="noopener">StoryBoard</a></h3><span class="chip" style="--c:#16a34a;--bg:#052e16;--fg:#bbf7d0">Green</span></header>
+          <div class="row"><code>35110c6</code> · 0 open PRs</div>
+          <div class="row"><span class="ci" style="color:#16a34a">&#9679; Quality: success</span></div>
           <p class="notes">Quiet green unless CI says otherwise.</p>
+          
         </article>
         <article class="card">
           <header><h3><a href="https://github.com/rupret007/Rad-Dad-Merch" target="_blank" rel="noopener">Rad Dad Merch</a></h3><span class="chip" style="--c:#16a34a;--bg:#052e16;--fg:#bbf7d0">Green</span></header>
           <div class="row"><code>b949c7c</code> · 0 open PRs</div>
-          <div class="row"><span class="ci" style="color:#16a34a">● Release integrity: success</span></div>
+          <div class="row"><span class="ci" style="color:#16a34a">&#9679; Release integrity: success</span></div>
           <p class="notes">Merch lane; watch Release integrity.</p>
+          
         </article>
         <article class="card">
           <header><h3><a href="https://github.com/rupret007/RadDadSite" target="_blank" rel="noopener">RadDadSite</a></h3><span class="chip" style="--c:#ca8a04;--bg:#422006;--fg:#fef08a">Yellow</span></header>
           <div class="row"><code>a56c44f</code> · 1 open PR</div>
-          <div class="row"><span class="ci" style="color:#16a34a">● Test Site: success</span></div>
+          <div class="row"><span class="ci" style="color:#16a34a">&#9679; Test Site: success</span></div>
           <p class="notes">Tip green typical; draft #6 prod deploy parked/Jeff-gate if still open.</p>
+          
         </article>
         <article class="card">
           <header><h3><a href="https://github.com/rupret007/rad-dad-show-night" target="_blank" rel="noopener">Show Night</a></h3><span class="chip" style="--c:#ca8a04;--bg:#422006;--fg:#fef08a">Yellow</span></header>
           <div class="row"><code>710e765</code> · 0 open PRs</div>
           <div class="row"><span class="meta">No Actions</span></div>
           <p class="notes">Show-night run sheet / flyer. No CI is OK.</p>
+          
         </article>
         <article class="card">
           <header><h3>AI Music Vault</h3><span class="chip" style="--c:#525252;--bg:#171717;--fg:#d4d4d4">Parked</span></header>
           <div class="row"></div>
           <div class="row"><span class="meta">No Actions</span></div>
           <p class="notes">Private docs/index. High-level only on public page.</p>
+          
         </article>
         <article class="card">
           <header><h3><a href="https://github.com/rupret007/Turdanoid" target="_blank" rel="noopener">Turdanoid</a></h3><span class="chip" style="--c:#ca8a04;--bg:#422006;--fg:#fef08a">Yellow</span></header>
           <div class="row"><code>a0ef856</code> · 0 open PRs</div>
-          <div class="row"><span class="ci" style="color:#16a34a">● CI: success</span></div>
-          <p class="notes">Tip usually green; stale open PRs → hygiene.</p>
+          <div class="row"><span class="ci" style="color:#16a34a">&#9679; CI: success</span></div>
+          <p class="notes">Tip usually green; stale open PRs -&gt; hygiene.</p>
+          
         </article></div>
     </section>
     <section id="cisco">
@@ -252,18 +465,21 @@
           <div class="row"></div>
           <div class="row"><span class="meta">No Actions</span></div>
           <p class="notes">Cisco CS desktop -- Build 115 in progress (Codex + Cloud Agent). No secrets on this page.</p>
+          
         </article>
         <article class="card">
           <header><h3>TACTrack</h3><span class="chip" style="--c:#ca8a04;--bg:#422006;--fg:#fef08a">Yellow</span></header>
           <div class="row"></div>
           <div class="row"><span class="meta">No Actions</span></div>
           <p class="notes">Private. High-level only -- CI / open PRs from live fetch.</p>
+          
         </article>
         <article class="card">
           <header><h3>AdoptIQ notes</h3><span class="chip" style="--c:#525252;--bg:#171717;--fg:#d4d4d4">Parked</span></header>
           <div class="row"></div>
           <div class="row"><span class="meta">No Actions</span></div>
           <p class="notes">High-level only: manager-decision UX + Build 115 candidate path. No CSOne paths, customer rows, or tokens.</p>
+          
         </article></div>
     </section>
     <section id="messaging">
@@ -272,21 +488,24 @@
       <div class="grid">
         <article class="card">
           <header><h3><a href="https://github.com/rupret007/Andrea_NanoBot" target="_blank" rel="noopener">Andrea NanoBot</a></h3><span class="chip" style="--c:#ca8a04;--bg:#422006;--fg:#fef08a">Yellow</span></header>
-          <div class="row"><code>7fbfc9a</code> · 2 open PRs</div>
-          <div class="row"><span class="ci" style="color:#dc2626">● Security: failure</span></div>
+          <div class="row"><code>3d4657f</code> · 0 open PRs</div>
+          <div class="row"><span class="ci" style="color:#ca8a04">&#9679; Update token count: skipped</span></div>
           <p class="notes">BB AppleScript send preferred. Private API OFF. Approval-fenced sends only.</p>
+          
         </article>
         <article class="card">
           <header><h3>Telegram Bot the Bot</h3><span class="chip" style="--c:#16a34a;--bg:#052e16;--fg:#bbf7d0">Green</span></header>
           <div class="row"></div>
           <div class="row"><span class="meta">No Actions</span></div>
           <p class="notes">Whisper + Chrome mop shipped. Bob front-door via Telegram.</p>
+          
         </article>
         <article class="card">
           <header><h3>Codex local goals</h3><span class="chip" style="--c:#16a34a;--bg:#052e16;--fg:#bbf7d0">Green</span></header>
           <div class="row"></div>
           <div class="row"><span class="meta">No Actions</span></div>
           <p class="notes">goals=true fixed. Local Codex loop for AdoptIQ/ops lanes.</p>
+          
         </article></div>
     </section>
     <section id="music-producer">
@@ -298,18 +517,21 @@
           <div class="row"></div>
           <div class="row"><span class="meta">No Actions</span></div>
           <p class="notes">Logic Pro 12.3.1 on Mac mini -- primary producer home.</p>
+          
         </article>
         <article class="card">
           <header><h3>LogicProMCP</h3><span class="chip" style="--c:#d97757;--bg:#2a1510;--fg:#f5c4b3">Jeff-gate</span></header>
           <div class="row"></div>
           <div class="row"><span class="meta">No Actions</span></div>
           <p class="notes">Installed. Pending Accessibility / Automation GUI grants from Jeff.</p>
+          
         </article>
         <article class="card">
           <header><h3>Moises / Suno</h3><span class="chip" style="--c:#d97757;--bg:#2a1510;--fg:#f5c4b3">Jeff-gate</span></header>
           <div class="row"></div>
           <div class="row"><span class="meta">No Actions</span></div>
           <p class="notes">Jeff-login gated for stems/covers/demos.</p>
+          
         </article></div>
     </section>
     <section id="parked">
@@ -321,18 +543,21 @@
           <div class="row"><code>1c3cab3</code> · 4 open PRs</div>
           <div class="row"><span class="meta">No Actions</span></div>
           <p class="notes">Parked. Open PRs ignored unless Jeff unparks.</p>
+          
         </article>
         <article class="card">
           <header><h3>Stalemate / Trailer Swift</h3><span class="chip" style="--c:#525252;--bg:#171717;--fg:#d4d4d4">Parked</span></header>
           <div class="row"></div>
           <div class="row"><span class="meta">No Actions</span></div>
           <p class="notes">Catalog/voice feel only -- parked catalog lane.</p>
+          
         </article>
         <article class="card">
           <header><h3><a href="https://github.com/rupret007/RadDadSite/pull/6" target="_blank" rel="noopener">RadDadSite #6</a></h3><span class="chip" style="--c:#525252;--bg:#171717;--fg:#d4d4d4">Parked</span></header>
           <div class="row"></div>
           <div class="row"><span class="meta">No Actions</span></div>
           <p class="notes">Draft prod deploy -- keep parked pending Che/server facts.</p>
+          
         </article></div>
     </section>
     <section id="active-agents">
@@ -344,24 +569,28 @@
           <div class="row"></div>
           <div class="row"><span class="meta">No Actions</span></div>
           <p class="notes">AdoptIQ PID 26928 · gpt-5.6-sol goals · codex-local :3210 ready · checked 2026-08-22T20:45:00-05:00</p>
+          
         </article>
         <article class="card">
           <header><h3>Cursor</h3><span class="chip" style="--c:#16a34a;--bg:#052e16;--fg:#bbf7d0">Running</span></header>
           <div class="row"></div>
           <div class="row"><span class="meta">No Actions</span></div>
           <p class="notes">Cursor.app present and running · checked 2026-08-22T20:45:00-05:00</p>
+          
         </article>
         <article class="card">
           <header><h3>Claude</h3><span class="chip" style="--c:#525252;--bg:#171717;--fg:#d4d4d4">Installed</span></header>
           <div class="row"></div>
           <div class="row"><span class="meta">No Actions</span></div>
           <p class="notes">Claude.app + claude 2.1.216 installed · checked 2026-08-22T20:45:00-05:00</p>
+          
         </article>
         <article class="card">
           <header><h3>AdoptIQ Cloud Agent</h3><span class="chip" style="--c:#ca8a04;--bg:#422006;--fg:#fef08a">Yellow</span></header>
           <div class="row"></div>
           <div class="row"><span class="meta">No Actions</span></div>
           <p class="notes">Cloud Agent + Build 115 path in flight elsewhere (Cursor Cloud). High-level only.</p>
+          
         </article></div>
     </section>
   </div>
@@ -374,8 +603,10 @@
 <script>
 (function () {
   // Simple+safe: fixed Jeff email. Bob emails a one-time code; page checks SHA-256 against status.json.verify.
+  // Pages/Fastly caches status.json ~max-age 600; raw main is the bust if Pages has no verify.
   var JEFF_EMAIL = "jeffstory007@gmail.com";
   var STORAGE_KEY = "bobOpsJeffAuth_v1";
+  var RAW_STATUS_URL = "https://raw.githubusercontent.com/rupret007/bob-ops-dashboard/main/status.json";
 
   var codeEl = document.getElementById("jeff-code");
   var statusEl = document.getElementById("auth-status");
@@ -387,6 +618,31 @@
   var unlockTouchAt = 0;
   var decideBusy = {};
   var pendingSeq = 0;
+
+  function hasUnlockVerify(data) {
+    var v = data && data.verify;
+    return !!(v && v.sha256 && v.exp);
+  }
+
+  async function fetchJsonNoStore(url, fetchFn) {
+    fetchFn = fetchFn || fetch;
+    var res = await fetchFn(url, { cache: "no-store" });
+    if (!res.ok) throw new Error("status " + res.status);
+    return res.json();
+  }
+
+  async function loadUnlockStatus(fetchFn) {
+    fetchFn = fetchFn || fetch;
+    var pagesUrl = "./status.json?ts=" + Date.now();
+    var rawUrl = RAW_STATUS_URL + "?ts=" + Date.now();
+    try {
+      var pages = await fetchJsonNoStore(pagesUrl, fetchFn);
+      if (hasUnlockVerify(pages)) return pages;
+    } catch (e) {
+      // Pages miss, HTTP error, or stale/null verify -- try raw main (no-store).
+    }
+    return fetchJsonNoStore(rawUrl, fetchFn);
+  }
 
   function setStatus(msg, kind) {
     statusEl.textContent = msg || "";
@@ -441,9 +697,7 @@
     unlockBusy = true;
     btnConfirm.disabled = true;
     try {
-      var res = await fetch("./status.json?ts=" + Date.now(), { cache: "no-store" });
-      if (!res.ok) throw new Error("status " + res.status);
-      var data = await res.json();
+      var data = await loadUnlockStatus();
       var v = (data && data.verify) || null;
       if (!v || !v.sha256 || !v.exp) {
         setStatus("No code active yet. Ask Bob for one.", "bad");
@@ -605,10 +859,9 @@
     else if (pendingBox) pendingBox.hidden = true;
   };
 
-  actions.addEventListener("click", function (ev) {
-    var btn = ev.target.closest("button[data-action]");
-    if (!btn || !document.body.classList.contains("jeff-verified")) return;
-    var act = btn.getAttribute("data-action");
+  var CONTROL_ACTIONS = { "refresh-hint": 1, "open-repo": 1, "mark-reviewed": 1, "ask-code": 1 };
+  function handleJeffAction(act) {
+    if (!CONTROL_ACTIONS[act]) return;
     if (act === "refresh-hint") {
       var cmd = "./refresh.sh --push";
       if (navigator.clipboard && navigator.clipboard.writeText) {
@@ -626,6 +879,14 @@
     } else if (act === "ask-code") {
       setStatus("Say send dashboard code in chat", "hint");
     }
+  }
+  document.addEventListener("click", function (ev) {
+    var btn = ev.target.closest("button[data-action]");
+    if (!btn) return;
+    var act = btn.getAttribute("data-action");
+    if (!CONTROL_ACTIONS[act]) return;
+    ev.preventDefault();
+    handleJeffAction(act);
   });
 
   applyVerified(loadAuth());
@@ -693,10 +954,18 @@
 
   function safeHref(u) {
     var s = String(u == null ? "" : u).trim();
+    if (s.indexOf("./") === 0 && s.indexOf(":") === -1 && !/[\s<>"']/.test(s)) return s;
     var low = s.toLowerCase();
     if (low.indexOf("https://") !== 0 && low.indexOf("http://") !== 0) return "";
     if (/[\s<>"']/.test(s)) return "";
     return s;
+  }
+  var PAINT_CONTROL_ACTIONS = { "refresh-hint": 1, "open-repo": 1, "mark-reviewed": 1, "ask-code": 1 };
+  function controlBtnHtml(p) {
+    var act = String((p && p.control_action) || "");
+    if (!PAINT_CONTROL_ACTIONS[act]) return "";
+    var label = esc(p.action_label || p.name || "Do");
+    return '<div class="ctrl"><button type="button" data-action="' + esc(act) + '">' + label + "</button></div>";
   }
 
   function chipHtml(st, label) {
@@ -794,7 +1063,8 @@
         if (p.accessible === false && p.repo) bits.push("inaccessible");
         cards += '<article class="card"><header><h3>' + titleHtml + '</h3>' + chip +
           '</header><div class="row">' + bits.join(" \u00b7 ") + '</div><div class="row">' +
-          ciBadge(p.ci) + '</div><p class="notes">' + esc(p.notes || "") + '</p></article>';
+          ciBadge(p.ci) + '</div><p class="notes">' + esc(p.notes || "") + '</p>' +
+          controlBtnHtml(p) + '</article>';
       });
       var strip = "";
       if (sec.id === "active-agents") strip = agentsStripHtml(data.agents || []);

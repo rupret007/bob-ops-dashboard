@@ -7,6 +7,7 @@ Public, mobile-friendly status board for projects Bob is working on (Jeff Story 
 ## What's here
 
 - `index.html` -- human dashboard (Claude orange `#d97757` on near-black `#0a0a0a`; Jeff verify gate)
+- First-class sections: **Abilities** (what Bob can do), **Controls** (what Jeff can do), **Features** (what the board is)
 - `status.json` -- machine-readable snapshot (client polls every ~30s)
 - `.github/workflows/refresh-dashboard.yml` -- Actions cron every 15 minutes
 - No secrets, tokens, CSOne customer paths, Keeper material, or private handoff text
@@ -28,13 +29,20 @@ Workflow uses default `GITHUB_TOKEN` (`permissions: contents: write`) plus `gh a
 
 ## Jeff verify gate
 
-Fixed allowlist: `jeffstory007@gmail.com` only. Bob emails a 6-digit code; the page SHA-256-checks it against `status.json.verify`. No mailto challenge. `localStorage` unlock is UX-only; real authority is a GitHub issue from `rupret007`.
+Fixed allowlist: `jeffstory007@gmail.com` only. Bob emails a 6-digit code (issuer TTL **2 hours**). The page SHA-256-checks it against `status.json.verify`. Unlock still fails on the phone when `exp` is past. Missing/wrong email and non-64-hex sha fail closed (no default-to-Jeff).
+
+GitHub Pages / Fastly caches `status.json` at **max-age 600**. If Unlock sees no verify (or the Pages fetch fails), it falls back to `raw.githubusercontent.com/rupret007/bob-ops-dashboard/main/status.json` (`no-store`, same allowlist / sha / exp checks).
+
+Refresh snapshots `refresh_started_ms` at start and must **never** drop a verify that was still live at that clock (`exp > refresh_started_ms`) or still within `issued_at + TTL` (plus 5 minutes grace). The 2026-08-23 iPhone miss was `15m OTP + 15m Actions cron + preserve only if exp > now` wiping the hash during a ~20s rebuild. Helper: `preserve_verify.py`. Gate: `./qa-claim-smoke.sh`.
+
+Unlock also keeps iOS double-submit / stale-poll guards: `unlockBusy`, `unlockTouchAt`, `pollSeq`, `pendingSeq`, `decideBusy`.
 
 ## Publish notes
 
 - Repo is **public** so GitHub Pages works on the free plan.
 - Pages served from `main` / root.
 - Theme + verify UI + client poll live in `refresh.sh` (source of truth) so they survive rebuilds.
+- Board HTML is escaped (`html.escape` / JS `esc` + `safeHref`). Do not render raw notes/URLs.
 - Do not merge unrelated PRs as part of a refresh.
 
 ## refresh.sh
@@ -44,7 +52,7 @@ Fixed allowlist: `jeffstory007@gmail.com` only. Bob emails a 6-digit code; the p
 ./refresh.sh --push   # rebuild and push to Pages (main / root)
 ```
 
-QA before calling Unlock good: `./qa-claim-smoke.sh` (fail-closed `node --check`, ASCII-safe scripts, verify allowlist).
+QA before calling Unlock good: `./qa-claim-smoke.sh` (fail-closed `node --check`, ASCII-safe scripts, XSS helpers, preserve race, raw fallback, first-class sections).
 
 ## Jeff verify + control panel
 
@@ -55,3 +63,5 @@ QA before calling Unlock good: `./qa-claim-smoke.sh` (fail-closed `node --check`
 5. Real authority is that GitHub issue, not localStorage
 
 Helper: `python3 issue-dashboard-code.py` then email the printed code and `./refresh.sh --push`.
+
+Do not weaken the Jeff email allowlist.

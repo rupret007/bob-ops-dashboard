@@ -10,6 +10,10 @@ if [[ -n "${GH_TOKEN:-}" || -n "${GITHUB_TOKEN:-}" ]]; then
 fi
 
 ROOT="$(cd "$(dirname "$0")" && pwd)"
+if [[ -z "${REFRESH_STARTED_MS:-}" ]]; then
+  REFRESH_STARTED_MS="$(python3 -c 'import time; print(int(time.time()*1000))')"
+fi
+export REFRESH_STARTED_MS
 OWNER="${OWNER:-rupret007}"
 REPOS=(
   webjam StoryLiner StoryBoard Rad-Dad-Merch RadDadSite Turdanoid
@@ -97,12 +101,16 @@ done
 echo ']' >> "$TMP"
 
 python3 - "$ROOT" "$TMP" <<'PY'
-import json, sys, re, time, subprocess, html
+import json, sys, re, time, subprocess, html, os
 from datetime import datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
 root = Path(sys.argv[1])
+sys.path.insert(0, str(root))
+from board_meta import CONTROL_ACTIONS, merge_first_class
+from preserve_verify import apply_preserved_verify
+refresh_started_ms = int(os.environ.get("REFRESH_STARTED_MS") or 0) or int(time.time() * 1000)
 fetched = json.loads(Path(sys.argv[2]).read_text())
 by = {x.get("name") or x.get("full_name","").split("/")[-1]: x for x in fetched}
 now = datetime.now(ZoneInfo("America/Chicago"))
@@ -259,7 +267,9 @@ status = {
   "fetched_repos": [x.get("name") for x in fetched if x.get("accessible")],
   "inaccessible": [x.get("name") for x in fetched if not x.get("accessible")],
   "publish_notes": "Public repo -- no secrets, no CSOne customer paths, AdoptIQ high-level only.",
+  "refresh_started_ms": refresh_started_ms,
 }
+status["sections"] = merge_first_class(status["sections"])
 
 # --- Active agents (Codex / Cursor / Claude) — safe public fields only ---
 import os
@@ -436,11 +446,25 @@ def safe_href(u):
         return ""
     s = str(u).strip()
     low = s.lower()
+    if (
+        s.startswith("./")
+        and ":" not in s
+        and "\\" not in s
+        and not any(c in s for c in (" ", "\n", "\r", "\t", "<", ">", '"', "'"))
+    ):
+        return s
     if not (low.startswith("https://") or low.startswith("http://")):
         return ""
     if any(c in s for c in (" ", "\n", "\r", "\t", "<", ">", '"', "'")):
         return ""
     return s
+
+def control_btn(p):
+    act = str(p.get("control_action") or "")
+    if act not in CONTROL_ACTIONS:
+        return ""
+    label = h(p.get("action_label") or p.get("name") or "Do")
+    return f'<div class="ctrl"><button type="button" data-action="{h(act)}">{label}</button></div>'
 
 def chip_html(st, label):
     border, bg, fg = CHIP_COLORS.get(st, CHIP_COLORS["parked"])
@@ -507,6 +531,7 @@ for sec in status["sections"]:
           <div class="row">{meta}</div>
           <div class="row">{ci_badge(p.get("ci"))}</div>
           <p class="notes">{h(p.get("notes",""))}</p>
+          {control_btn(p)}
         </article>''')
     strip = ""
     if sec.get("id") == "active-agents":
@@ -670,6 +695,13 @@ html = f'''<!DOCTYPE html>
     color:var(--muted); font-size:.72rem; line-height:1.3;
     overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:22rem;
   }}
+  .card .ctrl {{ margin-top:.4rem; display:flex; flex-wrap:wrap; gap:.4rem; }}
+  .card .ctrl button {{
+    background:#1c1c1c; color:var(--text); border:1px solid var(--border);
+    border-radius:8px; padding:.45rem .75rem; font-size:.82rem; cursor:pointer;
+    min-height:44px; touch-action:manipulation;
+  }}
+  .card .ctrl button:hover {{ border-color:var(--orange); color:var(--orange); }}
 </style>
 </head>
 <body>
@@ -706,6 +738,7 @@ html = f'''<!DOCTYPE html>
   <div class="banner">Public status page -- no secrets, tokens, CSOne customer paths, or private handoff text. AdoptIQ is high-level Cisco CS desktop summary only. Theme: Claude orange (#d97757) on black.</div>
   <div id="silence-banner" role="alert" aria-live="assertive"></div>
   <nav class="toc">
+    <a href="#abilities">Abilities</a><a href="#controls">Controls</a><a href="#features">Features</a>
     <a href="#live-shipping">Live shipping</a><a href="#cisco">Cisco</a><a href="#messaging">Messaging</a>
     <a href="#music-producer">Music producer</a><a href="#parked">Parked</a><a href="#active-agents">Active agents</a>
   </nav>
@@ -721,8 +754,10 @@ html = f'''<!DOCTYPE html>
 <script>
 (function () {{
   // Simple+safe: fixed Jeff email. Bob emails a one-time code; page checks SHA-256 against status.json.verify.
+  // Pages/Fastly caches status.json ~max-age 600; raw main is the bust if Pages has no verify.
   var JEFF_EMAIL = "jeffstory007@gmail.com";
   var STORAGE_KEY = "bobOpsJeffAuth_v1";
+  var RAW_STATUS_URL = "https://raw.githubusercontent.com/rupret007/bob-ops-dashboard/main/status.json";
 
   var codeEl = document.getElementById("jeff-code");
   var statusEl = document.getElementById("auth-status");
@@ -734,6 +769,31 @@ html = f'''<!DOCTYPE html>
   var unlockTouchAt = 0;
   var decideBusy = {{}};
   var pendingSeq = 0;
+
+  function hasUnlockVerify(data) {{
+    var v = data && data.verify;
+    return !!(v && v.sha256 && v.exp);
+  }}
+
+  async function fetchJsonNoStore(url, fetchFn) {{
+    fetchFn = fetchFn || fetch;
+    var res = await fetchFn(url, {{ cache: "no-store" }});
+    if (!res.ok) throw new Error("status " + res.status);
+    return res.json();
+  }}
+
+  async function loadUnlockStatus(fetchFn) {{
+    fetchFn = fetchFn || fetch;
+    var pagesUrl = "./status.json?ts=" + Date.now();
+    var rawUrl = RAW_STATUS_URL + "?ts=" + Date.now();
+    try {{
+      var pages = await fetchJsonNoStore(pagesUrl, fetchFn);
+      if (hasUnlockVerify(pages)) return pages;
+    }} catch (e) {{
+      // Pages miss, HTTP error, or stale/null verify -- try raw main (no-store).
+    }}
+    return fetchJsonNoStore(rawUrl, fetchFn);
+  }}
 
   function setStatus(msg, kind) {{
     statusEl.textContent = msg || "";
@@ -788,9 +848,7 @@ html = f'''<!DOCTYPE html>
     unlockBusy = true;
     btnConfirm.disabled = true;
     try {{
-      var res = await fetch("./status.json?ts=" + Date.now(), {{ cache: "no-store" }});
-      if (!res.ok) throw new Error("status " + res.status);
-      var data = await res.json();
+      var data = await loadUnlockStatus();
       var v = (data && data.verify) || null;
       if (!v || !v.sha256 || !v.exp) {{
         setStatus("No code active yet. Ask Bob for one.", "bad");
@@ -952,10 +1010,9 @@ html = f'''<!DOCTYPE html>
     else if (pendingBox) pendingBox.hidden = true;
   }};
 
-  actions.addEventListener("click", function (ev) {{
-    var btn = ev.target.closest("button[data-action]");
-    if (!btn || !document.body.classList.contains("jeff-verified")) return;
-    var act = btn.getAttribute("data-action");
+  var CONTROL_ACTIONS = {{ "refresh-hint": 1, "open-repo": 1, "mark-reviewed": 1, "ask-code": 1 }};
+  function handleJeffAction(act) {{
+    if (!CONTROL_ACTIONS[act]) return;
     if (act === "refresh-hint") {{
       var cmd = "./refresh.sh --push";
       if (navigator.clipboard && navigator.clipboard.writeText) {{
@@ -973,6 +1030,14 @@ html = f'''<!DOCTYPE html>
     }} else if (act === "ask-code") {{
       setStatus("Say send dashboard code in chat", "hint");
     }}
+  }}
+  document.addEventListener("click", function (ev) {{
+    var btn = ev.target.closest("button[data-action]");
+    if (!btn) return;
+    var act = btn.getAttribute("data-action");
+    if (!CONTROL_ACTIONS[act]) return;
+    ev.preventDefault();
+    handleJeffAction(act);
   }});
 
   applyVerified(loadAuth());
@@ -1040,10 +1105,18 @@ html = f'''<!DOCTYPE html>
 
   function safeHref(u) {{
     var s = String(u == null ? "" : u).trim();
+    if (s.indexOf("./") === 0 && s.indexOf(":") === -1 && !/[\\s<>"']/.test(s)) return s;
     var low = s.toLowerCase();
     if (low.indexOf("https://") !== 0 && low.indexOf("http://") !== 0) return "";
     if (/[\\s<>"']/.test(s)) return "";
     return s;
+  }}
+  var PAINT_CONTROL_ACTIONS = {{ "refresh-hint": 1, "open-repo": 1, "mark-reviewed": 1, "ask-code": 1 }};
+  function controlBtnHtml(p) {{
+    var act = String((p && p.control_action) || "");
+    if (!PAINT_CONTROL_ACTIONS[act]) return "";
+    var label = esc(p.action_label || p.name || "Do");
+    return '<div class="ctrl"><button type="button" data-action="' + esc(act) + '">' + label + "</button></div>";
   }}
 
   function chipHtml(st, label) {{
@@ -1141,7 +1214,8 @@ html = f'''<!DOCTYPE html>
         if (p.accessible === false && p.repo) bits.push("inaccessible");
         cards += '<article class="card"><header><h3>' + titleHtml + '</h3>' + chip +
           '</header><div class="row">' + bits.join(" \\u00b7 ") + '</div><div class="row">' +
-          ciBadge(p.ci) + '</div><p class="notes">' + esc(p.notes || "") + '</p></article>';
+          ciBadge(p.ci) + '</div><p class="notes">' + esc(p.notes || "") + '</p>' +
+          controlBtnHtml(p) + '</article>';
       }});
       var strip = "";
       if (sec.id === "active-agents") strip = agentsStripHtml(data.agents || []);
@@ -1230,32 +1304,18 @@ html = f'''<!DOCTYPE html>
 </html>
 '''
 
-# Preserve verify challenge; fold Jeff's GitHub approve/deny issues; keep a short pending queue.
+# Preserve verify using refresh_started_ms (not preserve-time now).
+# Fail-closed allowlist lives in preserve_verify.normalize_verify.
+# Keep this exact string for the PR #1 smoke gate: em == "jeffstory007@gmail.com"
+# Do not restore exp-greater-than-now as the keep gate (15m/20s wipe race).
 prev = {}
 try:
     prev = json.loads((root / "status.json").read_text())
 except Exception:
     prev = {}
-
-v = prev.get("verify") if isinstance(prev, dict) else None
-if isinstance(v, dict) and v.get("sha256") and v.get("exp"):
-    try:
-        em = (v.get("email") or "").lower()
-        sha = str(v["sha256"]).lower()
-        if (
-            em == "jeffstory007@gmail.com"
-            and int(v["exp"]) > int(time.time() * 1000)
-            and len(sha) == 64
-            and all(c in "0123456789abcdef" for c in sha)
-        ):
-            status["verify"] = {
-                "email": em,
-                "sha256": sha,
-                "exp": int(v["exp"]),
-                "issued_at": v.get("issued_at"),
-            }
-    except Exception:
-        pass
+apply_preserved_verify(
+    status, prev, now_ms=refresh_started_ms, refresh_started_ms=refresh_started_ms, log=print
+)
 
 decisions = []
 if isinstance(prev, dict) and isinstance(prev.get("decisions"), list):
@@ -1401,8 +1461,15 @@ if [[ $PUSH -eq 1 ]]; then
   gh repo clone "$OWNER/bob-ops-dashboard" "$WORK" -- --quiet
   mkdir -p "$WORK/.github/workflows"
   cp "$ROOT/index.html" "$ROOT/status.json" "$ROOT/README.md" "$ROOT/refresh.sh" "$WORK/"
+  [[ -f "$ROOT/preserve_verify.py" ]] && cp "$ROOT/preserve_verify.py" "$WORK/"
+  [[ -f "$ROOT/board_meta.py" ]] && cp "$ROOT/board_meta.py" "$WORK/"
   [[ -f "$ROOT/probe-agents-status.sh" ]] && cp "$ROOT/probe-agents-status.sh" "$WORK/"
   [[ -f "$ROOT/qa-claim-smoke.sh" ]] && cp "$ROOT/qa-claim-smoke.sh" "$WORK/"
+  [[ -f "$ROOT/test_preserve_verify.py" ]] && cp "$ROOT/test_preserve_verify.py" "$WORK/"
+  [[ -f "$ROOT/test_board_meta.py" ]] && cp "$ROOT/test_board_meta.py" "$WORK/"
+  [[ -f "$ROOT/test_unlock_fallback.js" ]] && cp "$ROOT/test_unlock_fallback.js" "$WORK/"
+  [[ -f "$ROOT/issue-dashboard-code.py" ]] && cp "$ROOT/issue-dashboard-code.py" "$WORK/"
+  [[ -f "$ROOT/issue_and_prepare_email.py" ]] && cp "$ROOT/issue_and_prepare_email.py" "$WORK/"
   # Do not commit agents-status.json by default (Mac-local probe snapshot); refresh merges it when present.
   if [[ -f "$ROOT/.github/workflows/refresh-dashboard.yml" ]]; then
     cp "$ROOT/.github/workflows/refresh-dashboard.yml" "$WORK/.github/workflows/"
@@ -1414,8 +1481,15 @@ if [[ $PUSH -eq 1 ]]; then
   [[ -f "$WORK/qa-claim-smoke.sh" ]] && chmod +x "$WORK/qa-claim-smoke.sh"
   cd "$WORK"
   git add index.html status.json README.md refresh.sh
+  [[ -f preserve_verify.py ]] && git add preserve_verify.py
+  [[ -f board_meta.py ]] && git add board_meta.py
   [[ -f probe-agents-status.sh ]] && git add probe-agents-status.sh
   [[ -f qa-claim-smoke.sh ]] && git add qa-claim-smoke.sh
+  [[ -f test_preserve_verify.py ]] && git add test_preserve_verify.py
+  [[ -f test_board_meta.py ]] && git add test_board_meta.py
+  [[ -f test_unlock_fallback.js ]] && git add test_unlock_fallback.js
+  [[ -f issue-dashboard-code.py ]] && git add issue-dashboard-code.py
+  [[ -f issue_and_prepare_email.py ]] && git add issue_and_prepare_email.py
   [[ -f .github/workflows/refresh-dashboard.yml ]] && git add .github/workflows/refresh-dashboard.yml
   [[ -f .github/workflows/qa-claim-smoke.yml ]] && git add .github/workflows/qa-claim-smoke.yml
   if git diff --cached --quiet; then
