@@ -128,6 +128,10 @@ grep -q 'function decisionHref' "$INDEX" || fail "decisionHref missing"
 grep -q 'function openBlank' "$INDEX" || fail "openBlank missing"
 grep -q 'pageshow' "$INDEX" || fail "pageshow resume missing"
 grep -q 'AbortController' "$INDEX" || fail "poll AbortController missing"
+grep -q 'function pollIsNewer' "$INDEX" || fail "pollIsNewer missing"
+grep -q 'function pollFailureCounts' "$INDEX" || fail "pollFailureCounts missing"
+grep -q 'function pollPaintDecision' "$INDEX" || fail "pollPaintDecision missing"
+grep -q 'pollSeq += 1' "$INDEX" || fail "stopPolling must bump pollSeq before abort"
 grep -q 'noopener noreferrer' "$INDEX" || fail "decision links missing noreferrer"
 grep -q 'function safeHref' "$INDEX" || fail "safeHref missing"
 grep -q 'pollSeq' "$INDEX" || fail "pollSeq missing"
@@ -188,6 +192,10 @@ grep -q 'actions/runs?per_page=20&branch=' "$REFRESH" || fail "refresh.sh must f
 grep -q 'is_ci_noise' "$ROOT/board_meta.py" || fail "board_meta.py missing is_ci_noise"
 grep -q 'CI pending' "$REFRESH" || fail "refresh.sh missing CI pending signal"
 grep -q 'AbortController' "$REFRESH" || fail "refresh.sh missing AbortController"
+grep -q 'pollIsNewer' "$REFRESH" || fail "refresh.sh missing pollIsNewer"
+grep -q 'pollFailureCounts' "$REFRESH" || fail "refresh.sh missing pollFailureCounts"
+grep -q 'pollPaintDecision' "$REFRESH" || fail "refresh.sh missing pollPaintDecision"
+grep -q 'pollSeq += 1' "$REFRESH" || fail "refresh.sh stopPolling must bump pollSeq"
 grep -q 'pageshow' "$REFRESH" || fail "refresh.sh missing pageshow"
 if grep -q 'from preserve_verify' "$REFRESH"; then
   fail "refresh.sh still imports preserve_verify"
@@ -398,6 +406,10 @@ if "function boardFingerprint" not in html or "function ageGateAgents" not in ht
     raise SystemExit("generated page missing no-flash / age-gate helpers")
 if "function decisionHref" not in html or "pageshow" not in html or "AbortController" not in html:
     raise SystemExit("generated page missing phone decision / poll helpers")
+if "function pollIsNewer" not in html or "function pollFailureCounts" not in html:
+    raise SystemExit("generated page missing poll no-flash helpers")
+if "pollSeq += 1" not in html:
+    raise SystemExit("generated page stopPolling must bump pollSeq")
 if "CI pending" not in html:
     raise SystemExit("generated page missing CI pending signal")
 if 'rel="noopener noreferrer"' not in html:

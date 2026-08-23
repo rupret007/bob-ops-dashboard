@@ -1024,7 +1024,8 @@ html = f'''<!DOCTYPE html>
 }})();
 
 (function () {{
-  // Near-realtime: poll status.json every 30s; paint board when generated_at changes (no full reload).
+  // Near-realtime: poll status.json every 30s; paint board when content changes (no full reload).
+  // Hide / iOS-return abort is not a fail. Stale cached JSON cannot rewind the board.
   var POLL_MS = 30000;
   var stamp = document.getElementById("live-stamp");
   var freshness = document.getElementById("freshness");
@@ -1422,16 +1423,37 @@ html = f'''<!DOCTYPE html>
     window.dispatchEvent(new CustomEvent("bob-ops-painted"));
   }}
 
+  function parseStampMs(ts) {{
+    var ms = Date.parse(String(ts || ""));
+    return isFinite(ms) ? ms : 0;
+  }}
+  function pollIsNewer(nextTs, knownTs) {{
+    var nextMs = parseStampMs(nextTs);
+    var knownMs = parseStampMs(knownTs);
+    if (!nextMs) return false;
+    if (!knownMs) return true;
+    return nextMs >= knownMs;
+  }}
+  function pollFailureCounts(seq, currentSeq) {{
+    return seq === currentSeq;
+  }}
+  function pollPaintDecision(nextTs, knownTs, lastFp, fp) {{
+    if (!pollIsNewer(nextTs, knownTs)) return "ignore";
+    var nextMs = parseStampMs(nextTs);
+    var knownMs = parseStampMs(knownTs);
+    if (lastFp === null) return nextMs > knownMs ? "paint" : "stamp";
+    return fp !== lastFp ? "paint" : "stamp";
+  }}
   function applyStamp(data) {{
     var next = data && data.generated_at;
-    if (next) {{
+    if (next && pollIsNewer(next, known)) {{
       known = next;
-      knownMs = Date.parse(next) || knownMs;
+      knownMs = parseStampMs(next) || knownMs;
       stamp.setAttribute("data-generated-at", known);
-    }}
-    if (data && data.generated_at_display && displayEl) {{
-      displayEl.textContent = data.generated_at_display;
-      stamp.setAttribute("data-display", data.generated_at_display);
+      if (data && data.generated_at_display && displayEl) {{
+        displayEl.textContent = data.generated_at_display;
+        stamp.setAttribute("data-display", data.generated_at_display);
+      }}
     }}
   }}
 
@@ -1457,7 +1479,17 @@ html = f'''<!DOCTYPE html>
         return res.json();
       }})
       .then(function (data) {{
-        if (seq !== pollSeq) return;
+        if (!pollFailureCounts(seq, pollSeq)) return;
+        var fp = boardFingerprint(data);
+        var decision = pollPaintDecision(data && data.generated_at, known, lastFp, fp);
+        if (decision === "ignore") {{
+          // Stale CDN/cache body. Do not rewind freshness or rewrite lanes.
+          lastPollOk = Date.now();
+          pollFailStreak = 0;
+          paint();
+          updateSilence();
+          return;
+        }}
         lastPollOk = Date.now();
         pollFailStreak = 0;
         if (dot) {{
@@ -1466,15 +1498,8 @@ html = f'''<!DOCTYPE html>
         }}
         lastAgents = (data && data.agents) || lastAgents;
         paintAgents(lastAgents);
-        var next = data && data.generated_at;
-        var stampChanged = !!(next && known && next !== known);
-        var fp = boardFingerprint(data);
-        var contentChanged = lastFp !== null && fp !== lastFp;
         applyStamp(data);
-        if (lastFp === null && stampChanged) {{
-          // HTML may be older than status.json (Pages cache). Paint once.
-          renderBoard(data);
-        }} else if (contentChanged) {{
+        if (decision === "paint") {{
           // Soft-paint from JSON -- skip timestamp-only Actions refreshes (no flash).
           renderBoard(data);
         }}
@@ -1483,7 +1508,7 @@ html = f'''<!DOCTYPE html>
         updateSilence();
       }})
       .catch(function () {{
-        if (seq !== pollSeq) return;
+        if (!pollFailureCounts(seq, pollSeq)) return;
         pollFailStreak += 1;
         freshness.textContent = "poll failed -- retrying";
         freshness.classList.add("stale");
@@ -1513,6 +1538,7 @@ html = f'''<!DOCTYPE html>
   }}
   function stopPolling() {{
     if (pollTimer) {{ clearInterval(pollTimer); pollTimer = null; }}
+    pollSeq += 1;
     if (pollAbort) {{
       try {{ pollAbort.abort(); }} catch (e) {{}}
     }}
