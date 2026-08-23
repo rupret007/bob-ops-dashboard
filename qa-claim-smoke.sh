@@ -136,6 +136,8 @@ grep -q 'noopener noreferrer' "$INDEX" || fail "decision links missing noreferre
 grep -q 'function safeHref' "$INDEX" || fail "safeHref missing"
 grep -q 'function safeAgentUrl' "$INDEX" || fail "safeAgentUrl missing"
 grep -q 'function laneHrefs' "$INDEX" || fail "laneHrefs missing"
+grep -q 'function signalHref' "$INDEX" || fail "signalHref missing"
+grep -q 'function safePullsUrl' "$INDEX" || fail "safePullsUrl missing"
 grep -q 'concl === "skipped"' "$INDEX" || fail "laneHrefs must drop skipped Open CI"
 grep -q 'concl === "skipped"' "$REFRESH" || fail "refresh.sh laneHrefs must drop skipped Open CI"
 grep -q 'data-open="work"' "$REFRESH" || fail "refresh.sh missing work-link taps"
@@ -210,6 +212,16 @@ grep -q 'pollSeq += 1' "$REFRESH" || fail "refresh.sh stopPolling must bump poll
 grep -q 'pageshow' "$REFRESH" || fail "refresh.sh missing pageshow"
 grep -q 'safe_agent_url' "$ROOT/board_meta.py" || fail "board_meta.py missing safe_agent_url"
 grep -q 'lane_hrefs' "$ROOT/board_meta.py" || fail "board_meta.py missing lane_hrefs"
+grep -q 'signal_href' "$ROOT/board_meta.py" || fail "board_meta.py missing signal_href"
+grep -q 'safe_pulls_url' "$ROOT/board_meta.py" || fail "board_meta.py missing safe_pulls_url"
+grep -q 'function signalHref' "$REFRESH" || fail "refresh.sh missing signalHref"
+grep -q 'function safePullsUrl' "$REFRESH" || fail "refresh.sh missing safePullsUrl"
+if grep -q '<span class="signal">1 open PR</span>' "$INDEX"; then
+  fail "1 open PR signal is still dead text"
+fi
+if grep -q '<span class="signal">4 open PRs</span>' "$INDEX"; then
+  fail "N open PRs signal is still dead text"
+fi
 grep -q 'merge_cloud_agents' "$REFRESH" || fail "refresh.sh missing merge_cloud_agents"
 grep -q 'pick_open_pr' "$REFRESH" || fail "refresh.sh missing pick_open_pr"
 grep -q 'function handleWorkClick' "$REFRESH" || fail "refresh.sh missing handleWorkClick"
@@ -455,6 +467,10 @@ if "pollSeq += 1" not in html:
     raise SystemExit("generated page stopPolling must bump pollSeq")
 if "function safeAgentUrl" not in html or "function laneHrefs" not in html:
     raise SystemExit("generated page missing work-link helpers")
+if "function signalHref" not in html or "function safePullsUrl" not in html:
+    raise SystemExit("generated page missing open-PR signal helpers")
+if '<span class="signal">1 open PR</span>' in html or '<span class="signal">4 open PRs</span>' in html:
+    raise SystemExit("generated page still has dead open-PR signal text")
 if "function handleWorkClick" not in html or "function openWorkLink" not in html:
     raise SystemExit("generated page missing iOS work-link fallback")
 if "window.openBlank = openBlank" not in html:

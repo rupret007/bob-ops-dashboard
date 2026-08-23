@@ -119,6 +119,7 @@ from board_meta import (
     is_quiet_lane,
     lane_hrefs,
     merge_cloud_agents,
+    signal_href,
     merge_first_class,
     parse_cloud_agents,
     presentation,
@@ -601,9 +602,10 @@ def lane_html(p):
         if title_url else title
     )
     signal = compact_signal(p)
-    if signal and hrefs.get("ci") and str(signal).startswith("CI"):
+    href = signal_href(p)
+    if signal and href:
         signal_html = (
-            f'<a class="signal" data-open="work" href="{h(hrefs["ci"])}" '
+            f'<a class="signal" data-open="work" href="{h(href)}" '
             f'target="_blank" rel="noopener noreferrer">{h(signal)}</a>'
         )
     else:
@@ -1233,6 +1235,14 @@ html = f'''<!DOCTYPE html>
     var s = cleanPublicUrl(u);
     return /^https:\\/\\/github\\.com\\/rupret007\\/[A-Za-z0-9._-]+$/i.test(s) ? s : "";
   }}
+  function safePullsUrl(u) {{
+    var s = cleanPublicUrl(u);
+    return /^https:\\/\\/github\\.com\\/rupret007\\/[A-Za-z0-9._-]+\\/pulls$/i.test(s) ? s : "";
+  }}
+  function pullsUrlFromRepo(u) {{
+    var repo = safeRepoUrl(u);
+    return repo ? repo + "/pulls" : "";
+  }}
   function laneHrefs(p) {{
     if (!p) return {{}};
     var ci = p.ci && typeof p.ci === "object" ? p.ci : {{}};
@@ -1370,9 +1380,10 @@ html = f'''<!DOCTYPE html>
       ? '<a data-open="work" href="' + esc(hrefs.title) + '" target="_blank" rel="noopener noreferrer">' + esc(title) + "</a>"
       : esc(title);
     var signal = compactSignal(p);
+    var href = signalHref(p);
     var signalHtml = "";
-    if (signal && hrefs.ci && String(signal).indexOf("CI") === 0) {{
-      signalHtml = '<a class="signal" data-open="work" href="' + esc(hrefs.ci) +
+    if (signal && href) {{
+      signalHtml = '<a class="signal" data-open="work" href="' + esc(href) +
         '" target="_blank" rel="noopener noreferrer">' + esc(signal) + "</a>";
     }} else if (signal) {{
       signalHtml = '<span class="signal">' + esc(signal) + "</span>";
@@ -1695,8 +1706,21 @@ html = f'''<!DOCTYPE html>
   var pollTimeout = null;
   lastAgents = readDomAgents();
   lastCloud = readDomCloud();
+  function signalHref(p) {{
+    var signal = compactSignal(p);
+    if (!signal) return "";
+    var hrefs = laneHrefs(p);
+    if (String(signal).indexOf("CI") === 0) return hrefs.ci || "";
+    if (String(signal).indexOf("open PR") !== -1) {{
+      var n = (typeof p.open_prs === "number" && isFinite(p.open_prs)) ? p.open_prs : 0;
+      var pulls = pullsUrlFromRepo(hrefs.repo || "");
+      if (n > 1) return pulls;
+      return hrefs.pr || pulls;
+    }}
+    return "";
+  }}
   function workHref(href) {{
-    return safeAgentUrl(href) || safePrUrl(href) || safeActionsUrl(href) || safeRepoUrl(href);
+    return safeAgentUrl(href) || safePrUrl(href) || safeActionsUrl(href) || safePullsUrl(href) || safeRepoUrl(href);
   }}
   function openWorkLink(href) {{
     var url = workHref(href);
