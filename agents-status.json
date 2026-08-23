@@ -3,25 +3,25 @@
     {
       "id": "codex",
       "name": "Codex",
-      "state": "running",
-      "detail": "AdoptIQ PID 26928 · gpt-5.6-sol goals · codex-local :3210 ready",
-      "checked_at": "2026-08-22T20:45:00-05:00"
+      "state": "unknown",
+      "detail": "No Mac probe in this clone",
+      "checked_at": null
     },
     {
       "id": "cursor",
       "name": "Cursor",
-      "state": "running",
-      "detail": "Cursor.app present and running",
-      "checked_at": "2026-08-22T20:45:00-05:00"
+      "state": "unknown",
+      "detail": "No Mac probe in this clone",
+      "checked_at": null
     },
     {
       "id": "claude",
       "name": "Claude",
-      "state": "installed",
-      "detail": "Claude.app + claude 2.1.216 installed",
-      "checked_at": "2026-08-22T20:45:00-05:00"
+      "state": "unknown",
+      "detail": "No Mac probe in this clone",
+      "checked_at": null
     }
   ],
-  "source": "seed-aug22-known",
-  "note": "Safe public fields only. Overwritten by Mac probe-agents-status.sh."
+  "source": "example-not-live",
+  "note": "Safe public fields only. Overwrite locally with probe-agents-status.sh. Refresh age-gates stale or untimestamped probes to unknown."
 }

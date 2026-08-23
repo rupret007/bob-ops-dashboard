@@ -2,21 +2,29 @@
 """Fail-closed checks for first-class Abilities / Decisions / How-this-board."""
 from __future__ import annotations
 
+import json
 import unittest
+from datetime import datetime, timedelta, timezone
 
 from board_meta import (
     CONTROL_ACTIONS,
     FIRST_CLASS_IDS,
+    age_gate_agents,
     attention_rank,
+    board_content_fingerprint,
     compact_signal,
     drop_leftover_verify,
     first_class_sections,
     is_quiet_lane,
     merge_first_class,
+    parse_agents_blob,
     pending_risk_rank,
     presentation,
+    resolve_agents,
     short_note,
     sort_pending,
+    split_pending,
+    status_from_fetch,
     visible_chip,
 )
 
@@ -80,6 +88,12 @@ class BoardMetaTests(unittest.TestCase):
         self.assertIn("Possession of the public URL", blob)
         self.assertNotIn("verified device", blob.lower())
         self.assertNotIn("Verified UI", blob)
+
+    def test_soft_paint_and_agent_honesty_copy(self):
+        blob = str(first_class_sections())
+        self.assertIn("not on every 15m", blob)
+        self.assertIn("Never invent Running", blob)
+        self.assertIn("Actions cadence is ~15m", blob)
 
     def test_security_features_from_pr1_survive_without_unlock(self):
         blob = str(first_class_sections())
@@ -145,6 +159,150 @@ class BoardMetaTests(unittest.TestCase):
         self.assertNotIn("\n", out)
         self.assertEqual(short_note(""), "")
         self.assertEqual(short_note(None), "")
+
+    def test_status_from_fetch_empty_ci_is_green_not_yellow(self):
+        green_empty = {"accessible": True, "open_prs": 0, "ci": None}
+        self.assertEqual(status_from_fetch(green_empty), "green")
+        self.assertEqual(status_from_fetch({"accessible": True, "open_prs": 0, "ci": {}}), "green")
+        self.assertEqual(
+            status_from_fetch({"accessible": True, "open_prs": 0, "ci": {"conclusion": "success"}}),
+            "green",
+        )
+        self.assertEqual(
+            status_from_fetch({"accessible": True, "open_prs": 0, "ci": {"conclusion": "failure"}}),
+            "red",
+        )
+        self.assertEqual(status_from_fetch({"accessible": True, "open_prs": 2, "ci": None}), "yellow")
+        self.assertEqual(status_from_fetch({"accessible": False}), "parked")
+        self.assertEqual(status_from_fetch({"accessible": False}, override="yellow"), "yellow")
+        self.assertEqual(status_from_fetch(green_empty, jeff_gate=True), "jeff-gate")
+        self.assertEqual(status_from_fetch(None), "parked")
+
+    def test_split_pending_keeps_unknown_risk_visible(self):
+        attn, low = split_pending(
+            [
+                {"id": "a", "risk": "low"},
+                {"id": "b", "risk": "high"},
+                {"id": "c", "risk": "mystery"},
+                {"id": "d", "risk": "medium"},
+            ]
+        )
+        self.assertEqual([p["id"] for p in attn], ["b", "d", "c"])
+        self.assertEqual([p["id"] for p in low], ["a"])
+        self.assertEqual(split_pending(None), ([], []))
+
+    def test_stale_or_untimestamped_agents_never_stay_running(self):
+        now_dt = datetime(2026, 8, 23, 5, 26, tzinfo=timezone.utc)
+        now = now_dt.timestamp()
+        stale_ts = "2026-08-22T20:45:00-05:00"  # hours older than `now`
+        fresh_ts = (now_dt - timedelta(minutes=10)).isoformat()
+        stale = parse_agents_blob(
+            {
+                "agents": [
+                    {"id": "codex", "name": "Codex", "state": "running", "detail": "PID 1", "checked_at": stale_ts},
+                    {"id": "cursor", "name": "Cursor", "state": "running", "detail": "app", "checked_at": stale_ts},
+                    {"id": "claude", "name": "Claude", "state": "installed", "detail": "app", "checked_at": stale_ts},
+                ]
+            }
+        )
+        gated = age_gate_agents(stale, now=now)
+        self.assertEqual([a["state"] for a in gated], ["unknown", "unknown", "unknown"])
+        self.assertTrue(all("probe stale" in a["detail"] for a in gated))
+        self.assertEqual(len(gated), 3)
+
+        untimestamped = age_gate_agents(
+            [{"id": "codex", "state": "running", "detail": "PID 9", "checked_at": None}],
+            now=now,
+        )
+        self.assertEqual(untimestamped[0]["state"], "unknown")
+
+        fresh = age_gate_agents(
+            [
+                {"id": "codex", "state": "running", "detail": "PID 2", "checked_at": fresh_ts},
+                {"id": "cursor", "state": "idle", "detail": "app", "checked_at": fresh_ts},
+                {"id": "claude", "state": "installed", "detail": "app", "checked_at": fresh_ts},
+            ],
+            now=now,
+        )
+        self.assertEqual([a["state"] for a in fresh], ["running", "idle", "installed"])
+
+    def test_future_checked_at_is_not_treated_as_live(self):
+        now = datetime(2026, 8, 23, 5, 26, tzinfo=timezone.utc).timestamp()
+        gated = age_gate_agents(
+            [
+                {
+                    "id": "codex",
+                    "state": "running",
+                    "detail": "time travel",
+                    "checked_at": "2026-08-24T12:00:00-05:00",
+                }
+            ],
+            now=now,
+        )
+        self.assertEqual(gated[0]["state"], "unknown")
+
+    def test_resolve_agents_does_not_fall_through_to_older_running(self):
+        now = datetime(2026, 8, 23, 5, 26, tzinfo=timezone.utc).timestamp()
+        stale = {
+            "agents": [
+                {"id": "codex", "state": "running", "detail": "seed", "checked_at": "2026-08-22T20:45:00-05:00"},
+                {"id": "cursor", "state": "running", "detail": "seed", "checked_at": "2026-08-22T20:45:00-05:00"},
+                {"id": "claude", "state": "installed", "detail": "seed", "checked_at": "2026-08-22T20:45:00-05:00"},
+            ]
+        }
+        older_running = [
+            {"id": "codex", "state": "running", "detail": "old", "checked_at": "2026-08-22T18:00:00-05:00"},
+            {"id": "cursor", "state": "running", "detail": "old", "checked_at": "2026-08-22T18:00:00-05:00"},
+            {"id": "claude", "state": "running", "detail": "old", "checked_at": "2026-08-22T18:00:00-05:00"},
+        ]
+        agents, src = resolve_agents(
+            file_texts=[("file:agents-status.json", json.dumps(stale))],
+            previous=older_running,
+            now=now,
+        )
+        self.assertTrue(src.endswith("stale->unknown"))
+        self.assertEqual([a["state"] for a in agents], ["unknown", "unknown", "unknown"])
+        self.assertNotIn("running", [a["state"] for a in agents])
+
+    def test_parse_agents_drops_extra_ids_and_redacts_secrets(self):
+        parsed = parse_agents_blob(
+            {
+                "agents": [
+                    {"id": "codex", "state": "idle", "detail": "bearer token xyz", "checked_at": "x"},
+                    {"id": "ghost", "state": "running", "detail": "invented"},
+                ]
+            }
+        )
+        self.assertIsNotNone(parsed)
+        assert parsed is not None
+        self.assertEqual([a["id"] for a in parsed], ["codex", "cursor", "claude"])
+        self.assertEqual(parsed[0]["detail"], "detail redacted")
+        self.assertEqual(parsed[0]["state"], "idle")
+        self.assertEqual(parsed[1]["state"], "unknown")
+        self.assertIsNone(parse_agents_blob("not-json"))
+        self.assertIsNone(parse_agents_blob(None))
+
+    def test_board_fingerprint_ignores_refresh_timestamps(self):
+        a = {
+            "generated_at": "one",
+            "generated_at_display": "Mon",
+            "refresh_started_ms": 1,
+            "agents_source": "file:x",
+            "pending": [{"id": "text-send", "risk": "high", "title": "Send", "detail": "x"}],
+            "agents": [{"id": "codex", "state": "unknown", "detail": "none"}],
+            "sections": [{"id": "live-shipping", "title": "Live", "projects": [{"name": "WebJam", "status": "jeff-gate"}]}],
+            "fetched_repos": ["webjam"],
+            "decisions": [{"id": "old"}],
+        }
+        b = dict(a)
+        b["generated_at"] = "two"
+        b["generated_at_display"] = "Tue"
+        b["refresh_started_ms"] = 99
+        b["agents_source"] = "previous:stale->unknown"
+        self.assertEqual(board_content_fingerprint(a), board_content_fingerprint(b))
+        c = dict(a)
+        c["pending"] = [{"id": "text-send", "risk": "high", "title": "Send", "detail": "changed"}]
+        self.assertNotEqual(board_content_fingerprint(a), board_content_fingerprint(c))
 
     def test_drop_leftover_verify_fail_closed(self):
         status = {

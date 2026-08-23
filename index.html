@@ -16,7 +16,7 @@
     font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;
     font-size:16px; line-height:1.4; }
   a { color:var(--link); text-decoration:none; } a:hover { text-decoration:underline; }
-  .wrap { max-width:40rem; margin:0 auto; padding:1rem 1rem 3.25rem; }
+  .wrap { max-width:40rem; margin:0 auto; padding:1rem 1rem calc(3.25rem + env(safe-area-inset-bottom, 0px)); }
   header.pulse { padding:0 0 1rem; margin:0 0 1.35rem; border:0; background:transparent; }
   header.pulse h1 { margin:0; font-size:1.05rem; font-weight:700; letter-spacing:-.01em; }
   header.pulse h1 .mark { color:var(--orange); }
@@ -114,6 +114,16 @@
     padding:.2rem 0; list-style:outside disclosure-closed;
   }
   .how-board[open] summary, .abilities-foot[open] summary { color:var(--orange); margin-bottom:.55rem; }
+  .pending-more { margin:.1rem 0 0; border:0; background:transparent; }
+  .pending-more > summary {
+    cursor:pointer; color:var(--muted); font-size:.8rem; font-weight:600;
+    min-height:44px; display:flex; align-items:center;
+    list-style:outside disclosure-closed;
+  }
+  .pending-more[open] > summary { color:var(--orange); }
+  @media (prefers-reduced-motion: reduce) {
+    .live-dot { animation:none; box-shadow:none; }
+  }
   @media (min-width:720px) {
     .wrap { padding:1.5rem 1.25rem 3.75rem; }
     .lane .notes { -webkit-line-clamp:2; }
@@ -131,14 +141,14 @@
   <header class="pulse">
     <h1><span class="mark">Bob</span> Ops</h1>
     <div class="pulse-row">
-      <div class="live-stamp" id="live-stamp" data-generated-at="2026-08-23T00:13:55.497806-05:00" data-display="Sun Aug 23, 2026 · 12:13 AM CDT"><span class="live-dot" id="live-dot" aria-hidden="true"></span><span id="freshness">Live - starting</span><span class="when"> · <strong id="updated-display">Sun Aug 23, 2026 · 12:13 AM CDT</strong></span></div>
-      <div id="active-agents"><div class="agents-strip" id="agents-strip"><div class="agent-pill" data-agent-id="codex" title="AdoptIQ PID 26928 · gpt-5.6-sol goals · codex-local :3210 ready"><span class="name">Codex</span><span class="chip" style="--c:#16a34a;--bg:#052e16;--fg:#bbf7d0">Running</span></div><div class="agent-pill" data-agent-id="cursor" title="Cursor.app present and running"><span class="name">Cursor</span><span class="chip" style="--c:#16a34a;--bg:#052e16;--fg:#bbf7d0">Running</span></div><div class="agent-pill" data-agent-id="claude" title="Claude.app + claude 2.1.216 installed"><span class="name">Claude</span><span class="chip" style="--c:#525252;--bg:#171717;--fg:#d4d4d4">Installed</span></div></div></div>
+      <div class="live-stamp" id="live-stamp" data-generated-at="2026-08-23T00:20:15.578111-05:00" data-display="Sun Aug 23, 2026 · 12:20 AM CDT"><span class="live-dot" id="live-dot" aria-hidden="true"></span><span id="freshness">Live - starting</span><span class="when"> · <strong id="updated-display">Sun Aug 23, 2026 · 12:20 AM CDT</strong></span></div>
+      <div id="active-agents"><div class="agents-strip" id="agents-strip"><div class="agent-pill" data-agent-id="codex" data-state="unknown" data-checked-at="" title="No Mac probe in this clone · probe stale (&gt;45m)"><span class="name">Codex</span><span class="chip" style="--c:#525252;--bg:#171717;--fg:#d4d4d4">Unknown</span></div><div class="agent-pill" data-agent-id="cursor" data-state="unknown" data-checked-at="" title="No Mac probe in this clone · probe stale (&gt;45m)"><span class="name">Cursor</span><span class="chip" style="--c:#525252;--bg:#171717;--fg:#d4d4d4">Unknown</span></div><div class="agent-pill" data-agent-id="claude" data-state="unknown" data-checked-at="" title="No Mac probe in this clone · probe stale (&gt;45m)"><span class="name">Claude</span><span class="chip" style="--c:#525252;--bg:#171717;--fg:#d4d4d4">Unknown</span></div></div></div>
     </div>
     <div class="status hint" id="panel-status"></div>
   </header>
   <div id="silence-banner" role="alert" aria-live="assertive"></div>
   <div id="board">
-  <section id="controls" class="block pending"><h2>Decisions</h2><div id="pending-box" class="pending-box"><p class="pending-help">Public board -- Approve opens a GitHub issue as <code>rupret007</code>.</p><div id="pending-list"><div class="pending-item" data-id="codex-goal-launch" data-title="Launch next Codex goal on Mac"><div class="pending-head"><div class="ptitle">Launch next Codex goal on Mac</div><span class="prisk high">high</span></div><div class="pdetail">High risk. Bob still shows the exact goal before acting.</div><div class="prow"><button type="button" data-dec="APPROVE">Approve</button><button type="button" class="warn" data-dec="HOLD">Hold</button><button type="button" class="danger" data-dec="DENY">Deny</button></div></div><div class="pending-item" data-id="text-send" data-title="Send a drafted text via Andrea"><div class="pending-head"><div class="ptitle">Send a drafted text via Andrea</div><span class="prisk high">high</span></div><div class="pdetail">High risk. Never auto-send. Draft must already exist.</div><div class="prow"><button type="button" data-dec="APPROVE">Approve</button><button type="button" class="warn" data-dec="HOLD">Hold</button><button type="button" class="danger" data-dec="DENY">Deny</button></div></div><div class="pending-item" data-id="adoptiq-cloud-relaunch" data-title="Relaunch AdoptIQ Cloud Agent"><div class="pending-head"><div class="ptitle">Relaunch AdoptIQ Cloud Agent</div><span class="prisk medium">medium</span></div><div class="pdetail">Needs Cursor on-demand on. Stays inside $10 hard ceiling.</div><div class="prow"><button type="button" data-dec="APPROVE">Approve</button><button type="button" class="warn" data-dec="HOLD">Hold</button><button type="button" class="danger" data-dec="DENY">Deny</button></div></div><div class="pending-item" data-id="webjam-exploratory" data-title="WebJam tip exploratory click-through"><div class="pending-head"><div class="ptitle">WebJam tip exploratory click-through</div><span class="prisk low">low</span></div><div class="pdetail">You walk the installed tip; Bob keeps the checklist ready.</div><div class="prow"><button type="button" data-dec="APPROVE">Approve</button><button type="button" class="warn" data-dec="HOLD">Hold</button><button type="button" class="danger" data-dec="DENY">Deny</button></div></div><div class="pending-item" data-id="dashboard-refresh" data-title="Force dashboard refresh + push"><div class="pending-head"><div class="ptitle">Force dashboard refresh + push</div><span class="prisk low">low</span></div><div class="pdetail">Safe. Rebuilds status from live gh and pushes Pages.</div><div class="prow"><button type="button" data-dec="APPROVE">Approve</button><button type="button" class="warn" data-dec="HOLD">Hold</button><button type="button" class="danger" data-dec="DENY">Deny</button></div></div></div></div></section><section id="live-shipping" class="block primary"><h2>Live shipping</h2><div class="lanes"><article class="lane"><h3><a href="https://github.com/rupret007/webjam" target="_blank" rel="noopener">WebJam</a></h3><div class="lane-end"><span class="chip" style="--c:#d97757;--bg:#2a1510;--fg:#f5c4b3">Jeff-gate</span><span class="signal">v0.26.0</span></div><p class="notes">PR #21 merged (docs on 5ca6ba5). Release stays v0.26.0 until Jeff names v0.27...</p></article><article class="lane"><h3><a href="https://github.com/rupret007/StoryBoard" target="_blank" rel="noopener">StoryBoard</a></h3><div class="lane-end"><span class="chip" style="--c:#ca8a04;--bg:#422006;--fg:#fef08a">Yellow</span><span class="signal">1 open PR</span></div><p class="notes">Quiet green unless CI says otherwise.</p></article><article class="lane"><h3><a href="https://github.com/rupret007/RadDadSite" target="_blank" rel="noopener">RadDadSite</a></h3><div class="lane-end"><span class="chip" style="--c:#ca8a04;--bg:#422006;--fg:#fef08a">Yellow</span><span class="signal">1 open PR</span></div><p class="notes">Tip green typical; draft #6 prod deploy parked/Jeff-gate if still open.</p></article><article class="lane"><h3><a href="https://github.com/rupret007/rad-dad-show-night" target="_blank" rel="noopener">Show Night</a></h3><div class="lane-end"><span class="chip" style="--c:#ca8a04;--bg:#422006;--fg:#fef08a">Yellow</span></div><p class="notes">Show-night run sheet / flyer. No CI is OK.</p></article><article class="lane"><h3><a href="https://github.com/rupret007/AI-Music-Vault" target="_blank" rel="noopener">AI Music Vault</a></h3><div class="lane-end"><span class="chip" style="--c:#ca8a04;--bg:#422006;--fg:#fef08a">Yellow</span></div><p class="notes">Private docs/index. High-level only on public page.</p></article><article class="lane"><h3><a href="https://github.com/rupret007/Turdanoid" target="_blank" rel="noopener">Turdanoid</a></h3><div class="lane-end"><span class="chip" style="--c:#ca8a04;--bg:#422006;--fg:#fef08a">Yellow</span></div><p class="notes">Tip usually green; stale open PRs -&gt; hygiene.</p></article><article class="lane is-quiet"><h3><a href="https://github.com/rupret007/StoryLiner" target="_blank" rel="noopener">StoryLiner</a></h3><div class="lane-end"><span class="chip" style="--c:#16a34a;--bg:#052e16;--fg:#bbf7d0">Green</span></div><p class="notes">PR #1 lint fix merged; confirm main CI from live fetch.</p></article><article class="lane is-quiet"><h3><a href="https://github.com/rupret007/Rad-Dad-Merch" target="_blank" rel="noopener">Rad Dad Merch</a></h3><div class="lane-end"><span class="chip" style="--c:#16a34a;--bg:#052e16;--fg:#bbf7d0">Green</span></div><p class="notes">Merch lane; watch Release integrity.</p></article></div></section><section id="cisco" class="block secondary"><h2>Cisco work</h2><div class="lanes"><article class="lane"><h3>AdoptIQ</h3><div class="lane-end"><span class="chip" style="--c:#ca8a04;--bg:#422006;--fg:#fef08a">Yellow</span></div><p class="notes">Cisco CS desktop -- Build 115 in progress (Codex + Cloud Agent). No secrets on this...</p></article><article class="lane"><h3>TACTrack</h3><div class="lane-end"><span class="chip" style="--c:#ca8a04;--bg:#422006;--fg:#fef08a">Yellow</span></div><p class="notes">Private. High-level only -- CI / open PRs from live fetch.</p></article><article class="lane"><h3>AdoptIQ notes</h3><div class="lane-end"><span class="chip" style="--c:#525252;--bg:#171717;--fg:#d4d4d4">Parked</span></div><p class="notes">High-level only: manager-decision UX + Build 115 candidate path. No CSOne paths...</p></article></div></section><section id="messaging" class="block secondary"><h2>Messaging / Bob infra</h2><div class="lanes"><article class="lane"><h3><a href="https://github.com/rupret007/Andrea_NanoBot" target="_blank" rel="noopener">Andrea NanoBot</a></h3><div class="lane-end"><span class="chip" style="--c:#ca8a04;--bg:#422006;--fg:#fef08a">Yellow</span><span class="signal">1 open PR</span></div><p class="notes">BB AppleScript send preferred. Private API OFF. Approval-fenced sends only.</p></article><article class="lane is-quiet"><h3>Telegram Bot the Bot</h3><div class="lane-end"><span class="chip" style="--c:#16a34a;--bg:#052e16;--fg:#bbf7d0">Green</span></div><p class="notes">Whisper + Chrome mop shipped. Bob front-door via Telegram.</p></article><article class="lane is-quiet"><h3>Codex local goals</h3><div class="lane-end"><span class="chip" style="--c:#16a34a;--bg:#052e16;--fg:#bbf7d0">Green</span></div><p class="notes">goals=true fixed. Local Codex loop for AdoptIQ/ops lanes.</p></article></div></section><section id="music-producer" class="block secondary"><h2>Music producer</h2><div class="lanes"><article class="lane is-quiet"><h3>Logic Pro home</h3><div class="lane-end"><span class="chip" style="--c:#16a34a;--bg:#052e16;--fg:#bbf7d0">Green</span></div><p class="notes">Logic Pro 12.3.1 on Mac mini -- primary producer home.</p></article><article class="lane"><h3>LogicProMCP</h3><div class="lane-end"><span class="chip" style="--c:#d97757;--bg:#2a1510;--fg:#f5c4b3">Jeff-gate</span></div><p class="notes">Installed. Pending Accessibility / Automation GUI grants from Jeff.</p></article><article class="lane"><h3>Moises / Suno</h3><div class="lane-end"><span class="chip" style="--c:#d97757;--bg:#2a1510;--fg:#f5c4b3">Jeff-gate</span></div><p class="notes">Jeff-login gated for stems/covers/demos.</p></article></div></section><section id="parked" class="block secondary"><h2>Parked</h2><div class="lanes"><article class="lane"><h3><a href="https://github.com/rupret007/story-corner-shelf" target="_blank" rel="noopener">Closet shelf</a></h3><div class="lane-end"><span class="chip" style="--c:#525252;--bg:#171717;--fg:#d4d4d4">Parked</span><span class="signal">4 open PRs</span></div><p class="notes">Parked. Open PRs ignored unless Jeff unparks.</p></article><article class="lane"><h3>Stalemate / Trailer Swift</h3><div class="lane-end"><span class="chip" style="--c:#525252;--bg:#171717;--fg:#d4d4d4">Parked</span></div><p class="notes">Catalog/voice feel only -- parked catalog lane.</p></article><article class="lane"><h3><a href="https://github.com/rupret007/RadDadSite/pull/6" target="_blank" rel="noopener">RadDadSite #6</a></h3><div class="lane-end"><span class="chip" style="--c:#525252;--bg:#171717;--fg:#d4d4d4">Parked</span></div><p class="notes">Draft prod deploy -- keep parked pending Che/server facts.</p></article></div></section><section id="abilities" class="block foot"><details class="abilities-foot"><summary>What Bob can do</summary><p class="pending-help">Texts / food after Jeff yes. No send button. Honest: there is no order button on this board.</p><div class="lanes"><article class="lane is-quiet"><h3>Rebuild this board</h3><div class="lane-end"></div><p class="notes">Actions cron every 15m plus ./refresh.sh. Live gh SHAs/CI. No secrets on the public...</p></article><article class="lane is-quiet"><h3>Cursor Cloud Agents</h3><div class="lane-end"></div><p class="notes">Repo work in Cursor Cloud. Jeff-gated / cost ceiling. High-level only here.</p></article><article class="lane is-quiet"><h3>Local Codex goals</h3><div class="lane-end"></div><p class="notes">Mac Codex loop for AdoptIQ and ops lanes. High-risk goals still shown in chat before...</p></article><article class="lane"><h3>Texts via Andrea</h3><div class="lane-end"><span class="chip" style="--c:#d97757;--bg:#2a1510;--fg:#f5c4b3">After yes</span></div><p class="notes">After Jeff yes only. Never auto-send. Draft must already exist. No send button on this...</p></article><article class="lane"><h3>Life-ops / Domino&#x27;s</h3><div class="lane-end"><span class="chip" style="--c:#d97757;--bg:#2a1510;--fg:#f5c4b3">After yes</span></div><p class="notes">Food, errands, Domino&#x27;s: chat yes only. Honest: there is no order button on this board.</p></article><article class="lane"><h3>Music producer help</h3><div class="lane-end"><span class="chip" style="--c:#d97757;--bg:#2a1510;--fg:#f5c4b3">Jeff-gate</span></div><p class="notes">Logic Pro is home. Moises / Suno need Jeff login. LogicProMCP needs Jeff GUI grants.</p></article><article class="lane"><h3>Cisco CS desktop (high-level)</h3><div class="lane-end"><span class="chip" style="--c:#525252;--bg:#171717;--fg:#d4d4d4">High-level</span></div><p class="notes">AdoptIQ / TACTrack appear as high-level Cisco CS desktop only. No CSOne paths or...</p></article><article class="lane"><h3>GitHub issue inbox</h3><div class="lane-end"><span class="chip" style="--c:#d97757;--bg:#2a1510;--fg:#f5c4b3">Authority</span></div><p class="notes">BOB-APPROVE / BOB-DENY / BOB-HOLD from rupret007 is the real yes. The board only opens...</p></article></div></details></section><section id="features" class="block foot"><details class="how-board"><summary>How this board works</summary><p class="pending-help">Engineer notes -- not the daily ops list.</p><p class="pending-help">Public board -- Approve opens a GitHub issue; submit while logged in as <code>rupret007</code>.</p><div class="tools"><button type="button" data-action="refresh-hint">Copy command</button><button type="button" data-action="open-repo">Open repo</button><button type="button" data-action="mark-reviewed">Mark reviewed</button></div><div class="lanes"><article class="lane is-quiet"><h3>Public board</h3><div class="lane-end"></div><p class="notes">Possession of the public URL is enough. GitHub login rupret007 is the real authority.</p></article><article class="lane is-quiet"><h3>Soft-paint poll</h3><div class="lane-end"></div><p class="notes">Client fetches status.json every 30s (pauses when the tab is hidden). Repaints the...</p></article><article class="lane is-quiet"><h3>Agents strip</h3><div class="lane-end"></div><p class="notes">Codex / Cursor / Claude state from a Mac probe. Public fields only. Token-like words...</p></article><article class="lane is-quiet"><h3>Silence banner</h3><div class="lane-end"></div><p class="notes">If refresh is quiet for ~45m the page warns that chips may be stale.</p></article><article class="lane is-quiet"><h3>XSS-safe cards</h3><div class="lane-end"></div><p class="notes">html.escape + safeHref on server render. Soft-paint uses esc/safeHref. ASCII-safe JS...</p></article><article class="lane is-quiet"><h3>Poll / decide race guards</h3><div class="lane-end"></div><p class="notes">pollSeq / pendingSeq drop stale fetches. decideBusy gates Approve / Hold / Deny...</p></article><article class="lane is-quiet"><h3>Public Pages</h3><div class="lane-end"></div><p class="notes">Free-plan GitHub Pages from main. No secrets, tokens, Keeper material, or private...</p></article></div></details></section>
+  <section id="controls" class="block pending"><h2>Decisions</h2><div id="pending-box" class="pending-box"><p class="pending-help">Public board -- Approve opens a GitHub issue as <code>rupret007</code>.</p><div id="pending-list"><div class="pending-item" data-id="codex-goal-launch" data-title="Launch next Codex goal on Mac"><div class="pending-head"><div class="ptitle">Launch next Codex goal on Mac</div><span class="prisk high">high</span></div><div class="pdetail">High risk. Bob still shows the exact goal before acting.</div><div class="prow"><button type="button" data-dec="APPROVE">Approve</button><button type="button" class="warn" data-dec="HOLD">Hold</button><button type="button" class="danger" data-dec="DENY">Deny</button></div></div><div class="pending-item" data-id="text-send" data-title="Send a drafted text via Andrea"><div class="pending-head"><div class="ptitle">Send a drafted text via Andrea</div><span class="prisk high">high</span></div><div class="pdetail">High risk. Never auto-send. Draft must already exist.</div><div class="prow"><button type="button" data-dec="APPROVE">Approve</button><button type="button" class="warn" data-dec="HOLD">Hold</button><button type="button" class="danger" data-dec="DENY">Deny</button></div></div><div class="pending-item" data-id="adoptiq-cloud-relaunch" data-title="Relaunch AdoptIQ Cloud Agent"><div class="pending-head"><div class="ptitle">Relaunch AdoptIQ Cloud Agent</div><span class="prisk medium">medium</span></div><div class="pdetail">Needs Cursor on-demand on. Stays inside $10 hard ceiling.</div><div class="prow"><button type="button" data-dec="APPROVE">Approve</button><button type="button" class="warn" data-dec="HOLD">Hold</button><button type="button" class="danger" data-dec="DENY">Deny</button></div></div><details class="pending-more"><summary>2 lower-risk items</summary><div class="pending-item" data-id="webjam-exploratory" data-title="WebJam tip exploratory click-through"><div class="pending-head"><div class="ptitle">WebJam tip exploratory click-through</div><span class="prisk low">low</span></div><div class="pdetail">You walk the installed tip; Bob keeps the checklist ready.</div><div class="prow"><button type="button" data-dec="APPROVE">Approve</button><button type="button" class="warn" data-dec="HOLD">Hold</button><button type="button" class="danger" data-dec="DENY">Deny</button></div></div><div class="pending-item" data-id="dashboard-refresh" data-title="Force dashboard refresh + push"><div class="pending-head"><div class="ptitle">Force dashboard refresh + push</div><span class="prisk low">low</span></div><div class="pdetail">Safe. Rebuilds status from live gh and pushes Pages.</div><div class="prow"><button type="button" data-dec="APPROVE">Approve</button><button type="button" class="warn" data-dec="HOLD">Hold</button><button type="button" class="danger" data-dec="DENY">Deny</button></div></div></details></div></div></section><section id="live-shipping" class="block primary"><h2>Live shipping</h2><div class="lanes"><article class="lane"><h3><a href="https://github.com/rupret007/webjam" target="_blank" rel="noopener">WebJam</a></h3><div class="lane-end"><span class="chip" style="--c:#d97757;--bg:#2a1510;--fg:#f5c4b3">Jeff-gate</span><span class="signal">v0.26.0</span></div><p class="notes">PR #21 merged (docs on 5ca6ba5). Release stays v0.26.0 until Jeff names v0.27...</p></article><article class="lane"><h3><a href="https://github.com/rupret007/StoryLiner" target="_blank" rel="noopener">StoryLiner</a></h3><div class="lane-end"><span class="chip" style="--c:#ca8a04;--bg:#422006;--fg:#fef08a">Yellow</span><span class="signal">1 open PR</span></div><p class="notes">PR #1 lint fix merged; confirm main CI from live fetch.</p></article><article class="lane"><h3><a href="https://github.com/rupret007/RadDadSite" target="_blank" rel="noopener">RadDadSite</a></h3><div class="lane-end"><span class="chip" style="--c:#ca8a04;--bg:#422006;--fg:#fef08a">Yellow</span><span class="signal">1 open PR</span></div><p class="notes">Tip green typical; draft #6 prod deploy parked/Jeff-gate if still open.</p></article><article class="lane"><h3><a href="https://github.com/rupret007/AI-Music-Vault" target="_blank" rel="noopener">AI Music Vault</a></h3><div class="lane-end"><span class="chip" style="--c:#ca8a04;--bg:#422006;--fg:#fef08a">Yellow</span><span class="signal">1 open PR</span></div><p class="notes">Private docs/index. High-level only on public page.</p></article><article class="lane is-quiet"><h3><a href="https://github.com/rupret007/StoryBoard" target="_blank" rel="noopener">StoryBoard</a></h3><div class="lane-end"><span class="chip" style="--c:#16a34a;--bg:#052e16;--fg:#bbf7d0">Green</span></div><p class="notes">Quiet green unless CI says otherwise.</p></article><article class="lane is-quiet"><h3><a href="https://github.com/rupret007/Rad-Dad-Merch" target="_blank" rel="noopener">Rad Dad Merch</a></h3><div class="lane-end"><span class="chip" style="--c:#16a34a;--bg:#052e16;--fg:#bbf7d0">Green</span></div><p class="notes">Merch lane; watch Release integrity.</p></article><article class="lane is-quiet"><h3><a href="https://github.com/rupret007/rad-dad-show-night" target="_blank" rel="noopener">Show Night</a></h3><div class="lane-end"><span class="chip" style="--c:#16a34a;--bg:#052e16;--fg:#bbf7d0">Green</span></div><p class="notes">Show-night run sheet / flyer. No CI is OK.</p></article><article class="lane is-quiet"><h3><a href="https://github.com/rupret007/Turdanoid" target="_blank" rel="noopener">Turdanoid</a></h3><div class="lane-end"><span class="chip" style="--c:#16a34a;--bg:#052e16;--fg:#bbf7d0">Green</span></div><p class="notes">Tip usually green; stale open PRs -&gt; hygiene.</p></article></div></section><section id="cisco" class="block secondary"><h2>Cisco work</h2><div class="lanes"><article class="lane"><h3>AdoptIQ</h3><div class="lane-end"><span class="chip" style="--c:#ca8a04;--bg:#422006;--fg:#fef08a">Yellow</span></div><p class="notes">Cisco CS desktop -- Build 115 in progress (Codex + Cloud Agent). No secrets on this...</p></article><article class="lane"><h3>TACTrack</h3><div class="lane-end"><span class="chip" style="--c:#ca8a04;--bg:#422006;--fg:#fef08a">Yellow</span></div><p class="notes">Private. High-level only -- CI / open PRs from live fetch.</p></article><article class="lane"><h3>AdoptIQ notes</h3><div class="lane-end"><span class="chip" style="--c:#525252;--bg:#171717;--fg:#d4d4d4">Parked</span></div><p class="notes">High-level only: manager-decision UX + Build 115 candidate path. No CSOne paths...</p></article></div></section><section id="messaging" class="block secondary"><h2>Messaging / Bob infra</h2><div class="lanes"><article class="lane"><h3><a href="https://github.com/rupret007/Andrea_NanoBot" target="_blank" rel="noopener">Andrea NanoBot</a></h3><div class="lane-end"><span class="chip" style="--c:#ca8a04;--bg:#422006;--fg:#fef08a">Yellow</span><span class="signal">1 open PR</span></div><p class="notes">BB AppleScript send preferred. Private API OFF. Approval-fenced sends only.</p></article><article class="lane is-quiet"><h3>Telegram Bot the Bot</h3><div class="lane-end"><span class="chip" style="--c:#16a34a;--bg:#052e16;--fg:#bbf7d0">Green</span></div><p class="notes">Whisper + Chrome mop shipped. Bob front-door via Telegram.</p></article><article class="lane is-quiet"><h3>Codex local goals</h3><div class="lane-end"><span class="chip" style="--c:#16a34a;--bg:#052e16;--fg:#bbf7d0">Green</span></div><p class="notes">goals=true fixed. Local Codex loop for AdoptIQ/ops lanes.</p></article></div></section><section id="music-producer" class="block secondary"><h2>Music producer</h2><div class="lanes"><article class="lane is-quiet"><h3>Logic Pro home</h3><div class="lane-end"><span class="chip" style="--c:#16a34a;--bg:#052e16;--fg:#bbf7d0">Green</span></div><p class="notes">Logic Pro 12.3.1 on Mac mini -- primary producer home.</p></article><article class="lane"><h3>LogicProMCP</h3><div class="lane-end"><span class="chip" style="--c:#d97757;--bg:#2a1510;--fg:#f5c4b3">Jeff-gate</span></div><p class="notes">Installed. Pending Accessibility / Automation GUI grants from Jeff.</p></article><article class="lane"><h3>Moises / Suno</h3><div class="lane-end"><span class="chip" style="--c:#d97757;--bg:#2a1510;--fg:#f5c4b3">Jeff-gate</span></div><p class="notes">Jeff-login gated for stems/covers/demos.</p></article></div></section><section id="parked" class="block secondary"><h2>Parked</h2><div class="lanes"><article class="lane"><h3><a href="https://github.com/rupret007/story-corner-shelf" target="_blank" rel="noopener">Closet shelf</a></h3><div class="lane-end"><span class="chip" style="--c:#525252;--bg:#171717;--fg:#d4d4d4">Parked</span><span class="signal">4 open PRs</span></div><p class="notes">Parked. Open PRs ignored unless Jeff unparks.</p></article><article class="lane"><h3>Stalemate / Trailer Swift</h3><div class="lane-end"><span class="chip" style="--c:#525252;--bg:#171717;--fg:#d4d4d4">Parked</span></div><p class="notes">Catalog/voice feel only -- parked catalog lane.</p></article><article class="lane"><h3><a href="https://github.com/rupret007/RadDadSite/pull/6" target="_blank" rel="noopener">RadDadSite #6</a></h3><div class="lane-end"><span class="chip" style="--c:#525252;--bg:#171717;--fg:#d4d4d4">Parked</span></div><p class="notes">Draft prod deploy -- keep parked pending Che/server facts.</p></article></div></section><section id="abilities" class="block foot"><details class="abilities-foot"><summary>What Bob can do</summary><p class="pending-help">Texts / food after Jeff yes. No send button. Honest: there is no order button on this board.</p><div class="lanes"><article class="lane is-quiet"><h3>Rebuild this board</h3><div class="lane-end"></div><p class="notes">Actions cron every 15m plus ./refresh.sh. Live gh SHAs/CI. No secrets on the public...</p></article><article class="lane is-quiet"><h3>Cursor Cloud Agents</h3><div class="lane-end"></div><p class="notes">Repo work in Cursor Cloud. Jeff-gated / cost ceiling. High-level only here.</p></article><article class="lane is-quiet"><h3>Local Codex goals</h3><div class="lane-end"></div><p class="notes">Mac Codex loop for AdoptIQ and ops lanes. High-risk goals still shown in chat before...</p></article><article class="lane"><h3>Texts via Andrea</h3><div class="lane-end"><span class="chip" style="--c:#d97757;--bg:#2a1510;--fg:#f5c4b3">After yes</span></div><p class="notes">After Jeff yes only. Never auto-send. Draft must already exist. No send button on this...</p></article><article class="lane"><h3>Life-ops / Domino&#x27;s</h3><div class="lane-end"><span class="chip" style="--c:#d97757;--bg:#2a1510;--fg:#f5c4b3">After yes</span></div><p class="notes">Food, errands, Domino&#x27;s: chat yes only. Honest: there is no order button on this board.</p></article><article class="lane"><h3>Music producer help</h3><div class="lane-end"><span class="chip" style="--c:#d97757;--bg:#2a1510;--fg:#f5c4b3">Jeff-gate</span></div><p class="notes">Logic Pro is home. Moises / Suno need Jeff login. LogicProMCP needs Jeff GUI grants.</p></article><article class="lane"><h3>Cisco CS desktop (high-level)</h3><div class="lane-end"><span class="chip" style="--c:#525252;--bg:#171717;--fg:#d4d4d4">High-level</span></div><p class="notes">AdoptIQ / TACTrack appear as high-level Cisco CS desktop only. No CSOne paths or...</p></article><article class="lane"><h3>GitHub issue inbox</h3><div class="lane-end"><span class="chip" style="--c:#d97757;--bg:#2a1510;--fg:#f5c4b3">Authority</span></div><p class="notes">BOB-APPROVE / BOB-DENY / BOB-HOLD from rupret007 is the real yes. The board only opens...</p></article></div></details></section><section id="features" class="block foot"><details class="how-board"><summary>How this board works</summary><p class="pending-help">Engineer notes -- not the daily ops list.</p><p class="pending-help">Public board -- Approve opens a GitHub issue; submit while logged in as <code>rupret007</code>.</p><div class="tools"><button type="button" data-action="refresh-hint">Copy command</button><button type="button" data-action="open-repo">Open repo</button><button type="button" data-action="mark-reviewed">Mark reviewed</button></div><div class="lanes"><article class="lane is-quiet"><h3>Public board</h3><div class="lane-end"></div><p class="notes">Possession of the public URL is enough. GitHub login rupret007 is the real authority.</p></article><article class="lane is-quiet"><h3>Soft-paint poll</h3><div class="lane-end"></div><p class="notes">Client fetches status.json every 30s (pauses when the tab is hidden). Repaints when...</p></article><article class="lane is-quiet"><h3>Agents strip</h3><div class="lane-end"></div><p class="notes">Codex / Cursor / Claude from a Mac probe. Stale or untimestamped probes paint Unknown...</p></article><article class="lane is-quiet"><h3>Silence banner</h3><div class="lane-end"></div><p class="notes">Actions cadence is ~15m. If refresh is quiet for ~45m the page warns that chips may be...</p></article><article class="lane is-quiet"><h3>XSS-safe cards</h3><div class="lane-end"></div><p class="notes">html.escape + safeHref on server render. Soft-paint uses esc/safeHref. ASCII-safe JS...</p></article><article class="lane is-quiet"><h3>Poll / decide race guards</h3><div class="lane-end"></div><p class="notes">pollSeq / pendingSeq drop stale fetches. decideBusy gates Approve / Hold / Deny...</p></article><article class="lane is-quiet"><h3>Public Pages</h3><div class="lane-end"></div><p class="notes">Free-plan GitHub Pages from main. No secrets, tokens, Keeper material, or private...</p></article></div></details></section>
   </div>
   <footer>
     <p><a href="https://github.com/rupret007/bob-ops-dashboard">rupret007/bob-ops-dashboard</a>
@@ -222,7 +232,13 @@
     var sec = document.getElementById("controls");
     if (sec) sec.hidden = rows.length === 0;
     if (!rows.length) return;
+    var attn = [];
+    var low = [];
     rows.forEach(function (it) {
+      if (String(it.risk || "").toLowerCase() === "low") low.push(it);
+      else attn.push(it);
+    });
+    function pendingNode(it) {
       var div = document.createElement("div");
       div.className = "pending-item";
       div.setAttribute("data-id", String(it.id));
@@ -246,11 +262,24 @@
       var rk = div.querySelector(".prisk");
       rk.textContent = it.risk || "low";
       rk.classList.add(riskClass(it.risk));
-      els.list.appendChild(div);
-    });
+      return div;
+    }
+    attn.forEach(function (it) { els.list.appendChild(pendingNode(it)); });
+    if (low.length) {
+      var more = document.createElement("details");
+      more.className = "pending-more";
+      var sum = document.createElement("summary");
+      sum.textContent = low.length + (low.length === 1 ? " lower-risk item" : " lower-risk items");
+      more.appendChild(sum);
+      low.forEach(function (it) { more.appendChild(pendingNode(it)); });
+      els.list.appendChild(more);
+    }
   }
 
   function loadPending() {
+    var list = document.getElementById("pending-list");
+    // First paint already has the inbox. Do not wipe/rebuild it (flash).
+    if (list && list.querySelector(".pending-item")) return;
     var seq = ++pendingSeq;
     fetch("./status.json?ts=" + Date.now(), { cache: "no-store" })
       .then(function (r) {
@@ -287,6 +316,8 @@
       if (navigator.clipboard && navigator.clipboard.writeText) {
         navigator.clipboard.writeText(cmd).then(function () {
           setStatus("Copied: " + cmd, "ok");
+        }).catch(function () {
+          setStatus(cmd, "ok");
         });
       } else {
         setStatus(cmd, "ok");
@@ -308,9 +339,6 @@
   });
 
   loadPending();
-  window.addEventListener("bob-ops-painted", function () {
-    loadPending();
-  });
 })();
 
 (function () {
@@ -325,15 +353,19 @@
   var known = stamp.getAttribute("data-generated-at") || "";
   var knownMs = Date.parse(known) || Date.now();
   var lastPollOk = Date.now();
+  var lastAgents = [];
+  var lastFp = null;
 
   function fmtAge(ms) {
+    // Actions cadence is ~15m. "Live" only while we are still inside that window.
     var s = Math.max(0, Math.floor(ms / 1000));
-    if (s < 8) return "Live - just now";
-    if (s < 60) return "Live - updated " + s + "s ago";
+    if (s < 8) return "Updated just now";
+    if (s < 60) return "Updated " + s + "s ago";
     var m = Math.floor(s / 60);
-    if (m < 60) return "Live - updated " + m + "m ago";
+    if (m < 16) return "Live - updated " + m + "m ago";
+    if (m < 60) return "Updated " + m + "m ago";
     var h = Math.floor(m / 60);
-    return "Live - updated " + h + "h ago";
+    return "Updated " + h + "h ago";
   }
 
   function paint() {
@@ -345,6 +377,7 @@
     if (dot) {
       dot.classList.toggle("stale", stale || pollFailStreak > 0);
     }
+    if (lastAgents && lastAgents.length) paintAgents(lastAgents);
     if (typeof updateSilence === "function") updateSilence();
   }
 
@@ -372,7 +405,7 @@
 
   function safeHref(u) {
     var s = String(u == null ? "" : u).trim();
-    if (s.indexOf("./") === 0 && s.indexOf(":") === -1 && !/[\s<>"']/.test(s)) return s;
+    if (s.indexOf("./") === 0 && s.indexOf(":") === -1 && s.indexOf("\\") === -1 && !/[\s<>"']/.test(s)) return s;
     var low = s.toLowerCase();
     if (low.indexOf("https://") !== 0 && low.indexOf("http://") !== 0) return "";
     if (/[\s<>"']/.test(s)) return "";
@@ -445,11 +478,13 @@
       var rb = rank.hasOwnProperty(String(b.risk || "").toLowerCase()) ? rank[String(b.risk).toLowerCase()] : 5;
       return ra - rb;
     });
-    var list = "";
+    var attn = "";
+    var low = "";
+    var lowCount = 0;
     rows.forEach(function (it) {
-      var risk = String(it.risk || "low").toLowerCase();
-      if (risk !== "high" && risk !== "medium") risk = "low";
-      list += '<div class="pending-item" data-id="' + esc(it.id) + '" data-title="' + esc(it.title || it.id) + '">' +
+      var rawRisk = String(it.risk || "").toLowerCase();
+      var risk = (rawRisk === "high" || rawRisk === "medium") ? rawRisk : "low";
+      var row = '<div class="pending-item" data-id="' + esc(it.id) + '" data-title="' + esc(it.title || it.id) + '">' +
         '<div class="pending-head"><div class="ptitle">' + esc(it.title || it.id) + "</div>" +
         '<span class="prisk ' + esc(risk) + '">' + esc(risk) + "</span></div>" +
         '<div class="pdetail">' + esc(shortNote(it.detail || "", 72)) + "</div>" +
@@ -457,10 +492,17 @@
         '<button type="button" data-dec="APPROVE">Approve</button>' +
         '<button type="button" class="warn" data-dec="HOLD">Hold</button>' +
         '<button type="button" class="danger" data-dec="DENY">Deny</button></div></div>';
+      if (rawRisk === "low") { low += row; lowCount += 1; }
+      else attn += row;
     });
+    if (lowCount) {
+      low = '<details class="pending-more"><summary>' +
+        esc(String(lowCount) + (lowCount === 1 ? " lower-risk item" : " lower-risk items")) +
+        "</summary>" + low + "</details>";
+    }
     return '<div id="pending-box" class="pending-box"' + (rows.length ? "" : " hidden") + ">" +
       '<p class="pending-help">Public board -- Approve opens a GitHub issue as <code>rupret007</code>.</p>' +
-      '<div id="pending-list">' + list + "</div></div>";
+      '<div id="pending-list">' + attn + low + "</div></div>";
   }
   function toolsRow(projects) {
     var btns = "";
@@ -542,16 +584,107 @@
     (agents || []).forEach(function (a) {
       var name = a.name || a.id || "agent";
       var detail = a.detail || "";
-      pills += '<div class="agent-pill" data-agent-id="' + esc(a.id || name) + '" title="' + esc(detail) + '">' +
+      pills += '<div class="agent-pill" data-agent-id="' + esc(a.id || name) +
+        '" data-state="' + esc(a.state || "unknown") +
+        '" data-checked-at="' + esc(a.checked_at || "") +
+        '" title="' + esc(detail) + '">' +
         '<span class="name">' + esc(name) + "</span>" + agentStateChip(a.state) + "</div>";
     });
     return '<div class="agents-strip" id="agents-strip">' + pills + "</div>";
   }
 
+  var AGENT_FRESH_MS = 45 * 60 * 1000;
+  function parseCheckedAt(ts) {
+    var ms = Date.parse(String(ts || ""));
+    return isFinite(ms) ? ms : 0;
+  }
+  function ageGateAgents(agents) {
+    var names = { codex: "Codex", cursor: "Cursor", claude: "Claude" };
+    var by = {};
+    (agents || []).forEach(function (a) {
+      if (a && a.id) by[String(a.id)] = a;
+    });
+    var now = Date.now();
+    return ["codex", "cursor", "claude"].map(function (id) {
+      var a = by[id] || { id: id, name: names[id], state: "unknown", detail: "No Mac probe yet" };
+      var ms = parseCheckedAt(a.checked_at);
+      var fresh = !!(ms && (now - ms) < AGENT_FRESH_MS && (ms - now) <= 5 * 60 * 1000);
+      var state = String(a.state || "unknown").toLowerCase();
+      if (!fresh) {
+        var detail = String(a.detail || "probe");
+        if (detail.toLowerCase().indexOf("probe stale") === -1) detail = detail + " \u00b7 probe stale (>45m)";
+        return { id: id, name: a.name || names[id], state: "unknown", detail: detail, checked_at: a.checked_at || "" };
+      }
+      if (state !== "running" && state !== "idle" && state !== "installed" && state !== "down" && state !== "unknown") {
+        state = "unknown";
+      }
+      return { id: id, name: a.name || names[id], state: state, detail: a.detail || "", checked_at: a.checked_at || "" };
+    });
+  }
+  function boardFingerprint(data) {
+    if (!data || typeof data !== "object") return "";
+    function agentKey(a) { return a ? [a.id, a.state, a.detail] : []; }
+    function pendingKey(it) { return it ? [it.id, it.title, it.risk, it.detail] : []; }
+    function projectKey(p) {
+      if (!p) return [];
+      var ci = p.ci && typeof p.ci === "object" ? p.ci : {};
+      return [p.name, p.status, p.chip, p.notes, p.open_prs, p.release, p.tip_sha, ci.conclusion || ""];
+    }
+    var sections = (data.sections || []).map(function (sec) {
+      if (!sec) return [];
+      return [sec.id, sec.title, (sec.projects || []).map(projectKey)];
+    });
+    return JSON.stringify({
+      pending: (data.pending || []).map(pendingKey),
+      agents: (data.agents || []).map(agentKey),
+      sections: sections,
+      fetched: data.fetched_repos || []
+    });
+  }
+  function snapshotOpen() {
+    function isOpen(sel) {
+      var el = document.querySelector(sel);
+      return !!(el && el.open);
+    }
+    return {
+      how: isOpen("details.how-board"),
+      ab: isOpen("details.abilities-foot"),
+      more: isOpen("details.pending-more")
+    };
+  }
+  function restoreOpen(s) {
+    function setOpen(sel, on) {
+      var el = document.querySelector(sel);
+      if (el && on) el.open = true;
+    }
+    if (!s) return;
+    setOpen("details.how-board", s.how);
+    setOpen("details.abilities-foot", s.ab);
+    setOpen("details.pending-more", s.more);
+  }
+  function paintAgents(agents) {
+    var host = document.getElementById("active-agents");
+    if (!host) return;
+    var html = agentsStripHtml(ageGateAgents(agents || []));
+    if (host.innerHTML === html) return;
+    host.innerHTML = html;
+  }
+  function readDomAgents() {
+    var pills = document.querySelectorAll("#agents-strip .agent-pill");
+    return Array.prototype.map.call(pills, function (el) {
+      return {
+        id: el.getAttribute("data-agent-id") || "",
+        name: ((el.querySelector(".name") || {}).textContent) || "",
+        state: el.getAttribute("data-state") || "unknown",
+        detail: el.getAttribute("title") || "",
+        checked_at: el.getAttribute("data-checked-at") || ""
+      };
+    });
+  }
+
   function renderBoard(data) {
     if (!boardEl || !data || !Array.isArray(data.sections)) return;
-    var host = document.getElementById("active-agents");
-    if (host) host.innerHTML = agentsStripHtml(data.agents || []);
+    paintAgents(data.agents || []);
     var controlProjects = [];
     var html = "";
     data.sections.forEach(function (sec) {
@@ -585,9 +718,14 @@
         "<h2>" + esc(sec.title || "") + "</h2>" +
         lanesHtml(sec.projects || [], kind === "primary") + "</section>";
     });
+    if (boardEl.getAttribute("data-fp") === html) return;
+    var open = snapshotOpen();
     boardEl.innerHTML = html;
+    boardEl.setAttribute("data-fp", html);
+    restoreOpen(open);
     if (fetchedLine && Array.isArray(data.fetched_repos)) {
-      fetchedLine.innerHTML = 'Live CI via <code>gh</code>: ' + esc(data.fetched_repos.join(", ")) + ".";
+      var fl = 'Live CI via <code>gh</code>: ' + esc(data.fetched_repos.join(", ")) + ".";
+      if (fetchedLine.innerHTML !== fl) fetchedLine.innerHTML = fl;
     }
     window.dispatchEvent(new CustomEvent("bob-ops-painted"));
   }
@@ -606,6 +744,7 @@
   }
 
   var pollSeq = 0;
+  lastAgents = readDomAgents();
   function poll() {
     var seq = ++pollSeq;
     var url = "./status.json?ts=" + Date.now();
@@ -622,13 +761,21 @@
           dot.classList.add("poll");
           setTimeout(function () { dot.classList.remove("poll"); }, 600);
         }
+        lastAgents = (data && data.agents) || lastAgents;
+        paintAgents(lastAgents);
         var next = data && data.generated_at;
-        var changed = !!(next && known && next !== known);
+        var stampChanged = !!(next && known && next !== known);
+        var fp = boardFingerprint(data);
+        var contentChanged = lastFp !== null && fp !== lastFp;
         applyStamp(data);
-        if (changed) {
-          // Soft-paint from JSON -- no full reload. Controls/pending stay public.
+        if (lastFp === null && stampChanged) {
+          // HTML may be older than status.json (Pages cache). Paint once.
+          renderBoard(data);
+        } else if (contentChanged) {
+          // Soft-paint from JSON -- skip timestamp-only Actions refreshes (no flash).
           renderBoard(data);
         }
+        lastFp = fp;
         paint();
         updateSilence();
       })

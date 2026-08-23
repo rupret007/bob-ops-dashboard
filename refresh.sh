@@ -109,6 +109,7 @@ from zoneinfo import ZoneInfo
 root = Path(sys.argv[1])
 sys.path.insert(0, str(root))
 from board_meta import (
+    AGENT_STATE_CHIP,
     CONTROL_ACTIONS,
     attention_rank,
     compact_signal,
@@ -116,8 +117,10 @@ from board_meta import (
     is_quiet_lane,
     merge_first_class,
     presentation,
+    resolve_agents,
     short_note,
-    sort_pending,
+    split_pending,
+    status_from_fetch,
     visible_chip,
 )
 refresh_started_ms = int(os.environ.get("REFRESH_STARTED_MS") or 0) or int(time.time() * 1000)
@@ -130,22 +133,6 @@ updated_iso = now.isoformat()
 def g(name):
     return by.get(name) or {"accessible": False, "name": name}
 
-def status_for(name, override=None):
-    if override:
-        return override
-    r = g(name)
-    if not r.get("accessible"):
-        return "parked"
-    ci = r.get("ci") or {}
-    concl = ci.get("conclusion")
-    if concl == "failure":
-        return "red"
-    if (r.get("open_prs") or 0) > 0:
-        return "yellow"
-    if concl == "success" or ci is None:
-        return "green"
-    return "yellow"
-
 CHIP = {
     "green": "Green", "yellow": "Yellow", "red": "Red",
     "parked": "Parked", "jeff-gate": "Jeff-gate",
@@ -153,7 +140,7 @@ CHIP = {
 
 def project(name, *, status=None, notes="", product_sha=None, jeff_gate=False, extra=None):
     r = g(name)
-    st = "jeff-gate" if jeff_gate else status_for(name, status)
+    st = status_from_fetch(r, override=status, jeff_gate=jeff_gate)
     p = {
         "name": name if not r.get("name") else r["name"],
         "repo": r.get("full_name"),
@@ -204,11 +191,11 @@ status = {
         project("StoryLiner", notes="PR #1 lint fix merged; confirm main CI from live fetch."),
         project("StoryBoard", notes="Quiet green unless CI says otherwise."),
         project("Rad-Dad-Merch", notes="Merch lane; watch Release integrity."),
-        project("RadDadSite", status="yellow",
+        project("RadDadSite",
                 notes="Tip green typical; draft #6 prod deploy parked/Jeff-gate if still open."),
         project("rad-dad-show-night", notes="Show-night run sheet / flyer. No CI is OK."),
         project("AI-Music-Vault", notes="Private docs/index. High-level only on public page."),
-        project("Turdanoid", status="yellow",
+        project("Turdanoid",
                 notes="Tip usually green; stale open PRs -> hygiene."),
       ],
     },
@@ -230,7 +217,7 @@ status = {
       "id": "messaging",
       "title": "Messaging / Bob infra",
       "projects": [
-        project("Andrea_NanoBot", status="yellow",
+        project("Andrea_NanoBot",
                 notes="BB AppleScript send preferred. Private API OFF. Approval-fenced sends only."),
         {"name": "Telegram Bot the Bot", "status": "green", "chip": "Green",
          "notes": "Whisper + Chrome mop shipped. Bob front-door via Telegram."},
@@ -266,12 +253,7 @@ status = {
     {
       "id": "active-agents",
       "title": "Active agents NOW",
-      "projects": [
-        {"name": "AdoptIQ Cloud Agent", "status": "yellow", "chip": "Yellow",
-         "notes": "Cloud Agent + Build 115 path in flight elsewhere."},
-        {"name": "Local Codex fix", "status": "yellow", "chip": "Yellow",
-         "notes": "AdoptIQ local Codex continuation in progress."},
-      ],
+      "projects": [],
     },
   ],
   "fetched_repos": [x.get("name") for x in fetched if x.get("accessible")],
@@ -282,137 +264,30 @@ status = {
 status["sections"] = merge_first_class(status["sections"])
 
 # --- Active agents (Codex / Cursor / Claude) — safe public fields only ---
-import os
-AGENT_IDS = ("codex", "cursor", "claude")
-AGENT_STATE_CHIP = {
-    "running": ("green", "Running"),
-    "idle": ("yellow", "Idle"),
-    "installed": ("parked", "Installed"),
-    "down": ("red", "Down"),
-    "unknown": ("parked", "Unknown"),
-}
-
-def _safe_agent(raw, fallback_id):
-    if not isinstance(raw, dict):
-        raw = {}
-    aid = str(raw.get("id") or fallback_id).strip().lower()[:32] or fallback_id
-    name = str(raw.get("name") or aid.title())[:48]
-    state = str(raw.get("state") or "unknown").strip().lower()
-    if state not in AGENT_STATE_CHIP:
-        state = "unknown"
-    detail = str(raw.get("detail") or "")[:200]
-    for bad in ("token", "secret", "bearer", "CSOne", "csone", "keeper", "password", "api_key", "apikey"):
-        if bad.lower() in detail.lower():
-            detail = "detail redacted"
-            break
-    checked = raw.get("checked_at")
-    return {
-        "id": aid,
-        "name": name,
-        "state": state,
-        "detail": detail,
-        "checked_at": checked,
-    }
-
-def _default_agents(state="unknown", detail="No Mac probe yet"):
-    names = {"codex": "Codex", "cursor": "Cursor", "claude": "Claude"}
-    return [_safe_agent({"id": i, "name": names[i], "state": state, "detail": detail}, i) for i in AGENT_IDS]
-
-def _parse_agents_blob(blob):
-    if blob is None:
-        return None
-    if isinstance(blob, str):
-        blob = blob.strip()
-        if not blob:
-            return None
-        try:
-            blob = json.loads(blob)
-        except Exception:
-            return None
-    if isinstance(blob, dict) and isinstance(blob.get("agents"), list):
-        rows = blob["agents"]
-    elif isinstance(blob, list):
-        rows = blob
-    else:
-        return None
-    by = {}
-    for row in rows:
-        if not isinstance(row, dict):
-            continue
-        a = _safe_agent(row, str(row.get("id") or "agent"))
-        by[a["id"]] = a
-    out = []
-    for i in AGENT_IDS:
-        out.append(by.get(i) or _safe_agent({"id": i, "name": i.title(), "state": "unknown", "detail": "missing from probe"}, i))
-    for k, v in by.items():
-        if k not in AGENT_IDS:
-            out.append(v)
-    return out
-
-def _agents_fresh(agents, max_age_sec=45 * 60):
-    if not agents:
-        return False
-    newest = None
-    for a in agents:
-        ts = a.get("checked_at") if isinstance(a, dict) else None
-        if not ts:
-            continue
-        try:
-            t = datetime.fromisoformat(str(ts).replace("Z", "+00:00"))
-            if t.tzinfo is None:
-                t = t.replace(tzinfo=ZoneInfo("America/Chicago"))
-            epoch = t.timestamp()
-            newest = epoch if newest is None else max(newest, epoch)
-        except Exception:
-            continue
-    if newest is None:
-        return False
-    return (time.time() - newest) < max_age_sec
-
 prev_early = {}
 try:
     prev_early = json.loads((root / "status.json").read_text())
 except Exception:
     prev_early = {}
 
-agents = None
-src = None
-env_blob = os.environ.get("AGENTS_STATUS_JSON")
-if env_blob:
-    agents = _parse_agents_blob(env_blob)
-    src = "env:AGENTS_STATUS_JSON"
-if agents is None:
-    for cand in (root / "agents-status.json", Path("/workspace/bob-ops-dashboard/agents-status.json")):
-        if cand.is_file():
-            try:
-                agents = _parse_agents_blob(cand.read_text())
-                src = f"file:{cand}"
-                break
-            except Exception:
-                continue
-if agents is None and isinstance(prev_early, dict):
-    prev_agents = prev_early.get("agents")
-    if isinstance(prev_agents, list) and prev_agents:
-        parsed = _parse_agents_blob(prev_agents)
-        if parsed and _agents_fresh(parsed):
-            agents = parsed
-            src = "previous:<45m"
-        elif parsed:
-            agents = [
-                _safe_agent(
-                    {**a, "state": "unknown", "detail": ((a.get("detail") or "stale") + " · probe stale (>45m)")},
-                    a.get("id") or "agent",
-                )
-                for a in parsed
-            ]
-            src = "previous:stale->unknown"
-if agents is None:
-    agents = _default_agents("unknown", "No Mac probe yet -- run probe-agents-status.sh")
-    src = "default:unknown"
-
+file_texts = []
+for cand in (root / "agents-status.json", Path("/workspace/bob-ops-dashboard/agents-status.json")):
+    if cand.is_file():
+        try:
+            file_texts.append((f"file:{cand}", cand.read_text()))
+            break
+        except Exception:
+            continue
+prev_agents = prev_early.get("agents") if isinstance(prev_early, dict) else None
+agents, src = resolve_agents(
+    env_blob=os.environ.get("AGENTS_STATUS_JSON"),
+    file_texts=file_texts,
+    previous=prev_agents,
+)
 status["agents"] = agents
 status["agents_source"] = src
 
+# Pulse data only -- do not invent a fourth Yellow "Cloud Agent" card.
 agent_projects = []
 for a in agents:
     st, label = AGENT_STATE_CHIP.get(a["state"], AGENT_STATE_CHIP["unknown"])
@@ -427,12 +302,6 @@ for a in agents:
         "agent_id": a["id"],
         "agent_state": a["state"],
     })
-agent_projects.append({
-    "name": "AdoptIQ Cloud Agent",
-    "status": "yellow",
-    "chip": "Yellow",
-    "notes": "Cloud Agent + Build 115 path in flight elsewhere (Cursor Cloud). High-level only.",
-})
 for sec in status["sections"]:
     if sec.get("id") == "active-agents":
         sec["projects"] = agent_projects
@@ -628,13 +497,23 @@ def pending_item_html(it):
     )
 
 def pending_shell(items):
-    rows = [pending_item_html(it) for it in sort_pending(items)]
-    rows = [r for r in rows if r]
-    hidden = "" if rows else " hidden"
+    attn, low = split_pending(items)
+    attn_html = [r for r in (pending_item_html(it) for it in attn) if r]
+    low_html = [r for r in (pending_item_html(it) for it in low) if r]
+    more = ""
+    if low_html:
+        n = len(low_html)
+        label = str(n) + (" lower-risk item" if n == 1 else " lower-risk items")
+        more = (
+            f'<details class="pending-more"><summary>{h(label)}</summary>'
+            + "".join(low_html)
+            + "</details>"
+        )
+    hidden = "" if (attn_html or low_html) else " hidden"
     return (
         f'<div id="pending-box" class="pending-box"{hidden}>'
         f'<p class="pending-help">Public board -- Approve opens a GitHub issue as <code>rupret007</code>.</p>'
-        f'<div id="pending-list">{"".join(rows)}</div></div>'
+        f'<div id="pending-list">{"".join(attn_html)}{more}</div></div>'
     )
 
 def tools_row(projects):
@@ -684,8 +563,11 @@ def agents_strip_html(agents_list):
         name = h(a.get("name") or a.get("id") or "agent")
         detail = h(a.get("detail") or "")
         aid = h(a.get("id") or a.get("name") or "agent")
+        state = h(a.get("state") or "unknown")
+        checked = h(a.get("checked_at") or "")
         pills.append(
-            f'<div class="agent-pill" data-agent-id="{aid}" title="{detail}">'
+            f'<div class="agent-pill" data-agent-id="{aid}" data-state="{state}" '
+            f'data-checked-at="{checked}" title="{detail}">'
             f'<span class="name">{name}</span>{chip}</div>'
         )
     return (
@@ -762,7 +644,7 @@ html = f'''<!DOCTYPE html>
     font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;
     font-size:16px; line-height:1.4; }}
   a {{ color:var(--link); text-decoration:none; }} a:hover {{ text-decoration:underline; }}
-  .wrap {{ max-width:40rem; margin:0 auto; padding:1rem 1rem 3.25rem; }}
+  .wrap {{ max-width:40rem; margin:0 auto; padding:1rem 1rem calc(3.25rem + env(safe-area-inset-bottom, 0px)); }}
   header.pulse {{ padding:0 0 1rem; margin:0 0 1.35rem; border:0; background:transparent; }}
   header.pulse h1 {{ margin:0; font-size:1.05rem; font-weight:700; letter-spacing:-.01em; }}
   header.pulse h1 .mark {{ color:var(--orange); }}
@@ -860,6 +742,16 @@ html = f'''<!DOCTYPE html>
     padding:.2rem 0; list-style:outside disclosure-closed;
   }}
   .how-board[open] summary, .abilities-foot[open] summary {{ color:var(--orange); margin-bottom:.55rem; }}
+  .pending-more {{ margin:.1rem 0 0; border:0; background:transparent; }}
+  .pending-more > summary {{
+    cursor:pointer; color:var(--muted); font-size:.8rem; font-weight:600;
+    min-height:44px; display:flex; align-items:center;
+    list-style:outside disclosure-closed;
+  }}
+  .pending-more[open] > summary {{ color:var(--orange); }}
+  @media (prefers-reduced-motion: reduce) {{
+    .live-dot {{ animation:none; box-shadow:none; }}
+  }}
   @media (min-width:720px) {{
     .wrap {{ padding:1.5rem 1.25rem 3.75rem; }}
     .lane .notes {{ -webkit-line-clamp:2; }}
@@ -968,7 +860,13 @@ html = f'''<!DOCTYPE html>
     var sec = document.getElementById("controls");
     if (sec) sec.hidden = rows.length === 0;
     if (!rows.length) return;
+    var attn = [];
+    var low = [];
     rows.forEach(function (it) {{
+      if (String(it.risk || "").toLowerCase() === "low") low.push(it);
+      else attn.push(it);
+    }});
+    function pendingNode(it) {{
       var div = document.createElement("div");
       div.className = "pending-item";
       div.setAttribute("data-id", String(it.id));
@@ -992,11 +890,24 @@ html = f'''<!DOCTYPE html>
       var rk = div.querySelector(".prisk");
       rk.textContent = it.risk || "low";
       rk.classList.add(riskClass(it.risk));
-      els.list.appendChild(div);
-    }});
+      return div;
+    }}
+    attn.forEach(function (it) {{ els.list.appendChild(pendingNode(it)); }});
+    if (low.length) {{
+      var more = document.createElement("details");
+      more.className = "pending-more";
+      var sum = document.createElement("summary");
+      sum.textContent = low.length + (low.length === 1 ? " lower-risk item" : " lower-risk items");
+      more.appendChild(sum);
+      low.forEach(function (it) {{ more.appendChild(pendingNode(it)); }});
+      els.list.appendChild(more);
+    }}
   }}
 
   function loadPending() {{
+    var list = document.getElementById("pending-list");
+    // First paint already has the inbox. Do not wipe/rebuild it (flash).
+    if (list && list.querySelector(".pending-item")) return;
     var seq = ++pendingSeq;
     fetch("./status.json?ts=" + Date.now(), {{ cache: "no-store" }})
       .then(function (r) {{
@@ -1033,6 +944,8 @@ html = f'''<!DOCTYPE html>
       if (navigator.clipboard && navigator.clipboard.writeText) {{
         navigator.clipboard.writeText(cmd).then(function () {{
           setStatus("Copied: " + cmd, "ok");
+        }}).catch(function () {{
+          setStatus(cmd, "ok");
         }});
       }} else {{
         setStatus(cmd, "ok");
@@ -1054,9 +967,6 @@ html = f'''<!DOCTYPE html>
   }});
 
   loadPending();
-  window.addEventListener("bob-ops-painted", function () {{
-    loadPending();
-  }});
 }})();
 
 (function () {{
@@ -1071,15 +981,19 @@ html = f'''<!DOCTYPE html>
   var known = stamp.getAttribute("data-generated-at") || "";
   var knownMs = Date.parse(known) || Date.now();
   var lastPollOk = Date.now();
+  var lastAgents = [];
+  var lastFp = null;
 
   function fmtAge(ms) {{
+    // Actions cadence is ~15m. "Live" only while we are still inside that window.
     var s = Math.max(0, Math.floor(ms / 1000));
-    if (s < 8) return "Live - just now";
-    if (s < 60) return "Live - updated " + s + "s ago";
+    if (s < 8) return "Updated just now";
+    if (s < 60) return "Updated " + s + "s ago";
     var m = Math.floor(s / 60);
-    if (m < 60) return "Live - updated " + m + "m ago";
+    if (m < 16) return "Live - updated " + m + "m ago";
+    if (m < 60) return "Updated " + m + "m ago";
     var h = Math.floor(m / 60);
-    return "Live - updated " + h + "h ago";
+    return "Updated " + h + "h ago";
   }}
 
   function paint() {{
@@ -1091,6 +1005,7 @@ html = f'''<!DOCTYPE html>
     if (dot) {{
       dot.classList.toggle("stale", stale || pollFailStreak > 0);
     }}
+    if (lastAgents && lastAgents.length) paintAgents(lastAgents);
     if (typeof updateSilence === "function") updateSilence();
   }}
 
@@ -1118,7 +1033,7 @@ html = f'''<!DOCTYPE html>
 
   function safeHref(u) {{
     var s = String(u == null ? "" : u).trim();
-    if (s.indexOf("./") === 0 && s.indexOf(":") === -1 && !/[\\s<>"']/.test(s)) return s;
+    if (s.indexOf("./") === 0 && s.indexOf(":") === -1 && s.indexOf("\\\\") === -1 && !/[\\s<>"']/.test(s)) return s;
     var low = s.toLowerCase();
     if (low.indexOf("https://") !== 0 && low.indexOf("http://") !== 0) return "";
     if (/[\\s<>"']/.test(s)) return "";
@@ -1191,11 +1106,13 @@ html = f'''<!DOCTYPE html>
       var rb = rank.hasOwnProperty(String(b.risk || "").toLowerCase()) ? rank[String(b.risk).toLowerCase()] : 5;
       return ra - rb;
     }});
-    var list = "";
+    var attn = "";
+    var low = "";
+    var lowCount = 0;
     rows.forEach(function (it) {{
-      var risk = String(it.risk || "low").toLowerCase();
-      if (risk !== "high" && risk !== "medium") risk = "low";
-      list += '<div class="pending-item" data-id="' + esc(it.id) + '" data-title="' + esc(it.title || it.id) + '">' +
+      var rawRisk = String(it.risk || "").toLowerCase();
+      var risk = (rawRisk === "high" || rawRisk === "medium") ? rawRisk : "low";
+      var row = '<div class="pending-item" data-id="' + esc(it.id) + '" data-title="' + esc(it.title || it.id) + '">' +
         '<div class="pending-head"><div class="ptitle">' + esc(it.title || it.id) + "</div>" +
         '<span class="prisk ' + esc(risk) + '">' + esc(risk) + "</span></div>" +
         '<div class="pdetail">' + esc(shortNote(it.detail || "", 72)) + "</div>" +
@@ -1203,10 +1120,17 @@ html = f'''<!DOCTYPE html>
         '<button type="button" data-dec="APPROVE">Approve</button>' +
         '<button type="button" class="warn" data-dec="HOLD">Hold</button>' +
         '<button type="button" class="danger" data-dec="DENY">Deny</button></div></div>';
+      if (rawRisk === "low") {{ low += row; lowCount += 1; }}
+      else attn += row;
     }});
+    if (lowCount) {{
+      low = '<details class="pending-more"><summary>' +
+        esc(String(lowCount) + (lowCount === 1 ? " lower-risk item" : " lower-risk items")) +
+        "</summary>" + low + "</details>";
+    }}
     return '<div id="pending-box" class="pending-box"' + (rows.length ? "" : " hidden") + ">" +
       '<p class="pending-help">Public board -- Approve opens a GitHub issue as <code>rupret007</code>.</p>' +
-      '<div id="pending-list">' + list + "</div></div>";
+      '<div id="pending-list">' + attn + low + "</div></div>";
   }}
   function toolsRow(projects) {{
     var btns = "";
@@ -1288,16 +1212,107 @@ html = f'''<!DOCTYPE html>
     (agents || []).forEach(function (a) {{
       var name = a.name || a.id || "agent";
       var detail = a.detail || "";
-      pills += '<div class="agent-pill" data-agent-id="' + esc(a.id || name) + '" title="' + esc(detail) + '">' +
+      pills += '<div class="agent-pill" data-agent-id="' + esc(a.id || name) +
+        '" data-state="' + esc(a.state || "unknown") +
+        '" data-checked-at="' + esc(a.checked_at || "") +
+        '" title="' + esc(detail) + '">' +
         '<span class="name">' + esc(name) + "</span>" + agentStateChip(a.state) + "</div>";
     }});
     return '<div class="agents-strip" id="agents-strip">' + pills + "</div>";
   }}
 
+  var AGENT_FRESH_MS = 45 * 60 * 1000;
+  function parseCheckedAt(ts) {{
+    var ms = Date.parse(String(ts || ""));
+    return isFinite(ms) ? ms : 0;
+  }}
+  function ageGateAgents(agents) {{
+    var names = {{ codex: "Codex", cursor: "Cursor", claude: "Claude" }};
+    var by = {{}};
+    (agents || []).forEach(function (a) {{
+      if (a && a.id) by[String(a.id)] = a;
+    }});
+    var now = Date.now();
+    return ["codex", "cursor", "claude"].map(function (id) {{
+      var a = by[id] || {{ id: id, name: names[id], state: "unknown", detail: "No Mac probe yet" }};
+      var ms = parseCheckedAt(a.checked_at);
+      var fresh = !!(ms && (now - ms) < AGENT_FRESH_MS && (ms - now) <= 5 * 60 * 1000);
+      var state = String(a.state || "unknown").toLowerCase();
+      if (!fresh) {{
+        var detail = String(a.detail || "probe");
+        if (detail.toLowerCase().indexOf("probe stale") === -1) detail = detail + " \\u00b7 probe stale (>45m)";
+        return {{ id: id, name: a.name || names[id], state: "unknown", detail: detail, checked_at: a.checked_at || "" }};
+      }}
+      if (state !== "running" && state !== "idle" && state !== "installed" && state !== "down" && state !== "unknown") {{
+        state = "unknown";
+      }}
+      return {{ id: id, name: a.name || names[id], state: state, detail: a.detail || "", checked_at: a.checked_at || "" }};
+    }});
+  }}
+  function boardFingerprint(data) {{
+    if (!data || typeof data !== "object") return "";
+    function agentKey(a) {{ return a ? [a.id, a.state, a.detail] : []; }}
+    function pendingKey(it) {{ return it ? [it.id, it.title, it.risk, it.detail] : []; }}
+    function projectKey(p) {{
+      if (!p) return [];
+      var ci = p.ci && typeof p.ci === "object" ? p.ci : {{}};
+      return [p.name, p.status, p.chip, p.notes, p.open_prs, p.release, p.tip_sha, ci.conclusion || ""];
+    }}
+    var sections = (data.sections || []).map(function (sec) {{
+      if (!sec) return [];
+      return [sec.id, sec.title, (sec.projects || []).map(projectKey)];
+    }});
+    return JSON.stringify({{
+      pending: (data.pending || []).map(pendingKey),
+      agents: (data.agents || []).map(agentKey),
+      sections: sections,
+      fetched: data.fetched_repos || []
+    }});
+  }}
+  function snapshotOpen() {{
+    function isOpen(sel) {{
+      var el = document.querySelector(sel);
+      return !!(el && el.open);
+    }}
+    return {{
+      how: isOpen("details.how-board"),
+      ab: isOpen("details.abilities-foot"),
+      more: isOpen("details.pending-more")
+    }};
+  }}
+  function restoreOpen(s) {{
+    function setOpen(sel, on) {{
+      var el = document.querySelector(sel);
+      if (el && on) el.open = true;
+    }}
+    if (!s) return;
+    setOpen("details.how-board", s.how);
+    setOpen("details.abilities-foot", s.ab);
+    setOpen("details.pending-more", s.more);
+  }}
+  function paintAgents(agents) {{
+    var host = document.getElementById("active-agents");
+    if (!host) return;
+    var html = agentsStripHtml(ageGateAgents(agents || []));
+    if (host.innerHTML === html) return;
+    host.innerHTML = html;
+  }}
+  function readDomAgents() {{
+    var pills = document.querySelectorAll("#agents-strip .agent-pill");
+    return Array.prototype.map.call(pills, function (el) {{
+      return {{
+        id: el.getAttribute("data-agent-id") || "",
+        name: ((el.querySelector(".name") || {{}}).textContent) || "",
+        state: el.getAttribute("data-state") || "unknown",
+        detail: el.getAttribute("title") || "",
+        checked_at: el.getAttribute("data-checked-at") || ""
+      }};
+    }});
+  }}
+
   function renderBoard(data) {{
     if (!boardEl || !data || !Array.isArray(data.sections)) return;
-    var host = document.getElementById("active-agents");
-    if (host) host.innerHTML = agentsStripHtml(data.agents || []);
+    paintAgents(data.agents || []);
     var controlProjects = [];
     var html = "";
     data.sections.forEach(function (sec) {{
@@ -1331,9 +1346,14 @@ html = f'''<!DOCTYPE html>
         "<h2>" + esc(sec.title || "") + "</h2>" +
         lanesHtml(sec.projects || [], kind === "primary") + "</section>";
     }});
+    if (boardEl.getAttribute("data-fp") === html) return;
+    var open = snapshotOpen();
     boardEl.innerHTML = html;
+    boardEl.setAttribute("data-fp", html);
+    restoreOpen(open);
     if (fetchedLine && Array.isArray(data.fetched_repos)) {{
-      fetchedLine.innerHTML = 'Live CI via <code>gh</code>: ' + esc(data.fetched_repos.join(", ")) + ".";
+      var fl = 'Live CI via <code>gh</code>: ' + esc(data.fetched_repos.join(", ")) + ".";
+      if (fetchedLine.innerHTML !== fl) fetchedLine.innerHTML = fl;
     }}
     window.dispatchEvent(new CustomEvent("bob-ops-painted"));
   }}
@@ -1352,6 +1372,7 @@ html = f'''<!DOCTYPE html>
   }}
 
   var pollSeq = 0;
+  lastAgents = readDomAgents();
   function poll() {{
     var seq = ++pollSeq;
     var url = "./status.json?ts=" + Date.now();
@@ -1368,13 +1389,21 @@ html = f'''<!DOCTYPE html>
           dot.classList.add("poll");
           setTimeout(function () {{ dot.classList.remove("poll"); }}, 600);
         }}
+        lastAgents = (data && data.agents) || lastAgents;
+        paintAgents(lastAgents);
         var next = data && data.generated_at;
-        var changed = !!(next && known && next !== known);
+        var stampChanged = !!(next && known && next !== known);
+        var fp = boardFingerprint(data);
+        var contentChanged = lastFp !== null && fp !== lastFp;
         applyStamp(data);
-        if (changed) {{
-          // Soft-paint from JSON -- no full reload. Controls/pending stay public.
+        if (lastFp === null && stampChanged) {{
+          // HTML may be older than status.json (Pages cache). Paint once.
+          renderBoard(data);
+        }} else if (contentChanged) {{
+          // Soft-paint from JSON -- skip timestamp-only Actions refreshes (no flash).
           renderBoard(data);
         }}
+        lastFp = fp;
         paint();
         updateSilence();
       }})
@@ -1417,12 +1446,14 @@ html = f'''<!DOCTYPE html>
 if drop_leftover_verify(status):
     print("drop leftover verify at write (fail-closed)")
 
-# Atomic status.json write (uptime-pulse pattern): tmp + replace.
+# Atomic status.json + index.html write (uptime-pulse pattern): tmp + replace.
 _status_tmp = root / "status.json.tmp"
 _status_tmp.write_text(json.dumps(status, indent=2) + "\n")
 _status_tmp.replace(root / "status.json")
-(root / "index.html").write_text(html)
-print(f"Wrote {root/'index.html'} and {root/'status.json'} (atomic JSON)")
+_html_tmp = root / "index.html.tmp"
+_html_tmp.write_text(html)
+_html_tmp.replace(root / "index.html")
+print(f"Wrote {root/'index.html'} and {root/'status.json'} (atomic)")
 print(f"Updated: {updated_ct}")
 print(f"Fetched OK: {status['fetched_repos']}")
 if status.get("inaccessible"):
@@ -1449,6 +1480,8 @@ if [[ $PUSH -eq 1 ]]; then
   [[ -f "$ROOT/qa-claim-smoke.sh" ]] && cp "$ROOT/qa-claim-smoke.sh" "$WORK/"
   [[ -f "$ROOT/test_board_meta.py" ]] && cp "$ROOT/test_board_meta.py" "$WORK/"
   [[ -f "$ROOT/test_open_decision.js" ]] && cp "$ROOT/test_open_decision.js" "$WORK/"
+  [[ -f "$ROOT/test_soft_paint.js" ]] && cp "$ROOT/test_soft_paint.js" "$WORK/"
+  [[ -f "$ROOT/.gitignore" ]] && cp "$ROOT/.gitignore" "$WORK/"
   # Do not commit agents-status.json by default (Mac-local probe snapshot); refresh merges it when present.
   if [[ -f "$ROOT/.github/workflows/refresh-dashboard.yml" ]]; then
     cp "$ROOT/.github/workflows/refresh-dashboard.yml" "$WORK/.github/workflows/"
@@ -1465,6 +1498,8 @@ if [[ $PUSH -eq 1 ]]; then
   [[ -f qa-claim-smoke.sh ]] && git add qa-claim-smoke.sh
   [[ -f test_board_meta.py ]] && git add test_board_meta.py
   [[ -f test_open_decision.js ]] && git add test_open_decision.js
+  [[ -f test_soft_paint.js ]] && git add test_soft_paint.js
+  [[ -f .gitignore ]] && git add .gitignore
   [[ -f .github/workflows/refresh-dashboard.yml ]] && git add .github/workflows/refresh-dashboard.yml
   [[ -f .github/workflows/qa-claim-smoke.yml ]] && git add .github/workflows/qa-claim-smoke.yml
   if git diff --cached --quiet; then
