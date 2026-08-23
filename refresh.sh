@@ -97,7 +97,7 @@ done
 echo ']' >> "$TMP"
 
 python3 - "$ROOT" "$TMP" <<'PY'
-import json, sys
+import json, sys, re, time, subprocess
 from datetime import datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -391,6 +391,26 @@ html = f'''<!DOCTYPE html>
   .auth .status.warn {{ color:var(--warn); }}
   .actions {{ margin-top:.75rem; display:none; gap:.5rem; flex-wrap:wrap; }}
   .actions.open {{ display:flex; }}
+  .pending-box {{ margin-top:.9rem; padding-top:.75rem; border-top:1px solid var(--border); }}
+  .pending-box[hidden] {{ display:none !important; }}
+  .pending-box h3 {{ margin:0 0 .35rem; font-size:.95rem; color:var(--orange); }}
+  .pending-help {{ margin:0 0 .6rem; color:var(--muted); font-size:.8rem; }}
+  .pending-item {{
+    border:1px solid var(--border); border-radius:10px; padding:.65rem .75rem; margin:.45rem 0;
+    background:#0d0d0d;
+  }}
+  .pending-item .ptitle {{ font-weight:600; margin:0 0 .2rem; }}
+  .pending-item .pdetail {{ color:var(--muted); font-size:.8rem; margin:0 0 .5rem; }}
+  .pending-item .prisk {{
+    display:inline-block; font-size:.7rem; text-transform:uppercase; letter-spacing:.04em;
+    border:1px solid var(--border); border-radius:999px; padding:.1rem .45rem; margin-right:.35rem;
+  }}
+  .pending-item .prisk.high {{ border-color:#dc2626; color:#fca5a5; }}
+  .pending-item .prisk.medium {{ border-color:#ca8a04; color:#fde68a; }}
+  .pending-item .prisk.low {{ border-color:#16a34a; color:#86efac; }}
+  .pending-item .prow {{ display:flex; flex-wrap:wrap; gap:.4rem; }}
+  .pending-item button.warn {{ border-color:#ca8a04; }}
+  .pending-item button.danger {{ border-color:#dc2626; color:#fecaca; }}
   .actions button {{
     background:#1c1c1c; color:var(--text); border:1px solid var(--border);
     border-radius:8px; padding:.45rem .75rem; font-size:.82rem; cursor:pointer;
@@ -419,22 +439,24 @@ html = f'''<!DOCTYPE html>
       {chip_html("green","Green")}{chip_html("yellow","Yellow")}{chip_html("red","Red")}{chip_html("parked","Parked")}{chip_html("jeff-gate","Jeff-gate")}
     </div>
     <div class="auth" id="auth-panel">
-      <h2>Jeff verify gate</h2>
-      <p>Phase 1: client allowlist + mailto challenge (server mailer next). Verified Jeff unlocks gated actions on this device.</p>
-      <div class="auth-row">
-        <input id="jeff-email" type="email" placeholder="jeff@example.com" autocomplete="email"/>
-        <button type="button" id="btn-send-challenge">Verify</button>
+      <h2>Jeff verify</h2>
+      <p>Simple and safe: Bob emails a one-time code only to <strong>jeffstory007@gmail.com</strong>. Enter that code here. No other address works.</p>
+      <div class="auth-row" id="code-row">
+        <input id="jeff-code" type="text" inputmode="numeric" maxlength="8" placeholder="6-digit code from email" autocomplete="one-time-code"/>
+        <button type="button" id="btn-confirm-code">Unlock</button>
         <button type="button" id="btn-sign-out" class="secondary" style="display:none">Sign out</button>
       </div>
-      <div class="auth-row" id="code-row" style="display:none">
-        <input id="jeff-code" type="text" placeholder="Paste challenge code from email" autocomplete="one-time-code"/>
-        <button type="button" id="btn-confirm-code">Unlock</button>
-      </div>
-      <div class="status" id="auth-status"></div>
+      <div class="status" id="auth-status">Ask Bob in chat: send dashboard code</div>
       <div class="actions" id="jeff-actions">
         <button type="button" data-action="refresh-hint">Copy refresh command</button>
         <button type="button" data-action="open-repo">Open dashboard repo</button>
         <button type="button" data-action="mark-reviewed">Mark board reviewed</button>
+        <button type="button" data-action="ask-code">Ask Bob for a new code</button>
+      </div>
+      <div id="pending-box" class="pending-box" hidden>
+        <h3>Pending for you</h3>
+        <p class="pending-help">Approve opens a GitHub issue as you (<code>rupret007</code>). That is the real yes. High-risk items still show the draft here in chat before Bob acts.</p>
+        <div id="pending-list"></div>
       </div>
     </div>
   </header>
@@ -452,32 +474,19 @@ html = f'''<!DOCTYPE html>
 </div>
 <script>
 (function () {{
-  // Phase-1 client allowlist. Discovered from GitHub primary public email for rupret007.
-  // Server-side mailer is next; until then mailto challenge is local-only.
-  var ALLOWLIST = ["jeffstory007@gmail.com"];
+  // Simple+safe: fixed Jeff email. Bob emails a one-time code; page checks SHA-256 against status.json.verify.
+  var JEFF_EMAIL = "jeffstory007@gmail.com";
   var STORAGE_KEY = "bobOpsJeffAuth_v1";
-  var CHALLENGE_KEY = "bobOpsJeffChallenge_v1";
 
-  var emailEl = document.getElementById("jeff-email");
   var codeEl = document.getElementById("jeff-code");
   var statusEl = document.getElementById("auth-status");
-  var codeRow = document.getElementById("code-row");
   var actions = document.getElementById("jeff-actions");
-  var btnSend = document.getElementById("btn-send-challenge");
   var btnConfirm = document.getElementById("btn-confirm-code");
   var btnOut = document.getElementById("btn-sign-out");
 
-  function norm(e) {{ return (e || "").trim().toLowerCase(); }}
   function setStatus(msg, kind) {{
     statusEl.textContent = msg || "";
     statusEl.className = "status" + (kind ? " " + kind : "");
-  }}
-  function randCode() {{
-    var a = new Uint8Array(4);
-    (window.crypto || window.msCrypto).getRandomValues(a);
-    var s = "";
-    for (var i = 0; i < a.length; i++) s += ("0" + a[i].toString(16)).slice(-2);
-    return s.toUpperCase();
   }}
   function loadAuth() {{
     try {{ return JSON.parse(localStorage.getItem(STORAGE_KEY) || "null"); }}
@@ -487,80 +496,157 @@ html = f'''<!DOCTYPE html>
     if (!obj) localStorage.removeItem(STORAGE_KEY);
     else localStorage.setItem(STORAGE_KEY, JSON.stringify(obj));
   }}
+  async function sha256Hex(text) {{
+    var data = new TextEncoder().encode(text);
+    var buf = await crypto.subtle.digest("SHA-256", data);
+    return Array.from(new Uint8Array(buf)).map(function (b) {{
+      return ("0" + b.toString(16)).slice(-2);
+    }}).join("");
+  }}
   function applyVerified(auth) {{
-    var ok = !!(auth && auth.email && auth.verifiedAt);
+    var ok = !!(auth && auth.email === JEFF_EMAIL && auth.verifiedAt);
     document.body.classList.toggle("jeff-verified", ok);
     actions.classList.toggle("open", ok);
     btnOut.style.display = ok ? "" : "none";
+    codeEl.disabled = ok;
+    btnConfirm.disabled = ok;
     if (ok) {{
-      emailEl.value = auth.email;
-      emailEl.disabled = true;
-      btnSend.disabled = true;
-      codeRow.style.display = "none";
-      setStatus("Verified as " + auth.email + " -- gated actions unlocked on this device.", "ok");
+      setStatus("Verified as " + JEFF_EMAIL + " on this device.", "ok");
       document.querySelectorAll(".card").forEach(function (c) {{
         var chip = c.querySelector(".chip");
         if (chip && /jeff-gate/i.test(chip.textContent)) c.classList.add("gated");
       }});
     }} else {{
-      emailEl.disabled = false;
-      btnSend.disabled = false;
       document.querySelectorAll(".card.gated").forEach(function (c) {{ c.classList.remove("gated"); }});
+      if (!statusEl.textContent) setStatus("Ask Bob in chat: send dashboard code", "");
     }}
   }}
 
-  btnSend.addEventListener("click", function () {{
-    var email = norm(emailEl.value);
-    if (!email || email.indexOf("@") < 0) {{
-      setStatus("Enter a valid email.", "bad");
+  btnConfirm.addEventListener("click", async function () {{
+    var code = (codeEl.value || "").replace(/\s+/g, "");
+    if (!/^\d{{6}}$/.test(code)) {{
+      setStatus("Enter the 6-digit code from email.", "bad");
       return;
     }}
-    if (ALLOWLIST.indexOf(email) < 0) {{
-      setStatus("Email not on Jeff allowlist. Ask Bob to add it after confirm.", "bad");
-      return;
+    setStatus("Checking…", "warn");
+    try {{
+      var res = await fetch("./status.json?ts=" + Date.now(), {{ cache: "no-store" }});
+      var data = await res.json();
+      var v = (data && data.verify) || null;
+      if (!v || !v.sha256 || !v.exp) {{
+        setStatus("No active code. Ask Bob: send dashboard code", "bad");
+        return;
+      }}
+      if (Date.now() > Number(v.exp)) {{
+        setStatus("Code expired. Ask Bob for a new one.", "bad");
+        return;
+      }}
+      if ((v.email || JEFF_EMAIL).toLowerCase() !== JEFF_EMAIL) {{
+        setStatus("Verify config mismatch. Ask Bob.", "bad");
+        return;
+      }}
+      var hex = await sha256Hex(code + ":" + JEFF_EMAIL);
+      if (hex !== String(v.sha256).toLowerCase()) {{
+        setStatus("Wrong code.", "bad");
+        return;
+      }}
+      saveAuth({{ email: JEFF_EMAIL, verifiedAt: new Date().toISOString() }});
+      applyVerified(loadAuth());
+    }} catch (e) {{
+      setStatus("Could not check code. Try again.", "bad");
     }}
-    var code = randCode();
-    var payload = {{ email: email, code: code, createdAt: Date.now() }};
-    sessionStorage.setItem(CHALLENGE_KEY, JSON.stringify(payload));
-    var subject = encodeURIComponent("Bob Ops verify code " + code);
-    var body = encodeURIComponent(
-      "Jeff -- your Bob Ops Dashboard challenge code is:\n\n" + code +
-      "\n\nPaste this code into the dashboard Unlock field.\n" +
-      "(Phase 1 mailto challenge; server mailer next.)\n"
-    );
-    window.location.href = "mailto:" + encodeURIComponent(email) + "?subject=" + subject + "&body=" + body;
-    codeRow.style.display = "flex";
-    setStatus("Mailto opened. Paste the code from the draft/sent mail to unlock.", "warn");
-  }});
-
-  btnConfirm.addEventListener("click", function () {{
-    var typed = (codeEl.value || "").trim().toUpperCase();
-    var raw = sessionStorage.getItem(CHALLENGE_KEY);
-    if (!raw) {{ setStatus("No pending challenge. Click Verify first.", "bad"); return; }}
-    var ch;
-    try {{ ch = JSON.parse(raw); }} catch (e) {{ setStatus("Challenge corrupt. Retry Verify.", "bad"); return; }}
-    if (!typed || typed !== String(ch.code || "").toUpperCase()) {{
-      setStatus("Code mismatch. Check the mailto draft.", "bad");
-      return;
-    }}
-    if (Date.now() - (ch.createdAt || 0) > 30 * 60 * 1000) {{
-      setStatus("Challenge expired. Click Verify again.", "bad");
-      return;
-    }}
-    var auth = {{ email: ch.email, verifiedAt: new Date().toISOString() }};
-    saveAuth(auth);
-    sessionStorage.removeItem(CHALLENGE_KEY);
-    codeEl.value = "";
-    applyVerified(auth);
   }});
 
   btnOut.addEventListener("click", function () {{
     saveAuth(null);
-    sessionStorage.removeItem(CHALLENGE_KEY);
-    codeRow.style.display = "none";
-    setStatus("Signed out. Gated actions locked.", "warn");
+    codeEl.value = "";
+    setStatus("Signed out. Ask Bob for a new code when you need it.", "warn");
     applyVerified(null);
   }});
+
+  var pendingBox = document.getElementById("pending-box");
+  var pendingList = document.getElementById("pending-list");
+
+  function riskClass(r) {{
+    r = (r || "low").toLowerCase();
+    if (r === "high") return "high";
+    if (r === "medium") return "medium";
+    return "low";
+  }}
+
+  function openDecisionIssue(verb, id, title) {{
+    var t = "BOB-" + verb + ": " + id;
+    var body = [
+      "Dashboard control decision",
+      "",
+      "id: " + id,
+      "title: " + (title || id),
+      "decision: " + verb.toLowerCase(),
+      "from: jeffstory007@gmail.com (verified device)",
+      "at: " + new Date().toISOString(),
+      "",
+      "Bob: treat this as a one-shot inbox item. High-risk still needs the draft shown in chat before acting."
+    ].join("\n");
+    var url = "https://github.com/rupret007/bob-ops-dashboard/issues/new?title=" +
+      encodeURIComponent(t) + "&body=" + encodeURIComponent(body);
+    window.open(url, "_blank", "noopener");
+    setStatus(verb + " draft opened on GitHub. Submit the issue while logged in as rupret007.", "warn");
+  }}
+
+  function renderPending(items) {{
+    if (!pendingBox || !pendingList) return;
+    pendingList.innerHTML = "";
+    if (!items || !items.length) {{
+      pendingBox.hidden = !document.body.classList.contains("jeff-verified");
+      if (!pendingBox.hidden) {{
+        pendingList.innerHTML = "<p class=\"pending-help\">Nothing pending. Bob will park new asks here.</p>";
+      }}
+      return;
+    }}
+    pendingBox.hidden = !document.body.classList.contains("jeff-verified");
+    items.forEach(function (it) {{
+      var div = document.createElement("div");
+      div.className = "pending-item";
+      div.innerHTML =
+        "<div class=\"ptitle\"></div>" +
+        "<div class=\"pdetail\"></div>" +
+        "<div class=\"prow\">" +
+          "<span class=\"prisk\"></span>" +
+          "<button type=\"button\" data-dec=\"APPROVE\">Approve</button>" +
+          "<button type=\"button\" class=\"warn\" data-dec=\"HOLD\">Hold</button>" +
+          "<button type=\"button\" class=\"danger\" data-dec=\"DENY\">Deny</button>" +
+        "</div>";
+      div.querySelector(".ptitle").textContent = it.title || it.id;
+      div.querySelector(".pdetail").textContent = it.detail || "";
+      var rk = div.querySelector(".prisk");
+      rk.textContent = (it.risk || "low") + " · " + (it.kind || "ops");
+      rk.classList.add(riskClass(it.risk));
+      div.querySelectorAll("button[data-dec]").forEach(function (b) {{
+        b.addEventListener("click", function () {{
+          openDecisionIssue(b.getAttribute("data-dec"), it.id, it.title);
+        }});
+      }});
+      pendingList.appendChild(div);
+    }});
+  }}
+
+  function loadPending() {{
+    fetch("./status.json?ts=" + Date.now(), {{ cache: "no-store" }})
+      .then(function (r) {{ return r.json(); }})
+      .then(function (data) {{
+        renderPending((data && data.pending) || []);
+      }})
+      .catch(function () {{
+        renderPending([]);
+      }});
+  }}
+
+  var _apply = applyVerified;
+  applyVerified = function (auth) {{
+    _apply(auth);
+    if (document.body.classList.contains("jeff-verified")) loadPending();
+    else if (pendingBox) pendingBox.hidden = true;
+  }};
 
   actions.addEventListener("click", function (ev) {{
     var btn = ev.target.closest("button[data-action]");
@@ -580,6 +666,8 @@ html = f'''<!DOCTYPE html>
     }} else if (act === "mark-reviewed") {{
       localStorage.setItem("bobOpsLastReviewed", new Date().toISOString());
       setStatus("Board marked reviewed locally at " + new Date().toLocaleString(), "ok");
+    }} else if (act === "ask-code") {{
+      setStatus("In Bob chat say: send dashboard code", "warn");
     }}
   }});
 
@@ -691,6 +779,143 @@ html = f'''<!DOCTYPE html>
 </body>
 </html>
 '''
+
+# Preserve verify challenge; fold Jeff's GitHub approve/deny issues; keep a short pending queue.
+prev = {}
+try:
+    prev = json.loads((root / "status.json").read_text())
+except Exception:
+    prev = {}
+
+v = prev.get("verify") if isinstance(prev, dict) else None
+if isinstance(v, dict) and v.get("sha256") and v.get("exp"):
+    try:
+        if int(v["exp"]) > int(time.time() * 1000):
+            status["verify"] = {
+                "email": (v.get("email") or "jeffstory007@gmail.com").lower(),
+                "sha256": str(v["sha256"]).lower(),
+                "exp": int(v["exp"]),
+                "issued_at": v.get("issued_at"),
+            }
+    except Exception:
+        pass
+
+decisions = []
+if isinstance(prev, dict) and isinstance(prev.get("decisions"), list):
+    decisions = [d for d in prev["decisions"] if isinstance(d, dict)]
+
+resolved = set()
+for d in decisions:
+    if d.get("id") and d.get("decision") in ("approve", "deny"):
+        resolved.add(str(d["id"]).lower())
+
+try:
+    raw = subprocess.check_output(
+        [
+            "gh", "issue", "list", "-R", "rupret007/bob-ops-dashboard",
+            "--state", "open", "--limit", "40",
+            "--json", "number,title,author,createdAt,url",
+        ],
+        text=True,
+        stderr=subprocess.DEVNULL,
+    )
+    issues = json.loads(raw or "[]")
+except Exception:
+    issues = []
+
+for iss in issues:
+    title = (iss.get("title") or "").strip()
+    author = ((iss.get("author") or {}).get("login") or "").lower()
+    if author != "rupret007":
+        continue
+    m = re.match(r"^BOB-(APPROVE|DENY|HOLD):\s*([a-z0-9._-]+)\s*$", title, re.I)
+    if not m:
+        continue
+    verb = m.group(1).lower()
+    pid = m.group(2).lower()
+    decision = "approve" if verb == "approve" else ("deny" if verb == "deny" else "hold")
+    entry = {
+        "id": pid,
+        "decision": decision,
+        "issue": iss.get("number"),
+        "url": iss.get("url"),
+        "at": iss.get("createdAt"),
+        "author": author,
+    }
+    decisions = [d for d in decisions if str(d.get("id", "")).lower() != pid]
+    decisions.append(entry)
+    if decision in ("approve", "deny"):
+        resolved.add(pid)
+    try:
+        subprocess.check_call(
+            [
+                "gh", "issue", "close", str(iss["number"]),
+                "-R", "rupret007/bob-ops-dashboard",
+                "--comment", f"Recorded as {decision} for Bob.",
+            ],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+    except Exception:
+        pass
+
+standing = [
+    {
+        "id": "webjam-exploratory",
+        "title": "WebJam tip exploratory click-through",
+        "kind": "jeff-gate",
+        "detail": "You walk the installed tip; Bob keeps the checklist ready.",
+        "risk": "low",
+    },
+    {
+        "id": "dashboard-refresh",
+        "title": "Force dashboard refresh + push",
+        "kind": "ops",
+        "detail": "Safe. Rebuilds status from live gh and pushes Pages.",
+        "risk": "low",
+    },
+    {
+        "id": "adoptiq-cloud-relaunch",
+        "title": "Relaunch AdoptIQ Cloud Agent",
+        "kind": "cloud-agent",
+        "detail": "Needs Cursor on-demand on. Stays inside $10 hard ceiling.",
+        "risk": "medium",
+    },
+    {
+        "id": "codex-goal-launch",
+        "title": "Launch next Codex goal on Mac",
+        "kind": "codex-launch",
+        "detail": "High risk. Bob still shows the exact goal before acting.",
+        "risk": "high",
+    },
+    {
+        "id": "text-send",
+        "title": "Send a drafted text via Andrea",
+        "kind": "text-send",
+        "detail": "High risk. Never auto-send. Draft must already exist.",
+        "risk": "high",
+    },
+]
+
+pending_out = [s for s in standing if s["id"] not in resolved]
+if isinstance(prev, dict) and isinstance(prev.get("pending"), list):
+    for item in prev["pending"]:
+        if not isinstance(item, dict):
+            continue
+        iid = str(item.get("id") or "").lower()
+        if not iid or iid in resolved or any(s["id"] == iid for s in pending_out):
+            continue
+        pending_out.append(item)
+
+status["pending"] = pending_out
+status["decisions"] = decisions[-40:]
+status["control"] = {
+    "mode": "github-issue-inbox",
+    "jeff_github": "rupret007",
+    "jeff_email": "jeffstory007@gmail.com",
+    "prefixes": ["BOB-APPROVE:", "BOB-DENY:", "BOB-HOLD:"],
+    "note": "Verified UI unlocks the panel. Real authority is a GitHub issue from rupret007.",
+}
 
 (root / "status.json").write_text(json.dumps(status, indent=2) + "\n")
 (root / "index.html").write_text(html)

@@ -43,3 +43,13 @@ Client allowlist + mailto challenge unlocks gated actions on-device. Server mail
 ./refresh.sh          # rebuild index.html + status.json from live gh
 ./refresh.sh --push   # rebuild and push to Pages (main / root)
 ```
+
+## Jeff verify + control panel
+
+1. In Bob chat: **send dashboard code**
+2. Bob emails a 6-digit code only to `jeffstory007@gmail.com`
+3. Enter it on the live page to unlock this device
+4. Pending items: **Approve / Hold / Deny** opens a GitHub issue titled `BOB-APPROVE: <id>` (must be logged in as `rupret007`)
+5. Real authority is that GitHub issue, not localStorage
+
+Helper: `python3 issue-dashboard-code.py` then email the printed code and `./refresh.sh --push`.

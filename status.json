@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-08-22T20:26:21.001027-05:00",
-  "generated_at_display": "Sat Aug 22, 2026 \u00b7 8:26 PM CDT",
+  "generated_at": "2026-08-22T20:37:23.822559-05:00",
+  "generated_at_display": "Sat Aug 22, 2026 \u00b7 8:37 PM CDT",
   "timezone": "America/Chicago",
   "owner": "rupret007",
   "dashboard": "bob-ops-dashboard",
@@ -365,5 +365,60 @@
     "story-corner-shelf"
   ],
   "inaccessible": [],
-  "publish_notes": "Public repo -- no secrets, no CSOne customer paths, AdoptIQ high-level only."
+  "publish_notes": "Public repo -- no secrets, no CSOne customer paths, AdoptIQ high-level only.",
+  "verify": {
+    "email": "jeffstory007@gmail.com",
+    "sha256": "64b5452efb8d8a3eda0fd0fc537f9ebb8c4193114aacd1c8939252180fcc053c",
+    "exp": 1787449913779,
+    "issued_at": 1787449013779
+  },
+  "pending": [
+    {
+      "id": "webjam-exploratory",
+      "title": "WebJam tip exploratory click-through",
+      "kind": "jeff-gate",
+      "detail": "You walk the installed tip; Bob keeps the checklist ready.",
+      "risk": "low"
+    },
+    {
+      "id": "dashboard-refresh",
+      "title": "Force dashboard refresh + push",
+      "kind": "ops",
+      "detail": "Safe. Rebuilds status from live gh and pushes Pages.",
+      "risk": "low"
+    },
+    {
+      "id": "adoptiq-cloud-relaunch",
+      "title": "Relaunch AdoptIQ Cloud Agent",
+      "kind": "cloud-agent",
+      "detail": "Needs Cursor on-demand on. Stays inside $10 hard ceiling.",
+      "risk": "medium"
+    },
+    {
+      "id": "codex-goal-launch",
+      "title": "Launch next Codex goal on Mac",
+      "kind": "codex-launch",
+      "detail": "High risk. Bob still shows the exact goal before acting.",
+      "risk": "high"
+    },
+    {
+      "id": "text-send",
+      "title": "Send a drafted text via Andrea",
+      "kind": "text-send",
+      "detail": "High risk. Never auto-send. Draft must already exist.",
+      "risk": "high"
+    }
+  ],
+  "decisions": [],
+  "control": {
+    "mode": "github-issue-inbox",
+    "jeff_github": "rupret007",
+    "jeff_email": "jeffstory007@gmail.com",
+    "prefixes": [
+      "BOB-APPROVE:",
+      "BOB-DENY:",
+      "BOB-HOLD:"
+    ],
+    "note": "Verified UI unlocks the panel. Real authority is a GitHub issue from rupret007."
+  }
 }
