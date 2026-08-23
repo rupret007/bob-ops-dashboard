@@ -1,91 +1,19 @@
 {
-  "generated_at": "2026-08-22T22:12:09.879772-05:00",
-  "generated_at_display": "Sat Aug 22, 2026 \u00b7 10:12 PM CDT",
+  "generated_at": "2026-08-22T22:30:04.165859-05:00",
+  "generated_at_display": "Sat Aug 22, 2026 \u00b7 10:30 PM CDT",
   "timezone": "America/Chicago",
   "owner": "rupret007",
   "dashboard": "bob-ops-dashboard",
   "sections": [
     {
-      "id": "abilities",
-      "title": "Abilities",
-      "projects": [
-        {
-          "name": "Rebuild this board",
-          "status": "green",
-          "chip": "Ability",
-          "notes": "Actions cron every 15m plus ./refresh.sh. Live gh SHAs/CI. No secrets on the public page."
-        },
-        {
-          "name": "Email Unlock codes",
-          "status": "green",
-          "chip": "Ability",
-          "notes": "6-digit OTP only to jeffstory007@gmail.com. Issuer TTL 2h. Refresh must not wipe a still-live verify."
-        },
-        {
-          "name": "Cursor Cloud Agents",
-          "status": "green",
-          "chip": "Ability",
-          "notes": "Repo work in Cursor Cloud. Jeff-gated / cost ceiling. High-level only here."
-        },
-        {
-          "name": "Local Codex goals",
-          "status": "green",
-          "chip": "Ability",
-          "notes": "Mac Codex loop for AdoptIQ and ops lanes. High-risk goals still shown in chat before launch."
-        },
-        {
-          "name": "Texts via Andrea",
-          "status": "jeff-gate",
-          "chip": "After yes",
-          "notes": "After Jeff yes only. Never auto-send. Draft must already exist. No send button on this page."
-        },
-        {
-          "name": "Life-ops / Domino's",
-          "status": "jeff-gate",
-          "chip": "After yes",
-          "notes": "Food, errands, Domino's: chat yes only. Honest: there is no order button on this board."
-        },
-        {
-          "name": "Music producer help",
-          "status": "jeff-gate",
-          "chip": "Jeff-gate",
-          "notes": "Logic Pro is home. Moises / Suno need Jeff login. LogicProMCP needs Jeff GUI grants."
-        },
-        {
-          "name": "Cisco CS desktop (high-level)",
-          "status": "parked",
-          "chip": "High-level",
-          "notes": "AdoptIQ / TACTrack appear as high-level Cisco CS desktop only. No CSOne paths or customer rows."
-        },
-        {
-          "name": "GitHub issue inbox",
-          "status": "jeff-gate",
-          "chip": "Authority",
-          "notes": "BOB-APPROVE / BOB-DENY / BOB-HOLD from rupret007 is the real yes. The board only opens the draft."
-        }
-      ]
-    },
-    {
       "id": "controls",
-      "title": "Controls",
+      "title": "Decisions",
       "projects": [
-        {
-          "name": "Unlock this phone",
-          "status": "jeff-gate",
-          "chip": "Control",
-          "notes": "Enter the emailed 6-digit code in Jeff verify above. Allowlist is jeffstory007@gmail.com only."
-        },
-        {
-          "name": "Approve / Hold / Deny",
-          "status": "jeff-gate",
-          "chip": "Control",
-          "notes": "Unlock first. Pending items open a GitHub issue as rupret007. That issue is the real yes. No silent act."
-        },
         {
           "name": "Copy refresh command",
           "status": "green",
           "chip": "Control",
-          "notes": "Copies ./refresh.sh --push. Does not run it. Safe to copy before Unlock.",
+          "notes": "Copies ./refresh.sh --push. Does not run it.",
           "control_action": "refresh-hint",
           "action_label": "Copy command"
         },
@@ -105,86 +33,6 @@
           "notes": "Local timestamp on this phone only. Does not notify Bob or change GitHub.",
           "control_action": "mark-reviewed",
           "action_label": "Mark reviewed"
-        },
-        {
-          "name": "Ask Bob for a new code",
-          "status": "green",
-          "chip": "Control",
-          "notes": "Say send dashboard code in chat. This page does not send mail.",
-          "control_action": "ask-code",
-          "action_label": "How to ask"
-        }
-      ]
-    },
-    {
-      "id": "features",
-      "title": "Features",
-      "projects": [
-        {
-          "name": "Soft-paint poll",
-          "status": "green",
-          "chip": "Feature",
-          "notes": "Client fetches status.json every 30s (pauses when the tab is hidden). Repaints the board when generated_at changes. No full reload."
-        },
-        {
-          "name": "Agents strip",
-          "status": "green",
-          "chip": "Feature",
-          "notes": "Codex / Cursor / Claude state from a Mac probe. Public fields only. Token-like words redacted."
-        },
-        {
-          "name": "Live shipping chips",
-          "status": "green",
-          "chip": "Feature",
-          "notes": "Green / yellow / red / parked / Jeff-gate from live gh tips, open PRs, and Actions."
-        },
-        {
-          "name": "Cisco high-level",
-          "status": "green",
-          "chip": "Feature",
-          "notes": "AdoptIQ Build 115 and TACTrack as public summaries. No CSOne, no customer paths."
-        },
-        {
-          "name": "Music producer gates",
-          "status": "green",
-          "chip": "Feature",
-          "notes": "Logic home is green. LogicProMCP and Moises / Suno stay Jeff-gate until Jeff grants access."
-        },
-        {
-          "name": "Parked lane",
-          "status": "parked",
-          "chip": "Feature",
-          "notes": "Closet shelf and catalog lanes stay parked unless Jeff unparks."
-        },
-        {
-          "name": "Silence banner",
-          "status": "green",
-          "chip": "Feature",
-          "notes": "If refresh is quiet for ~45m the page warns that chips may be stale."
-        },
-        {
-          "name": "Unlock + cache fallback",
-          "status": "green",
-          "chip": "Feature",
-          "notes": "SHA-256 against status.json.verify. Fail-closed: Jeff email + 64-hex sha. If Pages/Fastly serves a stale empty verify, Unlock tries raw main (no-store)."
-        },
-        {
-          "name": "XSS-safe cards",
-          "status": "green",
-          "chip": "Feature",
-          "notes": "html.escape + safeHref on server render. Soft-paint uses esc/safeHref. ASCII-safe JS (no smart quotes)."
-        },
-        {
-          "name": "Unlock race guards",
-          "status": "green",
-          "chip": "Feature",
-          "notes": "unlockBusy + unlockTouchAt stop iOS double-submit. pollSeq / pendingSeq drop stale fetches. decideBusy gates Approve."
-        },
-        {
-          "name": "Public Pages",
-          "status": "green",
-          "chip": "Feature",
-          "notes": "Free-plan GitHub Pages from main. No secrets, tokens, Keeper material, or private handoff text."
         }
       ]
     },
@@ -360,6 +208,42 @@
       ]
     },
     {
+      "id": "active-agents",
+      "title": "Active agents NOW",
+      "projects": [
+        {
+          "name": "Codex",
+          "status": "green",
+          "chip": "Running",
+          "notes": "AdoptIQ PID 26928 \u00b7 gpt-5.6-sol goals \u00b7 codex-local :3210 ready \u00b7 checked 2026-08-22T20:45:00-05:00",
+          "agent_id": "codex",
+          "agent_state": "running"
+        },
+        {
+          "name": "Cursor",
+          "status": "green",
+          "chip": "Running",
+          "notes": "Cursor.app present and running \u00b7 checked 2026-08-22T20:45:00-05:00",
+          "agent_id": "cursor",
+          "agent_state": "running"
+        },
+        {
+          "name": "Claude",
+          "status": "parked",
+          "chip": "Installed",
+          "notes": "Claude.app + claude 2.1.216 installed \u00b7 checked 2026-08-22T20:45:00-05:00",
+          "agent_id": "claude",
+          "agent_state": "installed"
+        },
+        {
+          "name": "AdoptIQ Cloud Agent",
+          "status": "yellow",
+          "chip": "Yellow",
+          "notes": "Cloud Agent + Build 115 path in flight elsewhere (Cursor Cloud). High-level only."
+        }
+      ]
+    },
+    {
       "id": "cisco",
       "title": "Cisco work",
       "projects": [
@@ -503,38 +387,104 @@
       ]
     },
     {
-      "id": "active-agents",
-      "title": "Active agents NOW",
+      "id": "abilities",
+      "title": "Abilities",
       "projects": [
         {
-          "name": "Codex",
+          "name": "Rebuild this board",
           "status": "green",
-          "chip": "Running",
-          "notes": "AdoptIQ PID 26928 \u00b7 gpt-5.6-sol goals \u00b7 codex-local :3210 ready \u00b7 checked 2026-08-22T20:45:00-05:00",
-          "agent_id": "codex",
-          "agent_state": "running"
+          "chip": "Ability",
+          "notes": "Actions cron every 15m plus ./refresh.sh. Live gh SHAs/CI. No secrets on the public page."
         },
         {
-          "name": "Cursor",
+          "name": "Cursor Cloud Agents",
           "status": "green",
-          "chip": "Running",
-          "notes": "Cursor.app present and running \u00b7 checked 2026-08-22T20:45:00-05:00",
-          "agent_id": "cursor",
-          "agent_state": "running"
+          "chip": "Ability",
+          "notes": "Repo work in Cursor Cloud. Jeff-gated / cost ceiling. High-level only here."
         },
         {
-          "name": "Claude",
+          "name": "Local Codex goals",
+          "status": "green",
+          "chip": "Ability",
+          "notes": "Mac Codex loop for AdoptIQ and ops lanes. High-risk goals still shown in chat before launch."
+        },
+        {
+          "name": "Texts via Andrea",
+          "status": "jeff-gate",
+          "chip": "After yes",
+          "notes": "After Jeff yes only. Never auto-send. Draft must already exist. No send button on this page."
+        },
+        {
+          "name": "Life-ops / Domino's",
+          "status": "jeff-gate",
+          "chip": "After yes",
+          "notes": "Food, errands, Domino's: chat yes only. Honest: there is no order button on this board."
+        },
+        {
+          "name": "Music producer help",
+          "status": "jeff-gate",
+          "chip": "Jeff-gate",
+          "notes": "Logic Pro is home. Moises / Suno need Jeff login. LogicProMCP needs Jeff GUI grants."
+        },
+        {
+          "name": "Cisco CS desktop (high-level)",
           "status": "parked",
-          "chip": "Installed",
-          "notes": "Claude.app + claude 2.1.216 installed \u00b7 checked 2026-08-22T20:45:00-05:00",
-          "agent_id": "claude",
-          "agent_state": "installed"
+          "chip": "High-level",
+          "notes": "AdoptIQ / TACTrack appear as high-level Cisco CS desktop only. No CSOne paths or customer rows."
         },
         {
-          "name": "AdoptIQ Cloud Agent",
-          "status": "yellow",
-          "chip": "Yellow",
-          "notes": "Cloud Agent + Build 115 path in flight elsewhere (Cursor Cloud). High-level only."
+          "name": "GitHub issue inbox",
+          "status": "jeff-gate",
+          "chip": "Authority",
+          "notes": "BOB-APPROVE / BOB-DENY / BOB-HOLD from rupret007 is the real yes. The board only opens the draft."
+        }
+      ]
+    },
+    {
+      "id": "features",
+      "title": "How this board works",
+      "projects": [
+        {
+          "name": "Public board",
+          "status": "green",
+          "chip": "Feature",
+          "notes": "Possession of the public URL is enough. GitHub login rupret007 is the real authority."
+        },
+        {
+          "name": "Soft-paint poll",
+          "status": "green",
+          "chip": "Feature",
+          "notes": "Client fetches status.json every 30s (pauses when the tab is hidden). Repaints the board when generated_at changes. No full reload."
+        },
+        {
+          "name": "Agents strip",
+          "status": "green",
+          "chip": "Feature",
+          "notes": "Codex / Cursor / Claude state from a Mac probe. Public fields only. Token-like words redacted."
+        },
+        {
+          "name": "Silence banner",
+          "status": "green",
+          "chip": "Feature",
+          "notes": "If refresh is quiet for ~45m the page warns that chips may be stale."
+        },
+        {
+          "name": "XSS-safe cards",
+          "status": "green",
+          "chip": "Feature",
+          "notes": "html.escape + safeHref on server render. Soft-paint uses esc/safeHref. ASCII-safe JS (no smart quotes)."
+        },
+        {
+          "name": "Poll / decide race guards",
+          "status": "green",
+          "chip": "Feature",
+          "notes": "pollSeq / pendingSeq drop stale fetches. decideBusy gates Approve / Hold / Deny double-clicks."
+        },
+        {
+          "name": "Public Pages",
+          "status": "green",
+          "chip": "Feature",
+          "notes": "Free-plan GitHub Pages from main. No secrets, tokens, Keeper material, or private handoff text."
         }
       ]
     }
@@ -556,7 +506,7 @@
     "AI-Music-Vault"
   ],
   "publish_notes": "Public repo -- no secrets, no CSOne customer paths, AdoptIQ high-level only.",
-  "refresh_started_ms": 1787454713557,
+  "refresh_started_ms": 1787455787912,
   "agents": [
     {
       "id": "codex",
@@ -581,12 +531,6 @@
     }
   ],
   "agents_source": "file:/workspace/agents-status.json",
-  "verify": {
-    "email": "jeffstory007@gmail.com",
-    "sha256": "d4a656f6ffaf6c6e5ba16d28e26fb9263d808755e70ee6d4bd0ce9a01594e49a",
-    "exp": 1787460582996,
-    "issued_at": 1787453382996
-  },
   "pending": [
     {
       "id": "webjam-exploratory",
@@ -628,12 +572,11 @@
   "control": {
     "mode": "github-issue-inbox",
     "jeff_github": "rupret007",
-    "jeff_email": "jeffstory007@gmail.com",
     "prefixes": [
       "BOB-APPROVE:",
       "BOB-DENY:",
       "BOB-HOLD:"
     ],
-    "note": "Verified UI unlocks the panel. Real authority is a GitHub issue from rupret007."
+    "note": "Public board. Real authority is a GitHub issue from rupret007."
   }
 }

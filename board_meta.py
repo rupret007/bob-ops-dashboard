@@ -1,11 +1,39 @@
 #!/usr/bin/env python3
-"""First-class Abilities / Controls / Features cards (honest, no fake buttons)."""
+"""First-class Abilities / Decisions / How-this-board cards (honest, no fake buttons)."""
 from __future__ import annotations
 
 from typing import Any
 
 FIRST_CLASS_IDS = ("abilities", "controls", "features")
-CONTROL_ACTIONS = frozenset({"refresh-hint", "open-repo", "mark-reviewed", "ask-code"})
+CONTROL_ACTIONS = frozenset({"refresh-hint", "open-repo", "mark-reviewed"})
+OPS_SECTION_ORDER = (
+    "live-shipping",
+    "active-agents",
+    "cisco",
+    "messaging",
+    "music-producer",
+    "parked",
+)
+# Section-type labels -- noisy on phone. Real status chips (Green / Jeff-gate) stay.
+SECTION_TYPE_CHIPS = frozenset({"Ability", "Control", "Feature"})
+
+
+def drop_leftover_verify(status: Any) -> bool:
+    """Fail-closed: never keep an OTP verify block on a public board."""
+    if not isinstance(status, dict) or "verify" not in status:
+        return False
+    status.pop("verify", None)
+    return True
+
+
+def visible_chip(project: Any) -> str | None:
+    """Return a status chip label, or None when it would only repeat the section name."""
+    if not isinstance(project, dict):
+        return None
+    label = str(project.get("chip") or "").strip()
+    if not label or label in SECTION_TYPE_CHIPS:
+        return None
+    return label
 
 
 def _card(
@@ -43,10 +71,6 @@ def first_class_sections() -> list[dict[str, Any]]:
                 _card(
                     "Rebuild this board",
                     "Actions cron every 15m plus ./refresh.sh. Live gh SHAs/CI. No secrets on the public page.",
-                ),
-                _card(
-                    "Email Unlock codes",
-                    "6-digit OTP only to jeffstory007@gmail.com. Issuer TTL 2h. Refresh must not wipe a still-live verify.",
                 ),
                 _card(
                     "Cursor Cloud Agents",
@@ -90,23 +114,11 @@ def first_class_sections() -> list[dict[str, Any]]:
         },
         {
             "id": "controls",
-            "title": "Controls",
+            "title": "Decisions",
             "projects": [
                 _card(
-                    "Unlock this phone",
-                    "Enter the emailed 6-digit code in Jeff verify above. Allowlist is jeffstory007@gmail.com only.",
-                    status="jeff-gate",
-                    chip="Control",
-                ),
-                _card(
-                    "Approve / Hold / Deny",
-                    "Unlock first. Pending items open a GitHub issue as rupret007. That issue is the real yes. No silent act.",
-                    status="jeff-gate",
-                    chip="Control",
-                ),
-                _card(
                     "Copy refresh command",
-                    "Copies ./refresh.sh --push. Does not run it. Safe to copy before Unlock.",
+                    "Copies ./refresh.sh --push. Does not run it.",
                     status="green",
                     chip="Control",
                     control_action="refresh-hint",
@@ -129,20 +141,17 @@ def first_class_sections() -> list[dict[str, Any]]:
                     control_action="mark-reviewed",
                     action_label="Mark reviewed",
                 ),
-                _card(
-                    "Ask Bob for a new code",
-                    "Say send dashboard code in chat. This page does not send mail.",
-                    status="green",
-                    chip="Control",
-                    control_action="ask-code",
-                    action_label="How to ask",
-                ),
             ],
         },
         {
             "id": "features",
-            "title": "Features",
+            "title": "How this board works",
             "projects": [
+                _card(
+                    "Public board",
+                    "Possession of the public URL is enough. GitHub login rupret007 is the real authority.",
+                    chip="Feature",
+                ),
                 _card(
                     "Soft-paint poll",
                     "Client fetches status.json every 30s (pauses when the tab is hidden). Repaints the board when generated_at changes. No full reload.",
@@ -154,34 +163,8 @@ def first_class_sections() -> list[dict[str, Any]]:
                     chip="Feature",
                 ),
                 _card(
-                    "Live shipping chips",
-                    "Green / yellow / red / parked / Jeff-gate from live gh tips, open PRs, and Actions.",
-                    chip="Feature",
-                ),
-                _card(
-                    "Cisco high-level",
-                    "AdoptIQ Build 115 and TACTrack as public summaries. No CSOne, no customer paths.",
-                    chip="Feature",
-                ),
-                _card(
-                    "Music producer gates",
-                    "Logic home is green. LogicProMCP and Moises / Suno stay Jeff-gate until Jeff grants access.",
-                    chip="Feature",
-                ),
-                _card(
-                    "Parked lane",
-                    "Closet shelf and catalog lanes stay parked unless Jeff unparks.",
-                    status="parked",
-                    chip="Feature",
-                ),
-                _card(
                     "Silence banner",
                     "If refresh is quiet for ~45m the page warns that chips may be stale.",
-                    chip="Feature",
-                ),
-                _card(
-                    "Unlock + cache fallback",
-                    "SHA-256 against status.json.verify. Fail-closed: Jeff email + 64-hex sha. If Pages/Fastly serves a stale empty verify, Unlock tries raw main (no-store).",
                     chip="Feature",
                 ),
                 _card(
@@ -190,8 +173,8 @@ def first_class_sections() -> list[dict[str, Any]]:
                     chip="Feature",
                 ),
                 _card(
-                    "Unlock race guards",
-                    "unlockBusy + unlockTouchAt stop iOS double-submit. pollSeq / pendingSeq drop stale fetches. decideBusy gates Approve.",
+                    "Poll / decide race guards",
+                    "pollSeq / pendingSeq drop stale fetches. decideBusy gates Approve / Hold / Deny double-clicks.",
                     chip="Feature",
                 ),
                 _card(
@@ -205,6 +188,8 @@ def first_class_sections() -> list[dict[str, Any]]:
 
 
 def merge_first_class(sections: list[Any] | None) -> list[dict[str, Any]]:
+    """Ops first (decisions, live shipping, agents), then abilities, plumbing last."""
+    fc = {s["id"]: s for s in first_class_sections()}
     rest: list[dict[str, Any]] = []
     for sec in sections or []:
         if not isinstance(sec, dict):
@@ -212,4 +197,20 @@ def merge_first_class(sections: list[Any] | None) -> list[dict[str, Any]]:
         if sec.get("id") in FIRST_CLASS_IDS:
             continue
         rest.append(sec)
-    return first_class_sections() + rest
+    rest_by = {s.get("id"): s for s in rest}
+    out: list[dict[str, Any]] = [fc["controls"]]
+    seen: set[str] = {"controls"}
+    for sid in OPS_SECTION_ORDER:
+        row = rest_by.get(sid)
+        if row:
+            out.append(row)
+            seen.add(str(sid))
+    for sec in rest:
+        sid = str(sec.get("id") or "")
+        if sid in seen:
+            continue
+        out.append(sec)
+        seen.add(sid)
+    out.append(fc["abilities"])
+    out.append(fc["features"])
+    return out
