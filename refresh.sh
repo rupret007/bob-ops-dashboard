@@ -108,7 +108,7 @@ from zoneinfo import ZoneInfo
 
 root = Path(sys.argv[1])
 sys.path.insert(0, str(root))
-from board_meta import CONTROL_ACTIONS, drop_leftover_verify, merge_first_class
+from board_meta import CONTROL_ACTIONS, drop_leftover_verify, merge_first_class, visible_chip
 refresh_started_ms = int(os.environ.get("REFRESH_STARTED_MS") or 0) or int(time.time() * 1000)
 fetched = json.loads(Path(sys.argv[2]).read_text())
 by = {x.get("name") or x.get("full_name","").split("/")[-1]: x for x in fetched}
@@ -471,10 +471,17 @@ def chip_html(st, label):
 
 def ci_badge(ci):
     if not ci:
-        return '<span class="meta">No Actions</span>'
+        return ""
     concl = ci.get("conclusion") or "unknown"
     color = {"success":"#16a34a","failure":"#dc2626","cancelled":"#64748b"}.get(concl, "#ca8a04")
     return f'<span class="ci" style="color:{color}">&#9679; {h(ci.get("name","CI"))}: {h(concl)}</span>'
+
+def pending_shell():
+    return '''<div id="pending-box" class="pending-box">
+        <h3>Pending decisions</h3>
+        <p class="pending-help">Approve / Hold / Deny opens a GitHub issue. Submit while logged in as <code>rupret007</code> -- that login is the real yes.</p>
+        <div id="pending-list"></div>
+      </div>'''
 
 sections_html = []
 
@@ -501,7 +508,11 @@ def agents_strip_html(agents_list):
 for sec in status["sections"]:
     cards = []
     for p in sec["projects"]:
-        chip = chip_html(p.get("status","parked"), p.get("chip", "?"))
+        # Agents strip already shows Codex/Cursor/Claude -- skip duplicate cards.
+        if sec.get("id") == "active-agents" and p.get("agent_id"):
+            continue
+        chip_label = visible_chip(p)
+        chip = chip_html(p.get("status") or "parked", chip_label) if chip_label else ""
         title = h(p.get("name") or "project")
         url = safe_href(p.get("url"))
         title_html = f'<a href="{h(url)}" target="_blank" rel="noopener">{title}</a>' if url else title
@@ -524,22 +535,42 @@ for sec in status["sections"]:
         if p.get("accessible") is False and p.get("repo"):
             bits.append("inaccessible")
         meta = " · ".join(bits)
+        ci = ci_badge(p.get("ci"))
+        rows = ""
+        if meta:
+            rows += f'<div class="row">{meta}</div>'
+        if ci:
+            rows += f'<div class="row">{ci}</div>'
         cards.append(f'''
         <article class="card">
           <header><h3>{title_html}</h3>{chip}</header>
-          <div class="row">{meta}</div>
-          <div class="row">{ci_badge(p.get("ci"))}</div>
+          {rows}
           <p class="notes">{h(p.get("notes",""))}</p>
           {control_btn(p)}
         </article>''')
     strip = ""
     if sec.get("id") == "active-agents":
         strip = agents_strip_html(status.get("agents"))
+    sid = h(sec.get("id") or "")
+    grid = f'<div class="grid">{"".join(cards)}</div>'
+    if sec.get("id") == "controls":
+        body = pending_shell() + grid
+        heading = f'<h2>{h(sec.get("title") or "Decisions")}</h2>'
+    elif sec.get("id") == "features":
+        heading = ""
+        body = (
+            '<details class="how-board"><summary>How this board works</summary>'
+            '<p class="pending-help">Engineer notes -- not the daily ops list.</p>'
+            + grid
+            + "</details>"
+        )
+    else:
+        heading = f'<h2>{h(sec.get("title") or "")}</h2>'
+        body = strip + grid
     sections_html.append(f'''
-    <section id="{h(sec.get("id") or "")}">
-      <h2>{h(sec.get("title") or "")}</h2>
-      {strip}
-      <div class="grid">{''.join(cards)}</div>
+    <section id="{sid}" class="block">
+      {heading}
+      {body}
     </section>''')
 
 
@@ -560,59 +591,56 @@ html = f'''<!DOCTYPE html>
   html,body {{ margin:0; padding:0; background:var(--bg); color:var(--text);
     font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif; line-height:1.45; }}
   a {{ color:var(--link); text-decoration:none; }} a:hover {{ text-decoration:underline; }}
-  .wrap {{ max-width:1100px; margin:0 auto; padding:1.25rem 1rem 3rem; }}
+  .wrap {{ max-width:1100px; margin:0 auto; padding:1.35rem 1.1rem 4rem; }}
   header.hero {{
     background:linear-gradient(145deg,#0a0a0a 0%,#141414 50%,#1a120e 100%);
-    border:1px solid var(--border); border-radius:16px; padding:1.25rem 1.35rem; margin-bottom:1.25rem;
+    border:1px solid var(--border); border-radius:16px; padding:1.35rem 1.4rem 1.5rem; margin-bottom:1.75rem;
     box-shadow:0 0 0 1px rgba(217,119,87,.12), 0 12px 40px rgba(0,0,0,.45);
   }}
-  header.hero h1 {{ margin:0 0 .35rem; font-size:clamp(1.4rem,4vw,1.85rem); }}
+  header.hero h1 {{ margin:0 0 .5rem; font-size:clamp(1.45rem,4vw,1.9rem); }}
   header.hero h1 .mark {{ color:var(--orange); }}
   .sub {{ color:var(--muted); font-size:.95rem; }}
-  .legend {{ display:flex; flex-wrap:wrap; gap:.45rem; margin-top:.9rem; }}
+  .board-note {{ margin:1rem 0 0; color:var(--muted); font-size:.9rem; line-height:1.5; }}
+  .legend {{ display:flex; flex-wrap:wrap; gap:.65rem; margin-top:1.15rem; }}
   .chip {{ display:inline-flex; align-items:center; gap:.35rem; border:1px solid var(--c);
-    background:var(--bg); color:var(--fg); border-radius:999px; padding:.15rem .6rem;
+    background:var(--bg); color:var(--fg); border-radius:999px; padding:.2rem .65rem;
     font-size:.72rem; font-weight:700; text-transform:uppercase; white-space:nowrap; }}
   .chip::before {{ content:""; width:.45rem; height:.45rem; border-radius:50%; background:var(--c); }}
-  nav.toc {{ display:flex; flex-wrap:wrap; gap:.5rem; margin:0 0 1.25rem; }}
+  nav.toc {{ display:flex; flex-wrap:wrap; gap:.65rem; margin:0 0 2rem; }}
   nav.toc a {{ background:var(--panel); border:1px solid var(--border); color:var(--text);
-    padding:.4rem .7rem; border-radius:999px; font-size:.82rem; }}
+    padding:.5rem .8rem; border-radius:999px; font-size:.82rem; }}
   nav.toc a:hover {{ border-color:var(--orange); color:var(--orange); }}
-  section {{ margin-bottom:1.75rem; }}
-  section h2 {{ margin:0 0 .75rem; font-size:1.15rem; border-left:3px solid var(--accent); padding-left:.6rem; }}
-  .grid {{ display:grid; grid-template-columns:repeat(auto-fill,minmax(260px,1fr)); gap:.75rem; }}
+  section.block {{ margin:0 0 3.5rem; padding-top:2.1rem; border-top:1px solid var(--border); }}
+  section.block:first-child {{ border-top:0; padding-top:0; }}
+  section h2 {{ margin:0 0 1.15rem; font-size:1.28rem; border-left:3px solid var(--accent);
+    padding:.15rem 0 .15rem .7rem; letter-spacing:.01em; }}
+  .grid {{ display:grid; grid-template-columns:1fr; gap:1.25rem; }}
   .card {{ background:var(--panel); border:1px solid var(--border); border-radius:14px;
-    padding:.9rem 1rem; display:flex; flex-direction:column; gap:.35rem; min-height:140px; }}
+    padding:1.15rem 1.2rem; display:flex; flex-direction:column; gap:.5rem; }}
   .card:hover {{ border-color:#3f3f3f; }}
-  .card header {{ display:flex; justify-content:space-between; align-items:flex-start; gap:.5rem; }}
-  .card h3 {{ margin:0; font-size:1.02rem; }}
+  .card header {{ display:flex; justify-content:space-between; align-items:flex-start; gap:.65rem; }}
+  .card h3 {{ margin:0; font-size:1.05rem; }}
   .row {{ color:var(--muted); font-size:.8rem; }}
-  .notes {{ margin:.25rem 0 0; color:#e5e5e5; font-size:.88rem; }}
+  .notes {{ margin:.15rem 0 0; color:#e5e5e5; font-size:.9rem; line-height:1.45; }}
   code {{ background:var(--panel2); padding:.05rem .35rem; border-radius:6px; font-size:.78rem; }}
   .ci {{ font-weight:600; font-size:.8rem; }}
-  footer {{ margin-top:2rem; padding-top:1rem; border-top:1px solid var(--border); color:var(--muted); font-size:.82rem; }}
+  footer {{ margin-top:1rem; padding-top:1.5rem; border-top:1px solid var(--border); color:var(--muted); font-size:.82rem; }}
   .banner {{ background:var(--orange-dim); border:1px solid rgba(217,119,87,.45); color:#f5c4b3;
-    border-radius:12px; padding:.75rem 1rem; margin-bottom:1rem; font-size:.88rem; }}
-  .hero-panel {{
-    margin-top:1rem; padding:1rem; border-radius:12px; border:1px solid rgba(217,119,87,.35);
-    background:#101010;
-  }}
-  .hero-panel p {{ margin:.25rem 0 .75rem; color:var(--muted); font-size:.85rem; }}
-  .hero-panel .status {{
-    font-size:.82rem; min-height:1.25em; margin-top:.45rem;
+    border-radius:12px; padding:.9rem 1.1rem; margin-bottom:1.5rem; font-size:.88rem; }}
+  .status {{
+    font-size:.82rem; min-height:1.25em; margin-top:.55rem;
     color:var(--muted); letter-spacing:.01em;
   }}
-  .hero-panel .status.ok {{ color:var(--ok); }}
-  .hero-panel .status.bad {{ color:#f87171; }}
-  .hero-panel .status.warn {{ color:var(--warn); }}
-  .hero-panel .status.hint {{ color:var(--muted); }}
-  .actions {{ margin-top:.75rem; display:flex; gap:.5rem; flex-wrap:wrap; }}
-  .pending-box {{ margin-top:.9rem; padding-top:.75rem; border-top:1px solid var(--border); }}
+  .status.ok {{ color:var(--ok); }}
+  .status.bad {{ color:#f87171; }}
+  .status.warn {{ color:var(--warn); }}
+  .status.hint {{ color:var(--muted); }}
+  .pending-box {{ margin:0 0 1.5rem; }}
   .pending-box[hidden] {{ display:none !important; }}
-  .pending-box h3 {{ margin:0 0 .35rem; font-size:.95rem; color:var(--orange); }}
-  .pending-help {{ margin:0 0 .6rem; color:var(--muted); font-size:.8rem; }}
+  .pending-box h3 {{ margin:0 0 .45rem; font-size:1.02rem; color:var(--orange); }}
+  .pending-help {{ margin:0 0 .85rem; color:var(--muted); font-size:.86rem; line-height:1.45; }}
   .pending-item {{
-    border:1px solid var(--border); border-radius:10px; padding:.65rem .75rem; margin:.45rem 0;
+    border:1px solid var(--border); border-radius:12px; padding:.9rem 1rem; margin:.85rem 0;
     background:#0d0d0d;
   }}
   .pending-item .ptitle {{ font-weight:600; margin:0 0 .2rem; }}
@@ -624,15 +652,16 @@ html = f'''<!DOCTYPE html>
   .pending-item .prisk.high {{ border-color:#dc2626; color:#fca5a5; }}
   .pending-item .prisk.medium {{ border-color:#ca8a04; color:#fde68a; }}
   .pending-item .prisk.low {{ border-color:#16a34a; color:#86efac; }}
-  .pending-item .prow {{ display:flex; flex-wrap:wrap; gap:.4rem; }}
+  .pending-item .prow {{ display:flex; flex-wrap:wrap; gap:.55rem; }}
+  .pending-item button {{
+    background:#1c1c1c; color:var(--text); border:1px solid var(--border);
+    border-radius:8px; padding:.5rem .8rem; font-size:.82rem; cursor:pointer;
+    min-height:44px; touch-action:manipulation;
+  }}
+  .pending-item button:hover {{ border-color:var(--orange); color:var(--orange); }}
   .pending-item button.warn {{ border-color:#ca8a04; }}
   .pending-item button.danger {{ border-color:#dc2626; color:#fecaca; }}
-  .actions button {{
-    background:#1c1c1c; color:var(--text); border:1px solid var(--border);
-    border-radius:8px; padding:.45rem .75rem; font-size:.82rem; cursor:pointer;
-  }}
-  .actions button:hover {{ border-color:var(--orange); color:var(--orange); }}
-  .live-stamp {{ display:flex; flex-wrap:wrap; align-items:center; gap:.45rem; margin-top:.35rem; }}
+  .live-stamp {{ display:flex; flex-wrap:wrap; align-items:center; gap:.45rem; margin-top:.55rem; }}
   .live-dot {{ width:.55rem; height:.55rem; border-radius:50%; background:var(--orange);
     box-shadow:0 0 0 0 rgba(217,119,87,.55); animation:pulse 2s infinite; }}
   .live-dot.stale {{ background:#64748b; animation:none; }}
@@ -650,7 +679,7 @@ html = f'''<!DOCTYPE html>
   #board {{ min-height:2rem; }}
   .agents-strip {{
     display:flex; flex-wrap:wrap; gap:.5rem; align-items:center;
-    margin:0 0 .85rem; padding:.65rem .75rem; border-radius:12px;
+    margin:0 0 1.35rem; padding:.85rem .9rem; border-radius:12px;
     background:var(--panel); border:1px solid var(--border);
   }}
   .agents-strip .agents-label {{
@@ -675,6 +704,17 @@ html = f'''<!DOCTYPE html>
     min-height:44px; touch-action:manipulation;
   }}
   .card .ctrl button:hover {{ border-color:var(--orange); color:var(--orange); }}
+  .how-board {{ margin:0; }}
+  .how-board summary {{
+    cursor:pointer; font-size:1.2rem; font-weight:700; color:var(--orange);
+    padding:.35rem 0 0.85rem; list-style:outside disclosure-closed;
+  }}
+  .how-board .grid {{ margin-top:.35rem; }}
+  @media (min-width:720px) {{
+    .wrap {{ padding:1.75rem 1.35rem 4.5rem; }}
+    section.block {{ margin-bottom:4.25rem; padding-top:2.6rem; }}
+    .grid {{ grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); gap:1.5rem; }}
+  }}
 </style>
 </head>
 <body>
@@ -686,27 +726,15 @@ html = f'''<!DOCTYPE html>
     <div class="legend">
       {chip_html("green","Green")}{chip_html("yellow","Yellow")}{chip_html("red","Red")}{chip_html("parked","Parked")}{chip_html("jeff-gate","Jeff-gate")}
     </div>
-    <div class="hero-panel" id="public-panel">
-      <p>Public board -- Approve opens a GitHub issue; submit while logged in as <code>rupret007</code>.</p>
-      <div class="status hint" id="panel-status">URL possession is enough. GitHub login is the real authority.</div>
-      <div class="actions" id="board-actions">
-        <button type="button" data-action="refresh-hint">Copy refresh command</button>
-        <button type="button" data-action="open-repo">Open dashboard repo</button>
-        <button type="button" data-action="mark-reviewed">Mark board reviewed</button>
-      </div>
-      <div id="pending-box" class="pending-box">
-        <h3>Pending for you</h3>
-        <p class="pending-help">Approve opens a GitHub issue as <code>rupret007</code>. That login is the real yes. High-risk items still show the draft in chat before Bob acts.</p>
-        <div id="pending-list"></div>
-      </div>
-    </div>
+    <p class="board-note">Public board -- Approve opens a GitHub issue; submit while logged in as <code>rupret007</code>.</p>
+    <div class="status hint" id="panel-status"></div>
   </header>
   <div class="banner">Public status page -- no secrets, tokens, CSOne customer paths, or private handoff text. AdoptIQ is high-level Cisco CS desktop summary only. Theme: Claude orange (#d97757) on black.</div>
   <div id="silence-banner" role="alert" aria-live="assertive"></div>
   <nav class="toc">
-    <a href="#abilities">Abilities</a><a href="#controls">Controls</a><a href="#features">Features</a>
-    <a href="#live-shipping">Live shipping</a><a href="#cisco">Cisco</a><a href="#messaging">Messaging</a>
-    <a href="#music-producer">Music producer</a><a href="#parked">Parked</a><a href="#active-agents">Active agents</a>
+    <a href="#controls">Decisions</a><a href="#live-shipping">Live shipping</a><a href="#active-agents">Agents</a>
+    <a href="#cisco">Cisco</a><a href="#messaging">Messaging</a><a href="#music-producer">Music</a>
+    <a href="#parked">Parked</a><a href="#abilities">Abilities</a><a href="#features">How this board works</a>
   </nav>
   <div id="board">
   {''.join(sections_html)}
@@ -721,10 +749,15 @@ html = f'''<!DOCTYPE html>
 (function () {{
   // Public board: URL is enough. Real yes is a GitHub issue from rupret007.
   var statusEl = document.getElementById("panel-status");
-  var pendingBox = document.getElementById("pending-box");
-  var pendingList = document.getElementById("pending-list");
   var decideBusy = {{}};
   var pendingSeq = 0;
+
+  function pendingEls() {{
+    return {{
+      box: document.getElementById("pending-box"),
+      list: document.getElementById("pending-list")
+    }};
+  }}
 
   // Drop the retired device flag. Not a login and never consulted.
   try {{ localStorage.removeItem("bobOpsJeffAuth_v1"); }} catch (e) {{}}
@@ -773,11 +806,12 @@ html = f'''<!DOCTYPE html>
   }}
 
   function renderPending(items) {{
-    if (!pendingBox || !pendingList) return;
-    pendingBox.hidden = false;
-    pendingList.innerHTML = "";
+    var els = pendingEls();
+    if (!els.box || !els.list) return;
+    els.box.hidden = false;
+    els.list.innerHTML = "";
     if (!items || !items.length) {{
-      pendingList.innerHTML = '<p class="pending-help">Nothing pending. Bob will park new asks here.</p>';
+      els.list.innerHTML = '<p class="pending-help">Nothing pending. Bob will park new asks here.</p>';
       return;
     }}
     items.forEach(function (it) {{
@@ -805,7 +839,7 @@ html = f'''<!DOCTYPE html>
           setTimeout(function () {{ b.disabled = false; }}, 2000);
         }});
       }});
-      pendingList.appendChild(div);
+      els.list.appendChild(div);
     }});
   }}
 
@@ -939,10 +973,21 @@ html = f'''<!DOCTYPE html>
   }}
 
   function ciBadge(ci) {{
-    if (!ci) return '<span class="meta">No Actions</span>';
+    if (!ci) return "";
     var concl = ci.conclusion || "unknown";
     var color = ({{ success: "#16a34a", failure: "#dc2626", cancelled: "#64748b" }})[concl] || "#ca8a04";
     return '<span class="ci" style="color:' + color + '">\\u25cf ' + esc(ci.name || "CI") + ': ' + esc(concl) + '</span>';
+  }}
+  var SECTION_TYPE_CHIPS = {{ Ability: 1, Control: 1, Feature: 1 }};
+  function visibleChipLabel(p) {{
+    var label = String((p && p.chip) || "").trim();
+    if (!label || SECTION_TYPE_CHIPS[label]) return "";
+    return label;
+  }}
+  function pendingShell() {{
+    return '<div id="pending-box" class="pending-box"><h3>Pending decisions</h3>' +
+      '<p class="pending-help">Approve / Hold / Deny opens a GitHub issue. Submit while logged in as <code>rupret007</code> -- that login is the real yes.</p>' +
+      '<div id="pending-list"></div></div>';
   }}
 
   function showSilence(msg) {{
@@ -1010,8 +1055,9 @@ html = f'''<!DOCTYPE html>
     data.sections.forEach(function (sec) {{
       var cards = "";
       (sec.projects || []).forEach(function (p) {{
-        var st = p.status || "parked";
-        var chip = chipHtml(st, p.chip || "?");
+        if (sec.id === "active-agents" && p.agent_id) return;
+        var chipLabel = visibleChipLabel(p);
+        var chip = chipLabel ? chipHtml(p.status || "parked", chipLabel) : "";
         var title = p.name || "project";
         var href = safeHref(p.url);
         var titleHtml = href
@@ -1026,15 +1072,30 @@ html = f'''<!DOCTYPE html>
         }}
         if (p.private) bits.push("private");
         if (p.accessible === false && p.repo) bits.push("inaccessible");
+        var rows = "";
+        if (bits.length) rows += '<div class="row">' + bits.join(" \\u00b7 ") + "</div>";
+        var ci = ciBadge(p.ci);
+        if (ci) rows += '<div class="row">' + ci + "</div>";
         cards += '<article class="card"><header><h3>' + titleHtml + '</h3>' + chip +
-          '</header><div class="row">' + bits.join(" \\u00b7 ") + '</div><div class="row">' +
-          ciBadge(p.ci) + '</div><p class="notes">' + esc(p.notes || "") + '</p>' +
-          controlBtnHtml(p) + '</article>';
+          "</header>" + rows + '<p class="notes">' + esc(p.notes || "") + "</p>" +
+          controlBtnHtml(p) + "</article>";
       }});
       var strip = "";
       if (sec.id === "active-agents") strip = agentsStripHtml(data.agents || []);
-      html += '<section id="' + esc(sec.id || "") + '"><h2>' + esc(sec.title || "") +
-        '</h2>' + strip + '<div class="grid">' + cards + '</div></section>';
+      var grid = '<div class="grid">' + cards + "</div>";
+      var heading = "";
+      var body = "";
+      if (sec.id === "controls") {{
+        heading = "<h2>" + esc(sec.title || "Decisions") + "</h2>";
+        body = pendingShell() + grid;
+      }} else if (sec.id === "features") {{
+        body = '<details class="how-board"><summary>How this board works</summary>' +
+          '<p class="pending-help">Engineer notes -- not the daily ops list.</p>' + grid + "</details>";
+      }} else {{
+        heading = "<h2>" + esc(sec.title || "") + "</h2>";
+        body = strip + grid;
+      }}
+      html += '<section id="' + esc(sec.id || "") + '" class="block">' + heading + body + "</section>";
     }});
     boardEl.innerHTML = html;
     if (fetchedLine && Array.isArray(data.fetched_repos)) {{

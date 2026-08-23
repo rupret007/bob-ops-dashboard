@@ -1,11 +1,21 @@
 #!/usr/bin/env python3
-"""First-class Abilities / Controls / Features cards (honest, no fake buttons)."""
+"""First-class Abilities / Decisions / How-this-board cards (honest, no fake buttons)."""
 from __future__ import annotations
 
 from typing import Any
 
 FIRST_CLASS_IDS = ("abilities", "controls", "features")
 CONTROL_ACTIONS = frozenset({"refresh-hint", "open-repo", "mark-reviewed"})
+OPS_SECTION_ORDER = (
+    "live-shipping",
+    "active-agents",
+    "cisco",
+    "messaging",
+    "music-producer",
+    "parked",
+)
+# Section-type labels -- noisy on phone. Real status chips (Green / Jeff-gate) stay.
+SECTION_TYPE_CHIPS = frozenset({"Ability", "Control", "Feature"})
 
 
 def drop_leftover_verify(status: Any) -> bool:
@@ -14,6 +24,16 @@ def drop_leftover_verify(status: Any) -> bool:
         return False
     status.pop("verify", None)
     return True
+
+
+def visible_chip(project: Any) -> str | None:
+    """Return a status chip label, or None when it would only repeat the section name."""
+    if not isinstance(project, dict):
+        return None
+    label = str(project.get("chip") or "").strip()
+    if not label or label in SECTION_TYPE_CHIPS:
+        return None
+    return label
 
 
 def _card(
@@ -94,14 +114,8 @@ def first_class_sections() -> list[dict[str, Any]]:
         },
         {
             "id": "controls",
-            "title": "Controls",
+            "title": "Decisions",
             "projects": [
-                _card(
-                    "Approve / Hold / Deny",
-                    "Pending items are public. Each button opens a GitHub issue as rupret007. That issue is the real yes. No silent act.",
-                    status="jeff-gate",
-                    chip="Control",
-                ),
                 _card(
                     "Copy refresh command",
                     "Copies ./refresh.sh --push. Does not run it.",
@@ -131,7 +145,7 @@ def first_class_sections() -> list[dict[str, Any]]:
         },
         {
             "id": "features",
-            "title": "Features",
+            "title": "How this board works",
             "projects": [
                 _card(
                     "Public board",
@@ -146,27 +160,6 @@ def first_class_sections() -> list[dict[str, Any]]:
                 _card(
                     "Agents strip",
                     "Codex / Cursor / Claude state from a Mac probe. Public fields only. Token-like words redacted.",
-                    chip="Feature",
-                ),
-                _card(
-                    "Live shipping chips",
-                    "Green / yellow / red / parked / Jeff-gate from live gh tips, open PRs, and Actions.",
-                    chip="Feature",
-                ),
-                _card(
-                    "Cisco high-level",
-                    "AdoptIQ Build 115 and TACTrack as public summaries. No CSOne, no customer paths.",
-                    chip="Feature",
-                ),
-                _card(
-                    "Music producer gates",
-                    "Logic home is green. LogicProMCP and Moises / Suno stay Jeff-gate until Jeff grants access.",
-                    chip="Feature",
-                ),
-                _card(
-                    "Parked lane",
-                    "Closet shelf and catalog lanes stay parked unless Jeff unparks.",
-                    status="parked",
                     chip="Feature",
                 ),
                 _card(
@@ -195,6 +188,8 @@ def first_class_sections() -> list[dict[str, Any]]:
 
 
 def merge_first_class(sections: list[Any] | None) -> list[dict[str, Any]]:
+    """Ops first (decisions, live shipping, agents), then abilities, plumbing last."""
+    fc = {s["id"]: s for s in first_class_sections()}
     rest: list[dict[str, Any]] = []
     for sec in sections or []:
         if not isinstance(sec, dict):
@@ -202,4 +197,20 @@ def merge_first_class(sections: list[Any] | None) -> list[dict[str, Any]]:
         if sec.get("id") in FIRST_CLASS_IDS:
             continue
         rest.append(sec)
-    return first_class_sections() + rest
+    rest_by = {s.get("id"): s for s in rest}
+    out: list[dict[str, Any]] = [fc["controls"]]
+    seen: set[str] = {"controls"}
+    for sid in OPS_SECTION_ORDER:
+        row = rest_by.get(sid)
+        if row:
+            out.append(row)
+            seen.add(str(sid))
+    for sec in rest:
+        sid = str(sec.get("id") or "")
+        if sid in seen:
+            continue
+        out.append(sec)
+        seen.add(sid)
+    out.append(fc["abilities"])
+    out.append(fc["features"])
+    return out

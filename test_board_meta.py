@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Fail-closed checks for first-class Abilities / Controls / Features."""
+"""Fail-closed checks for first-class Abilities / Decisions / How-this-board."""
 from __future__ import annotations
 
 import unittest
@@ -10,6 +10,7 @@ from board_meta import (
     drop_leftover_verify,
     first_class_sections,
     merge_first_class,
+    visible_chip,
 )
 
 
@@ -27,9 +28,12 @@ class BoardMetaTests(unittest.TestCase):
 
     def test_no_otp_or_unlock_copy(self):
         blob = str(first_class_sections()).lower()
-        for bad in ("unlock", "otp", "6-digit", "one-time", "sha256", "localstorage gate"):
+        for bad in ("unlock", "otp", "6-digit", "one-time", "sha256", "localstorage gate", "how to ask"):
             self.assertNotIn(bad, blob)
         self.assertNotIn("jeffstory007@gmail.com", blob)
+        names = [p["name"] for s in first_class_sections() for p in s["projects"]]
+        self.assertNotIn("Ask Bob for a new code", names)
+        self.assertNotIn("Email Unlock codes", names)
 
     def test_control_actions_have_no_ask_code(self):
         self.assertEqual(CONTROL_ACTIONS, frozenset({"refresh-hint", "open-repo", "mark-reviewed"}))
@@ -45,13 +49,22 @@ class BoardMetaTests(unittest.TestCase):
                 if "domino" in notes or ("andrea" in notes and "text" in notes):
                     self.assertNotIn("control_action", p)
 
-    def test_merge_prepends_and_dedupes(self):
-        old = [{"id": "abilities", "title": "stale"}, {"id": "live-shipping", "title": "Live"}]
+    def test_merge_ops_first_then_abilities_features(self):
+        old = [
+            {"id": "abilities", "title": "stale"},
+            {"id": "live-shipping", "title": "Live"},
+            {"id": "parked", "title": "Parked"},
+            {"id": "active-agents", "title": "Agents"},
+        ]
         out = merge_first_class(old)
-        self.assertEqual(out[0]["id"], "abilities")
-        self.assertEqual(out[0]["title"], "Abilities")
+        ids = [s["id"] for s in out]
+        self.assertEqual(ids[0], "controls")
+        self.assertEqual(out[0]["title"], "Decisions")
+        self.assertEqual(ids[1], "live-shipping")
+        self.assertEqual(ids[2], "active-agents")
+        self.assertEqual(ids[-2], "abilities")
+        self.assertEqual(ids[-1], "features")
         self.assertEqual([s["id"] for s in out if s["id"] == "abilities"], ["abilities"])
-        self.assertEqual(out[-1]["id"], "live-shipping")
 
     def test_honest_authority(self):
         blob = str(first_class_sections())
@@ -69,6 +82,14 @@ class BoardMetaTests(unittest.TestCase):
         self.assertIn("decideBusy", blob)
         self.assertNotIn("unlockBusy", blob)
         self.assertNotIn("64-hex", blob)
+
+    def test_visible_chip_hides_section_type_labels(self):
+        self.assertIsNone(visible_chip({"chip": "Control", "status": "green"}))
+        self.assertIsNone(visible_chip({"chip": "Feature"}))
+        self.assertIsNone(visible_chip({"chip": "Ability"}))
+        self.assertEqual(visible_chip({"chip": "Jeff-gate"}), "Jeff-gate")
+        self.assertEqual(visible_chip({"chip": "Green"}), "Green")
+        self.assertIsNone(visible_chip({}))
 
     def test_drop_leftover_verify_fail_closed(self):
         status = {

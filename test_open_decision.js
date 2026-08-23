@@ -49,6 +49,8 @@ function run() {
     "btn-confirm-code",
     "jeff-code",
     "ask-code",
+    "How to ask",
+    "Ask Bob for a new code",
     "loadUnlockStatus",
     "hasUnlockVerify",
     "unlockBusy",

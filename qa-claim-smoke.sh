@@ -86,6 +86,9 @@ for n in (
     ">Unlock<",
     "Jeff verify",
     "ask-code",
+    "How to ask",
+    "Ask Bob for a new code",
+    "Email Unlock codes",
     "6-digit code",
     "one-time code",
     "verified device",
@@ -131,6 +134,15 @@ if grep -E 'id="pending-box"[^>]*\bhidden\b' "$INDEX"; then
 fi
 grep -q 'Public board -- Approve opens a GitHub issue' "$INDEX" || fail "public-board note missing"
 grep -q 'BOB-APPROVE' "$INDEX" || fail "BOB-APPROVE missing"
+grep -q 'How this board works' "$INDEX" || fail "collapsed how-board missing"
+grep -q 'class="how-board"' "$INDEX" || fail "how-board details missing"
+grep -q 'section.block' "$INDEX" || fail "section.block spacing missing"
+if grep -q 'No Actions' "$INDEX"; then
+  fail "redundant No Actions chrome still on page"
+fi
+if grep -q 'How to ask' "$INDEX" || grep -q 'Ask Bob for a new code' "$INDEX"; then
+  fail "ask-code leftover still on page"
+fi
 pass "public-board markers present"
 
 # 5) Generator must keep XSS/race guards and drop verify
@@ -306,6 +318,10 @@ if 'id="btn-confirm-code"' in html or ">Unlock<" in html:
     raise SystemExit("generated page still has Unlock UI")
 if "function doUnlock" in html:
     raise SystemExit("generated page still has doUnlock")
+if "No Actions" in html:
+    raise SystemExit("generated page still has No Actions chrome")
+if "how-board" not in html:
+    raise SystemExit("generated page missing collapsed how-board")
 print("refresh.sh e2e stripped leftover verify")
 PY
   pass "refresh.sh e2e stripped leftover verify"
@@ -313,25 +329,42 @@ else
   echo "SKIP: refresh.sh e2e (gh not available)"
 fi
 
-# 11) first-class Abilities / Controls / Features on the draft page
-for id in abilities controls features; do
+# 11) Decisions first, plumbing Features collapsed
+for id in abilities controls features live-shipping active-agents; do
   grep -q "id=\"$id\"" "$INDEX" || fail "index.html missing section #$id"
   grep -q "href=\"#$id\"" "$INDEX" || fail "index.html TOC missing #$id"
 done
 grep -q 'href="#abilities"' "$REFRESH" || fail "refresh.sh TOC missing abilities"
-python3 - "$INDEX" <<'PY' || fail "first-class sections honesty"
+python3 - "$INDEX" <<'PY' || fail "ops-first / collapsed features honesty"
 from pathlib import Path
 import sys
 html = Path(sys.argv[1]).read_text()
-for needle in ("Abilities", "Controls", "Features", "No send button", "no order button"):
+for needle in ("Decisions", "Live shipping", "How this board works", "No send button", "no order button"):
     if needle not in html:
         raise SystemExit("missing " + needle)
+if "<details" not in html or "how-board" not in html:
+    raise SystemExit("features must be collapsed details")
+# Soft-paint must not lead the default phone view (only inside collapsed details).
+pre = html.split('<details class="how-board">', 1)[0]
+if "Soft-paint poll" in pre:
+    raise SystemExit("plumbing Features leaked above collapsed details")
+if "Agents strip" in pre:
+    raise SystemExit("Agents strip Feature card leaked above collapsed details")
 if "javascript:" in html.lower():
     raise SystemExit("javascript url in page")
 if "6-digit" in html or "Jeff verify" in html:
     raise SystemExit("OTP copy still on page")
-print("first-class sections present")
+board = html.split('id="board"', 1)[-1]
+# First board section should be decisions/controls, not Features.
+idx_c = board.find('id="controls"')
+idx_f = board.find('id="features"')
+idx_l = board.find('id="live-shipping"')
+if idx_c < 0 or idx_l < 0 or idx_f < 0:
+    raise SystemExit("missing ordered sections")
+if not (idx_c < idx_l < idx_f):
+    raise SystemExit("board order must be decisions, live shipping, then how-board")
+print("ops-first sections present")
 PY
-pass "Abilities / Controls / Features present"
+pass "ops-first board + collapsed how-board"
 
 echo "ALL SMOKES PASSED (static). Public board -- GitHub login is the real yes."

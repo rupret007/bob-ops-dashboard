@@ -7,7 +7,7 @@ Public, mobile-friendly status board for projects Bob is working on (Jeff Story 
 ## What's here
 
 - `index.html` -- human dashboard (Claude orange `#d97757` on near-black `#0a0a0a`)
-- First-class sections: **Abilities** (what Bob can do), **Controls** (what Jeff can do), **Features** (what the board is)
+- Phone-first board: **Decisions** (pending Approve/Hold/Deny), **Live shipping**, **Agents**, then the other ops lanes. **Abilities** sit lower. Engineer notes are behind collapsed **How this board works**.
 - `status.json` -- machine-readable snapshot (client polls every ~30s)
 - `.github/workflows/refresh-dashboard.yml` -- Actions cron every 15 minutes
 - No secrets, tokens, CSOne customer paths, Keeper material, or private handoff text
