@@ -202,7 +202,8 @@ function run() {
   });
   opened.length = 0;
   clicks.length = 0;
-  windowObj.open = function () {
+  windowObj.open = function (url, target, feat) {
+    opened.push({ url: String(url), target: target, feat: feat });
     return null;
   };
   openDecisionIssue("APPROVE", "text-send", "Send a drafted text via Andrea");
