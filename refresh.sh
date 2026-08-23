@@ -108,8 +108,7 @@ from zoneinfo import ZoneInfo
 
 root = Path(sys.argv[1])
 sys.path.insert(0, str(root))
-from board_meta import CONTROL_ACTIONS, merge_first_class
-from preserve_verify import apply_preserved_verify
+from board_meta import CONTROL_ACTIONS, drop_leftover_verify, merge_first_class
 refresh_started_ms = int(os.environ.get("REFRESH_STARTED_MS") or 0) or int(time.time() * 1000)
 fetched = json.loads(Path(sys.argv[2]).read_text())
 by = {x.get("name") or x.get("full_name","").split("/")[-1]: x for x in fetched}
@@ -594,44 +593,20 @@ html = f'''<!DOCTYPE html>
   footer {{ margin-top:2rem; padding-top:1rem; border-top:1px solid var(--border); color:var(--muted); font-size:.82rem; }}
   .banner {{ background:var(--orange-dim); border:1px solid rgba(217,119,87,.45); color:#f5c4b3;
     border-radius:12px; padding:.75rem 1rem; margin-bottom:1rem; font-size:.88rem; }}
-  .auth {{
+  .hero-panel {{
     margin-top:1rem; padding:1rem; border-radius:12px; border:1px solid rgba(217,119,87,.35);
     background:#101010;
   }}
-  .auth h2 {{ margin:0 0 .4rem; font-size:1rem; border:0; padding:0; color:var(--orange); }}
-  .auth p {{ margin:.25rem 0 .75rem; color:var(--muted); font-size:.85rem; }}
-  .auth-row {{ display:flex; flex-wrap:wrap; gap:.5rem; align-items:center; margin-bottom:.5rem; }}
-  .auth input[type="email"], .auth input[type="text"] {{
-    flex:1 1 180px; min-width:160px; background:#0a0a0a; color:var(--text);
-    border:1px solid var(--border); border-radius:8px; padding:.5rem .65rem; font-size:.9rem;
-  }}
-  .auth input:focus {{ outline:1px solid var(--orange); border-color:var(--orange); }}
-  .auth button {{
-    background:var(--orange); color:#0a0a0a; border:0; border-radius:8px;
-    padding:.5rem .9rem; font-weight:700; font-size:.85rem; cursor:pointer;
-  }}
-  .auth button.secondary {{ background:transparent; color:var(--orange); border:1px solid var(--orange); }}
-  .auth button:disabled {{ opacity:.45; cursor:not-allowed; }}
-  .auth .status {{
+  .hero-panel p {{ margin:.25rem 0 .75rem; color:var(--muted); font-size:.85rem; }}
+  .hero-panel .status {{
     font-size:.82rem; min-height:1.25em; margin-top:.45rem;
     color:var(--muted); letter-spacing:.01em;
   }}
-  .auth .status.ok {{ color:var(--ok); }}
-  .auth .status.bad {{ color:#f87171; }}
-  .auth .status.warn {{ color:var(--warn); }}
-  .auth .status.hint {{ color:var(--muted); }}
-  #btn-confirm-code {{
-    min-height:44px; min-width:6.5rem; touch-action:manipulation;
-    cursor:pointer; -webkit-tap-highlight-color:transparent;
-  }}
-  #jeff-code {{
-    min-height:44px; font-size:1.05rem; letter-spacing:.14em;
-    font-variant-numeric:tabular-nums;
-  }}
-  .auth-row {{ align-items:stretch; }}
-  .auth button.secondary {{ min-height:44px; touch-action:manipulation; }}
-  .actions {{ margin-top:.75rem; display:none; gap:.5rem; flex-wrap:wrap; }}
-  .actions.open {{ display:flex; }}
+  .hero-panel .status.ok {{ color:var(--ok); }}
+  .hero-panel .status.bad {{ color:#f87171; }}
+  .hero-panel .status.warn {{ color:var(--warn); }}
+  .hero-panel .status.hint {{ color:var(--muted); }}
+  .actions {{ margin-top:.75rem; display:flex; gap:.5rem; flex-wrap:wrap; }}
   .pending-box {{ margin-top:.9rem; padding-top:.75rem; border-top:1px solid var(--border); }}
   .pending-box[hidden] {{ display:none !important; }}
   .pending-box h3 {{ margin:0 0 .35rem; font-size:.95rem; color:var(--orange); }}
@@ -657,8 +632,6 @@ html = f'''<!DOCTYPE html>
     border-radius:8px; padding:.45rem .75rem; font-size:.82rem; cursor:pointer;
   }}
   .actions button:hover {{ border-color:var(--orange); color:var(--orange); }}
-  body:not(.jeff-verified) .gated {{ opacity:.55; }}
-  body.jeff-verified .gated {{ opacity:1; box-shadow:inset 0 0 0 1px rgba(217,119,87,.25); }}
   .live-stamp {{ display:flex; flex-wrap:wrap; align-items:center; gap:.45rem; margin-top:.35rem; }}
   .live-dot {{ width:.55rem; height:.55rem; border-radius:50%; background:var(--orange);
     box-shadow:0 0 0 0 rgba(217,119,87,.55); animation:pulse 2s infinite; }}
@@ -713,24 +686,17 @@ html = f'''<!DOCTYPE html>
     <div class="legend">
       {chip_html("green","Green")}{chip_html("yellow","Yellow")}{chip_html("red","Red")}{chip_html("parked","Parked")}{chip_html("jeff-gate","Jeff-gate")}
     </div>
-    <div class="auth" id="auth-panel">
-      <h2>Jeff verify</h2>
-      <p>Code goes to <strong>jeffstory007@gmail.com</strong>. Enter it below to unlock this device.</p>
-      <div class="auth-row" id="code-row">
-        <input id="jeff-code" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="6" placeholder="6-digit code" autocomplete="one-time-code" enterkeyhint="done"/>
-        <button type="button" id="btn-confirm-code">Unlock</button>
-        <button type="button" id="btn-sign-out" class="secondary" style="display:none">Sign out</button>
-      </div>
-      <div class="status hint" id="auth-status">Unlocked actions stay on this phone only</div>
-      <div class="actions" id="jeff-actions">
+    <div class="hero-panel" id="public-panel">
+      <p>Public board -- Approve opens a GitHub issue; submit while logged in as <code>rupret007</code>.</p>
+      <div class="status hint" id="panel-status">URL possession is enough. GitHub login is the real authority.</div>
+      <div class="actions" id="board-actions">
         <button type="button" data-action="refresh-hint">Copy refresh command</button>
         <button type="button" data-action="open-repo">Open dashboard repo</button>
         <button type="button" data-action="mark-reviewed">Mark board reviewed</button>
-        <button type="button" data-action="ask-code">Ask Bob for a new code</button>
       </div>
-      <div id="pending-box" class="pending-box" hidden>
+      <div id="pending-box" class="pending-box">
         <h3>Pending for you</h3>
-        <p class="pending-help">Approve opens a GitHub issue as you (<code>rupret007</code>). That is the real yes. High-risk items still show the draft here in chat before Bob acts.</p>
+        <p class="pending-help">Approve opens a GitHub issue as <code>rupret007</code>. That login is the real yes. High-risk items still show the draft in chat before Bob acts.</p>
         <div id="pending-list"></div>
       </div>
     </div>
@@ -753,162 +719,21 @@ html = f'''<!DOCTYPE html>
 </div>
 <script>
 (function () {{
-  // Simple+safe: fixed Jeff email. Bob emails a one-time code; page checks SHA-256 against status.json.verify.
-  // Pages/Fastly caches status.json ~max-age 600; raw main is the bust if Pages has no verify.
-  var JEFF_EMAIL = "jeffstory007@gmail.com";
-  var STORAGE_KEY = "bobOpsJeffAuth_v1";
-  var RAW_STATUS_URL = "https://raw.githubusercontent.com/rupret007/bob-ops-dashboard/main/status.json";
-
-  var codeEl = document.getElementById("jeff-code");
-  var statusEl = document.getElementById("auth-status");
-  var actions = document.getElementById("jeff-actions");
-  var btnConfirm = document.getElementById("btn-confirm-code");
-  var btnOut = document.getElementById("btn-sign-out");
-  if (!codeEl || !statusEl || !actions || !btnConfirm || !btnOut) return;
-  var unlockBusy = false;
-  var unlockTouchAt = 0;
+  // Public board: URL is enough. Real yes is a GitHub issue from rupret007.
+  var statusEl = document.getElementById("panel-status");
+  var pendingBox = document.getElementById("pending-box");
+  var pendingList = document.getElementById("pending-list");
   var decideBusy = {{}};
   var pendingSeq = 0;
 
-  function hasUnlockVerify(data) {{
-    var v = data && data.verify;
-    return !!(v && v.sha256 && v.exp);
-  }}
-
-  async function fetchJsonNoStore(url, fetchFn) {{
-    fetchFn = fetchFn || fetch;
-    var res = await fetchFn(url, {{ cache: "no-store" }});
-    if (!res.ok) throw new Error("status " + res.status);
-    return res.json();
-  }}
-
-  async function loadUnlockStatus(fetchFn) {{
-    fetchFn = fetchFn || fetch;
-    var pagesUrl = "./status.json?ts=" + Date.now();
-    var rawUrl = RAW_STATUS_URL + "?ts=" + Date.now();
-    try {{
-      var pages = await fetchJsonNoStore(pagesUrl, fetchFn);
-      if (hasUnlockVerify(pages)) return pages;
-    }} catch (e) {{
-      // Pages miss, HTTP error, or stale/null verify -- try raw main (no-store).
-    }}
-    return fetchJsonNoStore(rawUrl, fetchFn);
-  }}
+  // Drop the retired device flag. Not a login and never consulted.
+  try {{ localStorage.removeItem("bobOpsJeffAuth_v1"); }} catch (e) {{}}
 
   function setStatus(msg, kind) {{
+    if (!statusEl) return;
     statusEl.textContent = msg || "";
     statusEl.className = "status " + (kind || "hint");
   }}
-  function loadAuth() {{
-    try {{ return JSON.parse(localStorage.getItem(STORAGE_KEY) || "null"); }}
-    catch (e) {{ return null; }}
-  }}
-  function saveAuth(obj) {{
-    if (!obj) localStorage.removeItem(STORAGE_KEY);
-    else localStorage.setItem(STORAGE_KEY, JSON.stringify(obj));
-  }}
-  async function sha256Hex(text) {{
-    var data = new TextEncoder().encode(text);
-    var buf = await crypto.subtle.digest("SHA-256", data);
-    return Array.from(new Uint8Array(buf)).map(function (b) {{
-      return ("0" + b.toString(16)).slice(-2);
-    }}).join("");
-  }}
-  function applyVerified(auth) {{
-    var ok = !!(auth && auth.email === JEFF_EMAIL && auth.verifiedAt);
-    document.body.classList.toggle("jeff-verified", ok);
-    actions.classList.toggle("open", ok);
-    btnOut.style.display = ok ? "" : "none";
-    codeEl.disabled = ok;
-    btnConfirm.disabled = ok;
-    if (ok) {{
-      setStatus("Unlocked on this phone", "ok");
-      document.querySelectorAll(".card").forEach(function (c) {{
-        var chip = c.querySelector(".chip");
-        if (chip && /jeff-gate/i.test(chip.textContent)) c.classList.add("gated");
-      }});
-    }} else {{
-      document.querySelectorAll(".card.gated").forEach(function (c) {{ c.classList.remove("gated"); }});
-      if (!statusEl.textContent) setStatus("Unlocked actions stay on this phone only", "hint");
-    }}
-  }}
-
-  async function doUnlock() {{
-    if (unlockBusy || btnConfirm.disabled) return;
-    var code = (codeEl.value || "").replace(/\s+/g, "");
-    if (!/^\d{{6}}$/.test(code)) {{
-      setStatus("Need all 6 digits", "bad");
-      return;
-    }}
-    setStatus("Checking...", "warn");
-    if (!window.crypto || !crypto.subtle) {{
-      setStatus("This browser cannot verify here. Try Safari again.", "bad");
-      return;
-    }}
-    unlockBusy = true;
-    btnConfirm.disabled = true;
-    try {{
-      var data = await loadUnlockStatus();
-      var v = (data && data.verify) || null;
-      if (!v || !v.sha256 || !v.exp) {{
-        setStatus("No code active yet. Ask Bob for one.", "bad");
-        return;
-      }}
-      if (Date.now() > Number(v.exp)) {{
-        setStatus("That code expired. Ask Bob for a new one.", "bad");
-        return;
-      }}
-      if (String(v.email || "").toLowerCase() !== JEFF_EMAIL) {{
-        setStatus("Verify mismatch. Ask Bob.", "bad");
-        return;
-      }}
-      var want = String(v.sha256).toLowerCase();
-      if (!/^[0-9a-f]{{64}}$/.test(want)) {{
-        setStatus("Verify mismatch. Ask Bob.", "bad");
-        return;
-      }}
-      var hex = await sha256Hex(code + ":" + JEFF_EMAIL);
-      if (hex !== want) {{
-        setStatus("That code does not match. Try again.", "bad");
-        return;
-      }}
-      saveAuth({{ email: JEFF_EMAIL, verifiedAt: new Date().toISOString() }});
-      applyVerified(loadAuth());
-    }} catch (e) {{
-      setStatus("Could not reach status. Pull to refresh, then Unlock.", "bad");
-    }} finally {{
-      unlockBusy = false;
-      if (!document.body.classList.contains("jeff-verified")) btnConfirm.disabled = false;
-    }}
-  }}
-
-  btnConfirm.addEventListener("click", function (ev) {{
-    ev.preventDefault();
-    if (Date.now() - unlockTouchAt < 800) return;
-    doUnlock();
-  }});
-  btnConfirm.addEventListener("touchend", function (ev) {{
-    if (btnConfirm.disabled) return;
-    ev.preventDefault();
-    unlockTouchAt = Date.now();
-    doUnlock();
-  }}, {{ passive: false }});
-  codeEl.addEventListener("keydown", function (ev) {{
-    if (ev.key === "Enter") {{
-      ev.preventDefault();
-      doUnlock();
-    }}
-  }});
-
-  btnOut.addEventListener("click", function () {{
-    saveAuth(null);
-    codeEl.value = "";
-    setStatus("Signed out", "hint");
-    applyVerified(null);
-  }});
-
-  var pendingBox = document.getElementById("pending-box");
-  var pendingList = document.getElementById("pending-list");
 
   function riskClass(r) {{
     r = (r || "low").toLowerCase();
@@ -935,9 +760,10 @@ html = f'''<!DOCTYPE html>
       "id: " + pid,
       "title: " + String(title || pid).slice(0, 160),
       "decision: " + verb.toLowerCase(),
-      "from: jeffstory007@gmail.com (verified device)",
+      "from: public board",
       "at: " + new Date().toISOString(),
       "",
+      "Submit this issue while logged in as rupret007. That GitHub login is the real yes.",
       "Bob: treat this as a one-shot inbox item. High-risk still needs the draft shown in chat before acting."
     ].join(String.fromCharCode(10));
     var url = "https://github.com/rupret007/bob-ops-dashboard/issues/new?title=" +
@@ -948,15 +774,12 @@ html = f'''<!DOCTYPE html>
 
   function renderPending(items) {{
     if (!pendingBox || !pendingList) return;
+    pendingBox.hidden = false;
     pendingList.innerHTML = "";
     if (!items || !items.length) {{
-      pendingBox.hidden = !document.body.classList.contains("jeff-verified");
-      if (!pendingBox.hidden) {{
-        pendingList.innerHTML = '<p class="pending-help">Nothing pending. Bob will park new asks here.</p>';
-      }}
+      pendingList.innerHTML = '<p class="pending-help">Nothing pending. Bob will park new asks here.</p>';
       return;
     }}
-    pendingBox.hidden = !document.body.classList.contains("jeff-verified");
     items.forEach(function (it) {{
       var div = document.createElement("div");
       div.className = "pending-item";
@@ -1003,14 +826,7 @@ html = f'''<!DOCTYPE html>
       }});
   }}
 
-  var _apply = applyVerified;
-  applyVerified = function (auth) {{
-    _apply(auth);
-    if (document.body.classList.contains("jeff-verified")) loadPending();
-    else if (pendingBox) pendingBox.hidden = true;
-  }};
-
-  var CONTROL_ACTIONS = {{ "refresh-hint": 1, "open-repo": 1, "mark-reviewed": 1, "ask-code": 1 }};
+  var CONTROL_ACTIONS = {{ "refresh-hint": 1, "open-repo": 1, "mark-reviewed": 1 }};
   function handleJeffAction(act) {{
     if (!CONTROL_ACTIONS[act]) return;
     if (act === "refresh-hint") {{
@@ -1027,8 +843,6 @@ html = f'''<!DOCTYPE html>
     }} else if (act === "mark-reviewed") {{
       localStorage.setItem("bobOpsLastReviewed", new Date().toISOString());
       setStatus("Board marked reviewed locally at " + new Date().toLocaleString(), "ok");
-    }} else if (act === "ask-code") {{
-      setStatus("Say send dashboard code in chat", "hint");
     }}
   }}
   document.addEventListener("click", function (ev) {{
@@ -1040,9 +854,9 @@ html = f'''<!DOCTYPE html>
     handleJeffAction(act);
   }});
 
-  applyVerified(loadAuth());
+  loadPending();
   window.addEventListener("bob-ops-painted", function () {{
-    applyVerified(loadAuth());
+    loadPending();
   }});
 }})();
 
@@ -1111,7 +925,7 @@ html = f'''<!DOCTYPE html>
     if (/[\\s<>"']/.test(s)) return "";
     return s;
   }}
-  var PAINT_CONTROL_ACTIONS = {{ "refresh-hint": 1, "open-repo": 1, "mark-reviewed": 1, "ask-code": 1 }};
+  var PAINT_CONTROL_ACTIONS = {{ "refresh-hint": 1, "open-repo": 1, "mark-reviewed": 1 }};
   function controlBtnHtml(p) {{
     var act = String((p && p.control_action) || "");
     if (!PAINT_CONTROL_ACTIONS[act]) return "";
@@ -1263,7 +1077,7 @@ html = f'''<!DOCTYPE html>
         var changed = !!(next && known && next !== known);
         applyStamp(data);
         if (changed) {{
-          // Soft-paint from JSON - keeps verify localStorage, no flashy full reload.
+          // Soft-paint from JSON -- no full reload. Controls/pending stay public.
           renderBoard(data);
         }}
         paint();
@@ -1304,18 +1118,16 @@ html = f'''<!DOCTYPE html>
 </html>
 '''
 
-# Preserve verify using refresh_started_ms (not preserve-time now).
-# Fail-closed allowlist lives in preserve_verify.normalize_verify.
-# Keep this exact string for the PR #1 smoke gate: em == "jeffstory007@gmail.com"
-# Do not restore exp-greater-than-now as the keep gate (15m/20s wipe race).
+# Public board: never emit OTP verify. Fail-closed on leftover hashes.
 prev = {}
 try:
     prev = json.loads((root / "status.json").read_text())
 except Exception:
     prev = {}
-apply_preserved_verify(
-    status, prev, now_ms=refresh_started_ms, refresh_started_ms=refresh_started_ms, log=print
-)
+if drop_leftover_verify(prev):
+    print("ignored previous verify challenge (public board, no OTP)")
+if drop_leftover_verify(status):
+    print("drop leftover verify: public board has no OTP gate")
 
 decisions = []
 if isinstance(prev, dict) and isinstance(prev.get("decisions"), list):
@@ -1429,10 +1241,11 @@ status["decisions"] = decisions[-40:]
 status["control"] = {
     "mode": "github-issue-inbox",
     "jeff_github": "rupret007",
-    "jeff_email": "jeffstory007@gmail.com",
     "prefixes": ["BOB-APPROVE:", "BOB-DENY:", "BOB-HOLD:"],
-    "note": "Verified UI unlocks the panel. Real authority is a GitHub issue from rupret007.",
+    "note": "Public board. Real authority is a GitHub issue from rupret007.",
 }
+if drop_leftover_verify(status):
+    print("drop leftover verify at write (fail-closed)")
 
 # Atomic status.json write (uptime-pulse pattern): tmp + replace.
 _status_tmp = root / "status.json.tmp"
@@ -1461,15 +1274,11 @@ if [[ $PUSH -eq 1 ]]; then
   gh repo clone "$OWNER/bob-ops-dashboard" "$WORK" -- --quiet
   mkdir -p "$WORK/.github/workflows"
   cp "$ROOT/index.html" "$ROOT/status.json" "$ROOT/README.md" "$ROOT/refresh.sh" "$WORK/"
-  [[ -f "$ROOT/preserve_verify.py" ]] && cp "$ROOT/preserve_verify.py" "$WORK/"
   [[ -f "$ROOT/board_meta.py" ]] && cp "$ROOT/board_meta.py" "$WORK/"
   [[ -f "$ROOT/probe-agents-status.sh" ]] && cp "$ROOT/probe-agents-status.sh" "$WORK/"
   [[ -f "$ROOT/qa-claim-smoke.sh" ]] && cp "$ROOT/qa-claim-smoke.sh" "$WORK/"
-  [[ -f "$ROOT/test_preserve_verify.py" ]] && cp "$ROOT/test_preserve_verify.py" "$WORK/"
   [[ -f "$ROOT/test_board_meta.py" ]] && cp "$ROOT/test_board_meta.py" "$WORK/"
-  [[ -f "$ROOT/test_unlock_fallback.js" ]] && cp "$ROOT/test_unlock_fallback.js" "$WORK/"
-  [[ -f "$ROOT/issue-dashboard-code.py" ]] && cp "$ROOT/issue-dashboard-code.py" "$WORK/"
-  [[ -f "$ROOT/issue_and_prepare_email.py" ]] && cp "$ROOT/issue_and_prepare_email.py" "$WORK/"
+  [[ -f "$ROOT/test_open_decision.js" ]] && cp "$ROOT/test_open_decision.js" "$WORK/"
   # Do not commit agents-status.json by default (Mac-local probe snapshot); refresh merges it when present.
   if [[ -f "$ROOT/.github/workflows/refresh-dashboard.yml" ]]; then
     cp "$ROOT/.github/workflows/refresh-dashboard.yml" "$WORK/.github/workflows/"
@@ -1481,15 +1290,11 @@ if [[ $PUSH -eq 1 ]]; then
   [[ -f "$WORK/qa-claim-smoke.sh" ]] && chmod +x "$WORK/qa-claim-smoke.sh"
   cd "$WORK"
   git add index.html status.json README.md refresh.sh
-  [[ -f preserve_verify.py ]] && git add preserve_verify.py
   [[ -f board_meta.py ]] && git add board_meta.py
   [[ -f probe-agents-status.sh ]] && git add probe-agents-status.sh
   [[ -f qa-claim-smoke.sh ]] && git add qa-claim-smoke.sh
-  [[ -f test_preserve_verify.py ]] && git add test_preserve_verify.py
   [[ -f test_board_meta.py ]] && git add test_board_meta.py
-  [[ -f test_unlock_fallback.js ]] && git add test_unlock_fallback.js
-  [[ -f issue-dashboard-code.py ]] && git add issue-dashboard-code.py
-  [[ -f issue_and_prepare_email.py ]] && git add issue_and_prepare_email.py
+  [[ -f test_open_decision.js ]] && git add test_open_decision.js
   [[ -f .github/workflows/refresh-dashboard.yml ]] && git add .github/workflows/refresh-dashboard.yml
   [[ -f .github/workflows/qa-claim-smoke.yml ]] && git add .github/workflows/qa-claim-smoke.yml
   if git diff --cached --quiet; then

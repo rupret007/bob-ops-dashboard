@@ -5,7 +5,15 @@ from __future__ import annotations
 from typing import Any
 
 FIRST_CLASS_IDS = ("abilities", "controls", "features")
-CONTROL_ACTIONS = frozenset({"refresh-hint", "open-repo", "mark-reviewed", "ask-code"})
+CONTROL_ACTIONS = frozenset({"refresh-hint", "open-repo", "mark-reviewed"})
+
+
+def drop_leftover_verify(status: Any) -> bool:
+    """Fail-closed: never keep an OTP verify block on a public board."""
+    if not isinstance(status, dict) or "verify" not in status:
+        return False
+    status.pop("verify", None)
+    return True
 
 
 def _card(
@@ -43,10 +51,6 @@ def first_class_sections() -> list[dict[str, Any]]:
                 _card(
                     "Rebuild this board",
                     "Actions cron every 15m plus ./refresh.sh. Live gh SHAs/CI. No secrets on the public page.",
-                ),
-                _card(
-                    "Email Unlock codes",
-                    "6-digit OTP only to jeffstory007@gmail.com. Issuer TTL 2h. Refresh must not wipe a still-live verify.",
                 ),
                 _card(
                     "Cursor Cloud Agents",
@@ -93,20 +97,14 @@ def first_class_sections() -> list[dict[str, Any]]:
             "title": "Controls",
             "projects": [
                 _card(
-                    "Unlock this phone",
-                    "Enter the emailed 6-digit code in Jeff verify above. Allowlist is jeffstory007@gmail.com only.",
-                    status="jeff-gate",
-                    chip="Control",
-                ),
-                _card(
                     "Approve / Hold / Deny",
-                    "Unlock first. Pending items open a GitHub issue as rupret007. That issue is the real yes. No silent act.",
+                    "Pending items are public. Each button opens a GitHub issue as rupret007. That issue is the real yes. No silent act.",
                     status="jeff-gate",
                     chip="Control",
                 ),
                 _card(
                     "Copy refresh command",
-                    "Copies ./refresh.sh --push. Does not run it. Safe to copy before Unlock.",
+                    "Copies ./refresh.sh --push. Does not run it.",
                     status="green",
                     chip="Control",
                     control_action="refresh-hint",
@@ -129,20 +127,17 @@ def first_class_sections() -> list[dict[str, Any]]:
                     control_action="mark-reviewed",
                     action_label="Mark reviewed",
                 ),
-                _card(
-                    "Ask Bob for a new code",
-                    "Say send dashboard code in chat. This page does not send mail.",
-                    status="green",
-                    chip="Control",
-                    control_action="ask-code",
-                    action_label="How to ask",
-                ),
             ],
         },
         {
             "id": "features",
             "title": "Features",
             "projects": [
+                _card(
+                    "Public board",
+                    "Possession of the public URL is enough. GitHub login rupret007 is the real authority.",
+                    chip="Feature",
+                ),
                 _card(
                     "Soft-paint poll",
                     "Client fetches status.json every 30s (pauses when the tab is hidden). Repaints the board when generated_at changes. No full reload.",
@@ -180,18 +175,13 @@ def first_class_sections() -> list[dict[str, Any]]:
                     chip="Feature",
                 ),
                 _card(
-                    "Unlock + cache fallback",
-                    "SHA-256 against status.json.verify. Fail-closed: Jeff email + 64-hex sha. If Pages/Fastly serves a stale empty verify, Unlock tries raw main (no-store).",
-                    chip="Feature",
-                ),
-                _card(
                     "XSS-safe cards",
                     "html.escape + safeHref on server render. Soft-paint uses esc/safeHref. ASCII-safe JS (no smart quotes).",
                     chip="Feature",
                 ),
                 _card(
-                    "Unlock race guards",
-                    "unlockBusy + unlockTouchAt stop iOS double-submit. pollSeq / pendingSeq drop stale fetches. decideBusy gates Approve.",
+                    "Poll / decide race guards",
+                    "pollSeq / pendingSeq drop stale fetches. decideBusy gates Approve / Hold / Deny double-clicks.",
                     chip="Feature",
                 ),
                 _card(

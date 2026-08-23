@@ -1,6 +1,6 @@
 name: QA claim smoke
 
-# Fail-closed static gate: node --check, ASCII-safe JS, verify allowlist, XSS helpers.
+# Fail-closed static gate: node --check, ASCII-safe JS, no OTP leftovers, XSS helpers.
 on:
   pull_request:
   push:

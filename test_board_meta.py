@@ -4,7 +4,13 @@ from __future__ import annotations
 
 import unittest
 
-from board_meta import CONTROL_ACTIONS, FIRST_CLASS_IDS, first_class_sections, merge_first_class
+from board_meta import (
+    CONTROL_ACTIONS,
+    FIRST_CLASS_IDS,
+    drop_leftover_verify,
+    first_class_sections,
+    merge_first_class,
+)
 
 
 class BoardMetaTests(unittest.TestCase):
@@ -19,10 +25,15 @@ class BoardMetaTests(unittest.TestCase):
         self.assertIn("no secrets", blob)
         self.assertIn("no csone", blob)
 
-    def test_allowlist_mentioned_not_widened(self):
-        blob = str(first_class_sections())
-        self.assertIn("jeffstory007@gmail.com", blob)
-        self.assertNotIn("@gmail.com", blob.replace("jeffstory007@gmail.com", ""))
+    def test_no_otp_or_unlock_copy(self):
+        blob = str(first_class_sections()).lower()
+        for bad in ("unlock", "otp", "6-digit", "one-time", "sha256", "localstorage gate"):
+            self.assertNotIn(bad, blob)
+        self.assertNotIn("jeffstory007@gmail.com", blob)
+
+    def test_control_actions_have_no_ask_code(self):
+        self.assertEqual(CONTROL_ACTIONS, frozenset({"refresh-hint", "open-repo", "mark-reviewed"}))
+        self.assertNotIn("ask-code", CONTROL_ACTIONS)
 
     def test_no_fake_order_or_send_buttons(self):
         for sec in first_class_sections():
@@ -31,7 +42,7 @@ class BoardMetaTests(unittest.TestCase):
                 if act:
                     self.assertIn(act, CONTROL_ACTIONS)
                 notes = (p.get("notes") or "").lower()
-                if "domino" in notes or "andrea" in notes and "text" in notes:
+                if "domino" in notes or ("andrea" in notes and "text" in notes):
                     self.assertNotIn("control_action", p)
 
     def test_merge_prepends_and_dedupes(self):
@@ -46,14 +57,33 @@ class BoardMetaTests(unittest.TestCase):
         blob = str(first_class_sections())
         self.assertIn("rupret007", blob)
         self.assertIn("BOB-APPROVE", blob)
+        self.assertIn("Possession of the public URL", blob)
+        self.assertNotIn("verified device", blob.lower())
+        self.assertNotIn("Verified UI", blob)
 
-    def test_security_features_from_pr1_survive(self):
+    def test_security_features_from_pr1_survive_without_unlock(self):
         blob = str(first_class_sections())
         self.assertIn("html.escape", blob)
         self.assertIn("safeHref", blob)
-        self.assertIn("unlockBusy", blob)
         self.assertIn("pollSeq", blob)
-        self.assertIn("64-hex", blob)
+        self.assertIn("decideBusy", blob)
+        self.assertNotIn("unlockBusy", blob)
+        self.assertNotIn("64-hex", blob)
+
+    def test_drop_leftover_verify_fail_closed(self):
+        status = {
+            "generated_at": "x",
+            "verify": {
+                "email": "jeffstory007@gmail.com",
+                "sha256": "aa" * 32,
+                "exp": 1,
+            },
+        }
+        self.assertTrue(drop_leftover_verify(status))
+        self.assertNotIn("verify", status)
+        self.assertFalse(drop_leftover_verify(status))
+        self.assertFalse(drop_leftover_verify(None))
+        self.assertFalse(drop_leftover_verify("nope"))
 
 
 if __name__ == "__main__":
