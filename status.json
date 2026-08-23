@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-08-23T02:36:10.456837-05:00",
-  "generated_at_display": "Sun Aug 23, 2026 \u00b7 2:36 AM CDT",
+  "generated_at": "2026-08-23T03:02:07.721389-05:00",
+  "generated_at_display": "Sun Aug 23, 2026 \u00b7 3:02 AM CDT",
   "timezone": "America/Chicago",
   "owner": "rupret007",
   "dashboard": "bob-ops-dashboard",
@@ -58,7 +58,7 @@
           "agent_url": "https://cursor.com/agents/bc-e4bfc7dd-c244-429f-921e-1832592a399d",
           "ci": {
             "name": "WebJam CI",
-            "conclusion": "pending",
+            "conclusion": "in_progress",
             "branch": "master",
             "sha": "c8955a4",
             "created": "2026-08-23T07:22:44Z",
@@ -103,16 +103,16 @@
           "url": "https://github.com/rupret007/StoryBoard",
           "repo_url": "https://github.com/rupret007/StoryBoard",
           "private": false,
-          "status": "green",
-          "chip": "Green",
+          "status": "yellow",
+          "chip": "Yellow",
           "default_branch": "main",
           "tip_sha": "a7d904f",
           "tip_date": "2026-08-23T07:28:07Z",
-          "open_prs": 0,
-          "open_pr_url": null,
-          "open_pr_number": null,
-          "open_pr_draft": false,
-          "agent_url": null,
+          "open_prs": 1,
+          "open_pr_url": "https://github.com/rupret007/StoryBoard/pull/9",
+          "open_pr_number": 9,
+          "open_pr_draft": true,
+          "agent_url": "https://cursor.com/agents/bc-62bc312a-7b7c-493a-82c7-6b8bcfaf1cc3",
           "ci": {
             "name": "Quality",
             "conclusion": "success",
@@ -587,7 +587,7 @@
     "TACTrack"
   ],
   "publish_notes": "Public repo -- no secrets, no CSOne customer paths, AdoptIQ high-level only.",
-  "refresh_started_ms": 1787470551972,
+  "refresh_started_ms": 1787472107017,
   "agents": [
     {
       "id": "codex",
