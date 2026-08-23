@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-08-22T22:30:04.165859-05:00",
-  "generated_at_display": "Sat Aug 22, 2026 \u00b7 10:30 PM CDT",
+  "generated_at": "2026-08-22T22:53:04.709433-05:00",
+  "generated_at_display": "Sat Aug 22, 2026 \u00b7 10:53 PM CDT",
   "timezone": "America/Chicago",
   "owner": "rupret007",
   "dashboard": "bob-ops-dashboard",
@@ -50,13 +50,13 @@
           "default_branch": "master",
           "tip_sha": "ca0d3b3",
           "tip_date": "2026-08-23T03:05:01Z",
-          "open_prs": 0,
+          "open_prs": 1,
           "ci": {
             "name": "WebJam CI",
             "conclusion": "success",
             "branch": "master",
-            "sha": "c51751d",
-            "created": "2026-08-23T00:11:52Z"
+            "sha": "ca0d3b3",
+            "created": "2026-08-23T03:05:04Z"
           },
           "release": "v0.26.0",
           "notes": "PR #21 merged (docs on 5ca6ba5). Release stays v0.26.0 until Jeff names v0.27. Exploratory click-through Jeff-gated.",
@@ -301,7 +301,7 @@
           "default_branch": "main",
           "tip_sha": "3d4657f",
           "tip_date": "2026-08-23T03:04:41Z",
-          "open_prs": 0,
+          "open_prs": 1,
           "ci": {
             "name": "Update token count",
             "conclusion": "skipped",
@@ -506,7 +506,7 @@
     "AI-Music-Vault"
   ],
   "publish_notes": "Public repo -- no secrets, no CSOne customer paths, AdoptIQ high-level only.",
-  "refresh_started_ms": 1787455787912,
+  "refresh_started_ms": 1787457166934,
   "agents": [
     {
       "id": "codex",
@@ -530,7 +530,7 @@
       "checked_at": "2026-08-22T20:45:00-05:00"
     }
   ],
-  "agents_source": "file:/workspace/agents-status.json",
+  "agents_source": "file:/home/runner/work/bob-ops-dashboard/bob-ops-dashboard/agents-status.json",
   "pending": [
     {
       "id": "webjam-exploratory",
