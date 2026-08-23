@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-08-23T00:49:33.085557-05:00",
-  "generated_at_display": "Sun Aug 23, 2026 \u00b7 12:49 AM CDT",
+  "generated_at": "2026-08-23T00:55:17.133156-05:00",
+  "generated_at_display": "Sun Aug 23, 2026 \u00b7 12:55 AM CDT",
   "timezone": "America/Chicago",
   "owner": "rupret007",
   "dashboard": "bob-ops-dashboard",
@@ -45,18 +45,18 @@
           "repo": "rupret007/webjam",
           "url": "https://github.com/rupret007/webjam",
           "private": false,
-          "status": "jeff-gate",
-          "chip": "Jeff-gate",
+          "status": "yellow",
+          "chip": "Yellow",
           "default_branch": "master",
-          "tip_sha": "5280686",
-          "tip_date": "2026-08-23T05:39:28Z",
-          "open_prs": 1,
+          "tip_sha": "4a24c8c",
+          "tip_date": "2026-08-23T05:50:58Z",
+          "open_prs": 0,
           "ci": {
             "name": "WebJam CI",
-            "conclusion": "failure",
+            "conclusion": "in_progress",
             "branch": "master",
-            "sha": "5280686",
-            "created": "2026-08-23T05:39:31Z"
+            "sha": "4a24c8c",
+            "created": "2026-08-23T05:51:01Z"
           },
           "release": "v0.26.0",
           "notes": "PR #21 merged (docs on 5ca6ba5). Release stays v0.26.0 until Jeff names v0.27. Exploratory click-through Jeff-gated.",
@@ -454,7 +454,7 @@
           "name": "Soft-paint poll",
           "status": "green",
           "chip": "Feature",
-          "notes": "Client fetches status.json every 30s (pauses when the tab is hidden). Repaints when board content changes -- not on every 15m Actions timestamp. No full reload."
+          "notes": "Client fetches status.json every 30s (pauses when the tab is hidden). Immediate poll on pageshow / visible. Fetch aborts after 8s. Repaints when board content changes -- not on every 15m Actions timestamp."
         },
         {
           "name": "Agents strip",
@@ -478,7 +478,7 @@
           "name": "Poll / decide race guards",
           "status": "green",
           "chip": "Feature",
-          "notes": "pollSeq / pendingSeq drop stale fetches. decideBusy gates Approve / Hold / Deny double-clicks."
+          "notes": "pollSeq / pendingSeq drop stale fetches. Approve / Hold / Deny are real GitHub links so iOS cannot swallow a popup. decideBusy still debounce double-taps."
         },
         {
           "name": "Public Pages",
@@ -506,7 +506,7 @@
     "TACTrack"
   ],
   "publish_notes": "Public repo -- no secrets, no CSOne customer paths, AdoptIQ high-level only.",
-  "refresh_started_ms": 1787464157874,
+  "refresh_started_ms": 1787464498950,
   "agents": [
     {
       "id": "codex",
@@ -530,7 +530,7 @@
       "checked_at": null
     }
   ],
-  "agents_source": "file:/home/runner/work/bob-ops-dashboard/bob-ops-dashboard/agents-status.json:stale->unknown",
+  "agents_source": "file:/workspace/agents-status.json:stale->unknown",
   "pending": [
     {
       "id": "webjam-exploratory",

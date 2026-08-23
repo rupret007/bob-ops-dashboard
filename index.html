@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8"/>
-<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
 <meta name="color-scheme" content="dark"/>
 <title>Bob Ops Dashboard -- Jeff Story</title>
 <style>
@@ -16,7 +16,7 @@
     font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;
     font-size:16px; line-height:1.4; }
   a { color:var(--link); text-decoration:none; } a:hover { text-decoration:underline; }
-  .wrap { max-width:40rem; margin:0 auto; padding:1rem 1rem calc(3.25rem + env(safe-area-inset-bottom, 0px)); }
+  .wrap { max-width:40rem; margin:0 auto; padding:calc(1rem + env(safe-area-inset-top, 0px)) 1rem calc(3.25rem + env(safe-area-inset-bottom, 0px)); }
   header.pulse { padding:0 0 1rem; margin:0 0 1.35rem; border:0; background:transparent; }
   header.pulse h1 { margin:0; font-size:1.05rem; font-weight:700; letter-spacing:-.01em; }
   header.pulse h1 .mark { color:var(--orange); }
@@ -78,14 +78,18 @@
   .pending-item .prisk.medium { color:#fde68a; }
   .pending-item .prisk.low { color:#86efac; }
   .pending-item .prow { display:grid; grid-template-columns:1fr 1fr 1fr; gap:.4rem; margin-top:.45rem; }
-  .pending-item button, .tools button {
+  .pending-item button, .pending-item a.dec, .tools button {
     background:transparent; color:var(--text); border:1px solid var(--border);
     border-radius:8px; padding:.4rem .35rem; font-size:.78rem; cursor:pointer;
     min-height:44px; touch-action:manipulation; width:100%;
+    display:inline-flex; align-items:center; justify-content:center;
+    text-align:center; text-decoration:none; box-sizing:border-box;
   }
-  .pending-item button:hover, .tools button:hover { border-color:var(--orange); color:var(--orange); }
-  .pending-item button.warn { border-color:#ca8a04; }
-  .pending-item button.danger { border-color:#dc2626; color:#fecaca; }
+  .pending-item button:hover, .pending-item a.dec:hover, .tools button:hover {
+    border-color:var(--orange); color:var(--orange); text-decoration:none;
+  }
+  .pending-item button.warn, .pending-item a.dec.warn { border-color:#ca8a04; }
+  .pending-item button.danger, .pending-item a.dec.danger { border-color:#dc2626; color:#fecaca; }
   .live-stamp { display:flex; flex-wrap:wrap; align-items:center; gap:.4rem; color:var(--muted); font-size:.8rem; }
   .live-stamp .when { color:var(--muted); font-weight:500; }
   .live-dot { width:.5rem; height:.5rem; border-radius:50%; background:var(--orange);
@@ -141,14 +145,14 @@
   <header class="pulse">
     <h1><span class="mark">Bob</span> Ops</h1>
     <div class="pulse-row">
-      <div class="live-stamp" id="live-stamp" data-generated-at="2026-08-23T00:49:33.085557-05:00" data-display="Sun Aug 23, 2026 · 12:49 AM CDT"><span class="live-dot" id="live-dot" aria-hidden="true"></span><span id="freshness">Live - starting</span><span class="when"> · <strong id="updated-display">Sun Aug 23, 2026 · 12:49 AM CDT</strong></span></div>
+      <div class="live-stamp" id="live-stamp" data-generated-at="2026-08-23T00:55:17.133156-05:00" data-display="Sun Aug 23, 2026 · 12:55 AM CDT"><span class="live-dot" id="live-dot" aria-hidden="true"></span><span id="freshness">Live - starting</span><span class="when"> · <strong id="updated-display">Sun Aug 23, 2026 · 12:55 AM CDT</strong></span></div>
       <div id="active-agents"><div class="agents-strip" id="agents-strip"><div class="agent-pill" data-agent-id="codex" data-state="unknown" data-checked-at="" title="No Mac probe in this clone · probe stale (&gt;45m)"><span class="name">Codex</span><span class="chip" style="--c:#525252;--bg:#171717;--fg:#d4d4d4">Unknown</span></div><div class="agent-pill" data-agent-id="cursor" data-state="unknown" data-checked-at="" title="No Mac probe in this clone · probe stale (&gt;45m)"><span class="name">Cursor</span><span class="chip" style="--c:#525252;--bg:#171717;--fg:#d4d4d4">Unknown</span></div><div class="agent-pill" data-agent-id="claude" data-state="unknown" data-checked-at="" title="No Mac probe in this clone · probe stale (&gt;45m)"><span class="name">Claude</span><span class="chip" style="--c:#525252;--bg:#171717;--fg:#d4d4d4">Unknown</span></div></div></div>
     </div>
     <div class="status hint" id="panel-status"></div>
   </header>
   <div id="silence-banner" role="alert" aria-live="assertive"></div>
   <div id="board">
-  <section id="controls" class="block pending"><h2>Decisions</h2><div id="pending-box" class="pending-box"><p class="pending-help">Public board -- Approve opens a GitHub issue as <code>rupret007</code>.</p><div id="pending-list"><div class="pending-item" data-id="codex-goal-launch" data-title="Launch next Codex goal on Mac"><div class="pending-head"><div class="ptitle">Launch next Codex goal on Mac</div><span class="prisk high">high</span></div><div class="pdetail">High risk. Bob still shows the exact goal before acting.</div><div class="prow"><button type="button" data-dec="APPROVE">Approve</button><button type="button" class="warn" data-dec="HOLD">Hold</button><button type="button" class="danger" data-dec="DENY">Deny</button></div></div><div class="pending-item" data-id="text-send" data-title="Send a drafted text via Andrea"><div class="pending-head"><div class="ptitle">Send a drafted text via Andrea</div><span class="prisk high">high</span></div><div class="pdetail">High risk. Never auto-send. Draft must already exist.</div><div class="prow"><button type="button" data-dec="APPROVE">Approve</button><button type="button" class="warn" data-dec="HOLD">Hold</button><button type="button" class="danger" data-dec="DENY">Deny</button></div></div><div class="pending-item" data-id="adoptiq-cloud-relaunch" data-title="Relaunch AdoptIQ Cloud Agent"><div class="pending-head"><div class="ptitle">Relaunch AdoptIQ Cloud Agent</div><span class="prisk medium">medium</span></div><div class="pdetail">Needs Cursor on-demand on. Stays inside $10 hard ceiling.</div><div class="prow"><button type="button" data-dec="APPROVE">Approve</button><button type="button" class="warn" data-dec="HOLD">Hold</button><button type="button" class="danger" data-dec="DENY">Deny</button></div></div><details class="pending-more"><summary>2 lower-risk items</summary><div class="pending-item" data-id="webjam-exploratory" data-title="WebJam tip exploratory click-through"><div class="pending-head"><div class="ptitle">WebJam tip exploratory click-through</div><span class="prisk low">low</span></div><div class="pdetail">You walk the installed tip; Bob keeps the checklist ready.</div><div class="prow"><button type="button" data-dec="APPROVE">Approve</button><button type="button" class="warn" data-dec="HOLD">Hold</button><button type="button" class="danger" data-dec="DENY">Deny</button></div></div><div class="pending-item" data-id="dashboard-refresh" data-title="Force dashboard refresh + push"><div class="pending-head"><div class="ptitle">Force dashboard refresh + push</div><span class="prisk low">low</span></div><div class="pdetail">Safe. Rebuilds status from live gh and pushes Pages.</div><div class="prow"><button type="button" data-dec="APPROVE">Approve</button><button type="button" class="warn" data-dec="HOLD">Hold</button><button type="button" class="danger" data-dec="DENY">Deny</button></div></div></details></div></div></section><section id="live-shipping" class="block primary"><h2>Live shipping</h2><div class="lanes"><article class="lane"><h3><a href="https://github.com/rupret007/webjam" target="_blank" rel="noopener">WebJam</a></h3><div class="lane-end"><span class="chip" style="--c:#d97757;--bg:#2a1510;--fg:#f5c4b3">Jeff-gate</span><span class="signal">v0.26.0</span></div><p class="notes">PR #21 merged (docs on 5ca6ba5). Release stays v0.26.0 until Jeff names v0.27...</p></article><article class="lane"><h3><a href="https://github.com/rupret007/RadDadSite" target="_blank" rel="noopener">RadDadSite</a></h3><div class="lane-end"><span class="chip" style="--c:#ca8a04;--bg:#422006;--fg:#fef08a">Yellow</span><span class="signal">1 open PR</span></div><p class="notes">Tip green typical; draft #6 prod deploy parked/Jeff-gate if still open.</p></article><article class="lane is-quiet"><h3><a href="https://github.com/rupret007/StoryLiner" target="_blank" rel="noopener">StoryLiner</a></h3><div class="lane-end"><span class="chip" style="--c:#16a34a;--bg:#052e16;--fg:#bbf7d0">Green</span></div><p class="notes">PR #1 lint fix merged; confirm main CI from live fetch.</p></article><article class="lane is-quiet"><h3><a href="https://github.com/rupret007/StoryBoard" target="_blank" rel="noopener">StoryBoard</a></h3><div class="lane-end"><span class="chip" style="--c:#16a34a;--bg:#052e16;--fg:#bbf7d0">Green</span></div><p class="notes">Quiet green unless CI says otherwise.</p></article><article class="lane is-quiet"><h3><a href="https://github.com/rupret007/Rad-Dad-Merch" target="_blank" rel="noopener">Rad Dad Merch</a></h3><div class="lane-end"><span class="chip" style="--c:#16a34a;--bg:#052e16;--fg:#bbf7d0">Green</span></div><p class="notes">Merch lane; watch Release integrity.</p></article><article class="lane is-quiet"><h3><a href="https://github.com/rupret007/rad-dad-show-night" target="_blank" rel="noopener">Show Night</a></h3><div class="lane-end"><span class="chip" style="--c:#16a34a;--bg:#052e16;--fg:#bbf7d0">Green</span></div><p class="notes">Show-night run sheet / flyer. No CI is OK.</p></article><article class="lane is-quiet"><h3><a href="https://github.com/rupret007/AI-Music-Vault" target="_blank" rel="noopener">AI Music Vault</a></h3><div class="lane-end"><span class="chip" style="--c:#16a34a;--bg:#052e16;--fg:#bbf7d0">Green</span></div><p class="notes">Private docs/index. High-level only on public page.</p></article><article class="lane is-quiet"><h3><a href="https://github.com/rupret007/Turdanoid" target="_blank" rel="noopener">Turdanoid</a></h3><div class="lane-end"><span class="chip" style="--c:#16a34a;--bg:#052e16;--fg:#bbf7d0">Green</span></div><p class="notes">Tip usually green; stale open PRs -&gt; hygiene.</p></article></div></section><section id="cisco" class="block secondary"><h2>Cisco work</h2><div class="lanes"><article class="lane"><h3>AdoptIQ</h3><div class="lane-end"><span class="chip" style="--c:#ca8a04;--bg:#422006;--fg:#fef08a">Yellow</span></div><p class="notes">Cisco CS desktop -- Build 115 in progress (Codex + Cloud Agent). No secrets on this...</p></article><article class="lane"><h3>TACTrack</h3><div class="lane-end"><span class="chip" style="--c:#ca8a04;--bg:#422006;--fg:#fef08a">Yellow</span></div><p class="notes">Private. High-level only -- CI / open PRs from live fetch.</p></article><article class="lane"><h3>AdoptIQ notes</h3><div class="lane-end"><span class="chip" style="--c:#525252;--bg:#171717;--fg:#d4d4d4">Parked</span></div><p class="notes">High-level only: manager-decision UX + Build 115 candidate path. No CSOne paths...</p></article></div></section><section id="messaging" class="block secondary"><h2>Messaging / Bob infra</h2><div class="lanes"><article class="lane is-quiet"><h3><a href="https://github.com/rupret007/Andrea_NanoBot" target="_blank" rel="noopener">Andrea NanoBot</a></h3><div class="lane-end"><span class="chip" style="--c:#16a34a;--bg:#052e16;--fg:#bbf7d0">Green</span></div><p class="notes">BB AppleScript send preferred. Private API OFF. Approval-fenced sends only.</p></article><article class="lane is-quiet"><h3>Telegram Bot the Bot</h3><div class="lane-end"><span class="chip" style="--c:#16a34a;--bg:#052e16;--fg:#bbf7d0">Green</span></div><p class="notes">Whisper + Chrome mop shipped. Bob front-door via Telegram.</p></article><article class="lane is-quiet"><h3>Codex local goals</h3><div class="lane-end"><span class="chip" style="--c:#16a34a;--bg:#052e16;--fg:#bbf7d0">Green</span></div><p class="notes">goals=true fixed. Local Codex loop for AdoptIQ/ops lanes.</p></article></div></section><section id="music-producer" class="block secondary"><h2>Music producer</h2><div class="lanes"><article class="lane is-quiet"><h3>Logic Pro home</h3><div class="lane-end"><span class="chip" style="--c:#16a34a;--bg:#052e16;--fg:#bbf7d0">Green</span></div><p class="notes">Logic Pro 12.3.1 on Mac mini -- primary producer home.</p></article><article class="lane"><h3>LogicProMCP</h3><div class="lane-end"><span class="chip" style="--c:#d97757;--bg:#2a1510;--fg:#f5c4b3">Jeff-gate</span></div><p class="notes">Installed. Pending Accessibility / Automation GUI grants from Jeff.</p></article><article class="lane"><h3>Moises / Suno</h3><div class="lane-end"><span class="chip" style="--c:#d97757;--bg:#2a1510;--fg:#f5c4b3">Jeff-gate</span></div><p class="notes">Jeff-login gated for stems/covers/demos.</p></article></div></section><section id="parked" class="block secondary"><h2>Parked</h2><div class="lanes"><article class="lane"><h3><a href="https://github.com/rupret007/story-corner-shelf" target="_blank" rel="noopener">Closet shelf</a></h3><div class="lane-end"><span class="chip" style="--c:#525252;--bg:#171717;--fg:#d4d4d4">Parked</span><span class="signal">4 open PRs</span></div><p class="notes">Parked. Open PRs ignored unless Jeff unparks.</p></article><article class="lane"><h3>Stalemate / Trailer Swift</h3><div class="lane-end"><span class="chip" style="--c:#525252;--bg:#171717;--fg:#d4d4d4">Parked</span></div><p class="notes">Catalog/voice feel only -- parked catalog lane.</p></article><article class="lane"><h3><a href="https://github.com/rupret007/RadDadSite/pull/6" target="_blank" rel="noopener">RadDadSite #6</a></h3><div class="lane-end"><span class="chip" style="--c:#525252;--bg:#171717;--fg:#d4d4d4">Parked</span></div><p class="notes">Draft prod deploy -- keep parked pending Che/server facts.</p></article></div></section><section id="abilities" class="block foot"><details class="abilities-foot"><summary>What Bob can do</summary><p class="pending-help">Texts / food after Jeff yes. No send button. Honest: there is no order button on this board.</p><div class="lanes"><article class="lane is-quiet"><h3>Rebuild this board</h3><div class="lane-end"></div><p class="notes">Actions cron every 15m plus ./refresh.sh. Live gh SHAs/CI. No secrets on the public...</p></article><article class="lane is-quiet"><h3>Cursor Cloud Agents</h3><div class="lane-end"></div><p class="notes">Repo work in Cursor Cloud. Jeff-gated / cost ceiling. High-level only here.</p></article><article class="lane is-quiet"><h3>Local Codex goals</h3><div class="lane-end"></div><p class="notes">Mac Codex loop for AdoptIQ and ops lanes. High-risk goals still shown in chat before...</p></article><article class="lane"><h3>Texts via Andrea</h3><div class="lane-end"><span class="chip" style="--c:#d97757;--bg:#2a1510;--fg:#f5c4b3">After yes</span></div><p class="notes">After Jeff yes only. Never auto-send. Draft must already exist. No send button on this...</p></article><article class="lane"><h3>Life-ops / Domino&#x27;s</h3><div class="lane-end"><span class="chip" style="--c:#d97757;--bg:#2a1510;--fg:#f5c4b3">After yes</span></div><p class="notes">Food, errands, Domino&#x27;s: chat yes only. Honest: there is no order button on this board.</p></article><article class="lane"><h3>Music producer help</h3><div class="lane-end"><span class="chip" style="--c:#d97757;--bg:#2a1510;--fg:#f5c4b3">Jeff-gate</span></div><p class="notes">Logic Pro is home. Moises / Suno need Jeff login. LogicProMCP needs Jeff GUI grants.</p></article><article class="lane"><h3>Cisco CS desktop (high-level)</h3><div class="lane-end"><span class="chip" style="--c:#525252;--bg:#171717;--fg:#d4d4d4">High-level</span></div><p class="notes">AdoptIQ / TACTrack appear as high-level Cisco CS desktop only. No CSOne paths or...</p></article><article class="lane"><h3>GitHub issue inbox</h3><div class="lane-end"><span class="chip" style="--c:#d97757;--bg:#2a1510;--fg:#f5c4b3">Authority</span></div><p class="notes">BOB-APPROVE / BOB-DENY / BOB-HOLD from rupret007 is the real yes. The board only opens...</p></article></div></details></section><section id="features" class="block foot"><details class="how-board"><summary>How this board works</summary><p class="pending-help">Engineer notes -- not the daily ops list.</p><p class="pending-help">Public board -- Approve opens a GitHub issue; submit while logged in as <code>rupret007</code>.</p><div class="tools"><button type="button" data-action="refresh-hint">Copy command</button><button type="button" data-action="open-repo">Open repo</button><button type="button" data-action="mark-reviewed">Mark reviewed</button></div><div class="lanes"><article class="lane is-quiet"><h3>Public board</h3><div class="lane-end"></div><p class="notes">Possession of the public URL is enough. GitHub login rupret007 is the real authority.</p></article><article class="lane is-quiet"><h3>Soft-paint poll</h3><div class="lane-end"></div><p class="notes">Client fetches status.json every 30s (pauses when the tab is hidden). Repaints when...</p></article><article class="lane is-quiet"><h3>Agents strip</h3><div class="lane-end"></div><p class="notes">Codex / Cursor / Claude from a Mac probe. Stale or untimestamped probes paint Unknown...</p></article><article class="lane is-quiet"><h3>Silence banner</h3><div class="lane-end"></div><p class="notes">Actions cadence is ~15m. If refresh is quiet for ~45m the page warns that chips may be...</p></article><article class="lane is-quiet"><h3>XSS-safe cards</h3><div class="lane-end"></div><p class="notes">html.escape + safeHref on server render. Soft-paint uses esc/safeHref. ASCII-safe JS...</p></article><article class="lane is-quiet"><h3>Poll / decide race guards</h3><div class="lane-end"></div><p class="notes">pollSeq / pendingSeq drop stale fetches. decideBusy gates Approve / Hold / Deny...</p></article><article class="lane is-quiet"><h3>Public Pages</h3><div class="lane-end"></div><p class="notes">Free-plan GitHub Pages from main. No secrets, tokens, Keeper material, or private...</p></article></div></details></section>
+  <section id="controls" class="block pending"><h2>Decisions</h2><div id="pending-box" class="pending-box"><p class="pending-help">Public board -- Approve opens a GitHub issue as <code>rupret007</code>.</p><div id="pending-list"><div class="pending-item" data-id="codex-goal-launch" data-title="Launch next Codex goal on Mac"><div class="pending-head"><div class="ptitle">Launch next Codex goal on Mac</div><span class="prisk high">high</span></div><div class="pdetail">High risk. Bob still shows the exact goal before acting.</div><div class="prow"><a class="dec" data-dec="APPROVE" href="https://github.com/rupret007/bob-ops-dashboard/issues/new?title=BOB-APPROVE%3A+codex-goal-launch&amp;body=Dashboard+control+decision%0A%0Aid%3A+codex-goal-launch%0Atitle%3A+Launch+next+Codex+goal+on+Mac%0Adecision%3A+approve%0Afrom%3A+public+board%0A%0ASubmit+this+issue+while+logged+in+as+rupret007.+That+GitHub+login+is+the+real+yes.%0ABob%3A+treat+this+as+a+one-shot+inbox+item.+High-risk+still+needs+the+draft+shown+in+chat+before+acting." target="_blank" rel="noopener noreferrer">Approve</a><a class="dec warn" data-dec="HOLD" href="https://github.com/rupret007/bob-ops-dashboard/issues/new?title=BOB-HOLD%3A+codex-goal-launch&amp;body=Dashboard+control+decision%0A%0Aid%3A+codex-goal-launch%0Atitle%3A+Launch+next+Codex+goal+on+Mac%0Adecision%3A+hold%0Afrom%3A+public+board%0A%0ASubmit+this+issue+while+logged+in+as+rupret007.+That+GitHub+login+is+the+real+yes.%0ABob%3A+treat+this+as+a+one-shot+inbox+item.+High-risk+still+needs+the+draft+shown+in+chat+before+acting." target="_blank" rel="noopener noreferrer">Hold</a><a class="dec danger" data-dec="DENY" href="https://github.com/rupret007/bob-ops-dashboard/issues/new?title=BOB-DENY%3A+codex-goal-launch&amp;body=Dashboard+control+decision%0A%0Aid%3A+codex-goal-launch%0Atitle%3A+Launch+next+Codex+goal+on+Mac%0Adecision%3A+deny%0Afrom%3A+public+board%0A%0ASubmit+this+issue+while+logged+in+as+rupret007.+That+GitHub+login+is+the+real+yes.%0ABob%3A+treat+this+as+a+one-shot+inbox+item.+High-risk+still+needs+the+draft+shown+in+chat+before+acting." target="_blank" rel="noopener noreferrer">Deny</a></div></div><div class="pending-item" data-id="text-send" data-title="Send a drafted text via Andrea"><div class="pending-head"><div class="ptitle">Send a drafted text via Andrea</div><span class="prisk high">high</span></div><div class="pdetail">High risk. Never auto-send. Draft must already exist.</div><div class="prow"><a class="dec" data-dec="APPROVE" href="https://github.com/rupret007/bob-ops-dashboard/issues/new?title=BOB-APPROVE%3A+text-send&amp;body=Dashboard+control+decision%0A%0Aid%3A+text-send%0Atitle%3A+Send+a+drafted+text+via+Andrea%0Adecision%3A+approve%0Afrom%3A+public+board%0A%0ASubmit+this+issue+while+logged+in+as+rupret007.+That+GitHub+login+is+the+real+yes.%0ABob%3A+treat+this+as+a+one-shot+inbox+item.+High-risk+still+needs+the+draft+shown+in+chat+before+acting." target="_blank" rel="noopener noreferrer">Approve</a><a class="dec warn" data-dec="HOLD" href="https://github.com/rupret007/bob-ops-dashboard/issues/new?title=BOB-HOLD%3A+text-send&amp;body=Dashboard+control+decision%0A%0Aid%3A+text-send%0Atitle%3A+Send+a+drafted+text+via+Andrea%0Adecision%3A+hold%0Afrom%3A+public+board%0A%0ASubmit+this+issue+while+logged+in+as+rupret007.+That+GitHub+login+is+the+real+yes.%0ABob%3A+treat+this+as+a+one-shot+inbox+item.+High-risk+still+needs+the+draft+shown+in+chat+before+acting." target="_blank" rel="noopener noreferrer">Hold</a><a class="dec danger" data-dec="DENY" href="https://github.com/rupret007/bob-ops-dashboard/issues/new?title=BOB-DENY%3A+text-send&amp;body=Dashboard+control+decision%0A%0Aid%3A+text-send%0Atitle%3A+Send+a+drafted+text+via+Andrea%0Adecision%3A+deny%0Afrom%3A+public+board%0A%0ASubmit+this+issue+while+logged+in+as+rupret007.+That+GitHub+login+is+the+real+yes.%0ABob%3A+treat+this+as+a+one-shot+inbox+item.+High-risk+still+needs+the+draft+shown+in+chat+before+acting." target="_blank" rel="noopener noreferrer">Deny</a></div></div><div class="pending-item" data-id="adoptiq-cloud-relaunch" data-title="Relaunch AdoptIQ Cloud Agent"><div class="pending-head"><div class="ptitle">Relaunch AdoptIQ Cloud Agent</div><span class="prisk medium">medium</span></div><div class="pdetail">Needs Cursor on-demand on. Stays inside $10 hard ceiling.</div><div class="prow"><a class="dec" data-dec="APPROVE" href="https://github.com/rupret007/bob-ops-dashboard/issues/new?title=BOB-APPROVE%3A+adoptiq-cloud-relaunch&amp;body=Dashboard+control+decision%0A%0Aid%3A+adoptiq-cloud-relaunch%0Atitle%3A+Relaunch+AdoptIQ+Cloud+Agent%0Adecision%3A+approve%0Afrom%3A+public+board%0A%0ASubmit+this+issue+while+logged+in+as+rupret007.+That+GitHub+login+is+the+real+yes.%0ABob%3A+treat+this+as+a+one-shot+inbox+item.+High-risk+still+needs+the+draft+shown+in+chat+before+acting." target="_blank" rel="noopener noreferrer">Approve</a><a class="dec warn" data-dec="HOLD" href="https://github.com/rupret007/bob-ops-dashboard/issues/new?title=BOB-HOLD%3A+adoptiq-cloud-relaunch&amp;body=Dashboard+control+decision%0A%0Aid%3A+adoptiq-cloud-relaunch%0Atitle%3A+Relaunch+AdoptIQ+Cloud+Agent%0Adecision%3A+hold%0Afrom%3A+public+board%0A%0ASubmit+this+issue+while+logged+in+as+rupret007.+That+GitHub+login+is+the+real+yes.%0ABob%3A+treat+this+as+a+one-shot+inbox+item.+High-risk+still+needs+the+draft+shown+in+chat+before+acting." target="_blank" rel="noopener noreferrer">Hold</a><a class="dec danger" data-dec="DENY" href="https://github.com/rupret007/bob-ops-dashboard/issues/new?title=BOB-DENY%3A+adoptiq-cloud-relaunch&amp;body=Dashboard+control+decision%0A%0Aid%3A+adoptiq-cloud-relaunch%0Atitle%3A+Relaunch+AdoptIQ+Cloud+Agent%0Adecision%3A+deny%0Afrom%3A+public+board%0A%0ASubmit+this+issue+while+logged+in+as+rupret007.+That+GitHub+login+is+the+real+yes.%0ABob%3A+treat+this+as+a+one-shot+inbox+item.+High-risk+still+needs+the+draft+shown+in+chat+before+acting." target="_blank" rel="noopener noreferrer">Deny</a></div></div><details class="pending-more"><summary>2 lower-risk items</summary><div class="pending-item" data-id="webjam-exploratory" data-title="WebJam tip exploratory click-through"><div class="pending-head"><div class="ptitle">WebJam tip exploratory click-through</div><span class="prisk low">low</span></div><div class="pdetail">You walk the installed tip; Bob keeps the checklist ready.</div><div class="prow"><a class="dec" data-dec="APPROVE" href="https://github.com/rupret007/bob-ops-dashboard/issues/new?title=BOB-APPROVE%3A+webjam-exploratory&amp;body=Dashboard+control+decision%0A%0Aid%3A+webjam-exploratory%0Atitle%3A+WebJam+tip+exploratory+click-through%0Adecision%3A+approve%0Afrom%3A+public+board%0A%0ASubmit+this+issue+while+logged+in+as+rupret007.+That+GitHub+login+is+the+real+yes.%0ABob%3A+treat+this+as+a+one-shot+inbox+item.+High-risk+still+needs+the+draft+shown+in+chat+before+acting." target="_blank" rel="noopener noreferrer">Approve</a><a class="dec warn" data-dec="HOLD" href="https://github.com/rupret007/bob-ops-dashboard/issues/new?title=BOB-HOLD%3A+webjam-exploratory&amp;body=Dashboard+control+decision%0A%0Aid%3A+webjam-exploratory%0Atitle%3A+WebJam+tip+exploratory+click-through%0Adecision%3A+hold%0Afrom%3A+public+board%0A%0ASubmit+this+issue+while+logged+in+as+rupret007.+That+GitHub+login+is+the+real+yes.%0ABob%3A+treat+this+as+a+one-shot+inbox+item.+High-risk+still+needs+the+draft+shown+in+chat+before+acting." target="_blank" rel="noopener noreferrer">Hold</a><a class="dec danger" data-dec="DENY" href="https://github.com/rupret007/bob-ops-dashboard/issues/new?title=BOB-DENY%3A+webjam-exploratory&amp;body=Dashboard+control+decision%0A%0Aid%3A+webjam-exploratory%0Atitle%3A+WebJam+tip+exploratory+click-through%0Adecision%3A+deny%0Afrom%3A+public+board%0A%0ASubmit+this+issue+while+logged+in+as+rupret007.+That+GitHub+login+is+the+real+yes.%0ABob%3A+treat+this+as+a+one-shot+inbox+item.+High-risk+still+needs+the+draft+shown+in+chat+before+acting." target="_blank" rel="noopener noreferrer">Deny</a></div></div><div class="pending-item" data-id="dashboard-refresh" data-title="Force dashboard refresh + push"><div class="pending-head"><div class="ptitle">Force dashboard refresh + push</div><span class="prisk low">low</span></div><div class="pdetail">Safe. Rebuilds status from live gh and pushes Pages.</div><div class="prow"><a class="dec" data-dec="APPROVE" href="https://github.com/rupret007/bob-ops-dashboard/issues/new?title=BOB-APPROVE%3A+dashboard-refresh&amp;body=Dashboard+control+decision%0A%0Aid%3A+dashboard-refresh%0Atitle%3A+Force+dashboard+refresh+%2B+push%0Adecision%3A+approve%0Afrom%3A+public+board%0A%0ASubmit+this+issue+while+logged+in+as+rupret007.+That+GitHub+login+is+the+real+yes.%0ABob%3A+treat+this+as+a+one-shot+inbox+item.+High-risk+still+needs+the+draft+shown+in+chat+before+acting." target="_blank" rel="noopener noreferrer">Approve</a><a class="dec warn" data-dec="HOLD" href="https://github.com/rupret007/bob-ops-dashboard/issues/new?title=BOB-HOLD%3A+dashboard-refresh&amp;body=Dashboard+control+decision%0A%0Aid%3A+dashboard-refresh%0Atitle%3A+Force+dashboard+refresh+%2B+push%0Adecision%3A+hold%0Afrom%3A+public+board%0A%0ASubmit+this+issue+while+logged+in+as+rupret007.+That+GitHub+login+is+the+real+yes.%0ABob%3A+treat+this+as+a+one-shot+inbox+item.+High-risk+still+needs+the+draft+shown+in+chat+before+acting." target="_blank" rel="noopener noreferrer">Hold</a><a class="dec danger" data-dec="DENY" href="https://github.com/rupret007/bob-ops-dashboard/issues/new?title=BOB-DENY%3A+dashboard-refresh&amp;body=Dashboard+control+decision%0A%0Aid%3A+dashboard-refresh%0Atitle%3A+Force+dashboard+refresh+%2B+push%0Adecision%3A+deny%0Afrom%3A+public+board%0A%0ASubmit+this+issue+while+logged+in+as+rupret007.+That+GitHub+login+is+the+real+yes.%0ABob%3A+treat+this+as+a+one-shot+inbox+item.+High-risk+still+needs+the+draft+shown+in+chat+before+acting." target="_blank" rel="noopener noreferrer">Deny</a></div></div></details></div></div></section><section id="live-shipping" class="block primary"><h2>Live shipping</h2><div class="lanes"><article class="lane"><h3><a href="https://github.com/rupret007/webjam" target="_blank" rel="noopener">WebJam</a></h3><div class="lane-end"><span class="chip" style="--c:#ca8a04;--bg:#422006;--fg:#fef08a">Yellow</span><span class="signal">CI running</span></div><p class="notes">PR #21 merged (docs on 5ca6ba5). Release stays v0.26.0 until Jeff names v0.27...</p></article><article class="lane"><h3><a href="https://github.com/rupret007/RadDadSite" target="_blank" rel="noopener">RadDadSite</a></h3><div class="lane-end"><span class="chip" style="--c:#ca8a04;--bg:#422006;--fg:#fef08a">Yellow</span><span class="signal">1 open PR</span></div><p class="notes">Tip green typical; draft #6 prod deploy parked/Jeff-gate if still open.</p></article><article class="lane is-quiet"><h3><a href="https://github.com/rupret007/StoryLiner" target="_blank" rel="noopener">StoryLiner</a></h3><div class="lane-end"><span class="chip" style="--c:#16a34a;--bg:#052e16;--fg:#bbf7d0">Green</span></div><p class="notes">PR #1 lint fix merged; confirm main CI from live fetch.</p></article><article class="lane is-quiet"><h3><a href="https://github.com/rupret007/StoryBoard" target="_blank" rel="noopener">StoryBoard</a></h3><div class="lane-end"><span class="chip" style="--c:#16a34a;--bg:#052e16;--fg:#bbf7d0">Green</span></div><p class="notes">Quiet green unless CI says otherwise.</p></article><article class="lane is-quiet"><h3><a href="https://github.com/rupret007/Rad-Dad-Merch" target="_blank" rel="noopener">Rad Dad Merch</a></h3><div class="lane-end"><span class="chip" style="--c:#16a34a;--bg:#052e16;--fg:#bbf7d0">Green</span></div><p class="notes">Merch lane; watch Release integrity.</p></article><article class="lane is-quiet"><h3><a href="https://github.com/rupret007/rad-dad-show-night" target="_blank" rel="noopener">Show Night</a></h3><div class="lane-end"><span class="chip" style="--c:#16a34a;--bg:#052e16;--fg:#bbf7d0">Green</span></div><p class="notes">Show-night run sheet / flyer. No CI is OK.</p></article><article class="lane is-quiet"><h3><a href="https://github.com/rupret007/AI-Music-Vault" target="_blank" rel="noopener">AI Music Vault</a></h3><div class="lane-end"><span class="chip" style="--c:#16a34a;--bg:#052e16;--fg:#bbf7d0">Green</span></div><p class="notes">Private docs/index. High-level only on public page.</p></article><article class="lane is-quiet"><h3><a href="https://github.com/rupret007/Turdanoid" target="_blank" rel="noopener">Turdanoid</a></h3><div class="lane-end"><span class="chip" style="--c:#16a34a;--bg:#052e16;--fg:#bbf7d0">Green</span></div><p class="notes">Tip usually green; stale open PRs -&gt; hygiene.</p></article></div></section><section id="cisco" class="block secondary"><h2>Cisco work</h2><div class="lanes"><article class="lane"><h3>AdoptIQ</h3><div class="lane-end"><span class="chip" style="--c:#ca8a04;--bg:#422006;--fg:#fef08a">Yellow</span></div><p class="notes">Cisco CS desktop -- Build 115 in progress (Codex + Cloud Agent). No secrets on this...</p></article><article class="lane"><h3>TACTrack</h3><div class="lane-end"><span class="chip" style="--c:#ca8a04;--bg:#422006;--fg:#fef08a">Yellow</span></div><p class="notes">Private. High-level only -- CI / open PRs from live fetch.</p></article><article class="lane"><h3>AdoptIQ notes</h3><div class="lane-end"><span class="chip" style="--c:#525252;--bg:#171717;--fg:#d4d4d4">Parked</span></div><p class="notes">High-level only: manager-decision UX + Build 115 candidate path. No CSOne paths...</p></article></div></section><section id="messaging" class="block secondary"><h2>Messaging / Bob infra</h2><div class="lanes"><article class="lane is-quiet"><h3><a href="https://github.com/rupret007/Andrea_NanoBot" target="_blank" rel="noopener">Andrea NanoBot</a></h3><div class="lane-end"><span class="chip" style="--c:#16a34a;--bg:#052e16;--fg:#bbf7d0">Green</span></div><p class="notes">BB AppleScript send preferred. Private API OFF. Approval-fenced sends only.</p></article><article class="lane is-quiet"><h3>Telegram Bot the Bot</h3><div class="lane-end"><span class="chip" style="--c:#16a34a;--bg:#052e16;--fg:#bbf7d0">Green</span></div><p class="notes">Whisper + Chrome mop shipped. Bob front-door via Telegram.</p></article><article class="lane is-quiet"><h3>Codex local goals</h3><div class="lane-end"><span class="chip" style="--c:#16a34a;--bg:#052e16;--fg:#bbf7d0">Green</span></div><p class="notes">goals=true fixed. Local Codex loop for AdoptIQ/ops lanes.</p></article></div></section><section id="music-producer" class="block secondary"><h2>Music producer</h2><div class="lanes"><article class="lane is-quiet"><h3>Logic Pro home</h3><div class="lane-end"><span class="chip" style="--c:#16a34a;--bg:#052e16;--fg:#bbf7d0">Green</span></div><p class="notes">Logic Pro 12.3.1 on Mac mini -- primary producer home.</p></article><article class="lane"><h3>LogicProMCP</h3><div class="lane-end"><span class="chip" style="--c:#d97757;--bg:#2a1510;--fg:#f5c4b3">Jeff-gate</span></div><p class="notes">Installed. Pending Accessibility / Automation GUI grants from Jeff.</p></article><article class="lane"><h3>Moises / Suno</h3><div class="lane-end"><span class="chip" style="--c:#d97757;--bg:#2a1510;--fg:#f5c4b3">Jeff-gate</span></div><p class="notes">Jeff-login gated for stems/covers/demos.</p></article></div></section><section id="parked" class="block secondary"><h2>Parked</h2><div class="lanes"><article class="lane"><h3><a href="https://github.com/rupret007/story-corner-shelf" target="_blank" rel="noopener">Closet shelf</a></h3><div class="lane-end"><span class="chip" style="--c:#525252;--bg:#171717;--fg:#d4d4d4">Parked</span><span class="signal">4 open PRs</span></div><p class="notes">Parked. Open PRs ignored unless Jeff unparks.</p></article><article class="lane"><h3>Stalemate / Trailer Swift</h3><div class="lane-end"><span class="chip" style="--c:#525252;--bg:#171717;--fg:#d4d4d4">Parked</span></div><p class="notes">Catalog/voice feel only -- parked catalog lane.</p></article><article class="lane"><h3><a href="https://github.com/rupret007/RadDadSite/pull/6" target="_blank" rel="noopener">RadDadSite #6</a></h3><div class="lane-end"><span class="chip" style="--c:#525252;--bg:#171717;--fg:#d4d4d4">Parked</span></div><p class="notes">Draft prod deploy -- keep parked pending Che/server facts.</p></article></div></section><section id="abilities" class="block foot"><details class="abilities-foot"><summary>What Bob can do</summary><p class="pending-help">Texts / food after Jeff yes. No send button. Honest: there is no order button on this board.</p><div class="lanes"><article class="lane is-quiet"><h3>Rebuild this board</h3><div class="lane-end"></div><p class="notes">Actions cron every 15m plus ./refresh.sh. Live gh SHAs/CI. No secrets on the public...</p></article><article class="lane is-quiet"><h3>Cursor Cloud Agents</h3><div class="lane-end"></div><p class="notes">Repo work in Cursor Cloud. Jeff-gated / cost ceiling. High-level only here.</p></article><article class="lane is-quiet"><h3>Local Codex goals</h3><div class="lane-end"></div><p class="notes">Mac Codex loop for AdoptIQ and ops lanes. High-risk goals still shown in chat before...</p></article><article class="lane"><h3>Texts via Andrea</h3><div class="lane-end"><span class="chip" style="--c:#d97757;--bg:#2a1510;--fg:#f5c4b3">After yes</span></div><p class="notes">After Jeff yes only. Never auto-send. Draft must already exist. No send button on this...</p></article><article class="lane"><h3>Life-ops / Domino&#x27;s</h3><div class="lane-end"><span class="chip" style="--c:#d97757;--bg:#2a1510;--fg:#f5c4b3">After yes</span></div><p class="notes">Food, errands, Domino&#x27;s: chat yes only. Honest: there is no order button on this board.</p></article><article class="lane"><h3>Music producer help</h3><div class="lane-end"><span class="chip" style="--c:#d97757;--bg:#2a1510;--fg:#f5c4b3">Jeff-gate</span></div><p class="notes">Logic Pro is home. Moises / Suno need Jeff login. LogicProMCP needs Jeff GUI grants.</p></article><article class="lane"><h3>Cisco CS desktop (high-level)</h3><div class="lane-end"><span class="chip" style="--c:#525252;--bg:#171717;--fg:#d4d4d4">High-level</span></div><p class="notes">AdoptIQ / TACTrack appear as high-level Cisco CS desktop only. No CSOne paths or...</p></article><article class="lane"><h3>GitHub issue inbox</h3><div class="lane-end"><span class="chip" style="--c:#d97757;--bg:#2a1510;--fg:#f5c4b3">Authority</span></div><p class="notes">BOB-APPROVE / BOB-DENY / BOB-HOLD from rupret007 is the real yes. The board only opens...</p></article></div></details></section><section id="features" class="block foot"><details class="how-board"><summary>How this board works</summary><p class="pending-help">Engineer notes -- not the daily ops list.</p><p class="pending-help">Public board -- Approve opens a GitHub issue; submit while logged in as <code>rupret007</code>.</p><div class="tools"><button type="button" data-action="refresh-hint">Copy command</button><button type="button" data-action="open-repo">Open repo</button><button type="button" data-action="mark-reviewed">Mark reviewed</button></div><div class="lanes"><article class="lane is-quiet"><h3>Public board</h3><div class="lane-end"></div><p class="notes">Possession of the public URL is enough. GitHub login rupret007 is the real authority.</p></article><article class="lane is-quiet"><h3>Soft-paint poll</h3><div class="lane-end"></div><p class="notes">Client fetches status.json every 30s (pauses when the tab is hidden). Immediate poll...</p></article><article class="lane is-quiet"><h3>Agents strip</h3><div class="lane-end"></div><p class="notes">Codex / Cursor / Claude from a Mac probe. Stale or untimestamped probes paint Unknown...</p></article><article class="lane is-quiet"><h3>Silence banner</h3><div class="lane-end"></div><p class="notes">Actions cadence is ~15m. If refresh is quiet for ~45m the page warns that chips may be...</p></article><article class="lane is-quiet"><h3>XSS-safe cards</h3><div class="lane-end"></div><p class="notes">html.escape + safeHref on server render. Soft-paint uses esc/safeHref. ASCII-safe JS...</p></article><article class="lane is-quiet"><h3>Poll / decide race guards</h3><div class="lane-end"></div><p class="notes">pollSeq / pendingSeq drop stale fetches. Approve / Hold / Deny are real GitHub links...</p></article><article class="lane is-quiet"><h3>Public Pages</h3><div class="lane-end"></div><p class="notes">Free-plan GitHub Pages from main. No secrets, tokens, Keeper material, or private...</p></article></div></details></section>
   </div>
   <footer>
     <p><a href="https://github.com/rupret007/bob-ops-dashboard">rupret007/bob-ops-dashboard</a>
@@ -186,17 +190,10 @@
     return "low";
   }
 
-  function openDecisionIssue(verb, id, title) {
-    if (verb !== "APPROVE" && verb !== "DENY" && verb !== "HOLD") return;
+  function decisionHref(verb, id, title) {
+    if (verb !== "APPROVE" && verb !== "DENY" && verb !== "HOLD") return "";
     var pid = String(id || "").trim();
-    if (!/^[a-zA-Z0-9._-]+$/.test(pid)) {
-      setStatus("Bad pending id", "bad");
-      return;
-    }
-    var key = verb + ":" + pid;
-    if (decideBusy[key]) return;
-    decideBusy[key] = 1;
-    setTimeout(function () { delete decideBusy[key]; }, 2000);
+    if (!/^[a-zA-Z0-9._-]+$/.test(pid)) return "";
     var t = "BOB-" + verb + ": " + pid;
     var body = [
       "Dashboard control decision",
@@ -205,14 +202,43 @@
       "title: " + String(title || pid).slice(0, 160),
       "decision: " + verb.toLowerCase(),
       "from: public board",
-      "at: " + new Date().toISOString(),
       "",
       "Submit this issue while logged in as rupret007. That GitHub login is the real yes.",
       "Bob: treat this as a one-shot inbox item. High-risk still needs the draft shown in chat before acting."
     ].join(String.fromCharCode(10));
-    var url = "https://github.com/rupret007/bob-ops-dashboard/issues/new?title=" +
+    return "https://github.com/rupret007/bob-ops-dashboard/issues/new?title=" +
       encodeURIComponent(t) + "&body=" + encodeURIComponent(body);
-    window.open(url, "_blank", "noopener");
+  }
+  window.decisionHref = decisionHref;
+
+  function openBlank(url) {
+    if (!url) return false;
+    var w = null;
+    try { w = window.open(url, "_blank", "noopener,noreferrer"); } catch (e) { w = null; }
+    if (w) return true;
+    var a = document.createElement("a");
+    a.href = url;
+    a.target = "_blank";
+    a.rel = "noopener noreferrer";
+    a.style.display = "none";
+    document.body.appendChild(a);
+    a.click();
+    if (a.remove) a.remove();
+    else if (a.parentNode) a.parentNode.removeChild(a);
+    return true;
+  }
+
+  function openDecisionIssue(verb, id, title) {
+    var url = decisionHref(verb, id, title);
+    if (!url) {
+      setStatus("Bad pending id", "bad");
+      return;
+    }
+    var key = verb + ":" + String(id || "").trim();
+    if (decideBusy[key]) return;
+    decideBusy[key] = 1;
+    setTimeout(function () { delete decideBusy[key]; }, 2000);
+    openBlank(url);
     setStatus(verb + " draft opened on GitHub. Submit the issue while logged in as rupret007.", "warn");
   }
 
@@ -246,11 +272,22 @@
       div.innerHTML =
         '<div class="pending-head"><div class="ptitle"></div><span class="prisk"></span></div>' +
         '<div class="pdetail"></div>' +
-        '<div class="prow">' +
-          '<button type="button" data-dec="APPROVE">Approve</button>' +
-          '<button type="button" class="warn" data-dec="HOLD">Hold</button>' +
-          '<button type="button" class="danger" data-dec="DENY">Deny</button>' +
-        '</div>';
+        '<div class="prow"></div>';
+      var prow = div.querySelector(".prow");
+      function decLink(verb, extra) {
+        var href = decisionHref(verb, it.id, it.title || it.id);
+        var a = document.createElement("a");
+        a.className = "dec" + (extra ? " " + extra : "");
+        a.setAttribute("data-dec", verb);
+        if (href) a.setAttribute("href", href);
+        a.setAttribute("target", "_blank");
+        a.setAttribute("rel", "noopener noreferrer");
+        a.textContent = verb === "APPROVE" ? "Approve" : verb === "HOLD" ? "Hold" : "Deny";
+        return a;
+      }
+      prow.appendChild(decLink("APPROVE", ""));
+      prow.appendChild(decLink("HOLD", "warn"));
+      prow.appendChild(decLink("DENY", "danger"));
       div.querySelector(".ptitle").textContent = it.title || it.id;
       var detail = String(it.detail || "");
       if (detail.length > 72) {
@@ -297,15 +334,27 @@
   }
 
   document.addEventListener("click", function (ev) {
-    var decBtn = ev.target.closest("button[data-dec]");
+    var decBtn = ev.target.closest("[data-dec]");
     if (!decBtn) return;
-    ev.preventDefault();
-    if (decBtn.disabled) return;
     var item = decBtn.closest(".pending-item");
     if (!item) return;
-    decBtn.disabled = true;
-    openDecisionIssue(decBtn.getAttribute("data-dec"), item.getAttribute("data-id"), item.getAttribute("data-title"));
-    setTimeout(function () { decBtn.disabled = false; }, 2000);
+    var verb = decBtn.getAttribute("data-dec");
+    var pid = item.getAttribute("data-id");
+    var title = item.getAttribute("data-title");
+    var key = verb + ":" + String(pid || "").trim();
+    if (decideBusy[key]) {
+      ev.preventDefault();
+      return;
+    }
+    var href = decBtn.getAttribute("href") || "";
+    if (decBtn.tagName === "A" && href.indexOf("https://github.com/rupret007/bob-ops-dashboard/issues/new?") === 0) {
+      decideBusy[key] = 1;
+      setTimeout(function () { delete decideBusy[key]; }, 2000);
+      setStatus(verb + " draft opened on GitHub. Submit the issue while logged in as rupret007.", "warn");
+      return;
+    }
+    ev.preventDefault();
+    openDecisionIssue(verb, pid, title);
   });
 
   var CONTROL_ACTIONS = { "refresh-hint": 1, "open-repo": 1, "mark-reviewed": 1 };
@@ -323,7 +372,7 @@
         setStatus(cmd, "ok");
       }
     } else if (act === "open-repo") {
-      window.open("https://github.com/rupret007/bob-ops-dashboard", "_blank", "noopener");
+      openBlank("https://github.com/rupret007/bob-ops-dashboard");
     } else if (act === "mark-reviewed") {
       localStorage.setItem("bobOpsLastReviewed", new Date().toISOString());
       setStatus("Board marked reviewed locally at " + new Date().toLocaleString(), "ok");
@@ -432,17 +481,20 @@
   }
   function compactSignal(p) {
     if (!p) return "";
+    var ci = p.ci;
+    var concl = (ci && typeof ci === "object") ? String(ci.conclusion || "").toLowerCase() : "";
+    if (concl === "failure" || concl === "timed_out" || concl === "action_required" || concl === "startup_failure") {
+      return "CI fail";
+    }
+    if (concl === "in_progress" || concl === "queued" || concl === "waiting" || concl === "pending" || concl === "requested") {
+      return "CI running";
+    }
     var rel = String(p.release || "").trim();
     if (rel) return rel;
     if (typeof p.open_prs === "number" && isFinite(p.open_prs) && p.open_prs > 0) {
       return p.open_prs + (p.open_prs === 1 ? " open PR" : " open PRs");
     }
-    var ci = p.ci;
-    if (ci && typeof ci === "object") {
-      var concl = String(ci.conclusion || "").toLowerCase();
-      if (concl === "failure") return "CI fail";
-      if (concl && concl !== "success" && concl !== "skipped" && concl !== "cancelled") return concl;
-    }
+    if (concl && concl !== "success" && concl !== "skipped" && concl !== "cancelled") return concl;
     return "";
   }
   function shortNote(notes, limit) {
@@ -484,14 +536,18 @@
     rows.forEach(function (it) {
       var rawRisk = String(it.risk || "").toLowerCase();
       var risk = (rawRisk === "high" || rawRisk === "medium") ? rawRisk : "low";
+      function decA(verb, extra) {
+        var href = (window.decisionHref && window.decisionHref(verb, it.id, it.title || it.id)) || "";
+        if (!href) return "";
+        var label = verb === "APPROVE" ? "Approve" : verb === "HOLD" ? "Hold" : "Deny";
+        return '<a class="dec' + (extra ? " " + extra : "") + '" data-dec="' + esc(verb) +
+          '" href="' + esc(href) + '" target="_blank" rel="noopener noreferrer">' + label + "</a>";
+      }
       var row = '<div class="pending-item" data-id="' + esc(it.id) + '" data-title="' + esc(it.title || it.id) + '">' +
         '<div class="pending-head"><div class="ptitle">' + esc(it.title || it.id) + "</div>" +
         '<span class="prisk ' + esc(risk) + '">' + esc(risk) + "</span></div>" +
         '<div class="pdetail">' + esc(shortNote(it.detail || "", 72)) + "</div>" +
-        '<div class="prow">' +
-        '<button type="button" data-dec="APPROVE">Approve</button>' +
-        '<button type="button" class="warn" data-dec="HOLD">Hold</button>' +
-        '<button type="button" class="danger" data-dec="DENY">Deny</button></div></div>';
+        '<div class="prow">' + decA("APPROVE", "") + decA("HOLD", "warn") + decA("DENY", "danger") + "</div></div>";
       if (rawRisk === "low") { low += row; lowCount += 1; }
       else attn += row;
     });
@@ -744,11 +800,22 @@
   }
 
   var pollSeq = 0;
+  var POLL_TIMEOUT_MS = 8000;
+  var pollAbort = null;
+  var pollTimeout = null;
   lastAgents = readDomAgents();
   function poll() {
     var seq = ++pollSeq;
+    if (pollAbort) {
+      try { pollAbort.abort(); } catch (e) {}
+    }
+    if (pollTimeout) clearTimeout(pollTimeout);
+    pollAbort = new AbortController();
+    pollTimeout = setTimeout(function () {
+      try { pollAbort.abort(); } catch (e) {}
+    }, POLL_TIMEOUT_MS);
     var url = "./status.json?ts=" + Date.now();
-    fetch(url, { cache: "no-store" })
+    fetch(url, { cache: "no-store", signal: pollAbort.signal })
       .then(function (res) {
         if (!res.ok) throw new Error("HTTP " + res.status);
         return res.json();
@@ -786,26 +853,46 @@
         freshness.classList.add("stale");
         if (dot) dot.classList.add("stale");
         updateSilence();
+      })
+      .then(function () {
+        if (seq === pollSeq && pollTimeout) clearTimeout(pollTimeout);
       });
   }
 
   var pollTimer = null;
+  var paintTimer = null;
+  function startPaintClock() {
+    paint();
+    if (paintTimer) clearInterval(paintTimer);
+    paintTimer = setInterval(paint, 1000);
+  }
+  function stopPaintClock() {
+    if (paintTimer) { clearInterval(paintTimer); paintTimer = null; }
+  }
   function startPolling() {
     if (pollTimer) clearInterval(pollTimer);
     poll();
     pollTimer = setInterval(poll, POLL_MS);
+    startPaintClock();
   }
   function stopPolling() {
     if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+    if (pollAbort) {
+      try { pollAbort.abort(); } catch (e) {}
+    }
+    if (pollTimeout) clearTimeout(pollTimeout);
+    stopPaintClock();
   }
   document.addEventListener("visibilitychange", function () {
     if (document.visibilityState === "hidden") stopPolling();
     else startPolling();
   });
+  window.addEventListener("pageshow", function () {
+    if (document.visibilityState !== "hidden") startPolling();
+  });
 
   paint();
-  setInterval(paint, 1000);
-  // Pause polls when tab hidden; resume on visible.
+  // Pause polls when tab hidden; resume on visible / bfcache pageshow.
   if (document.visibilityState !== "hidden") startPolling();
   else setTimeout(function () { if (document.visibilityState !== "hidden") startPolling(); }, 5000);
 })();
