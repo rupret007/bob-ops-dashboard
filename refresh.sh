@@ -644,7 +644,7 @@ html = f'''<!DOCTYPE html>
     if (!items || !items.length) {{
       pendingBox.hidden = !document.body.classList.contains("jeff-verified");
       if (!pendingBox.hidden) {{
-        pendingList.innerHTML = "<p class=\"pending-help\">Nothing pending. Bob will park new asks here.</p>";
+        pendingList.innerHTML = '<p class="pending-help">Nothing pending. Bob will park new asks here.</p>';
       }}
       return;
     }}
