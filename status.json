@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-08-23T01:55:58.908964-05:00",
-  "generated_at_display": "Sun Aug 23, 2026 \u00b7 1:55 AM CDT",
+  "generated_at": "2026-08-23T02:01:28.992447-05:00",
+  "generated_at_display": "Sun Aug 23, 2026 \u00b7 2:01 AM CDT",
   "timezone": "America/Chicago",
   "owner": "rupret007",
   "dashboard": "bob-ops-dashboard",
@@ -44,19 +44,25 @@
           "name": "WebJam",
           "repo": "rupret007/webjam",
           "url": "https://github.com/rupret007/webjam",
+          "repo_url": "https://github.com/rupret007/webjam",
           "private": false,
           "status": "yellow",
           "chip": "Yellow",
           "default_branch": "master",
           "tip_sha": "270c0c0",
           "tip_date": "2026-08-23T06:51:47Z",
-          "open_prs": 0,
+          "open_prs": 1,
+          "open_pr_url": "https://github.com/rupret007/webjam/pull/29",
+          "open_pr_number": 29,
+          "open_pr_draft": true,
+          "agent_url": "https://cursor.com/agents/bc-cfa8086e-f6e8-4037-96c4-935b10b2907d",
           "ci": {
             "name": "WebJam CI",
             "conclusion": "in_progress",
             "branch": "master",
             "sha": "270c0c0",
-            "created": "2026-08-23T06:51:49Z"
+            "created": "2026-08-23T06:51:49Z",
+            "html_url": "https://github.com/rupret007/webjam/actions/runs/32624033001"
           },
           "release": "v0.26.0",
           "notes": "PR #21 merged (docs on 5ca6ba5). Release stays v0.26.0 until Jeff names v0.27. Exploratory click-through Jeff-gated.",
@@ -67,19 +73,25 @@
           "name": "StoryLiner",
           "repo": "rupret007/StoryLiner",
           "url": "https://github.com/rupret007/StoryLiner",
+          "repo_url": "https://github.com/rupret007/StoryLiner",
           "private": false,
-          "status": "green",
-          "chip": "Green",
+          "status": "yellow",
+          "chip": "Yellow",
           "default_branch": "main",
           "tip_sha": "d311f73",
           "tip_date": "2026-08-23T06:51:53Z",
-          "open_prs": 0,
+          "open_prs": 1,
+          "open_pr_url": "https://github.com/rupret007/StoryLiner/pull/8",
+          "open_pr_number": 8,
+          "open_pr_draft": false,
+          "agent_url": "https://cursor.com/agents/bc-86736cf9-0b6b-4071-b59e-7781ec59b012",
           "ci": {
             "name": "CI",
             "conclusion": "success",
             "branch": "main",
             "sha": "d311f73",
-            "created": "2026-08-23T06:51:56Z"
+            "created": "2026-08-23T06:51:56Z",
+            "html_url": "https://github.com/rupret007/StoryLiner/actions/runs/32624038108"
           },
           "release": null,
           "notes": "PR #1 lint fix merged; confirm main CI from live fetch.",
@@ -89,19 +101,25 @@
           "name": "StoryBoard",
           "repo": "rupret007/StoryBoard",
           "url": "https://github.com/rupret007/StoryBoard",
+          "repo_url": "https://github.com/rupret007/StoryBoard",
           "private": false,
           "status": "yellow",
           "chip": "Yellow",
           "default_branch": "main",
           "tip_sha": "e81bf5a",
           "tip_date": "2026-08-23T06:51:57Z",
-          "open_prs": 0,
+          "open_prs": 1,
+          "open_pr_url": "https://github.com/rupret007/StoryBoard/pull/7",
+          "open_pr_number": 7,
+          "open_pr_draft": true,
+          "agent_url": "https://cursor.com/agents/bc-e348bb1a-2d59-4fe4-9e57-136cd6ea4804",
           "ci": {
             "name": "Quality",
-            "conclusion": "in_progress",
+            "conclusion": "success",
             "branch": "main",
             "sha": "e81bf5a",
-            "created": "2026-08-23T06:52:00Z"
+            "created": "2026-08-23T06:52:00Z",
+            "html_url": "https://github.com/rupret007/StoryBoard/actions/runs/32624040799"
           },
           "release": null,
           "notes": "Quiet green unless CI says otherwise.",
@@ -111,6 +129,7 @@
           "name": "Rad Dad Merch",
           "repo": "rupret007/Rad-Dad-Merch",
           "url": "https://github.com/rupret007/Rad-Dad-Merch",
+          "repo_url": "https://github.com/rupret007/Rad-Dad-Merch",
           "private": false,
           "status": "green",
           "chip": "Green",
@@ -118,12 +137,17 @@
           "tip_sha": "b949c7c",
           "tip_date": "2026-08-21T12:44:28Z",
           "open_prs": 0,
+          "open_pr_url": null,
+          "open_pr_number": null,
+          "open_pr_draft": false,
+          "agent_url": null,
           "ci": {
             "name": "Release integrity",
             "conclusion": "success",
             "branch": "main",
             "sha": "b949c7c",
-            "created": "2026-08-21T12:44:32Z"
+            "created": "2026-08-21T12:44:32Z",
+            "html_url": "https://github.com/rupret007/Rad-Dad-Merch/actions/runs/32483333775"
           },
           "release": null,
           "notes": "Merch lane; watch Release integrity.",
@@ -133,6 +157,7 @@
           "name": "RadDadSite",
           "repo": "rupret007/RadDadSite",
           "url": "https://github.com/rupret007/RadDadSite",
+          "repo_url": "https://github.com/rupret007/RadDadSite",
           "private": false,
           "status": "yellow",
           "chip": "Yellow",
@@ -140,12 +165,17 @@
           "tip_sha": "a56c44f",
           "tip_date": "2026-08-21T04:37:57Z",
           "open_prs": 1,
+          "open_pr_url": "https://github.com/rupret007/RadDadSite/pull/6",
+          "open_pr_number": 6,
+          "open_pr_draft": true,
+          "agent_url": null,
           "ci": {
             "name": "Test Site",
             "conclusion": "success",
             "branch": "main",
             "sha": "a56c44f",
-            "created": "2026-08-21T04:38:00Z"
+            "created": "2026-08-21T04:38:00Z",
+            "html_url": "https://github.com/rupret007/RadDadSite/actions/runs/32447624274"
           },
           "release": null,
           "notes": "Tip green typical; draft #6 prod deploy parked/Jeff-gate if still open.",
@@ -155,6 +185,7 @@
           "name": "Show Night",
           "repo": "rupret007/rad-dad-show-night",
           "url": "https://github.com/rupret007/rad-dad-show-night",
+          "repo_url": "https://github.com/rupret007/rad-dad-show-night",
           "private": false,
           "status": "green",
           "chip": "Green",
@@ -162,6 +193,10 @@
           "tip_sha": "710e765",
           "tip_date": "2026-08-14T18:07:17Z",
           "open_prs": 0,
+          "open_pr_url": null,
+          "open_pr_number": null,
+          "open_pr_draft": false,
+          "agent_url": null,
           "ci": null,
           "release": null,
           "notes": "Show-night run sheet / flyer. No CI is OK.",
@@ -171,19 +206,25 @@
           "name": "AI Music Vault",
           "repo": "rupret007/AI-Music-Vault",
           "url": "https://github.com/rupret007/AI-Music-Vault",
+          "repo_url": "https://github.com/rupret007/AI-Music-Vault",
           "private": false,
-          "status": "green",
-          "chip": "Green",
+          "status": "yellow",
+          "chip": "Yellow",
           "default_branch": "main",
           "tip_sha": "819a8ae",
           "tip_date": "2026-08-23T06:52:01Z",
-          "open_prs": 0,
+          "open_prs": 1,
+          "open_pr_url": "https://github.com/rupret007/AI-Music-Vault/pull/7",
+          "open_pr_number": 7,
+          "open_pr_draft": false,
+          "agent_url": "https://cursor.com/agents/bc-d512f50b-bec0-4d59-8591-3af5b012bec3",
           "ci": {
             "name": "catalog-validate",
             "conclusion": "success",
             "branch": "main",
             "sha": "819a8ae",
-            "created": "2026-08-23T06:52:04Z"
+            "created": "2026-08-23T06:52:04Z",
+            "html_url": "https://github.com/rupret007/AI-Music-Vault/actions/runs/32624043797"
           },
           "release": null,
           "notes": "Private docs/index. High-level only on public page.",
@@ -193,6 +234,7 @@
           "name": "Turdanoid",
           "repo": "rupret007/Turdanoid",
           "url": "https://github.com/rupret007/Turdanoid",
+          "repo_url": "https://github.com/rupret007/Turdanoid",
           "private": false,
           "status": "green",
           "chip": "Green",
@@ -200,12 +242,17 @@
           "tip_sha": "a0ef856",
           "tip_date": "2026-08-23T01:02:17Z",
           "open_prs": 0,
+          "open_pr_url": null,
+          "open_pr_number": null,
+          "open_pr_draft": false,
+          "agent_url": null,
           "ci": {
             "name": "CI",
             "conclusion": "success",
             "branch": "main",
             "sha": "a0ef856",
-            "created": "2026-08-23T01:02:20Z"
+            "created": "2026-08-23T01:02:20Z",
+            "html_url": "https://github.com/rupret007/Turdanoid/actions/runs/32609377612"
           },
           "release": null,
           "notes": "Tip usually green; stale open PRs -> hygiene.",
@@ -223,7 +270,9 @@
           "chip": "Unknown",
           "notes": "No Mac probe in this clone \u00b7 probe stale (>45m)",
           "agent_id": "codex",
-          "agent_state": "unknown"
+          "agent_state": "unknown",
+          "url": null,
+          "pr_url": null
         },
         {
           "name": "Cursor",
@@ -231,7 +280,9 @@
           "chip": "Unknown",
           "notes": "No Mac probe in this clone \u00b7 probe stale (>45m)",
           "agent_id": "cursor",
-          "agent_state": "unknown"
+          "agent_state": "unknown",
+          "url": null,
+          "pr_url": null
         },
         {
           "name": "Claude",
@@ -239,7 +290,9 @@
           "chip": "Unknown",
           "notes": "No Mac probe in this clone \u00b7 probe stale (>45m)",
           "agent_id": "claude",
-          "agent_state": "unknown"
+          "agent_state": "unknown",
+          "url": null,
+          "pr_url": null
         }
       ]
     },
@@ -251,6 +304,7 @@
           "name": "AdoptIQ",
           "repo": null,
           "url": null,
+          "repo_url": null,
           "private": null,
           "status": "yellow",
           "chip": "Yellow",
@@ -258,6 +312,10 @@
           "tip_sha": null,
           "tip_date": null,
           "open_prs": null,
+          "open_pr_url": null,
+          "open_pr_number": null,
+          "open_pr_draft": false,
+          "agent_url": null,
           "ci": null,
           "release": null,
           "notes": "Cisco CS desktop -- Build 115 in progress (Codex + Cloud Agent). No secrets on this page.",
@@ -267,6 +325,7 @@
           "name": "TACTrack",
           "repo": null,
           "url": null,
+          "repo_url": null,
           "private": null,
           "status": "yellow",
           "chip": "Yellow",
@@ -274,6 +333,10 @@
           "tip_sha": null,
           "tip_date": null,
           "open_prs": null,
+          "open_pr_url": null,
+          "open_pr_number": null,
+          "open_pr_draft": false,
+          "agent_url": null,
           "ci": null,
           "release": null,
           "notes": "Private. High-level only -- CI / open PRs from live fetch.",
@@ -295,19 +358,25 @@
           "name": "Andrea NanoBot",
           "repo": "rupret007/Andrea_NanoBot",
           "url": "https://github.com/rupret007/Andrea_NanoBot",
+          "repo_url": "https://github.com/rupret007/Andrea_NanoBot",
           "private": false,
           "status": "yellow",
           "chip": "Yellow",
           "default_branch": "main",
           "tip_sha": "ff13dc0",
           "tip_date": "2026-08-23T06:51:50Z",
-          "open_prs": 0,
+          "open_prs": 1,
+          "open_pr_url": "https://github.com/rupret007/Andrea_NanoBot/pull/16",
+          "open_pr_number": 16,
+          "open_pr_draft": true,
+          "agent_url": "https://cursor.com/agents/bc-7a0d9e2c-69b5-44b5-9081-0170bd6c9d59",
           "ci": {
-            "name": "CI",
-            "conclusion": "in_progress",
+            "name": "Bump version",
+            "conclusion": "skipped",
             "branch": "main",
             "sha": "ff13dc0",
-            "created": "2026-08-23T06:51:53Z"
+            "created": "2026-08-23T06:51:53Z",
+            "html_url": "https://github.com/rupret007/Andrea_NanoBot/actions/runs/32624035652"
           },
           "release": null,
           "notes": "BB AppleScript send preferred. Private API OFF. Approval-fenced sends only.",
@@ -359,6 +428,7 @@
           "name": "Closet shelf",
           "repo": "rupret007/story-corner-shelf",
           "url": "https://github.com/rupret007/story-corner-shelf",
+          "repo_url": "https://github.com/rupret007/story-corner-shelf",
           "private": false,
           "status": "parked",
           "chip": "Parked",
@@ -366,12 +436,17 @@
           "tip_sha": "1c3cab3",
           "tip_date": "2026-08-19T06:34:19Z",
           "open_prs": 4,
+          "open_pr_url": "https://github.com/rupret007/story-corner-shelf/pull/1",
+          "open_pr_number": 1,
+          "open_pr_draft": false,
+          "agent_url": "https://cursor.com/agents/bc-9e25e7a8-3fb6-4495-859e-e483aea6f9ab",
           "ci": {
             "name": "Validate shelf artifacts",
             "conclusion": "success",
             "branch": "main",
             "sha": "1c3cab3",
-            "created": "2026-08-19T06:34:22Z"
+            "created": "2026-08-19T06:34:22Z",
+            "html_url": "https://github.com/rupret007/story-corner-shelf/actions/runs/32223979725"
           },
           "release": null,
           "notes": "Parked. Open PRs ignored unless Jeff unparks.",
@@ -460,13 +535,13 @@
           "name": "Soft-paint poll",
           "status": "green",
           "chip": "Feature",
-          "notes": "Client fetches status.json every 30s (pauses when the tab is hidden). Immediate poll on pageshow / visible. Fetch aborts after 8s. Hide / iOS-return abort is not a failed poll. A stale cached status.json cannot rewind the board. Repaints when board content changes -- not on every 15m Actions timestamp. Tip CI is the current SHA; Pages / skipped helpers cannot hide a fail."
+          "notes": "Client fetches status.json every 30s (pauses when the tab is hidden). Immediate poll on pageshow / visible. Fetch aborts after 8s. Hide / iOS-return abort is not a failed poll. A stale cached status.json cannot rewind the board. Repaints when board content changes -- not on every 15m Actions timestamp. Tip CI is the current SHA; Pages / skipped helpers cannot hide a fail. Lanes prefer the open PR; CI fail/running taps the Actions run when a run URL is known."
         },
         {
           "name": "Agents strip",
           "status": "green",
           "chip": "Feature",
-          "notes": "Codex / Cursor / Claude from a Mac probe. Stale or untimestamped probes paint Unknown. Never invent Running. Token-like words redacted."
+          "notes": "Codex / Cursor / Claude from a Mac probe. Stale or untimestamped probes paint Unknown. Never invent Running. Cloud pills appear only with a real cursor.com/agents/bc- UUID (from probe or an open PR body). Tap Open agent / Open PR (real target=_blank plus openBlank fallback). Token-like words redacted."
         },
         {
           "name": "Silence banner",
@@ -484,7 +559,7 @@
           "name": "Poll / decide race guards",
           "status": "green",
           "chip": "Feature",
-          "notes": "pollSeq / pendingSeq drop stale fetches. stopPolling bumps pollSeq before abort so tab-hide is not a fail. Approve / Hold / Deny are real GitHub links so iOS cannot swallow a popup. decideBusy still debounce double-taps."
+          "notes": "pollSeq / pendingSeq drop stale fetches. stopPolling bumps pollSeq before abort so tab-hide is not a fail. Approve / Hold / Deny are real GitHub links so iOS cannot swallow a popup. Open agent / Open PR / Open repo / Open CI use the same real target=_blank plus openBlank fallback. decideBusy still debounce double-taps."
         },
         {
           "name": "Public Pages",
@@ -512,31 +587,66 @@
     "TACTrack"
   ],
   "publish_notes": "Public repo -- no secrets, no CSOne customer paths, AdoptIQ high-level only.",
-  "refresh_started_ms": 1787468140785,
+  "refresh_started_ms": 1787468471110,
   "agents": [
     {
       "id": "codex",
       "name": "Codex",
       "state": "unknown",
       "detail": "No Mac probe in this clone \u00b7 probe stale (>45m)",
-      "checked_at": null
+      "checked_at": null,
+      "url": null,
+      "pr_url": null
     },
     {
       "id": "cursor",
       "name": "Cursor",
       "state": "unknown",
       "detail": "No Mac probe in this clone \u00b7 probe stale (>45m)",
-      "checked_at": null
+      "checked_at": null,
+      "url": null,
+      "pr_url": null
     },
     {
       "id": "claude",
       "name": "Claude",
       "state": "unknown",
       "detail": "No Mac probe in this clone \u00b7 probe stale (>45m)",
+      "checked_at": null,
+      "url": null,
+      "pr_url": null
+    }
+  ],
+  "agents_source": "file:/workspace/agents-status.json:stale->unknown",
+  "cloud_agents": [
+    {
+      "id": "bc-8e16f06d-f73f-482c-987f-e13f2d3b9fb1",
+      "name": "PR #9",
+      "state": "unknown",
+      "detail": "feat: tap Cloud Agent, open PR, and tip CI from the phone board",
+      "url": "https://cursor.com/agents/bc-8e16f06d-f73f-482c-987f-e13f2d3b9fb1",
+      "pr_url": "https://github.com/rupret007/bob-ops-dashboard/pull/9",
+      "checked_at": null
+    },
+    {
+      "id": "bc-cfa8086e-f6e8-4037-96c4-935b10b2907d",
+      "name": "PR #29",
+      "state": "unknown",
+      "detail": "fix: name a written outline without dressing it as a place",
+      "url": "https://cursor.com/agents/bc-cfa8086e-f6e8-4037-96c4-935b10b2907d",
+      "pr_url": "https://github.com/rupret007/webjam/pull/29",
+      "checked_at": null
+    },
+    {
+      "id": "bc-86736cf9-0b6b-4071-b59e-7781ec59b012",
+      "name": "PR #8",
+      "state": "unknown",
+      "detail": "Jeff: Copy keeps POSSIBLE_LIVE_WRITE (no second live path)",
+      "url": "https://cursor.com/agents/bc-86736cf9-0b6b-4071-b59e-7781ec59b012",
+      "pr_url": "https://github.com/rupret007/StoryLiner/pull/8",
       "checked_at": null
     }
   ],
-  "agents_source": "file:/home/runner/work/bob-ops-dashboard/bob-ops-dashboard/agents-status.json:stale->unknown",
   "pending": [
     {
       "id": "webjam-exploratory",

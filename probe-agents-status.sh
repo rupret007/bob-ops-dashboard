@@ -11,6 +11,8 @@
 # Optional env:
 #   CODEX_PID_HINT   — known Codex PID to prefer when pgrep finds several
 #   CODEX_LOCAL_URL  — default http://127.0.0.1:3210/meta
+#   CLOUD_AGENT_URL  — https://cursor.com/agents/bc-<uuid> (ignored if not that shape)
+#   CLOUD_AGENT_PR   — https://github.com/rupret007/<repo>/pull/<n>
 set -euo pipefail
 
 CHECKED_AT="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
@@ -163,7 +165,7 @@ fi
 
 # Emit JSON object with agents array (refresh.sh merges this).
 python3 - "$CHECKED_AT" "$codex_state" "$codex_detail" "$cursor_state" "$cursor_detail" "$claude_state" "$claude_detail" <<'PY'
-import json, sys
+import json, os, re, sys
 checked_at, cs, cd, us, ud, ls, ld = sys.argv[1:8]
 out = {
   "agents": [
@@ -174,5 +176,21 @@ out = {
   "source": "probe-agents-status.sh",
   "checked_at": checked_at,
 }
+url = (os.environ.get("CLOUD_AGENT_URL") or "").strip().split("?", 1)[0].rstrip("/")
+pr = (os.environ.get("CLOUD_AGENT_PR") or "").strip().split("?", 1)[0].rstrip("/")
+bc = re.compile(r"^https://cursor\.com/agents/(bc-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$", re.I)
+pr_ok = re.compile(r"^https://github\.com/rupret007/[A-Za-z0-9._-]+/pull/[1-9][0-9]*$", re.I)
+m = bc.match(url)
+if m:
+    row = {
+        "name": "Cloud",
+        "state": "unknown",
+        "detail": "from CLOUD_AGENT_URL",
+        "url": "https://cursor.com/agents/" + m.group(1).lower(),
+        "checked_at": checked_at,
+    }
+    if pr_ok.match(pr):
+        row["pr_url"] = pr
+    out["cloud_agents"] = [row]
 print(json.dumps(out, indent=2))
 PY
