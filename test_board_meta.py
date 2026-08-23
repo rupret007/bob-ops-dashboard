@@ -101,6 +101,9 @@ class BoardMetaTests(unittest.TestCase):
         self.assertIn("Actions cadence is ~15m", blob)
         self.assertIn("real GitHub links", blob)
         self.assertIn("Pages / skipped helpers cannot hide a fail", blob)
+        self.assertIn("not a failed poll", blob)
+        self.assertIn("cannot rewind", blob)
+        self.assertIn("stopPolling bumps pollSeq", blob)
 
     def test_security_features_from_pr1_survive_without_unlock(self):
         blob = str(first_class_sections())

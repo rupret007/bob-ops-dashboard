@@ -722,7 +722,7 @@ def first_class_sections() -> list[dict[str, Any]]:
                 ),
                 _card(
                     "Soft-paint poll",
-                    "Client fetches status.json every 30s (pauses when the tab is hidden). Immediate poll on pageshow / visible. Fetch aborts after 8s. Repaints when board content changes -- not on every 15m Actions timestamp. Tip CI is the current SHA; Pages / skipped helpers cannot hide a fail.",
+                    "Client fetches status.json every 30s (pauses when the tab is hidden). Immediate poll on pageshow / visible. Fetch aborts after 8s. Hide / iOS-return abort is not a failed poll. A stale cached status.json cannot rewind the board. Repaints when board content changes -- not on every 15m Actions timestamp. Tip CI is the current SHA; Pages / skipped helpers cannot hide a fail.",
                     chip="Feature",
                 ),
                 _card(
@@ -742,7 +742,7 @@ def first_class_sections() -> list[dict[str, Any]]:
                 ),
                 _card(
                     "Poll / decide race guards",
-                    "pollSeq / pendingSeq drop stale fetches. Approve / Hold / Deny are real GitHub links so iOS cannot swallow a popup. decideBusy still debounce double-taps.",
+                    "pollSeq / pendingSeq drop stale fetches. stopPolling bumps pollSeq before abort so tab-hide is not a fail. Approve / Hold / Deny are real GitHub links so iOS cannot swallow a popup. decideBusy still debounce double-taps.",
                     chip="Feature",
                 ),
                 _card(

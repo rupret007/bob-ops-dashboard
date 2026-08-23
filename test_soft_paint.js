@@ -53,6 +53,9 @@ function run() {
   if (src.indexOf("pageshow") === -1) fail("pageshow resume missing");
   if (src.indexOf("AbortController") === -1) fail("poll AbortController missing");
   if (src.indexOf("POLL_TIMEOUT_MS") === -1) fail("poll timeout missing");
+  if (src.indexOf("function pollIsNewer") === -1) fail("pollIsNewer missing");
+  if (src.indexOf("function pollFailureCounts") === -1) fail("pollFailureCounts missing");
+  if (src.indexOf("function pollPaintDecision") === -1) fail("pollPaintDecision missing");
 
   const boardFingerprint = eval("(" + extractFn(src, "boardFingerprint") + ")");
   const a = {
@@ -135,6 +138,55 @@ function run() {
   }
   if (compactSignal({ release: "v0.26.0", ci: { conclusion: "success" }, open_prs: 0 }) !== "v0.26.0") {
     fail("green release still shows the tag");
+  }
+
+  const parseStampMs = eval("(" + extractFn(src, "parseStampMs") + ")");
+  const pollIsNewer = eval(
+    "(function (parseStampMs) { return " + extractFn(src, "pollIsNewer") + "; })"
+  )(parseStampMs);
+  const pollFailureCounts = eval("(" + extractFn(src, "pollFailureCounts") + ")");
+  const pollPaintDecision = eval(
+    "(function (parseStampMs, pollIsNewer) { return " +
+      extractFn(src, "pollPaintDecision") +
+      "; })"
+  )(parseStampMs, pollIsNewer);
+
+  if (pollFailureCounts(1, 2)) fail("superseded / hide abort must not count as poll fail");
+  if (!pollFailureCounts(3, 3)) fail("in-flight timeout must still count as poll fail");
+
+  const older = "2026-08-23T05:00:00.000Z";
+  const same = "2026-08-23T06:00:00.000Z";
+  const newer = "2026-08-23T06:15:00.000Z";
+  if (pollIsNewer(older, same)) fail("older stamp must not beat known");
+  if (!pollIsNewer(same, same)) fail("equal stamp is usable");
+  if (!pollIsNewer(newer, same)) fail("newer stamp must win");
+  if (pollIsNewer("", same)) fail("empty stamp is not newer");
+  if (pollIsNewer("nope", same)) fail("unparseable stamp is not newer");
+
+  if (pollPaintDecision(older, same, null, "a") !== "ignore") {
+    fail("stale JSON on first poll must ignore (no rewind)");
+  }
+  if (pollPaintDecision(same, same, null, "a") !== "stamp") {
+    fail("first poll with same stamp must not rewrite first paint");
+  }
+  if (pollPaintDecision(newer, same, null, "a") !== "paint") {
+    fail("newer JSON than HTML must paint once");
+  }
+  if (pollPaintDecision(newer, same, "a", "a") !== "stamp") {
+    fail("timestamp-only newer refresh must not flash");
+  }
+  if (pollPaintDecision(newer, same, "a", "b") !== "paint") {
+    fail("newer content change must soft-paint");
+  }
+  if (pollPaintDecision(older, same, "a", "b") !== "ignore") {
+    fail("stale JSON must not rewrite lanes after first paint");
+  }
+
+  const stopPolling = extractFn(src, "stopPolling");
+  const incAt = stopPolling.indexOf("pollSeq += 1");
+  const abortAt = stopPolling.indexOf("pollAbort.abort");
+  if (incAt < 0 || abortAt < 0 || incAt > abortAt) {
+    fail("stopPolling must bump pollSeq before abort");
   }
 
   console.log("soft-paint / agent age-gate smoke ok");
