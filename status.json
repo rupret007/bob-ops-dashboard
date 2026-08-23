@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-08-22T22:53:04.709433-05:00",
-  "generated_at_display": "Sat Aug 22, 2026 \u00b7 10:53 PM CDT",
+  "generated_at": "2026-08-22T23:00:42.689433-05:00",
+  "generated_at_display": "Sat Aug 22, 2026 \u00b7 11:00 PM CDT",
   "timezone": "America/Chicago",
   "owner": "rupret007",
   "dashboard": "bob-ops-dashboard",
@@ -506,7 +506,7 @@
     "AI-Music-Vault"
   ],
   "publish_notes": "Public repo -- no secrets, no CSOne customer paths, AdoptIQ high-level only.",
-  "refresh_started_ms": 1787457166934,
+  "refresh_started_ms": 1787457625723,
   "agents": [
     {
       "id": "codex",
@@ -530,7 +530,7 @@
       "checked_at": "2026-08-22T20:45:00-05:00"
     }
   ],
-  "agents_source": "file:/home/runner/work/bob-ops-dashboard/bob-ops-dashboard/agents-status.json",
+  "agents_source": "file:/workspace/agents-status.json",
   "pending": [
     {
       "id": "webjam-exploratory",

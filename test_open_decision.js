@@ -67,10 +67,14 @@ function run() {
   if (html.indexOf("Public board -- Approve opens a GitHub issue") === -1) {
     fail("missing public-board note");
   }
-  if (html.indexOf('id="pending-box"') === -1) fail("pending-box missing");
-  if (/id="pending-box"[^>]*\bhidden\b/.test(html)) {
-    fail("pending-box must not start hidden");
+  const paint = html.split("<script>")[0];
+  if (paint.indexOf('id="pending-box"') === -1) fail("pending-box missing");
+  if (paint.indexOf("pending-item") !== -1 && /id="pending-box"[^>]*\bhidden\b/.test(paint)) {
+    fail("pending-box must not start hidden when items are painted");
   }
+  if (paint.indexOf('class="pulse"') === -1) fail("pulse strip missing");
+  if (paint.indexOf("abilities-foot") === -1) fail("abilities must be collapsed footer");
+  if (paint.indexOf("Nothing pending") !== -1) fail("empty-pending chrome leaked");
 
   let lastStatus = "";
   function setStatus(msg) {

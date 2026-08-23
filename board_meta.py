@@ -6,6 +6,7 @@ from typing import Any
 
 FIRST_CLASS_IDS = ("abilities", "controls", "features")
 CONTROL_ACTIONS = frozenset({"refresh-hint", "open-repo", "mark-reviewed"})
+# Visual board: pulse (agents) is outside sections. Ops lanes after pending.
 OPS_SECTION_ORDER = (
     "live-shipping",
     "active-agents",
@@ -14,8 +15,21 @@ OPS_SECTION_ORDER = (
     "music-producer",
     "parked",
 )
+PRIMARY_SECTION_IDS = frozenset({"live-shipping"})
+SECONDARY_SECTION_IDS = frozenset({"cisco", "messaging", "music-producer", "parked"})
+COLLAPSED_SECTION_IDS = frozenset({"abilities", "features"})
+# Agents live in the top pulse strip -- do not paint as a card grid.
+PULSE_SECTION_IDS = frozenset({"active-agents"})
 # Section-type labels -- noisy on phone. Real status chips (Green / Jeff-gate) stay.
 SECTION_TYPE_CHIPS = frozenset({"Ability", "Control", "Feature"})
+ATTENTION_ORDER = {
+    "red": 0,
+    "jeff-gate": 1,
+    "yellow": 2,
+    "green": 3,
+    "parked": 4,
+}
+PENDING_RISK_ORDER = {"high": 0, "medium": 1, "low": 2}
 
 
 def drop_leftover_verify(status: Any) -> bool:
@@ -34,6 +48,84 @@ def visible_chip(project: Any) -> str | None:
     if not label or label in SECTION_TYPE_CHIPS:
         return None
     return label
+
+
+def presentation(section_id: Any) -> str:
+    """How a section should paint: pending, pulse, primary, secondary, footer, other."""
+    sid = str(section_id or "")
+    if sid == "controls":
+        return "pending"
+    if sid in PULSE_SECTION_IDS:
+        return "pulse"
+    if sid in PRIMARY_SECTION_IDS:
+        return "primary"
+    if sid in SECONDARY_SECTION_IDS:
+        return "secondary"
+    if sid in COLLAPSED_SECTION_IDS:
+        return "footer"
+    return "secondary"
+
+
+def attention_rank(project: Any) -> int:
+    """Lower = needs Jeff sooner. Unknown statuses sort last."""
+    if not isinstance(project, dict):
+        return 9
+    return ATTENTION_ORDER.get(str(project.get("status") or ""), 5)
+
+
+def is_quiet_lane(project: Any) -> bool:
+    """Green lanes are scan-quiet -- hide essay notes on the phone."""
+    if not isinstance(project, dict):
+        return False
+    return str(project.get("status") or "") == "green"
+
+
+def compact_signal(project: Any) -> str | None:
+    """One scan signal. Skip SHA / product SHA / '0 open PRs' / success-CI essays."""
+    if not isinstance(project, dict):
+        return None
+    rel = str(project.get("release") or "").strip()
+    if rel:
+        return rel
+    n = project.get("open_prs")
+    try:
+        count = int(n) if n is not None else 0
+    except (TypeError, ValueError):
+        count = 0
+    if count > 0:
+        return str(count) + (" open PR" if count == 1 else " open PRs")
+    ci = project.get("ci")
+    if isinstance(ci, dict):
+        concl = str(ci.get("conclusion") or "").strip().lower()
+        if concl == "failure":
+            return "CI fail"
+        if concl and concl not in ("success", "skipped", "cancelled"):
+            return concl
+    return None
+
+
+def pending_risk_rank(item: Any) -> int:
+    """Lower = needs Jeff sooner. Unknown risk sorts last."""
+    if not isinstance(item, dict):
+        return 9
+    return PENDING_RISK_ORDER.get(str(item.get("risk") or "").lower(), 5)
+
+
+def sort_pending(items: Any) -> list[dict[str, Any]]:
+    """High-risk first so the inbox is a ten-second scan, not a card stack."""
+    rows = [it for it in (items or []) if isinstance(it, dict)]
+    return sorted(rows, key=pending_risk_rank)
+
+
+def short_note(notes: Any, limit: int = 88) -> str:
+    """Phone-safe note. CSS also clamps; this keeps first-paint copy short."""
+    text = " ".join(str(notes or "").split())
+    if len(text) <= limit:
+        return text
+    cut = text[: limit - 1].rsplit(" ", 1)[0].rstrip(".,;:")
+    if len(cut) < 24:
+        cut = text[: limit - 1]
+    return cut + "..."
 
 
 def _card(
@@ -188,7 +280,7 @@ def first_class_sections() -> list[dict[str, Any]]:
 
 
 def merge_first_class(sections: list[Any] | None) -> list[dict[str, Any]]:
-    """Ops first (decisions, live shipping, agents), then abilities, plumbing last."""
+    """Pending first, then live shipping / agents / quieter ops; abilities + plumbing last."""
     fc = {s["id"]: s for s in first_class_sections()}
     rest: list[dict[str, Any]] = []
     for sec in sections or []:
