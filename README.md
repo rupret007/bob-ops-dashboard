@@ -27,3 +27,10 @@ Suggested one-liner offer for Jeff:
 - Repo is **public** so GitHub Pages works on the free plan.
 - Pages served from `main` / root.
 - Do not merge unrelated PRs as part of a refresh.
+
+## refresh.sh
+
+```bash
+./refresh.sh          # rebuild index.html + status.json from live gh
+./refresh.sh --push   # rebuild and push to Pages (main / root)
+```
