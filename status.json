@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-08-23T00:20:15.578111-05:00",
-  "generated_at_display": "Sun Aug 23, 2026 \u00b7 12:20 AM CDT",
+  "generated_at": "2026-08-23T00:23:24.390947-05:00",
+  "generated_at_display": "Sun Aug 23, 2026 \u00b7 12:23 AM CDT",
   "timezone": "America/Chicago",
   "owner": "rupret007",
   "dashboard": "bob-ops-dashboard",
@@ -50,7 +50,7 @@
           "default_branch": "master",
           "tip_sha": "ebbaad8",
           "tip_date": "2026-08-23T05:07:36Z",
-          "open_prs": 1,
+          "open_prs": 2,
           "ci": {
             "name": "WebJam CI",
             "conclusion": "success",
@@ -90,12 +90,12 @@
           "repo": "rupret007/StoryBoard",
           "url": "https://github.com/rupret007/StoryBoard",
           "private": false,
-          "status": "green",
-          "chip": "Green",
+          "status": "yellow",
+          "chip": "Yellow",
           "default_branch": "main",
           "tip_sha": "78e020c",
           "tip_date": "2026-08-23T05:18:53Z",
-          "open_prs": 0,
+          "open_prs": 1,
           "ci": {
             "name": "Quality",
             "conclusion": "success",
@@ -175,15 +175,15 @@
           "status": "yellow",
           "chip": "Yellow",
           "default_branch": "main",
-          "tip_sha": "9a9f42e",
-          "tip_date": "2026-08-23T05:13:42Z",
+          "tip_sha": "58a0297",
+          "tip_date": "2026-08-23T05:20:59Z",
           "open_prs": 1,
           "ci": {
             "name": "catalog-validate",
             "conclusion": "success",
             "branch": "main",
-            "sha": "9a9f42e",
-            "created": "2026-08-23T05:13:44Z"
+            "sha": "58a0297",
+            "created": "2026-08-23T05:21:02Z"
           },
           "release": null,
           "notes": "Private docs/index. High-level only on public page.",
@@ -506,7 +506,7 @@
     "TACTrack"
   ],
   "publish_notes": "Public repo -- no secrets, no CSOne customer paths, AdoptIQ high-level only.",
-  "refresh_started_ms": 1787462399130,
+  "refresh_started_ms": 1787462581359,
   "agents": [
     {
       "id": "codex",
@@ -530,7 +530,7 @@
       "checked_at": null
     }
   ],
-  "agents_source": "file:/workspace/agents-status.json:stale->unknown",
+  "agents_source": "file:/home/runner/work/bob-ops-dashboard/bob-ops-dashboard/agents-status.json:stale->unknown",
   "pending": [
     {
       "id": "webjam-exploratory",
