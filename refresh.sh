@@ -168,7 +168,7 @@ def project(name, *, status=None, notes="", product_sha=None, jeff_gate=False, e
     p["name"] = rename.get(name, p["name"])
     return p
 
-# Curated narrative notes (safe / no secrets) — live SHAs/CI come from gh
+# Curated narrative notes (safe / no secrets) -- live SHAs/CI come from gh
 web = g("webjam")
 status = {
   "generated_at": updated_iso,
@@ -199,9 +199,9 @@ status = {
       "title": "Cisco work",
       "projects": [
         project("AdoptIQ", status="yellow",
-                notes="Cisco CS desktop — Build 115 in progress (Codex + Cloud Agent). No secrets on this page."),
+                notes="Cisco CS desktop -- Build 115 in progress (Codex + Cloud Agent). No secrets on this page."),
         project("TACTrack", status="yellow",
-                notes="Private. High-level only — CI / open PRs from live fetch."),
+                notes="Private. High-level only -- CI / open PRs from live fetch."),
         {
           "name": "AdoptIQ notes", "status": "parked", "chip": "Parked",
           "notes": "High-level only: manager-decision UX + Build 115 candidate path. No CSOne paths, customer rows, or tokens.",
@@ -225,7 +225,7 @@ status = {
       "title": "Music producer",
       "projects": [
         {"name": "Logic Pro home", "status": "green", "chip": "Green",
-         "notes": "Logic Pro 12.3.1 on Mac mini — primary producer home."},
+         "notes": "Logic Pro 12.3.1 on Mac mini -- primary producer home."},
         {"name": "LogicProMCP", "status": "jeff-gate", "chip": "Jeff-gate",
          "notes": "Installed. Pending Accessibility / Automation GUI grants from Jeff."},
         {"name": "Moises / Suno", "status": "jeff-gate", "chip": "Jeff-gate",
@@ -239,10 +239,10 @@ status = {
         project("story-corner-shelf", status="parked",
                 notes="Parked. Open PRs ignored unless Jeff unparks."),
         {"name": "Stalemate / Trailer Swift", "status": "parked", "chip": "Parked",
-         "notes": "Catalog/voice feel only — parked catalog lane."},
+         "notes": "Catalog/voice feel only -- parked catalog lane."},
         {"name": "RadDadSite #6", "status": "parked", "chip": "Parked",
          "url": "https://github.com/rupret007/RadDadSite/pull/6",
-         "notes": "Draft prod deploy — keep parked pending Che/server facts."},
+         "notes": "Draft prod deploy -- keep parked pending Che/server facts."},
       ],
     },
     {
@@ -258,7 +258,7 @@ status = {
   ],
   "fetched_repos": [x.get("name") for x in fetched if x.get("accessible")],
   "inaccessible": [x.get("name") for x in fetched if not x.get("accessible")],
-  "publish_notes": "Public repo — no secrets, no CSOne customer paths, AdoptIQ high-level only.",
+  "publish_notes": "Public repo -- no secrets, no CSOne customer paths, AdoptIQ high-level only.",
 }
 
 # HTML render (same dark mobile layout)

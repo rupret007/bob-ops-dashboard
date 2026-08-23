@@ -21,24 +21,25 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          # Optional repo secret BOB_OPS_GH_TOKEN (repo scope) so private rupret007/*
-          # tips/CI are visible. Falls back to GITHUB_TOKEN (public data only).
-          token: ${{ secrets.BOB_OPS_GH_TOKEN || github.token }}
+
+      - name: Setup gh auth
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh auth setup-git
+          gh auth status || true
 
       - name: Rebuild dashboard
         env:
-          GH_TOKEN: ${{ secrets.BOB_OPS_GH_TOKEN || github.token }}
+          GH_TOKEN: ${{ github.token }}
           OWNER: rupret007
         run: |
           set -euo pipefail
-          gh auth status || true
           chmod +x ./refresh.sh
           ./refresh.sh
 
       - name: Commit and push if changed
-        env:
-          GH_TOKEN: ${{ secrets.BOB_OPS_GH_TOKEN || github.token }}
         run: |
           set -euo pipefail
           git config user.name "bob-ops-dashboard[bot]"

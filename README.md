@@ -24,7 +24,7 @@ Optional: a Bob / Grok routine can also call `./refresh.sh --push` on meaningful
 
 ### Actions token limits
 
-Workflow uses default `GITHUB_TOKEN` (`permissions: contents: write`). It can read **public** `rupret007/*` repos and push this dashboard. **Private** repos (e.g. AdoptIQ / TACTrack) may show as inaccessible in Actions -- that is OK; keep high-level notes. To deepen private fetches later, add an optional repo PAT secret and wire it into the workflow.
+Workflow uses default `GITHUB_TOKEN` (`permissions: contents: write`) plus `gh auth setup-git`. It can read **public** `rupret007/*` repos and push this dashboard. **Private** repos (e.g. AdoptIQ / TACTrack) may show as inaccessible from Actions -- that is OK; keep high-level notes in the board.
 
 ## Jeff verify gate (phase 1)
 
