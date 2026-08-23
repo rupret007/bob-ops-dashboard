@@ -26,9 +26,9 @@ Optional: a Bob / Grok routine can also call `./refresh.sh --push` on meaningful
 
 Workflow uses default `GITHUB_TOKEN` (`permissions: contents: write`) plus `gh auth setup-git`. It can read **public** `rupret007/*` repos and push this dashboard. **Private** repos (e.g. AdoptIQ / TACTrack) may show as inaccessible from Actions -- that is OK; keep high-level notes in the board.
 
-## Jeff verify gate (phase 1)
+## Jeff verify gate
 
-Client allowlist + mailto challenge unlocks gated actions on-device. Server mailer is next. Allowlist currently includes Jeff's public GitHub email.
+Fixed allowlist: `jeffstory007@gmail.com` only. Bob emails a 6-digit code; the page SHA-256-checks it against `status.json.verify`. No mailto challenge. `localStorage` unlock is UX-only; real authority is a GitHub issue from `rupret007`.
 
 ## Publish notes
 
@@ -43,6 +43,8 @@ Client allowlist + mailto challenge unlocks gated actions on-device. Server mail
 ./refresh.sh          # rebuild index.html + status.json from live gh
 ./refresh.sh --push   # rebuild and push to Pages (main / root)
 ```
+
+QA before calling Unlock good: `./qa-claim-smoke.sh` (fail-closed `node --check`, ASCII-safe scripts, verify allowlist).
 
 ## Jeff verify + control panel
 

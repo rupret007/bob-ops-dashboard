@@ -382,6 +382,11 @@
   var actions = document.getElementById("jeff-actions");
   var btnConfirm = document.getElementById("btn-confirm-code");
   var btnOut = document.getElementById("btn-sign-out");
+  if (!codeEl || !statusEl || !actions || !btnConfirm || !btnOut) return;
+  var unlockBusy = false;
+  var unlockTouchAt = 0;
+  var decideBusy = {};
+  var pendingSeq = 0;
 
   function setStatus(msg, kind) {
     statusEl.textContent = msg || "";
@@ -422,6 +427,7 @@
   }
 
   async function doUnlock() {
+    if (unlockBusy || btnConfirm.disabled) return;
     var code = (codeEl.value || "").replace(/\s+/g, "");
     if (!/^\d{6}$/.test(code)) {
       setStatus("Need all 6 digits", "bad");
@@ -432,6 +438,8 @@
       setStatus("This browser cannot verify here. Try Safari again.", "bad");
       return;
     }
+    unlockBusy = true;
+    btnConfirm.disabled = true;
     try {
       var res = await fetch("./status.json?ts=" + Date.now(), { cache: "no-store" });
       if (!res.ok) throw new Error("status " + res.status);
@@ -445,12 +453,17 @@
         setStatus("That code expired. Ask Bob for a new one.", "bad");
         return;
       }
-      if ((v.email || JEFF_EMAIL).toLowerCase() !== JEFF_EMAIL) {
+      if (String(v.email || "").toLowerCase() !== JEFF_EMAIL) {
+        setStatus("Verify mismatch. Ask Bob.", "bad");
+        return;
+      }
+      var want = String(v.sha256).toLowerCase();
+      if (!/^[0-9a-f]{64}$/.test(want)) {
         setStatus("Verify mismatch. Ask Bob.", "bad");
         return;
       }
       var hex = await sha256Hex(code + ":" + JEFF_EMAIL);
-      if (hex !== String(v.sha256).toLowerCase()) {
+      if (hex !== want) {
         setStatus("That code does not match. Try again.", "bad");
         return;
       }
@@ -458,16 +471,21 @@
       applyVerified(loadAuth());
     } catch (e) {
       setStatus("Could not reach status. Pull to refresh, then Unlock.", "bad");
+    } finally {
+      unlockBusy = false;
+      if (!document.body.classList.contains("jeff-verified")) btnConfirm.disabled = false;
     }
   }
 
   btnConfirm.addEventListener("click", function (ev) {
     ev.preventDefault();
+    if (Date.now() - unlockTouchAt < 800) return;
     doUnlock();
   });
   btnConfirm.addEventListener("touchend", function (ev) {
     if (btnConfirm.disabled) return;
     ev.preventDefault();
+    unlockTouchAt = Date.now();
     doUnlock();
   }, { passive: false });
   codeEl.addEventListener("keydown", function (ev) {
@@ -495,12 +513,22 @@
   }
 
   function openDecisionIssue(verb, id, title) {
-    var t = "BOB-" + verb + ": " + id;
+    if (verb !== "APPROVE" && verb !== "DENY" && verb !== "HOLD") return;
+    var pid = String(id || "").trim();
+    if (!/^[a-zA-Z0-9._-]+$/.test(pid)) {
+      setStatus("Bad pending id", "bad");
+      return;
+    }
+    var key = verb + ":" + pid;
+    if (decideBusy[key]) return;
+    decideBusy[key] = 1;
+    setTimeout(function () { delete decideBusy[key]; }, 2000);
+    var t = "BOB-" + verb + ": " + pid;
     var body = [
       "Dashboard control decision",
       "",
-      "id: " + id,
-      "title: " + (title || id),
+      "id: " + pid,
+      "title: " + String(title || pid).slice(0, 160),
       "decision: " + verb.toLowerCase(),
       "from: jeffstory007@gmail.com (verified device)",
       "at: " + new Date().toISOString(),
@@ -539,11 +567,14 @@
       div.querySelector(".ptitle").textContent = it.title || it.id;
       div.querySelector(".pdetail").textContent = it.detail || "";
       var rk = div.querySelector(".prisk");
-      rk.textContent = (it.risk || "low") + " · " + (it.kind || "ops");
+      rk.textContent = (it.risk || "low") + " \u00b7 " + (it.kind || "ops");
       rk.classList.add(riskClass(it.risk));
       div.querySelectorAll("button[data-dec]").forEach(function (b) {
         b.addEventListener("click", function () {
+          if (b.disabled) return;
+          b.disabled = true;
           openDecisionIssue(b.getAttribute("data-dec"), it.id, it.title);
+          setTimeout(function () { b.disabled = false; }, 2000);
         });
       });
       pendingList.appendChild(div);
@@ -551,12 +582,18 @@
   }
 
   function loadPending() {
+    var seq = ++pendingSeq;
     fetch("./status.json?ts=" + Date.now(), { cache: "no-store" })
-      .then(function (r) { return r.json(); })
+      .then(function (r) {
+        if (!r.ok) throw new Error("status " + r.status);
+        return r.json();
+      })
       .then(function (data) {
+        if (seq !== pendingSeq) return;
         renderPending((data && data.pending) || []);
       })
       .catch(function () {
+        if (seq !== pendingSeq) return;
         renderPending([]);
       });
   }
@@ -654,6 +691,14 @@
     });
   }
 
+  function safeHref(u) {
+    var s = String(u == null ? "" : u).trim();
+    var low = s.toLowerCase();
+    if (low.indexOf("https://") !== 0 && low.indexOf("http://") !== 0) return "";
+    if (/[\s<>"']/.test(s)) return "";
+    return s;
+  }
+
   function chipHtml(st, label) {
     var c = CHIP_COLORS[st] || CHIP_COLORS.parked;
     return '<span class="chip" style="--c:' + c[0] + ';--bg:' + c[1] + ';--fg:' + c[2] + '">' + esc(label) + '</span>';
@@ -663,7 +708,7 @@
     if (!ci) return '<span class="meta">No Actions</span>';
     var concl = ci.conclusion || "unknown";
     var color = ({ success: "#16a34a", failure: "#dc2626", cancelled: "#64748b" })[concl] || "#ca8a04";
-    return '<span class="ci" style="color:' + color + '">● ' + esc(ci.name || "CI") + ': ' + esc(concl) + '</span>';
+    return '<span class="ci" style="color:' + color + '">\u25cf ' + esc(ci.name || "CI") + ': ' + esc(concl) + '</span>';
   }
 
   function showSilence(msg) {
@@ -689,12 +734,12 @@
   function updateSilence() {
     var age = Date.now() - knownMs;
     if (pollFailStreak >= 1) {
-      showSilence("⚠ status.json poll failing - board may be wrong. Retrying every 30s. Last successful poll data age: " + fmtSilenceAge(age) + ".");
+      showSilence("\u26a0 status.json poll failing - board may be wrong. Retrying every 30s. Last successful poll data age: " + fmtSilenceAge(age) + ".");
       return;
     }
     if (age > SILENCE_LIMIT_MS) {
       var when = (displayEl && displayEl.textContent) || known || "unknown";
-      showSilence("⚠ Refresh has been silent since " + when + " (" + fmtSilenceAge(age) + " ago) - statuses below are outdated; repos may be up or down regardless of what this page shows.");
+      showSilence("\u26a0 Refresh has been silent since " + when + " (" + fmtSilenceAge(age) + " ago) - statuses below are outdated; repos may be up or down regardless of what this page shows.");
       return;
     }
     if (pollFailStreak === 0) hideSilence();
@@ -734,18 +779,21 @@
         var st = p.status || "parked";
         var chip = chipHtml(st, p.chip || "?");
         var title = p.name || "project";
-        var titleHtml = p.url
-          ? '<a href="' + esc(p.url) + '" target="_blank" rel="noopener">' + esc(title) + '</a>'
+        var href = safeHref(p.url);
+        var titleHtml = href
+          ? '<a href="' + esc(href) + '" target="_blank" rel="noopener">' + esc(title) + '</a>'
           : esc(title);
         var bits = [];
         if (p.tip_sha) bits.push("<code>" + esc(p.tip_sha) + "</code>");
         if (p.product_sha) bits.push("product <code>" + esc(p.product_sha) + "</code>");
         if (p.release) bits.push("release <strong>" + esc(p.release) + "</strong>");
-        if (p.open_prs != null) bits.push(p.open_prs + " open PR" + (p.open_prs === 1 ? "" : "s"));
+        if (typeof p.open_prs === "number" && isFinite(p.open_prs)) {
+          bits.push(p.open_prs + " open PR" + (p.open_prs === 1 ? "" : "s"));
+        }
         if (p.private) bits.push("private");
         if (p.accessible === false && p.repo) bits.push("inaccessible");
         cards += '<article class="card"><header><h3>' + titleHtml + '</h3>' + chip +
-          '</header><div class="row">' + bits.join(" · ") + '</div><div class="row">' +
+          '</header><div class="row">' + bits.join(" \u00b7 ") + '</div><div class="row">' +
           ciBadge(p.ci) + '</div><p class="notes">' + esc(p.notes || "") + '</p></article>';
       });
       var strip = "";
@@ -773,7 +821,9 @@
     }
   }
 
+  var pollSeq = 0;
   function poll() {
+    var seq = ++pollSeq;
     var url = "./status.json?ts=" + Date.now();
     fetch(url, { cache: "no-store" })
       .then(function (res) {
@@ -781,6 +831,7 @@
         return res.json();
       })
       .then(function (data) {
+        if (seq !== pollSeq) return;
         lastPollOk = Date.now();
         pollFailStreak = 0;
         if (dot) {
@@ -798,6 +849,7 @@
         updateSilence();
       })
       .catch(function () {
+        if (seq !== pollSeq) return;
         pollFailStreak += 1;
         freshness.textContent = "poll failed -- retrying";
         freshness.classList.add("stale");

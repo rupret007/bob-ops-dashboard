@@ -39,6 +39,12 @@ jobs:
           chmod +x ./refresh.sh
           ./refresh.sh
 
+      - name: QA claim smoke (generated page)
+        run: |
+          set -euo pipefail
+          chmod +x ./qa-claim-smoke.sh
+          ./qa-claim-smoke.sh
+
       - name: Commit and push if changed
         run: |
           set -euo pipefail
