@@ -97,7 +97,7 @@ done
 echo ']' >> "$TMP"
 
 python3 - "$ROOT" "$TMP" <<'PY'
-import json, sys, re, time, subprocess
+import json, sys, re, time, subprocess, html
 from datetime import datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -191,7 +191,7 @@ status = {
         project("rad-dad-show-night", notes="Show-night run sheet / flyer. No CI is OK."),
         project("AI-Music-Vault", notes="Private docs/index. High-level only on public page."),
         project("Turdanoid", status="yellow",
-                notes="Tip usually green; stale open PRs → hygiene."),
+                notes="Tip usually green; stale open PRs -> hygiene."),
       ],
     },
     {
@@ -387,7 +387,7 @@ if agents is None and isinstance(prev_early, dict):
             ]
             src = "previous:stale->unknown"
 if agents is None:
-    agents = _default_agents("unknown", "No Mac probe yet — run probe-agents-status.sh")
+    agents = _default_agents("unknown", "No Mac probe yet -- run probe-agents-status.sh")
     src = "default:unknown"
 
 status["agents"] = agents
@@ -428,16 +428,30 @@ CHIP_COLORS = {
   "jeff-gate": ("#d97757", "#2a1510", "#f5c4b3"),
 }
 
+def h(s):
+    return html.escape("" if s is None else str(s), quote=True)
+
+def safe_href(u):
+    if not u:
+        return ""
+    s = str(u).strip()
+    low = s.lower()
+    if not (low.startswith("https://") or low.startswith("http://")):
+        return ""
+    if any(c in s for c in (" ", "\n", "\r", "\t", "<", ">", '"', "'")):
+        return ""
+    return s
+
 def chip_html(st, label):
     border, bg, fg = CHIP_COLORS.get(st, CHIP_COLORS["parked"])
-    return f'<span class="chip" style="--c:{border};--bg:{bg};--fg:{fg}">{label}</span>'
+    return f'<span class="chip" style="--c:{border};--bg:{bg};--fg:{fg}">{h(label)}</span>'
 
 def ci_badge(ci):
     if not ci:
         return '<span class="meta">No Actions</span>'
     concl = ci.get("conclusion") or "unknown"
     color = {"success":"#16a34a","failure":"#dc2626","cancelled":"#64748b"}.get(concl, "#ca8a04")
-    return f'<span class="ci" style="color:{color}">● {ci.get("name","CI")}: {concl}</span>'
+    return f'<span class="ci" style="color:{color}">&#9679; {h(ci.get("name","CI"))}: {h(concl)}</span>'
 
 sections_html = []
 
@@ -446,14 +460,13 @@ def agents_strip_html(agents_list):
     for a in agents_list or []:
         st, label = AGENT_STATE_CHIP.get(a.get("state"), AGENT_STATE_CHIP["unknown"])
         chip = chip_html(st, label)
-        name = a.get("name") or a.get("id") or "agent"
-        detail = a.get("detail") or ""
-        # Escape attribute quotes in detail title
-        detail_attr = detail.replace('"', "&quot;")
+        name = h(a.get("name") or a.get("id") or "agent")
+        detail = h(a.get("detail") or "")
+        aid = h(a.get("id") or a.get("name") or "agent")
         pills.append(
-            f'<div class="agent-pill" data-agent-id="{a.get("id") or name}">'
+            f'<div class="agent-pill" data-agent-id="{aid}">'
             f'<div class="top"><span class="name">{name}</span>{chip}</div>'
-            f'<div class="detail" title="{detail_attr}">{detail}</div></div>'
+            f'<div class="detail" title="{detail}">{detail}</div></div>'
         )
     return (
         '<div class="agents-strip" id="agents-strip">'
@@ -466,19 +479,23 @@ for sec in status["sections"]:
     cards = []
     for p in sec["projects"]:
         chip = chip_html(p.get("status","parked"), p.get("chip", "?"))
-        title = p["name"]
-        url = p.get("url")
-        title_html = f'<a href="{url}" target="_blank" rel="noopener">{title}</a>' if url else title
+        title = h(p.get("name") or "project")
+        url = safe_href(p.get("url"))
+        title_html = f'<a href="{h(url)}" target="_blank" rel="noopener">{title}</a>' if url else title
         bits = []
         if p.get("tip_sha"):
-            bits.append(f'<code>{p["tip_sha"]}</code>')
+            bits.append(f'<code>{h(p["tip_sha"])}</code>')
         if p.get("product_sha"):
-            bits.append(f'product <code>{p["product_sha"]}</code>')
+            bits.append(f'product <code>{h(p["product_sha"])}</code>')
         if p.get("release"):
-            bits.append(f'release <strong>{p["release"]}</strong>')
+            bits.append(f'release <strong>{h(p["release"])}</strong>')
         if p.get("open_prs") is not None:
-            n = p["open_prs"]
-            bits.append(f'{n} open PR' + ("s" if n != 1 else ""))
+            try:
+                n = int(p["open_prs"])
+            except (TypeError, ValueError):
+                n = None
+            if n is not None:
+                bits.append(f"{n} open PR" + ("s" if n != 1 else ""))
         if p.get("private"):
             bits.append("private")
         if p.get("accessible") is False and p.get("repo"):
@@ -489,14 +506,14 @@ for sec in status["sections"]:
           <header><h3>{title_html}</h3>{chip}</header>
           <div class="row">{meta}</div>
           <div class="row">{ci_badge(p.get("ci"))}</div>
-          <p class="notes">{p.get("notes","")}</p>
+          <p class="notes">{h(p.get("notes",""))}</p>
         </article>''')
     strip = ""
     if sec.get("id") == "active-agents":
         strip = agents_strip_html(status.get("agents"))
     sections_html.append(f'''
-    <section id="{sec["id"]}">
-      <h2>{sec["title"]}</h2>
+    <section id="{h(sec.get("id") or "")}">
+      <h2>{h(sec.get("title") or "")}</h2>
       {strip}
       <div class="grid">{''.join(cards)}</div>
     </section>''')
@@ -660,7 +677,7 @@ html = f'''<!DOCTYPE html>
   <header class="hero">
     <h1><span class="mark">Bob</span> Ops Dashboard</h1>
     <div class="sub">Projects Bob is working on for Jeff Story · live music/apps focus · closet parked</div>
-    <div class="sub live-stamp" id="live-stamp" data-generated-at="{updated_iso}" data-display="{updated_ct}"><span class="live-dot" id="live-dot" aria-hidden="true"></span>Last updated: <strong id="updated-display">{updated_ct}</strong> · <span id="freshness">Live - starting</span> · polls status.json every 30s</div>
+    <div class="sub live-stamp" id="live-stamp" data-generated-at="{h(updated_iso)}" data-display="{h(updated_ct)}"><span class="live-dot" id="live-dot" aria-hidden="true"></span>Last updated: <strong id="updated-display">{h(updated_ct)}</strong> · <span id="freshness">Live - starting</span> · polls status.json every 30s</div>
     <div class="legend">
       {chip_html("green","Green")}{chip_html("yellow","Yellow")}{chip_html("red","Red")}{chip_html("parked","Parked")}{chip_html("jeff-gate","Jeff-gate")}
     </div>
@@ -698,7 +715,7 @@ html = f'''<!DOCTYPE html>
   <footer>
     <p>Source: <a href="https://github.com/rupret007/bob-ops-dashboard">rupret007/bob-ops-dashboard</a>
     · <a href="./status.json">status.json</a> · Refresh: <code>./refresh.sh</code> + Actions cron every 15m · client poll 30s · soft-paint (no full reload).</p>
-    <p id="fetched-line">Live CI via <code>gh</code>: {', '.join(status.get('fetched_repos') or [])}.</p>
+    <p id="fetched-line">Live CI via <code>gh</code>: {h(', '.join(status.get('fetched_repos') or []))}.</p>
   </footer>
 </div>
 <script>
@@ -712,6 +729,11 @@ html = f'''<!DOCTYPE html>
   var actions = document.getElementById("jeff-actions");
   var btnConfirm = document.getElementById("btn-confirm-code");
   var btnOut = document.getElementById("btn-sign-out");
+  if (!codeEl || !statusEl || !actions || !btnConfirm || !btnOut) return;
+  var unlockBusy = false;
+  var unlockTouchAt = 0;
+  var decideBusy = {{}};
+  var pendingSeq = 0;
 
   function setStatus(msg, kind) {{
     statusEl.textContent = msg || "";
@@ -752,6 +774,7 @@ html = f'''<!DOCTYPE html>
   }}
 
   async function doUnlock() {{
+    if (unlockBusy || btnConfirm.disabled) return;
     var code = (codeEl.value || "").replace(/\s+/g, "");
     if (!/^\d{{6}}$/.test(code)) {{
       setStatus("Need all 6 digits", "bad");
@@ -762,6 +785,8 @@ html = f'''<!DOCTYPE html>
       setStatus("This browser cannot verify here. Try Safari again.", "bad");
       return;
     }}
+    unlockBusy = true;
+    btnConfirm.disabled = true;
     try {{
       var res = await fetch("./status.json?ts=" + Date.now(), {{ cache: "no-store" }});
       if (!res.ok) throw new Error("status " + res.status);
@@ -775,12 +800,17 @@ html = f'''<!DOCTYPE html>
         setStatus("That code expired. Ask Bob for a new one.", "bad");
         return;
       }}
-      if ((v.email || JEFF_EMAIL).toLowerCase() !== JEFF_EMAIL) {{
+      if (String(v.email || "").toLowerCase() !== JEFF_EMAIL) {{
+        setStatus("Verify mismatch. Ask Bob.", "bad");
+        return;
+      }}
+      var want = String(v.sha256).toLowerCase();
+      if (!/^[0-9a-f]{{64}}$/.test(want)) {{
         setStatus("Verify mismatch. Ask Bob.", "bad");
         return;
       }}
       var hex = await sha256Hex(code + ":" + JEFF_EMAIL);
-      if (hex !== String(v.sha256).toLowerCase()) {{
+      if (hex !== want) {{
         setStatus("That code does not match. Try again.", "bad");
         return;
       }}
@@ -788,16 +818,21 @@ html = f'''<!DOCTYPE html>
       applyVerified(loadAuth());
     }} catch (e) {{
       setStatus("Could not reach status. Pull to refresh, then Unlock.", "bad");
+    }} finally {{
+      unlockBusy = false;
+      if (!document.body.classList.contains("jeff-verified")) btnConfirm.disabled = false;
     }}
   }}
 
   btnConfirm.addEventListener("click", function (ev) {{
     ev.preventDefault();
+    if (Date.now() - unlockTouchAt < 800) return;
     doUnlock();
   }});
   btnConfirm.addEventListener("touchend", function (ev) {{
     if (btnConfirm.disabled) return;
     ev.preventDefault();
+    unlockTouchAt = Date.now();
     doUnlock();
   }}, {{ passive: false }});
   codeEl.addEventListener("keydown", function (ev) {{
@@ -825,12 +860,22 @@ html = f'''<!DOCTYPE html>
   }}
 
   function openDecisionIssue(verb, id, title) {{
-    var t = "BOB-" + verb + ": " + id;
+    if (verb !== "APPROVE" && verb !== "DENY" && verb !== "HOLD") return;
+    var pid = String(id || "").trim();
+    if (!/^[a-zA-Z0-9._-]+$/.test(pid)) {{
+      setStatus("Bad pending id", "bad");
+      return;
+    }}
+    var key = verb + ":" + pid;
+    if (decideBusy[key]) return;
+    decideBusy[key] = 1;
+    setTimeout(function () {{ delete decideBusy[key]; }}, 2000);
+    var t = "BOB-" + verb + ": " + pid;
     var body = [
       "Dashboard control decision",
       "",
-      "id: " + id,
-      "title: " + (title || id),
+      "id: " + pid,
+      "title: " + String(title || pid).slice(0, 160),
       "decision: " + verb.toLowerCase(),
       "from: jeffstory007@gmail.com (verified device)",
       "at: " + new Date().toISOString(),
@@ -869,11 +914,14 @@ html = f'''<!DOCTYPE html>
       div.querySelector(".ptitle").textContent = it.title || it.id;
       div.querySelector(".pdetail").textContent = it.detail || "";
       var rk = div.querySelector(".prisk");
-      rk.textContent = (it.risk || "low") + " · " + (it.kind || "ops");
+      rk.textContent = (it.risk || "low") + " \\u00b7 " + (it.kind || "ops");
       rk.classList.add(riskClass(it.risk));
       div.querySelectorAll("button[data-dec]").forEach(function (b) {{
         b.addEventListener("click", function () {{
+          if (b.disabled) return;
+          b.disabled = true;
           openDecisionIssue(b.getAttribute("data-dec"), it.id, it.title);
+          setTimeout(function () {{ b.disabled = false; }}, 2000);
         }});
       }});
       pendingList.appendChild(div);
@@ -881,12 +929,18 @@ html = f'''<!DOCTYPE html>
   }}
 
   function loadPending() {{
+    var seq = ++pendingSeq;
     fetch("./status.json?ts=" + Date.now(), {{ cache: "no-store" }})
-      .then(function (r) {{ return r.json(); }})
+      .then(function (r) {{
+        if (!r.ok) throw new Error("status " + r.status);
+        return r.json();
+      }})
       .then(function (data) {{
+        if (seq !== pendingSeq) return;
         renderPending((data && data.pending) || []);
       }})
       .catch(function () {{
+        if (seq !== pendingSeq) return;
         renderPending([]);
       }});
   }}
@@ -984,6 +1038,14 @@ html = f'''<!DOCTYPE html>
     }});
   }}
 
+  function safeHref(u) {{
+    var s = String(u == null ? "" : u).trim();
+    var low = s.toLowerCase();
+    if (low.indexOf("https://") !== 0 && low.indexOf("http://") !== 0) return "";
+    if (/[\\s<>"']/.test(s)) return "";
+    return s;
+  }}
+
   function chipHtml(st, label) {{
     var c = CHIP_COLORS[st] || CHIP_COLORS.parked;
     return '<span class="chip" style="--c:' + c[0] + ';--bg:' + c[1] + ';--fg:' + c[2] + '">' + esc(label) + '</span>';
@@ -993,7 +1055,7 @@ html = f'''<!DOCTYPE html>
     if (!ci) return '<span class="meta">No Actions</span>';
     var concl = ci.conclusion || "unknown";
     var color = ({{ success: "#16a34a", failure: "#dc2626", cancelled: "#64748b" }})[concl] || "#ca8a04";
-    return '<span class="ci" style="color:' + color + '">● ' + esc(ci.name || "CI") + ': ' + esc(concl) + '</span>';
+    return '<span class="ci" style="color:' + color + '">\\u25cf ' + esc(ci.name || "CI") + ': ' + esc(concl) + '</span>';
   }}
 
   function showSilence(msg) {{
@@ -1019,12 +1081,12 @@ html = f'''<!DOCTYPE html>
   function updateSilence() {{
     var age = Date.now() - knownMs;
     if (pollFailStreak >= 1) {{
-      showSilence("⚠ status.json poll failing - board may be wrong. Retrying every 30s. Last successful poll data age: " + fmtSilenceAge(age) + ".");
+      showSilence("\\u26a0 status.json poll failing - board may be wrong. Retrying every 30s. Last successful poll data age: " + fmtSilenceAge(age) + ".");
       return;
     }}
     if (age > SILENCE_LIMIT_MS) {{
       var when = (displayEl && displayEl.textContent) || known || "unknown";
-      showSilence("⚠ Refresh has been silent since " + when + " (" + fmtSilenceAge(age) + " ago) - statuses below are outdated; repos may be up or down regardless of what this page shows.");
+      showSilence("\\u26a0 Refresh has been silent since " + when + " (" + fmtSilenceAge(age) + " ago) - statuses below are outdated; repos may be up or down regardless of what this page shows.");
       return;
     }}
     if (pollFailStreak === 0) hideSilence();
@@ -1064,18 +1126,21 @@ html = f'''<!DOCTYPE html>
         var st = p.status || "parked";
         var chip = chipHtml(st, p.chip || "?");
         var title = p.name || "project";
-        var titleHtml = p.url
-          ? '<a href="' + esc(p.url) + '" target="_blank" rel="noopener">' + esc(title) + '</a>'
+        var href = safeHref(p.url);
+        var titleHtml = href
+          ? '<a href="' + esc(href) + '" target="_blank" rel="noopener">' + esc(title) + '</a>'
           : esc(title);
         var bits = [];
         if (p.tip_sha) bits.push("<code>" + esc(p.tip_sha) + "</code>");
         if (p.product_sha) bits.push("product <code>" + esc(p.product_sha) + "</code>");
         if (p.release) bits.push("release <strong>" + esc(p.release) + "</strong>");
-        if (p.open_prs != null) bits.push(p.open_prs + " open PR" + (p.open_prs === 1 ? "" : "s"));
+        if (typeof p.open_prs === "number" && isFinite(p.open_prs)) {{
+          bits.push(p.open_prs + " open PR" + (p.open_prs === 1 ? "" : "s"));
+        }}
         if (p.private) bits.push("private");
         if (p.accessible === false && p.repo) bits.push("inaccessible");
         cards += '<article class="card"><header><h3>' + titleHtml + '</h3>' + chip +
-          '</header><div class="row">' + bits.join(" · ") + '</div><div class="row">' +
+          '</header><div class="row">' + bits.join(" \\u00b7 ") + '</div><div class="row">' +
           ciBadge(p.ci) + '</div><p class="notes">' + esc(p.notes || "") + '</p></article>';
       }});
       var strip = "";
@@ -1103,7 +1168,9 @@ html = f'''<!DOCTYPE html>
     }}
   }}
 
+  var pollSeq = 0;
   function poll() {{
+    var seq = ++pollSeq;
     var url = "./status.json?ts=" + Date.now();
     fetch(url, {{ cache: "no-store" }})
       .then(function (res) {{
@@ -1111,6 +1178,7 @@ html = f'''<!DOCTYPE html>
         return res.json();
       }})
       .then(function (data) {{
+        if (seq !== pollSeq) return;
         lastPollOk = Date.now();
         pollFailStreak = 0;
         if (dot) {{
@@ -1128,6 +1196,7 @@ html = f'''<!DOCTYPE html>
         updateSilence();
       }})
       .catch(function () {{
+        if (seq !== pollSeq) return;
         pollFailStreak += 1;
         freshness.textContent = "poll failed -- retrying";
         freshness.classList.add("stale");
@@ -1171,10 +1240,17 @@ except Exception:
 v = prev.get("verify") if isinstance(prev, dict) else None
 if isinstance(v, dict) and v.get("sha256") and v.get("exp"):
     try:
-        if int(v["exp"]) > int(time.time() * 1000):
+        em = (v.get("email") or "").lower()
+        sha = str(v["sha256"]).lower()
+        if (
+            em == "jeffstory007@gmail.com"
+            and int(v["exp"]) > int(time.time() * 1000)
+            and len(sha) == 64
+            and all(c in "0123456789abcdef" for c in sha)
+        ):
             status["verify"] = {
-                "email": (v.get("email") or "jeffstory007@gmail.com").lower(),
-                "sha256": str(v["sha256"]).lower(),
+                "email": em,
+                "sha256": sha,
                 "exp": int(v["exp"]),
                 "issued_at": v.get("issued_at"),
             }
@@ -1326,15 +1402,22 @@ if [[ $PUSH -eq 1 ]]; then
   mkdir -p "$WORK/.github/workflows"
   cp "$ROOT/index.html" "$ROOT/status.json" "$ROOT/README.md" "$ROOT/refresh.sh" "$WORK/"
   [[ -f "$ROOT/probe-agents-status.sh" ]] && cp "$ROOT/probe-agents-status.sh" "$WORK/"
+  [[ -f "$ROOT/qa-claim-smoke.sh" ]] && cp "$ROOT/qa-claim-smoke.sh" "$WORK/"
   # Do not commit agents-status.json by default (Mac-local probe snapshot); refresh merges it when present.
   if [[ -f "$ROOT/.github/workflows/refresh-dashboard.yml" ]]; then
     cp "$ROOT/.github/workflows/refresh-dashboard.yml" "$WORK/.github/workflows/"
   fi
+  if [[ -f "$ROOT/.github/workflows/qa-claim-smoke.yml" ]]; then
+    cp "$ROOT/.github/workflows/qa-claim-smoke.yml" "$WORK/.github/workflows/"
+  fi
   chmod +x "$WORK/refresh.sh"
+  [[ -f "$WORK/qa-claim-smoke.sh" ]] && chmod +x "$WORK/qa-claim-smoke.sh"
   cd "$WORK"
   git add index.html status.json README.md refresh.sh
   [[ -f probe-agents-status.sh ]] && git add probe-agents-status.sh
+  [[ -f qa-claim-smoke.sh ]] && git add qa-claim-smoke.sh
   [[ -f .github/workflows/refresh-dashboard.yml ]] && git add .github/workflows/refresh-dashboard.yml
+  [[ -f .github/workflows/qa-claim-smoke.yml ]] && git add .github/workflows/qa-claim-smoke.yml
   if git diff --cached --quiet; then
     echo "No changes to push."
   else

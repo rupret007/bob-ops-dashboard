@@ -1,0 +1,20 @@
+name: QA claim smoke
+
+# Fail-closed static gate: node --check, ASCII-safe JS, verify allowlist, XSS helpers.
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Run qa-claim-smoke.sh
+        run: |
+          set -euo pipefail
+          chmod +x ./qa-claim-smoke.sh
+          ./qa-claim-smoke.sh
