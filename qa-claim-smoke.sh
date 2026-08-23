@@ -124,6 +124,11 @@ pass "no OTP / Unlock leftovers"
 
 # 4) Required public-board + anti-regression symbols
 grep -q 'function openDecisionIssue' "$INDEX" || fail "openDecisionIssue missing"
+grep -q 'function decisionHref' "$INDEX" || fail "decisionHref missing"
+grep -q 'function openBlank' "$INDEX" || fail "openBlank missing"
+grep -q 'pageshow' "$INDEX" || fail "pageshow resume missing"
+grep -q 'AbortController' "$INDEX" || fail "poll AbortController missing"
+grep -q 'noopener noreferrer' "$INDEX" || fail "decision links missing noreferrer"
 grep -q 'function safeHref' "$INDEX" || fail "safeHref missing"
 grep -q 'pollSeq' "$INDEX" || fail "pollSeq missing"
 grep -q 'decideBusy' "$INDEX" || fail "decideBusy missing"
@@ -177,6 +182,10 @@ grep -q 'status_from_fetch' "$REFRESH" || fail "refresh.sh missing status_from_f
 grep -q 'pending-more' "$REFRESH" || fail "refresh.sh missing pending-more"
 grep -q 'boardFingerprint' "$REFRESH" || fail "refresh.sh missing boardFingerprint"
 grep -q 'ageGateAgents' "$REFRESH" || fail "refresh.sh missing ageGateAgents"
+grep -q 'decisionHref' "$REFRESH" || fail "refresh.sh missing decisionHref"
+grep -q 'pick_tip_ci' "$REFRESH" || fail "refresh.sh missing pick_tip_ci"
+grep -q 'AbortController' "$REFRESH" || fail "refresh.sh missing AbortController"
+grep -q 'pageshow' "$REFRESH" || fail "refresh.sh missing pageshow"
 if grep -q 'from preserve_verify' "$REFRESH"; then
   fail "refresh.sh still imports preserve_verify"
 fi
@@ -384,6 +393,10 @@ if "pending-more" not in html:
     raise SystemExit("generated page missing collapsed lower-risk pending")
 if "function boardFingerprint" not in html or "function ageGateAgents" not in html:
     raise SystemExit("generated page missing no-flash / age-gate helpers")
+if "function decisionHref" not in html or "pageshow" not in html or "AbortController" not in html:
+    raise SystemExit("generated page missing phone decision / poll helpers")
+if 'rel="noopener noreferrer"' not in html:
+    raise SystemExit("generated page missing noreferrer decision links")
 agents = st.get("agents") or []
 if any(str(a.get("state") or "") == "running" for a in agents):
     raise SystemExit("stale seed Running leaked into agents")

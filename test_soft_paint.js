@@ -50,6 +50,9 @@ function run() {
   }
   if (html.indexOf("class=\"card\"") !== -1) fail("essay cards leaked");
   if (html.indexOf("data-checked-at") === -1) fail("agent pills need data-checked-at");
+  if (src.indexOf("pageshow") === -1) fail("pageshow resume missing");
+  if (src.indexOf("AbortController") === -1) fail("poll AbortController missing");
+  if (src.indexOf("POLL_TIMEOUT_MS") === -1) fail("poll timeout missing");
 
   const boardFingerprint = eval("(" + extractFn(src, "boardFingerprint") + ")");
   const a = {
@@ -115,6 +118,17 @@ function run() {
   ]);
   if (fresh[0].state !== "running" || fresh[1].state !== "idle" || fresh[2].state !== "installed") {
     fail("fresh probe must keep honest states");
+  }
+
+  const compactSignal = eval("(" + extractFn(src, "compactSignal") + ")");
+  if (compactSignal({ release: "v0.26.0", ci: { conclusion: "failure" }, open_prs: 1 }) !== "CI fail") {
+    fail("CI fail must beat release + open PR");
+  }
+  if (compactSignal({ release: "v0.26.0", ci: { conclusion: "in_progress" } }) !== "CI running") {
+    fail("in-progress tip CI must say CI running");
+  }
+  if (compactSignal({ release: "v0.26.0", ci: { conclusion: "success" }, open_prs: 0 }) !== "v0.26.0") {
+    fail("green release still shows the tag");
   }
 
   console.log("soft-paint / agent age-gate smoke ok");

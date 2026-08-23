@@ -29,9 +29,11 @@ need_gh() {
 
 fetch_repo() {
   local r="$1"
-  python3 - "$OWNER" "$r" <<'PY'
+  python3 - "$OWNER" "$r" "$ROOT" <<'PY'
 import json, subprocess, sys
-owner, repo = sys.argv[1], sys.argv[2]
+owner, repo, root = sys.argv[1], sys.argv[2], sys.argv[3]
+sys.path.insert(0, root)
+from board_meta import pick_tip_ci
 full = f"{owner}/{repo}"
 
 def api(path, default=None):
@@ -55,17 +57,7 @@ msg = (c.get("message") or "").split("\n", 1)[0]
 
 prs = api(f"repos/{full}/pulls?state=open&per_page=100", []) or []
 runs = api(f"repos/{full}/actions/runs?per_page=20", {}) or {}
-ci = None
-for run in runs.get("workflow_runs") or []:
-    if run.get("head_branch") == branch and run.get("status") == "completed":
-        ci = {
-            "name": run.get("name"),
-            "conclusion": run.get("conclusion"),
-            "branch": branch,
-            "sha": (run.get("head_sha") or "")[:7],
-            "created": run.get("created_at"),
-        }
-        break
+ci = pick_tip_ci(runs.get("workflow_runs") or [], branch)
 
 rels = api(f"repos/{full}/releases?per_page=1", []) or []
 release = (rels[0].get("tag_name") if rels else None)
@@ -113,6 +105,7 @@ from board_meta import (
     CONTROL_ACTIONS,
     attention_rank,
     compact_signal,
+    decision_href,
     drop_leftover_verify,
     is_quiet_lane,
     merge_first_class,
@@ -472,6 +465,17 @@ def chip_html(st, label):
     border, bg, fg = CHIP_COLORS.get(st, CHIP_COLORS["parked"])
     return f'<span class="chip" style="--c:{border};--bg:{bg};--fg:{fg}">{h(label)}</span>'
 
+def pending_dec_link(verb, pid, title, extra_class=""):
+    href = safe_href(decision_href(verb, pid, title))
+    if not href:
+        return ""
+    cls = "dec" + ((" " + extra_class) if extra_class else "")
+    label = {"APPROVE": "Approve", "HOLD": "Hold", "DENY": "Deny"}[verb]
+    return (
+        f'<a class="{cls}" data-dec="{h(verb)}" href="{h(href)}" '
+        f'target="_blank" rel="noopener noreferrer">{label}</a>'
+    )
+
 def pending_item_html(it):
     if not isinstance(it, dict):
         return ""
@@ -490,9 +494,9 @@ def pending_item_html(it):
         f'<span class="prisk {h(risk)}">{h(risk)}</span></div>'
         f'<div class="pdetail">{h(detail)}</div>'
         f'<div class="prow">'
-        f'<button type="button" data-dec="APPROVE">Approve</button>'
-        f'<button type="button" class="warn" data-dec="HOLD">Hold</button>'
-        f'<button type="button" class="danger" data-dec="DENY">Deny</button>'
+        f'{pending_dec_link("APPROVE", pid, title)}'
+        f'{pending_dec_link("HOLD", pid, title, "warn")}'
+        f'{pending_dec_link("DENY", pid, title, "danger")}'
         f'</div></div>'
     )
 
@@ -630,7 +634,7 @@ html = f'''<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="utf-8"/>
-<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
 <meta name="color-scheme" content="dark"/>
 <title>Bob Ops Dashboard -- Jeff Story</title>
 <style>
@@ -644,7 +648,7 @@ html = f'''<!DOCTYPE html>
     font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;
     font-size:16px; line-height:1.4; }}
   a {{ color:var(--link); text-decoration:none; }} a:hover {{ text-decoration:underline; }}
-  .wrap {{ max-width:40rem; margin:0 auto; padding:1rem 1rem calc(3.25rem + env(safe-area-inset-bottom, 0px)); }}
+  .wrap {{ max-width:40rem; margin:0 auto; padding:calc(1rem + env(safe-area-inset-top, 0px)) 1rem calc(3.25rem + env(safe-area-inset-bottom, 0px)); }}
   header.pulse {{ padding:0 0 1rem; margin:0 0 1.35rem; border:0; background:transparent; }}
   header.pulse h1 {{ margin:0; font-size:1.05rem; font-weight:700; letter-spacing:-.01em; }}
   header.pulse h1 .mark {{ color:var(--orange); }}
@@ -706,14 +710,18 @@ html = f'''<!DOCTYPE html>
   .pending-item .prisk.medium {{ color:#fde68a; }}
   .pending-item .prisk.low {{ color:#86efac; }}
   .pending-item .prow {{ display:grid; grid-template-columns:1fr 1fr 1fr; gap:.4rem; margin-top:.45rem; }}
-  .pending-item button, .tools button {{
+  .pending-item button, .pending-item a.dec, .tools button {{
     background:transparent; color:var(--text); border:1px solid var(--border);
     border-radius:8px; padding:.4rem .35rem; font-size:.78rem; cursor:pointer;
     min-height:44px; touch-action:manipulation; width:100%;
+    display:inline-flex; align-items:center; justify-content:center;
+    text-align:center; text-decoration:none; box-sizing:border-box;
   }}
-  .pending-item button:hover, .tools button:hover {{ border-color:var(--orange); color:var(--orange); }}
-  .pending-item button.warn {{ border-color:#ca8a04; }}
-  .pending-item button.danger {{ border-color:#dc2626; color:#fecaca; }}
+  .pending-item button:hover, .pending-item a.dec:hover, .tools button:hover {{
+    border-color:var(--orange); color:var(--orange); text-decoration:none;
+  }}
+  .pending-item button.warn, .pending-item a.dec.warn {{ border-color:#ca8a04; }}
+  .pending-item button.danger, .pending-item a.dec.danger {{ border-color:#dc2626; color:#fecaca; }}
   .live-stamp {{ display:flex; flex-wrap:wrap; align-items:center; gap:.4rem; color:var(--muted); font-size:.8rem; }}
   .live-stamp .when {{ color:var(--muted); font-weight:500; }}
   .live-dot {{ width:.5rem; height:.5rem; border-radius:50%; background:var(--orange);
@@ -814,17 +822,10 @@ html = f'''<!DOCTYPE html>
     return "low";
   }}
 
-  function openDecisionIssue(verb, id, title) {{
-    if (verb !== "APPROVE" && verb !== "DENY" && verb !== "HOLD") return;
+  function decisionHref(verb, id, title) {{
+    if (verb !== "APPROVE" && verb !== "DENY" && verb !== "HOLD") return "";
     var pid = String(id || "").trim();
-    if (!/^[a-zA-Z0-9._-]+$/.test(pid)) {{
-      setStatus("Bad pending id", "bad");
-      return;
-    }}
-    var key = verb + ":" + pid;
-    if (decideBusy[key]) return;
-    decideBusy[key] = 1;
-    setTimeout(function () {{ delete decideBusy[key]; }}, 2000);
+    if (!/^[a-zA-Z0-9._-]+$/.test(pid)) return "";
     var t = "BOB-" + verb + ": " + pid;
     var body = [
       "Dashboard control decision",
@@ -833,14 +834,43 @@ html = f'''<!DOCTYPE html>
       "title: " + String(title || pid).slice(0, 160),
       "decision: " + verb.toLowerCase(),
       "from: public board",
-      "at: " + new Date().toISOString(),
       "",
       "Submit this issue while logged in as rupret007. That GitHub login is the real yes.",
       "Bob: treat this as a one-shot inbox item. High-risk still needs the draft shown in chat before acting."
     ].join(String.fromCharCode(10));
-    var url = "https://github.com/rupret007/bob-ops-dashboard/issues/new?title=" +
+    return "https://github.com/rupret007/bob-ops-dashboard/issues/new?title=" +
       encodeURIComponent(t) + "&body=" + encodeURIComponent(body);
-    window.open(url, "_blank", "noopener");
+  }}
+  window.decisionHref = decisionHref;
+
+  function openBlank(url) {{
+    if (!url) return false;
+    var w = null;
+    try {{ w = window.open(url, "_blank", "noopener,noreferrer"); }} catch (e) {{ w = null; }}
+    if (w) return true;
+    var a = document.createElement("a");
+    a.href = url;
+    a.target = "_blank";
+    a.rel = "noopener noreferrer";
+    a.style.display = "none";
+    document.body.appendChild(a);
+    a.click();
+    if (a.remove) a.remove();
+    else if (a.parentNode) a.parentNode.removeChild(a);
+    return true;
+  }}
+
+  function openDecisionIssue(verb, id, title) {{
+    var url = decisionHref(verb, id, title);
+    if (!url) {{
+      setStatus("Bad pending id", "bad");
+      return;
+    }}
+    var key = verb + ":" + String(id || "").trim();
+    if (decideBusy[key]) return;
+    decideBusy[key] = 1;
+    setTimeout(function () {{ delete decideBusy[key]; }}, 2000);
+    openBlank(url);
     setStatus(verb + " draft opened on GitHub. Submit the issue while logged in as rupret007.", "warn");
   }}
 
@@ -874,11 +904,22 @@ html = f'''<!DOCTYPE html>
       div.innerHTML =
         '<div class="pending-head"><div class="ptitle"></div><span class="prisk"></span></div>' +
         '<div class="pdetail"></div>' +
-        '<div class="prow">' +
-          '<button type="button" data-dec="APPROVE">Approve</button>' +
-          '<button type="button" class="warn" data-dec="HOLD">Hold</button>' +
-          '<button type="button" class="danger" data-dec="DENY">Deny</button>' +
-        '</div>';
+        '<div class="prow"></div>';
+      var prow = div.querySelector(".prow");
+      function decLink(verb, extra) {{
+        var href = decisionHref(verb, it.id, it.title || it.id);
+        var a = document.createElement("a");
+        a.className = "dec" + (extra ? " " + extra : "");
+        a.setAttribute("data-dec", verb);
+        if (href) a.setAttribute("href", href);
+        a.setAttribute("target", "_blank");
+        a.setAttribute("rel", "noopener noreferrer");
+        a.textContent = verb === "APPROVE" ? "Approve" : verb === "HOLD" ? "Hold" : "Deny";
+        return a;
+      }}
+      prow.appendChild(decLink("APPROVE", ""));
+      prow.appendChild(decLink("HOLD", "warn"));
+      prow.appendChild(decLink("DENY", "danger"));
       div.querySelector(".ptitle").textContent = it.title || it.id;
       var detail = String(it.detail || "");
       if (detail.length > 72) {{
@@ -925,15 +966,27 @@ html = f'''<!DOCTYPE html>
   }}
 
   document.addEventListener("click", function (ev) {{
-    var decBtn = ev.target.closest("button[data-dec]");
+    var decBtn = ev.target.closest("[data-dec]");
     if (!decBtn) return;
-    ev.preventDefault();
-    if (decBtn.disabled) return;
     var item = decBtn.closest(".pending-item");
     if (!item) return;
-    decBtn.disabled = true;
-    openDecisionIssue(decBtn.getAttribute("data-dec"), item.getAttribute("data-id"), item.getAttribute("data-title"));
-    setTimeout(function () {{ decBtn.disabled = false; }}, 2000);
+    var verb = decBtn.getAttribute("data-dec");
+    var pid = item.getAttribute("data-id");
+    var title = item.getAttribute("data-title");
+    var key = verb + ":" + String(pid || "").trim();
+    if (decideBusy[key]) {{
+      ev.preventDefault();
+      return;
+    }}
+    var href = decBtn.getAttribute("href") || "";
+    if (decBtn.tagName === "A" && href.indexOf("https://github.com/rupret007/bob-ops-dashboard/issues/new?") === 0) {{
+      decideBusy[key] = 1;
+      setTimeout(function () {{ delete decideBusy[key]; }}, 2000);
+      setStatus(verb + " draft opened on GitHub. Submit the issue while logged in as rupret007.", "warn");
+      return;
+    }}
+    ev.preventDefault();
+    openDecisionIssue(verb, pid, title);
   }});
 
   var CONTROL_ACTIONS = {{ "refresh-hint": 1, "open-repo": 1, "mark-reviewed": 1 }};
@@ -951,7 +1004,7 @@ html = f'''<!DOCTYPE html>
         setStatus(cmd, "ok");
       }}
     }} else if (act === "open-repo") {{
-      window.open("https://github.com/rupret007/bob-ops-dashboard", "_blank", "noopener");
+      openBlank("https://github.com/rupret007/bob-ops-dashboard");
     }} else if (act === "mark-reviewed") {{
       localStorage.setItem("bobOpsLastReviewed", new Date().toISOString());
       setStatus("Board marked reviewed locally at " + new Date().toLocaleString(), "ok");
@@ -1060,17 +1113,20 @@ html = f'''<!DOCTYPE html>
   }}
   function compactSignal(p) {{
     if (!p) return "";
+    var ci = p.ci;
+    var concl = (ci && typeof ci === "object") ? String(ci.conclusion || "").toLowerCase() : "";
+    if (concl === "failure" || concl === "timed_out" || concl === "action_required" || concl === "startup_failure") {{
+      return "CI fail";
+    }}
+    if (concl === "in_progress" || concl === "queued" || concl === "waiting" || concl === "pending" || concl === "requested") {{
+      return "CI running";
+    }}
     var rel = String(p.release || "").trim();
     if (rel) return rel;
     if (typeof p.open_prs === "number" && isFinite(p.open_prs) && p.open_prs > 0) {{
       return p.open_prs + (p.open_prs === 1 ? " open PR" : " open PRs");
     }}
-    var ci = p.ci;
-    if (ci && typeof ci === "object") {{
-      var concl = String(ci.conclusion || "").toLowerCase();
-      if (concl === "failure") return "CI fail";
-      if (concl && concl !== "success" && concl !== "skipped" && concl !== "cancelled") return concl;
-    }}
+    if (concl && concl !== "success" && concl !== "skipped" && concl !== "cancelled") return concl;
     return "";
   }}
   function shortNote(notes, limit) {{
@@ -1112,14 +1168,18 @@ html = f'''<!DOCTYPE html>
     rows.forEach(function (it) {{
       var rawRisk = String(it.risk || "").toLowerCase();
       var risk = (rawRisk === "high" || rawRisk === "medium") ? rawRisk : "low";
+      function decA(verb, extra) {{
+        var href = (window.decisionHref && window.decisionHref(verb, it.id, it.title || it.id)) || "";
+        if (!href) return "";
+        var label = verb === "APPROVE" ? "Approve" : verb === "HOLD" ? "Hold" : "Deny";
+        return '<a class="dec' + (extra ? " " + extra : "") + '" data-dec="' + esc(verb) +
+          '" href="' + esc(href) + '" target="_blank" rel="noopener noreferrer">' + label + "</a>";
+      }}
       var row = '<div class="pending-item" data-id="' + esc(it.id) + '" data-title="' + esc(it.title || it.id) + '">' +
         '<div class="pending-head"><div class="ptitle">' + esc(it.title || it.id) + "</div>" +
         '<span class="prisk ' + esc(risk) + '">' + esc(risk) + "</span></div>" +
         '<div class="pdetail">' + esc(shortNote(it.detail || "", 72)) + "</div>" +
-        '<div class="prow">' +
-        '<button type="button" data-dec="APPROVE">Approve</button>' +
-        '<button type="button" class="warn" data-dec="HOLD">Hold</button>' +
-        '<button type="button" class="danger" data-dec="DENY">Deny</button></div></div>';
+        '<div class="prow">' + decA("APPROVE", "") + decA("HOLD", "warn") + decA("DENY", "danger") + "</div></div>";
       if (rawRisk === "low") {{ low += row; lowCount += 1; }}
       else attn += row;
     }});
@@ -1372,11 +1432,22 @@ html = f'''<!DOCTYPE html>
   }}
 
   var pollSeq = 0;
+  var POLL_TIMEOUT_MS = 8000;
+  var pollAbort = null;
+  var pollTimeout = null;
   lastAgents = readDomAgents();
   function poll() {{
     var seq = ++pollSeq;
+    if (pollAbort) {{
+      try {{ pollAbort.abort(); }} catch (e) {{}}
+    }}
+    if (pollTimeout) clearTimeout(pollTimeout);
+    pollAbort = new AbortController();
+    pollTimeout = setTimeout(function () {{
+      try {{ pollAbort.abort(); }} catch (e) {{}}
+    }}, POLL_TIMEOUT_MS);
     var url = "./status.json?ts=" + Date.now();
-    fetch(url, {{ cache: "no-store" }})
+    fetch(url, {{ cache: "no-store", signal: pollAbort.signal }})
       .then(function (res) {{
         if (!res.ok) throw new Error("HTTP " + res.status);
         return res.json();
@@ -1414,26 +1485,46 @@ html = f'''<!DOCTYPE html>
         freshness.classList.add("stale");
         if (dot) dot.classList.add("stale");
         updateSilence();
+      }})
+      .then(function () {{
+        if (seq === pollSeq && pollTimeout) clearTimeout(pollTimeout);
       }});
   }}
 
   var pollTimer = null;
+  var paintTimer = null;
+  function startPaintClock() {{
+    paint();
+    if (paintTimer) clearInterval(paintTimer);
+    paintTimer = setInterval(paint, 1000);
+  }}
+  function stopPaintClock() {{
+    if (paintTimer) {{ clearInterval(paintTimer); paintTimer = null; }}
+  }}
   function startPolling() {{
     if (pollTimer) clearInterval(pollTimer);
     poll();
     pollTimer = setInterval(poll, POLL_MS);
+    startPaintClock();
   }}
   function stopPolling() {{
     if (pollTimer) {{ clearInterval(pollTimer); pollTimer = null; }}
+    if (pollAbort) {{
+      try {{ pollAbort.abort(); }} catch (e) {{}}
+    }}
+    if (pollTimeout) clearTimeout(pollTimeout);
+    stopPaintClock();
   }}
   document.addEventListener("visibilitychange", function () {{
     if (document.visibilityState === "hidden") stopPolling();
     else startPolling();
   }});
+  window.addEventListener("pageshow", function () {{
+    if (document.visibilityState !== "hidden") startPolling();
+  }});
 
   paint();
-  setInterval(paint, 1000);
-  // Pause polls when tab hidden; resume on visible.
+  // Pause polls when tab hidden; resume on visible / bfcache pageshow.
   if (document.visibilityState !== "hidden") startPolling();
   else setTimeout(function () {{ if (document.visibilityState !== "hidden") startPolling(); }}, 5000);
 }})();

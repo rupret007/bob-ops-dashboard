@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import json
+import re
 import time
 from datetime import datetime
 from typing import Any
+from urllib.parse import urlencode
 from zoneinfo import ZoneInfo
 
 FIRST_CLASS_IDS = ("abilities", "controls", "features")
@@ -58,6 +60,17 @@ AGENT_SECRET_WORDS = (
     "apikey",
 )
 BOARD_TZ = "America/Chicago"
+# Live CI honesty. Jeff-gate / release chips must not hide a red or running tip.
+CI_FAIL_CONCLUSIONS = frozenset(
+    {"failure", "timed_out", "action_required", "startup_failure"}
+)
+CI_ACTIVE_CONCLUSIONS = frozenset(
+    {"in_progress", "queued", "waiting", "pending", "requested"}
+)
+CI_OK_CONCLUSIONS = frozenset({"", "success", "skipped", "cancelled"})
+DECISION_VERBS = frozenset({"APPROVE", "HOLD", "DENY"})
+DECISION_ISSUE_NEW = "https://github.com/rupret007/bob-ops-dashboard/issues/new"
+PENDING_ID_RE = re.compile(r"^[a-zA-Z0-9._-]+$")
 
 
 def drop_leftover_verify(status: Any) -> bool:
@@ -108,6 +121,44 @@ def is_quiet_lane(project: Any) -> bool:
     return str(project.get("status") or "") == "green"
 
 
+def ci_conclusion(repo: Any) -> str:
+    """Normalized tip CI conclusion. Empty when missing or not a dict."""
+    if not isinstance(repo, dict):
+        return ""
+    ci = repo.get("ci")
+    if not isinstance(ci, dict):
+        return ""
+    return str(ci.get("conclusion") or "").strip().lower()
+
+
+def pick_tip_ci(runs: Any, branch: Any) -> dict[str, Any] | None:
+    """Latest default-branch run wins, including in_progress / queued.
+
+    Do not skip an in-flight tip run to show an older completed success or
+    failure. Phone scan should say CI running when master is still painting.
+    """
+    want = str(branch or "")
+    if not want:
+        return None
+    for run in runs or []:
+        if not isinstance(run, dict):
+            continue
+        if str(run.get("head_branch") or "") != want:
+            continue
+        status = str(run.get("status") or "").strip().lower()
+        concl = str(run.get("conclusion") or "").strip().lower()
+        if status and status != "completed":
+            concl = status
+        return {
+            "name": run.get("name"),
+            "conclusion": concl or None,
+            "branch": want,
+            "sha": (run.get("head_sha") or "")[:7] or None,
+            "created": run.get("created_at"),
+        }
+    return None
+
+
 def status_from_fetch(
     repo: Any,
     *,
@@ -116,37 +167,45 @@ def status_from_fetch(
 ) -> str:
     """Lane status from live gh. Missing CI is OK (green). Inaccessible is parked.
 
-    Curated override / jeff_gate win so Cisco high-level notes can stay yellow
-    without pretending we fetched private CI. Empty ``ci: {}`` must not become
-    Yellow -- that was inventing a problem when no Actions run exists.
+    Parked override still wins (ignored PRs stay parked). Live CI fail or an
+    in-flight tip run beat jeff_gate so WebJam cannot hide Red behind
+    Jeff-gate + a release tag. Empty ``ci: {}`` stays green. Cisco
+    high-level notes keep an explicit yellow override when inaccessible.
     """
+    if override == "parked":
+        return "parked"
+    accessible = isinstance(repo, dict) and bool(repo.get("accessible"))
+    concl = ci_conclusion(repo) if accessible else ""
+    if accessible and concl in CI_FAIL_CONCLUSIONS:
+        return "red"
+    if accessible and concl in CI_ACTIVE_CONCLUSIONS:
+        return "yellow"
     if jeff_gate:
         return "jeff-gate"
     if override:
         return override
-    if not isinstance(repo, dict) or not repo.get("accessible"):
+    if not accessible:
         return "parked"
-    ci = repo.get("ci")
-    concl = ""
-    if isinstance(ci, dict):
-        concl = str(ci.get("conclusion") or "").strip().lower()
-    if concl == "failure":
-        return "red"
     try:
         n = int(repo.get("open_prs") or 0)
     except (TypeError, ValueError):
         n = 0
     if n > 0:
         return "yellow"
-    if concl in ("", "success", "skipped", "cancelled"):
+    if concl in CI_OK_CONCLUSIONS:
         return "green"
     return "yellow"
 
 
 def compact_signal(project: Any) -> str | None:
-    """One scan signal. Skip SHA / product SHA / '0 open PRs' / success-CI essays."""
+    """One scan signal. Live CI fail/running beat a release tag."""
     if not isinstance(project, dict):
         return None
+    concl = ci_conclusion(project)
+    if concl in CI_FAIL_CONCLUSIONS:
+        return "CI fail"
+    if concl in CI_ACTIVE_CONCLUSIONS:
+        return "CI running"
     rel = str(project.get("release") or "").strip()
     if rel:
         return rel
@@ -157,14 +216,38 @@ def compact_signal(project: Any) -> str | None:
         count = 0
     if count > 0:
         return str(count) + (" open PR" if count == 1 else " open PRs")
-    ci = project.get("ci")
-    if isinstance(ci, dict):
-        concl = str(ci.get("conclusion") or "").strip().lower()
-        if concl == "failure":
-            return "CI fail"
-        if concl and concl not in ("success", "skipped", "cancelled"):
-            return concl
+    if concl and concl not in CI_OK_CONCLUSIONS:
+        return concl
     return None
+
+
+def decision_body(pid: str, title: Any, verb: str) -> str:
+    """Stable BOB-* issue body. No clock so first-paint hrefs match JS."""
+    return "\n".join(
+        [
+            "Dashboard control decision",
+            "",
+            "id: " + pid,
+            "title: " + str(title or pid)[:160],
+            "decision: " + verb.lower(),
+            "from: public board",
+            "",
+            "Submit this issue while logged in as rupret007. That GitHub login is the real yes.",
+            "Bob: treat this as a one-shot inbox item. High-risk still needs the draft shown in chat before acting.",
+        ]
+    )
+
+
+def decision_href(verb: Any, pid: Any, title: Any = "") -> str:
+    """GitHub new-issue URL for Approve / Hold / Deny. Empty if unsafe."""
+    v = str(verb or "").strip().upper()
+    ident = str(pid or "").strip()
+    if v not in DECISION_VERBS or not PENDING_ID_RE.match(ident):
+        return ""
+    query = urlencode(
+        {"title": "BOB-" + v + ": " + ident, "body": decision_body(ident, title, v)}
+    )
+    return DECISION_ISSUE_NEW + "?" + query
 
 
 def pending_risk_rank(item: Any) -> int:
@@ -529,7 +612,7 @@ def first_class_sections() -> list[dict[str, Any]]:
                 ),
                 _card(
                     "Soft-paint poll",
-                    "Client fetches status.json every 30s (pauses when the tab is hidden). Repaints when board content changes -- not on every 15m Actions timestamp. No full reload.",
+                    "Client fetches status.json every 30s (pauses when the tab is hidden). Immediate poll on pageshow / visible. Fetch aborts after 8s. Repaints when board content changes -- not on every 15m Actions timestamp.",
                     chip="Feature",
                 ),
                 _card(
@@ -549,7 +632,7 @@ def first_class_sections() -> list[dict[str, Any]]:
                 ),
                 _card(
                     "Poll / decide race guards",
-                    "pollSeq / pendingSeq drop stale fetches. decideBusy gates Approve / Hold / Deny double-clicks.",
+                    "pollSeq / pendingSeq drop stale fetches. Approve / Hold / Deny are real GitHub links so iOS cannot swallow a popup. decideBusy still debounce double-taps.",
                     chip="Feature",
                 ),
                 _card(

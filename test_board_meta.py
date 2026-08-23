@@ -13,12 +13,14 @@ from board_meta import (
     attention_rank,
     board_content_fingerprint,
     compact_signal,
+    decision_href,
     drop_leftover_verify,
     first_class_sections,
     is_quiet_lane,
     merge_first_class,
     parse_agents_blob,
     pending_risk_rank,
+    pick_tip_ci,
     presentation,
     resolve_agents,
     short_note,
@@ -92,8 +94,10 @@ class BoardMetaTests(unittest.TestCase):
     def test_soft_paint_and_agent_honesty_copy(self):
         blob = str(first_class_sections())
         self.assertIn("not on every 15m", blob)
+        self.assertIn("pageshow", blob)
         self.assertIn("Never invent Running", blob)
         self.assertIn("Actions cadence is ~15m", blob)
+        self.assertIn("real GitHub links", blob)
 
     def test_security_features_from_pr1_survive_without_unlock(self):
         blob = str(first_class_sections())
@@ -128,6 +132,18 @@ class BoardMetaTests(unittest.TestCase):
         self.assertIsNone(compact_signal({"tip_sha": "abc1234", "open_prs": 0, "product_sha": "deadbee"}))
         self.assertIsNone(compact_signal({"ci": {"name": "CI", "conclusion": "success"}, "open_prs": 0}))
         self.assertEqual(compact_signal({"ci": {"conclusion": "failure"}}), "CI fail")
+        self.assertEqual(
+            compact_signal({"release": "v0.26.0", "ci": {"conclusion": "failure"}, "open_prs": 1}),
+            "CI fail",
+        )
+        self.assertEqual(
+            compact_signal({"release": "v0.26.0", "ci": {"conclusion": "in_progress"}}),
+            "CI running",
+        )
+        self.assertEqual(
+            compact_signal({"release": "v0.26.0", "ci": {"conclusion": "queued"}}),
+            "CI running",
+        )
         self.assertIsNone(compact_signal({}))
         self.assertIsNone(compact_signal(None))
 
@@ -177,6 +193,77 @@ class BoardMetaTests(unittest.TestCase):
         self.assertEqual(status_from_fetch({"accessible": False}, override="yellow"), "yellow")
         self.assertEqual(status_from_fetch(green_empty, jeff_gate=True), "jeff-gate")
         self.assertEqual(status_from_fetch(None), "parked")
+        failing = {"accessible": True, "open_prs": 1, "ci": {"conclusion": "failure"}}
+        self.assertEqual(status_from_fetch(failing, jeff_gate=True), "red")
+        self.assertEqual(
+            status_from_fetch(
+                {"accessible": True, "open_prs": 0, "ci": {"conclusion": "in_progress"}},
+                jeff_gate=True,
+            ),
+            "yellow",
+        )
+        self.assertEqual(
+            status_from_fetch(
+                {"accessible": True, "open_prs": 0, "ci": {"conclusion": "success"}},
+                jeff_gate=True,
+            ),
+            "jeff-gate",
+        )
+        self.assertEqual(status_from_fetch(failing, override="parked"), "parked")
+        self.assertEqual(
+            status_from_fetch(
+                {"accessible": True, "open_prs": 0, "ci": {"conclusion": "timed_out"}}
+            ),
+            "red",
+        )
+
+    def test_pick_tip_ci_does_not_skip_in_progress(self):
+        runs = [
+            {
+                "head_branch": "feat",
+                "status": "completed",
+                "conclusion": "failure",
+                "name": "PR CI",
+                "head_sha": "fffffff",
+            },
+            {
+                "head_branch": "master",
+                "status": "in_progress",
+                "conclusion": None,
+                "name": "WebJam CI",
+                "head_sha": "abc1234dead",
+                "created_at": "2026-08-23T05:50:00Z",
+            },
+            {
+                "head_branch": "master",
+                "status": "completed",
+                "conclusion": "failure",
+                "name": "WebJam CI",
+                "head_sha": "5280686",
+            },
+        ]
+        picked = pick_tip_ci(runs, "master")
+        self.assertIsNotNone(picked)
+        assert picked is not None
+        self.assertEqual(picked["conclusion"], "in_progress")
+        self.assertEqual(picked["sha"], "abc1234")
+        self.assertEqual(pick_tip_ci(runs, "main"), None)
+        self.assertIsNone(pick_tip_ci(None, "master"))
+
+    def test_decision_href_is_safe_and_stable(self):
+        from urllib.parse import parse_qs, urlparse
+
+        url = decision_href("APPROVE", "dashboard-refresh", "Force dashboard refresh + push")
+        self.assertTrue(
+            url.startswith("https://github.com/rupret007/bob-ops-dashboard/issues/new?")
+        )
+        q = parse_qs(urlparse(url).query)
+        self.assertEqual(q["title"][0], "BOB-APPROVE: dashboard-refresh")
+        self.assertIn("rupret007", q["body"][0])
+        self.assertNotIn("at:", q["body"][0])
+        self.assertEqual(decision_href("DELETE", "dashboard-refresh", "nope"), "")
+        self.assertEqual(decision_href("APPROVE", "bad id", "nope"), "")
+        self.assertEqual(decision_href("APPROVE", "", "nope"), "")
 
     def test_split_pending_keeps_unknown_risk_visible(self):
         attn, low = split_pending(
