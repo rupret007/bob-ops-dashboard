@@ -3,60 +3,371 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
-<title>Bob ops dashboard — Jeff Story</title>
+<meta name="color-scheme" content="dark"/>
+<title>Bob Ops Dashboard — Jeff Story</title>
+<meta name="description" content="Live status board for projects Bob is working on."/>
 <style>
-:root {
-  --bg:#0f1419; --card:#1a2332; --text:#e7ecf3; --muted:#9aa7b8;
-  --ok:#3dd68c; --bad:#ff6b6b; --jeff:#ffd166; --run:#4cc9f0; --park:#8b95a8;
-  --line:#2a3545;
-}
-* { box-sizing:border-box; }
-body {
-  margin:0; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
-  background: radial-gradient(1200px 600px at 10% -10%, #1b2a44, transparent), var(--bg);
-  color:var(--text); line-height:1.45; padding:24px 16px 64px;
-}
-.wrap { max-width:980px; margin:0 auto; }
-header { margin-bottom:28px; }
-h1 { font-size:1.6rem; margin:0 0 6px; letter-spacing:-0.02em; }
-.sub { color:var(--muted); font-size:0.95rem; }
-h2 { font-size:0.85rem; text-transform:uppercase; letter-spacing:0.08em; color:var(--muted); margin:28px 0 12px; }
-.grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); gap:12px; }
-.card { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:14px 14px 12px; }
-.top { display:flex; justify-content:space-between; gap:10px; align-items:flex-start; margin-bottom:8px; }
-h3 { margin:0; font-size:1.05rem; font-weight:650; }
-h3 a { color:var(--text); text-decoration:none; border-bottom:1px solid transparent; }
-h3 a:hover { border-bottom-color:var(--run); }
-p { margin:0; color:var(--muted); font-size:0.92rem; }
-.chips { display:flex; flex-wrap:wrap; gap:6px; justify-content:flex-end; }
-.chip { font-size:0.72rem; font-weight:650; padding:3px 8px; border-radius:999px; background:#243044; color:var(--muted); white-space:nowrap; }
-.chip.ok { background:rgba(61,214,140,.15); color:var(--ok); }
-.chip.bad { background:rgba(255,107,107,.15); color:var(--bad); }
-.chip.jeff { background:rgba(255,209,102,.15); color:var(--jeff); }
-.chip.run { background:rgba(76,201,240,.15); color:var(--run); }
-.chip.park { background:rgba(139,149,168,.15); color:var(--park); }
-footer { margin-top:36px; color:var(--muted); font-size:0.85rem; }
-.legend { display:flex; flex-wrap:wrap; gap:8px; margin-top:12px; }
+  :root {
+    --bg: #0b1220;
+    --panel: #121a2b;
+    --panel2: #182235;
+    --text: #e8eefc;
+    --muted: #9aa8c7;
+    --border: #243049;
+    --accent: #38bdf8;
+    --link: #7dd3fc;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: var(--bg); color: var(--text);
+    font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+    line-height: 1.45; }
+  a { color: var(--link); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .wrap { max-width: 1100px; margin: 0 auto; padding: 1.25rem 1rem 3rem; }
+  header.hero {
+    background: linear-gradient(145deg, #0f172a 0%, #1e293b 55%, #0b3b4a 100%);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 1.25rem 1.35rem;
+    margin-bottom: 1.25rem;
+    box-shadow: 0 10px 40px rgba(0,0,0,.35);
+  }
+  header.hero h1 { margin: 0 0 .35rem; font-size: clamp(1.4rem, 4vw, 1.85rem); letter-spacing: -0.02em; }
+  header.hero .sub { color: var(--muted); font-size: .95rem; }
+  .legend { display: flex; flex-wrap: wrap; gap: .45rem; margin-top: .9rem; }
+  .chip {
+    display: inline-flex; align-items: center; gap: .35rem;
+    border: 1px solid var(--c); background: var(--bg); color: var(--fg);
+    border-radius: 999px; padding: .15rem .6rem; font-size: .72rem;
+    font-weight: 700; letter-spacing: .02em; text-transform: uppercase;
+    white-space: nowrap;
+  }
+  .chip::before { content: ""; width: .45rem; height: .45rem; border-radius: 50%; background: var(--c); }
+  nav.toc {
+    display: flex; flex-wrap: wrap; gap: .5rem; margin: 0 0 1.25rem;
+  }
+  nav.toc a {
+    background: var(--panel); border: 1px solid var(--border); color: var(--text);
+    padding: .4rem .7rem; border-radius: 999px; font-size: .82rem;
+  }
+  nav.toc a:hover { border-color: var(--accent); text-decoration: none; }
+  section { margin-bottom: 1.75rem; }
+  section h2 {
+    margin: 0 0 .75rem; font-size: 1.15rem; color: #f8fafc;
+    border-left: 3px solid var(--accent); padding-left: .6rem;
+  }
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: .75rem;
+  }
+  .card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: .9rem 1rem;
+    display: flex; flex-direction: column; gap: .35rem;
+    min-height: 140px;
+  }
+  .card header { display: flex; justify-content: space-between; align-items: flex-start; gap: .5rem; }
+  .card h3 { margin: 0; font-size: 1.02rem; }
+  .row { color: var(--muted); font-size: .8rem; }
+  .notes { margin: .25rem 0 0; color: #d6def0; font-size: .88rem; }
+  code { background: var(--panel2); padding: .05rem .35rem; border-radius: 6px; font-size: .78rem; }
+  .ci { font-weight: 600; font-size: .8rem; }
+  footer {
+    margin-top: 2rem; padding-top: 1rem; border-top: 1px solid var(--border);
+    color: var(--muted); font-size: .82rem;
+  }
+  .banner {
+    background: #172554; border: 1px solid #1d4ed8; color: #bfdbfe;
+    border-radius: 12px; padding: .75rem 1rem; margin-bottom: 1rem; font-size: .88rem;
+  }
+  @media (max-width: 520px) {
+    .card header { flex-direction: column; align-items: flex-start; }
+  }
 </style>
 </head>
 <body>
-<main class="wrap">
-<header>
-  <h1>Bob ops dashboard</h1>
-  <div class="sub">Jeff Story · live projects Bob is working · updated 2026-08-22 07:59 PM CT</div>
-  <div class="legend">
-    <span class="chip ok">Green CI</span>
-    <span class="chip bad">Red CI</span>
-    <span class="chip run">In flight</span>
-    <span class="chip jeff">Needs you</span>
-    <span class="chip park">Parked</span>
+  <div class="wrap">
+    <header class="hero">
+      <h1>Bob Ops Dashboard</h1>
+      <div class="sub">Projects Bob is working on for Jeff Story · live music/apps focus · closet parked</div>
+      <div class="sub" style="margin-top:.35rem">Last updated: <strong>Sat Aug 22, 2026 · 8:00 PM CDT</strong></div>
+      <div class="legend">
+        <span class="chip" style="--c:#16a34a;--bg:#052e16;--fg:#bbf7d0">Green</span>
+        <span class="chip" style="--c:#ca8a04;--bg:#422006;--fg:#fef08a">Yellow</span>
+        <span class="chip" style="--c:#dc2626;--bg:#450a0a;--fg:#fecaca">Red</span>
+        <span class="chip" style="--c:#64748b;--bg:#0f172a;--fg:#cbd5e1">Parked</span>
+        <span class="chip" style="--c:#7c3aed;--bg:#2e1065;--fg:#e9d5ff">Jeff-gate</span>
+      </div>
+    </header>
+
+    <div class="banner">
+      Public status page — no secrets, tokens, CSOne customer paths, or private handoff text.
+      AdoptIQ shown as high-level Cisco CS desktop summary only.
+    </div>
+
+    <nav class="toc" aria-label="Sections">
+      <a href="#live-shipping">Live shipping</a>
+      <a href="#cisco">Cisco</a>
+      <a href="#messaging">Messaging</a>
+      <a href="#music-producer">Music producer</a>
+      <a href="#parked">Parked</a>
+      <a href="#active-agents">Active agents</a>
+    </nav>
+
+    
+    <section id="live-shipping">
+      <h2>Live shipping</h2>
+      <div class="grid">
+        
+        <article class="card">
+          <header>
+            <h3><a href="https://github.com/rupret007/webjam" target="_blank" rel="noopener">WebJam</a></h3>
+            <span class="chip" style="--c:#7c3aed;--bg:#2e1065;--fg:#e9d5ff">Jeff-gate</span>
+          </header>
+          <div class="row"><code>c51751d</code> · product <code>5ca6ba5</code> · release <strong>v0.26.0</strong> · 0 open PRs</div>
+          <div class="row"><span class="ci" style="color:#16a34a">● WebJam CI: success</span></div>
+          <p class="notes">PR #21 merged (docs release round for 5ca6ba5). Master CI green. Release stays v0.26.0 until Jeff names v0.27. Exploratory click-through Jeff-gated.</p>
+        </article>
+        <article class="card">
+          <header>
+            <h3><a href="https://github.com/rupret007/StoryLiner" target="_blank" rel="noopener">StoryLiner</a></h3>
+            <span class="chip" style="--c:#16a34a;--bg:#052e16;--fg:#bbf7d0">Green</span>
+          </header>
+          <div class="row"><code>669e98d</code> · 0 open PRs</div>
+          <div class="row"><span class="ci" style="color:#16a34a">● CI: success</span></div>
+          <p class="notes">PR #1 lint fix merged. Main CI success (lint+typecheck+build).</p>
+        </article>
+        <article class="card">
+          <header>
+            <h3><a href="https://github.com/rupret007/StoryBoard" target="_blank" rel="noopener">StoryBoard</a></h3>
+            <span class="chip" style="--c:#16a34a;--bg:#052e16;--fg:#bbf7d0">Green</span>
+          </header>
+          <div class="row"><code>da92aeb</code> · 0 open PRs</div>
+          <div class="row"><span class="ci" style="color:#16a34a">● Quality: success</span></div>
+          <p class="notes">Quiet green. No open PRs.</p>
+        </article>
+        <article class="card">
+          <header>
+            <h3><a href="https://github.com/rupret007/Rad-Dad-Merch" target="_blank" rel="noopener">Rad Dad Merch</a></h3>
+            <span class="chip" style="--c:#16a34a;--bg:#052e16;--fg:#bbf7d0">Green</span>
+          </header>
+          <div class="row"><code>b949c7c</code> · 0 open PRs</div>
+          <div class="row"><span class="ci" style="color:#16a34a">● Release integrity: success</span></div>
+          <p class="notes">History import #1 landed. Quiet green.</p>
+        </article>
+        <article class="card">
+          <header>
+            <h3><a href="https://github.com/rupret007/RadDadSite" target="_blank" rel="noopener">RadDadSite</a></h3>
+            <span class="chip" style="--c:#ca8a04;--bg:#422006;--fg:#fef08a">Yellow</span>
+          </header>
+          <div class="row"><code>a56c44f</code> · 1 open PR</div>
+          <div class="row"><span class="ci" style="color:#16a34a">● Test Site: success</span></div>
+          <p class="notes">Tip + Pages green. Draft PR #6 (prod deploy) conflicting — parked/Jeff-gate.</p>
+        </article>
+        <article class="card">
+          <header>
+            <h3><a href="https://github.com/rupret007/rad-dad-show-night" target="_blank" rel="noopener">Show Night</a></h3>
+            <span class="chip" style="--c:#16a34a;--bg:#052e16;--fg:#bbf7d0">Green</span>
+          </header>
+          <div class="row"><code>710e765</code> · 0 open PRs</div>
+          <div class="row"><span class="meta">No Actions</span></div>
+          <p class="notes">Flyer update present. No Actions workflows.</p>
+        </article>
+        <article class="card">
+          <header>
+            <h3><a href="https://github.com/rupret007/AI-Music-Vault" target="_blank" rel="noopener">AI Music Vault</a></h3>
+            <span class="chip" style="--c:#16a34a;--bg:#052e16;--fg:#bbf7d0">Green</span>
+          </header>
+          <div class="row"><code>61bbc78</code> · 0 open PRs · private</div>
+          <div class="row"><span class="meta">No Actions</span></div>
+          <p class="notes">Private docs/index. No Actions. High-level only on public page.</p>
+        </article>
+        <article class="card">
+          <header>
+            <h3><a href="https://github.com/rupret007/Turdanoid" target="_blank" rel="noopener">Turdanoid</a></h3>
+            <span class="chip" style="--c:#ca8a04;--bg:#422006;--fg:#fef08a">Yellow</span>
+          </header>
+          <div class="row"><code>bc03f6c</code> · 3 open PRs</div>
+          <div class="row"><span class="ci" style="color:#16a34a">● CI: success</span></div>
+          <p class="notes">Tip CI+Pages green. Stale open PRs #5/#4/#2 — hygiene in flight.</p>
+        </article>
+      </div>
+    </section>
+    <section id="cisco">
+      <h2>Cisco work</h2>
+      <div class="grid">
+        
+        <article class="card">
+          <header>
+            <h3><a href="https://github.com/rupret007/AdoptIQ" target="_blank" rel="noopener">AdoptIQ</a></h3>
+            <span class="chip" style="--c:#ca8a04;--bg:#422006;--fg:#fef08a">Yellow</span>
+          </header>
+          <div class="row"><code>87e0cb7</code> · 0 open PRs · private</div>
+          <div class="row"><span class="ci" style="color:#dc2626">● Build AdoptIQ: failure</span></div>
+          <p class="notes">Cisco CS desktop — Build 115 in progress (Codex + Cloud Agent). No secrets on this page.</p>
+        </article>
+        <article class="card">
+          <header>
+            <h3><a href="https://github.com/rupret007/TACTrack" target="_blank" rel="noopener">TACTrack</a></h3>
+            <span class="chip" style="--c:#ca8a04;--bg:#422006;--fg:#fef08a">Yellow</span>
+          </header>
+          <div class="row"><code>5432348</code> · 2 open PRs · private</div>
+          <div class="row"><span class="ci" style="color:#dc2626">● CI: failure</span></div>
+          <p class="notes">Private. Main CI red; open fix/validation PRs. High-level only.</p>
+        </article>
+        <article class="card">
+          <header>
+            <h3>AdoptIQ notes</h3>
+            <span class="chip" style="--c:#64748b;--bg:#0f172a;--fg:#cbd5e1">Parked</span>
+          </header>
+          <div class="row">private</div>
+          <div class="row"><span class="meta">No Actions</span></div>
+          <p class="notes">High-level only: manager-decision UX + Build 115 candidate path. No CSOne paths, customer rows, or tokens.</p>
+        </article>
+      </div>
+    </section>
+    <section id="messaging">
+      <h2>Messaging / Bob infra</h2>
+      <div class="grid">
+        
+        <article class="card">
+          <header>
+            <h3><a href="https://github.com/rupret007/Andrea_NanoBot" target="_blank" rel="noopener">Andrea NanoBot</a></h3>
+            <span class="chip" style="--c:#ca8a04;--bg:#422006;--fg:#fef08a">Yellow</span>
+          </header>
+          <div class="row"><code>7fbfc9a</code> · 0 open PRs</div>
+          <div class="row"><span class="ci" style="color:#dc2626">● Security: failure</span></div>
+          <p class="notes">BB AppleScript send preferred. Private API OFF (do not re-enable). Approval-fenced sends only.</p>
+        </article>
+        <article class="card">
+          <header>
+            <h3>Telegram Bot the Bot</h3>
+            <span class="chip" style="--c:#16a34a;--bg:#052e16;--fg:#bbf7d0">Green</span>
+          </header>
+          <div class="row"></div>
+          <div class="row"><span class="meta">No Actions</span></div>
+          <p class="notes">Whisper + Chrome NATURAL_UX mop shipped. Bob front-door via Telegram.</p>
+        </article>
+        <article class="card">
+          <header>
+            <h3>Codex local goals</h3>
+            <span class="chip" style="--c:#16a34a;--bg:#052e16;--fg:#bbf7d0">Green</span>
+          </header>
+          <div class="row"></div>
+          <div class="row"><span class="meta">No Actions</span></div>
+          <p class="notes">goals=true fixed. Local Codex loop continues for AdoptIQ/ops lanes.</p>
+        </article>
+      </div>
+    </section>
+    <section id="music-producer">
+      <h2>Music producer</h2>
+      <div class="grid">
+        
+        <article class="card">
+          <header>
+            <h3>Logic Pro home</h3>
+            <span class="chip" style="--c:#16a34a;--bg:#052e16;--fg:#bbf7d0">Green</span>
+          </header>
+          <div class="row"></div>
+          <div class="row"><span class="meta">No Actions</span></div>
+          <p class="notes">Logic Pro 12.3.1 on Mac mini — primary producer home. Logic-first file drop.</p>
+        </article>
+        <article class="card">
+          <header>
+            <h3>LogicProMCP</h3>
+            <span class="chip" style="--c:#7c3aed;--bg:#2e1065;--fg:#e9d5ff">Jeff-gate</span>
+          </header>
+          <div class="row"></div>
+          <div class="row"><span class="meta">No Actions</span></div>
+          <p class="notes">Installed (v3.14.0). Pending Accessibility / Automation GUI grants from Jeff.</p>
+        </article>
+        <article class="card">
+          <header>
+            <h3>Moises / Suno</h3>
+            <span class="chip" style="--c:#7c3aed;--bg:#2e1065;--fg:#e9d5ff">Jeff-gate</span>
+          </header>
+          <div class="row"></div>
+          <div class="row"><span class="meta">No Actions</span></div>
+          <p class="notes">Jeff-login gated for stems/covers/demos.</p>
+        </article>
+      </div>
+    </section>
+    <section id="parked">
+      <h2>Parked</h2>
+      <div class="grid">
+        
+        <article class="card">
+          <header>
+            <h3><a href="https://github.com/rupret007/story-corner-shelf" target="_blank" rel="noopener">Closet shelf</a></h3>
+            <span class="chip" style="--c:#64748b;--bg:#0f172a;--fg:#cbd5e1">Parked</span>
+          </header>
+          <div class="row"><code>1c3cab3</code> · 4 open PRs</div>
+          <div class="row"><span class="meta">No Actions</span></div>
+          <p class="notes">Parked. Open PRs ignored unless Jeff unparks.</p>
+        </article>
+        <article class="card">
+          <header>
+            <h3>Stalemate / Trailer Swift</h3>
+            <span class="chip" style="--c:#64748b;--bg:#0f172a;--fg:#cbd5e1">Parked</span>
+          </header>
+          <div class="row"></div>
+          <div class="row"><span class="meta">No Actions</span></div>
+          <p class="notes">Catalog/voice feel only — no live show push. Parked catalog lane.</p>
+        </article>
+        <article class="card">
+          <header>
+            <h3><a href="https://github.com/rupret007/RadDadSite/pull/6" target="_blank" rel="noopener">RadDadSite #6</a></h3>
+            <span class="chip" style="--c:#64748b;--bg:#0f172a;--fg:#cbd5e1">Parked</span>
+          </header>
+          <div class="row"></div>
+          <div class="row"><span class="meta">No Actions</span></div>
+          <p class="notes">Draft prod deploy pipeline — CONFLICTING. Keep parked pending Che/server facts.</p>
+        </article>
+      </div>
+    </section>
+    <section id="active-agents">
+      <h2>Active agents NOW</h2>
+      <div class="grid">
+        
+        <article class="card">
+          <header>
+            <h3>AdoptIQ Cloud Agent</h3>
+            <span class="chip" style="--c:#ca8a04;--bg:#422006;--fg:#fef08a">Yellow</span>
+          </header>
+          <div class="row"></div>
+          <div class="row"><span class="meta">No Actions</span></div>
+          <p class="notes">Cloud Agent in flight elsewhere (Build 115 / Codex+Cloud). Left alone by music/ops pass.</p>
+        </article>
+        <article class="card">
+          <header>
+            <h3>Local Codex fix</h3>
+            <span class="chip" style="--c:#ca8a04;--bg:#422006;--fg:#fef08a">Yellow</span>
+          </header>
+          <div class="row"></div>
+          <div class="row"><span class="meta">No Actions</span></div>
+          <p class="notes">AdoptIQ local Codex continuation in progress (Build 115 path).</p>
+        </article>
+        <article class="card">
+          <header>
+            <h3>Turdanoid hygiene</h3>
+            <span class="chip" style="--c:#ca8a04;--bg:#422006;--fg:#fef08a">Yellow</span>
+          </header>
+          <div class="row"></div>
+          <div class="row"><span class="meta">No Actions</span></div>
+          <p class="notes">Cloud Agent launched to close stale conflicting/off-topic PRs #2/#4/#5.</p>
+        </article>
+      </div>
+    </section>
+
+    <footer>
+      <p>Source: <a href="https://github.com/rupret007/bob-ops-dashboard">rupret007/bob-ops-dashboard</a>
+      · Machine JSON: <a href="./status.json">status.json</a>
+      · Refreshed by Bob (weekday morning routine).</p>
+      <p>Live CI fetched via <code>gh</code> for webjam, StoryLiner, StoryBoard, Rad-Dad-Merch, RadDadSite, Turdanoid, AdoptIQ, TACTrack, AI-Music-Vault, rad-dad-show-night, Andrea_NanoBot, story-corner-shelf.</p>
+    </footer>
   </div>
-</header>
-<section><h2>Live music &amp; apps</h2><div class="grid"><article class="card"><div class="top"><h3><a href="https://github.com/rupret007/webjam" target="_blank" rel="noopener">WebJam</a></h3><div class="chips"><span class="chip ok">Green</span> <span class="chip jeff">Needs you</span></div></div><p>Tip green; #21 docs merged; release still v0.26.0 until you name v0.27; exploratory click-through is your walk</p></article><article class="card"><div class="top"><h3><a href="https://github.com/rupret007/StoryLiner" target="_blank" rel="noopener">StoryLiner</a></h3><div class="chips"><span class="chip ok">Green</span></div></div><p>Lint PR #1 merged; main CI green</p></article><article class="card"><div class="top"><h3><a href="https://github.com/rupret007/StoryBoard" target="_blank" rel="noopener">StoryBoard</a></h3><div class="chips"><span class="chip ok">Green</span> <span class="chip jeff">Needs you</span></div></div><p>Quality CI green (older); needs Postgres + Vault import for Manager</p></article><article class="card"><div class="top"><h3><a href="https://github.com/rupret007/Rad-Dad-Merch" target="_blank" rel="noopener">Rad Dad Merch</a></h3><div class="chips"><span class="chip ok">Green</span></div></div><p>Release integrity green</p></article><article class="card"><div class="top"><h3><a href="https://github.com/rupret007/RadDadSite" target="_blank" rel="noopener">RadDadSite</a></h3><div class="chips"><span class="chip ok">Green</span> <span class="chip park">Parked</span></div></div><p>Site tests green; draft #6 production deploy parked</p></article><article class="card"><div class="top"><h3><a href="https://github.com/rupret007/rad-dad-show-night" target="_blank" rel="noopener">Show Night</a></h3><div class="chips"><span class="chip mute">—</span></div></div><p>Repo active; no Actions runs seen</p></article><article class="card"><div class="top"><h3><a href="https://github.com/rupret007/AI-Music-Vault" target="_blank" rel="noopener">AI Music Vault</a></h3><div class="chips"><span class="chip mute">—</span></div></div><p>Private; song source of truth</p></article><article class="card"><div class="top"><h3><a href="https://github.com/rupret007/Turdanoid" target="_blank" rel="noopener">Turdanoid</a></h3><div class="chips"><span class="chip ok">Green</span> <span class="chip jeff">Needs you</span></div></div><p>Tip green; stale draft PRs 4/5 (+2) hygiene leftover</p></article></div></section><section><h2>Cisco work</h2><div class="grid"><article class="card"><div class="top"><h3><a href="https://github.com/rupret007/AdoptIQ" target="_blank" rel="noopener">AdoptIQ</a></h3><div class="chips"><span class="chip bad">Red</span> <span class="chip run">In flight</span></div></div><p>Build 115 continuation; Codex + Cloud Agent in flight; no secrets on this board</p></article><article class="card"><div class="top"><h3><a href="https://github.com/rupret007/TACTrack" target="_blank" rel="noopener">TACTrack</a></h3><div class="chips"><span class="chip bad">Red</span></div></div><p>CI red; open harness/validation PRs</p></article></div></section><section><h2>Bob / messaging infra</h2><div class="grid"><article class="card"><div class="top"><h3><a href="https://github.com/rupret007/Andrea_NanoBot" target="_blank" rel="noopener">Andrea NanoBot</a></h3><div class="chips"><span class="chip bad">Red</span></div></div><p>Texts engine; BB apple-script send; Private API OFF; AGI Layer CI red on branch</p></article><article class="card"><div class="top"><h3>Bot the Bot</h3><div class="chips"><span class="chip mute">—</span></div></div><p>Phone Bob channel; short replies</p></article><article class="card"><div class="top"><h3>Codex local</h3><div class="chips"><span class="chip mute">—</span> <span class="chip run">In flight</span></div></div><p>goals=true enabled; ~/bin/codex linked; AdoptIQ launch being fixed</p></article></div></section><section><h2>Music producer</h2><div class="grid"><article class="card"><div class="top"><h3>Logic Pro + MCP</h3><div class="chips"><span class="chip mute">—</span> <span class="chip jeff">Needs you</span></div></div><p>Logic 12.3.1 installed; MCP ready; needs Accessibility + Cursor restart</p></article><article class="card"><div class="top"><h3>Moises / Suno</h3><div class="chips"><span class="chip mute">—</span> <span class="chip jeff">Needs you</span></div></div><p>Producer suite ready; needs your logins for hands-on</p></article></div></section><section><h2>Parked</h2><div class="grid"><article class="card"><div class="top"><h3><a href="https://github.com/rupret007/story-corner-shelf" target="_blank" rel="noopener">Closet shelf</a></h3><div class="chips"><span class="chip mute">—</span> <span class="chip park">Parked</span></div></div><p>Parked — buying shelf instead</p></article></div></section>
-<footer>
-  No secrets or customer data on this page. Cisco items are high-level only.<br/>
-  Source: <code>rupret007/bob-ops-dashboard</code> · refreshed by Bob
-</footer>
-</main>
 </body>
 </html>
