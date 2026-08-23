@@ -261,6 +261,164 @@ status = {
   "publish_notes": "Public repo -- no secrets, no CSOne customer paths, AdoptIQ high-level only.",
 }
 
+# --- Active agents (Codex / Cursor / Claude) — safe public fields only ---
+import os
+AGENT_IDS = ("codex", "cursor", "claude")
+AGENT_STATE_CHIP = {
+    "running": ("green", "Running"),
+    "idle": ("yellow", "Idle"),
+    "installed": ("parked", "Installed"),
+    "down": ("red", "Down"),
+    "unknown": ("parked", "Unknown"),
+}
+
+def _safe_agent(raw, fallback_id):
+    if not isinstance(raw, dict):
+        raw = {}
+    aid = str(raw.get("id") or fallback_id).strip().lower()[:32] or fallback_id
+    name = str(raw.get("name") or aid.title())[:48]
+    state = str(raw.get("state") or "unknown").strip().lower()
+    if state not in AGENT_STATE_CHIP:
+        state = "unknown"
+    detail = str(raw.get("detail") or "")[:200]
+    for bad in ("token", "secret", "bearer", "CSOne", "csone", "keeper", "password", "api_key", "apikey"):
+        if bad.lower() in detail.lower():
+            detail = "detail redacted"
+            break
+    checked = raw.get("checked_at")
+    return {
+        "id": aid,
+        "name": name,
+        "state": state,
+        "detail": detail,
+        "checked_at": checked,
+    }
+
+def _default_agents(state="unknown", detail="No Mac probe yet"):
+    names = {"codex": "Codex", "cursor": "Cursor", "claude": "Claude"}
+    return [_safe_agent({"id": i, "name": names[i], "state": state, "detail": detail}, i) for i in AGENT_IDS]
+
+def _parse_agents_blob(blob):
+    if blob is None:
+        return None
+    if isinstance(blob, str):
+        blob = blob.strip()
+        if not blob:
+            return None
+        try:
+            blob = json.loads(blob)
+        except Exception:
+            return None
+    if isinstance(blob, dict) and isinstance(blob.get("agents"), list):
+        rows = blob["agents"]
+    elif isinstance(blob, list):
+        rows = blob
+    else:
+        return None
+    by = {}
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        a = _safe_agent(row, str(row.get("id") or "agent"))
+        by[a["id"]] = a
+    out = []
+    for i in AGENT_IDS:
+        out.append(by.get(i) or _safe_agent({"id": i, "name": i.title(), "state": "unknown", "detail": "missing from probe"}, i))
+    for k, v in by.items():
+        if k not in AGENT_IDS:
+            out.append(v)
+    return out
+
+def _agents_fresh(agents, max_age_sec=45 * 60):
+    if not agents:
+        return False
+    newest = None
+    for a in agents:
+        ts = a.get("checked_at") if isinstance(a, dict) else None
+        if not ts:
+            continue
+        try:
+            t = datetime.fromisoformat(str(ts).replace("Z", "+00:00"))
+            if t.tzinfo is None:
+                t = t.replace(tzinfo=ZoneInfo("America/Chicago"))
+            epoch = t.timestamp()
+            newest = epoch if newest is None else max(newest, epoch)
+        except Exception:
+            continue
+    if newest is None:
+        return False
+    return (time.time() - newest) < max_age_sec
+
+prev_early = {}
+try:
+    prev_early = json.loads((root / "status.json").read_text())
+except Exception:
+    prev_early = {}
+
+agents = None
+src = None
+env_blob = os.environ.get("AGENTS_STATUS_JSON")
+if env_blob:
+    agents = _parse_agents_blob(env_blob)
+    src = "env:AGENTS_STATUS_JSON"
+if agents is None:
+    for cand in (root / "agents-status.json", Path("/workspace/bob-ops-dashboard/agents-status.json")):
+        if cand.is_file():
+            try:
+                agents = _parse_agents_blob(cand.read_text())
+                src = f"file:{cand}"
+                break
+            except Exception:
+                continue
+if agents is None and isinstance(prev_early, dict):
+    prev_agents = prev_early.get("agents")
+    if isinstance(prev_agents, list) and prev_agents:
+        parsed = _parse_agents_blob(prev_agents)
+        if parsed and _agents_fresh(parsed):
+            agents = parsed
+            src = "previous:<45m"
+        elif parsed:
+            agents = [
+                _safe_agent(
+                    {**a, "state": "unknown", "detail": ((a.get("detail") or "stale") + " · probe stale (>45m)")},
+                    a.get("id") or "agent",
+                )
+                for a in parsed
+            ]
+            src = "previous:stale->unknown"
+if agents is None:
+    agents = _default_agents("unknown", "No Mac probe yet — run probe-agents-status.sh")
+    src = "default:unknown"
+
+status["agents"] = agents
+status["agents_source"] = src
+
+agent_projects = []
+for a in agents:
+    st, label = AGENT_STATE_CHIP.get(a["state"], AGENT_STATE_CHIP["unknown"])
+    notes = a.get("detail") or ""
+    if a.get("checked_at"):
+        notes = (notes + f" · checked {a['checked_at']}").strip(" ·")
+    agent_projects.append({
+        "name": a["name"],
+        "status": st,
+        "chip": label,
+        "notes": notes,
+        "agent_id": a["id"],
+        "agent_state": a["state"],
+    })
+agent_projects.append({
+    "name": "AdoptIQ Cloud Agent",
+    "status": "yellow",
+    "chip": "Yellow",
+    "notes": "Cloud Agent + Build 115 path in flight elsewhere (Cursor Cloud). High-level only.",
+})
+for sec in status["sections"]:
+    if sec.get("id") == "active-agents":
+        sec["projects"] = agent_projects
+        sec["title"] = "Active agents NOW"
+        break
+
 # HTML render (same dark mobile layout)
 CHIP_COLORS = {
   "green": ("#16a34a", "#052e16", "#bbf7d0"),
@@ -282,6 +440,28 @@ def ci_badge(ci):
     return f'<span class="ci" style="color:{color}">● {ci.get("name","CI")}: {concl}</span>'
 
 sections_html = []
+
+def agents_strip_html(agents_list):
+    pills = []
+    for a in agents_list or []:
+        st, label = AGENT_STATE_CHIP.get(a.get("state"), AGENT_STATE_CHIP["unknown"])
+        chip = chip_html(st, label)
+        name = a.get("name") or a.get("id") or "agent"
+        detail = a.get("detail") or ""
+        # Escape attribute quotes in detail title
+        detail_attr = detail.replace('"', "&quot;")
+        pills.append(
+            f'<div class="agent-pill" data-agent-id="{a.get("id") or name}">'
+            f'<div class="top"><span class="name">{name}</span>{chip}</div>'
+            f'<div class="detail" title="{detail_attr}">{detail}</div></div>'
+        )
+    return (
+        '<div class="agents-strip" id="agents-strip">'
+        '<span class="agents-label">Live</span>'
+        + "".join(pills)
+        + "</div>"
+    )
+
 for sec in status["sections"]:
     cards = []
     for p in sec["projects"]:
@@ -311,11 +491,16 @@ for sec in status["sections"]:
           <div class="row">{ci_badge(p.get("ci"))}</div>
           <p class="notes">{p.get("notes","")}</p>
         </article>''')
+    strip = ""
+    if sec.get("id") == "active-agents":
+        strip = agents_strip_html(status.get("agents"))
     sections_html.append(f'''
     <section id="{sec["id"]}">
       <h2>{sec["title"]}</h2>
+      {strip}
       <div class="grid">{''.join(cards)}</div>
     </section>''')
+
 
 html = f'''<!DOCTYPE html>
 <html lang="en">
@@ -448,6 +633,26 @@ html = f'''<!DOCTYPE html>
   }}
   #silence-banner.show {{ display:block; }}
   #board {{ min-height:2rem; }}
+  .agents-strip {{
+    display:flex; flex-wrap:wrap; gap:.5rem; align-items:center;
+    margin:0 0 .85rem; padding:.65rem .75rem; border-radius:12px;
+    background:var(--panel); border:1px solid var(--border);
+  }}
+  .agents-strip .agents-label {{
+    color:var(--muted); font-size:.75rem; font-weight:700; text-transform:uppercase;
+    letter-spacing:.04em; margin-right:.25rem;
+  }}
+  .agents-strip .agent-pill {{
+    display:inline-flex; flex-direction:column; gap:.1rem; max-width:100%;
+    border:1px solid var(--border); border-radius:10px; padding:.35rem .55rem;
+    background:var(--panel2); min-width:7.5rem;
+  }}
+  .agents-strip .agent-pill .top {{ display:flex; align-items:center; gap:.4rem; }}
+  .agents-strip .agent-pill .name {{ font-weight:700; font-size:.85rem; }}
+  .agents-strip .agent-pill .detail {{
+    color:var(--muted); font-size:.72rem; line-height:1.3;
+    overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:22rem;
+  }}
 </style>
 </head>
 <body>
@@ -825,6 +1030,31 @@ html = f'''<!DOCTYPE html>
     if (pollFailStreak === 0) hideSilence();
   }}
 
+  function agentStateChip(state) {{
+    var map = {{
+      running: ["green", "Running"],
+      idle: ["yellow", "Idle"],
+      installed: ["parked", "Installed"],
+      down: ["red", "Down"],
+      unknown: ["parked", "Unknown"]
+    }};
+    var m = map[state] || map.unknown;
+    return chipHtml(m[0], m[1]);
+  }}
+
+  function agentsStripHtml(agents) {{
+    var pills = "";
+    (agents || []).forEach(function (a) {{
+      var name = a.name || a.id || "agent";
+      var detail = a.detail || "";
+      pills += '<div class="agent-pill" data-agent-id="' + esc(a.id || name) + '">' +
+        '<div class="top"><span class="name">' + esc(name) + '</span>' + agentStateChip(a.state) +
+        '</div><div class="detail" title="' + esc(detail) + '">' + esc(detail) + '</div></div>';
+    }});
+    return '<div class="agents-strip" id="agents-strip"><span class="agents-label">Live</span>' +
+      pills + '</div>';
+  }}
+
   function renderBoard(data) {{
     if (!boardEl || !data || !Array.isArray(data.sections)) return;
     var html = "";
@@ -848,8 +1078,10 @@ html = f'''<!DOCTYPE html>
           '</header><div class="row">' + bits.join(" · ") + '</div><div class="row">' +
           ciBadge(p.ci) + '</div><p class="notes">' + esc(p.notes || "") + '</p></article>';
       }});
+      var strip = "";
+      if (sec.id === "active-agents") strip = agentsStripHtml(data.agents || []);
       html += '<section id="' + esc(sec.id || "") + '"><h2>' + esc(sec.title || "") +
-        '</h2><div class="grid">' + cards + '</div></section>';
+        '</h2>' + strip + '<div class="grid">' + cards + '</div></section>';
     }});
     boardEl.innerHTML = html;
     if (fetchedLine && Array.isArray(data.fetched_repos)) {{
@@ -1076,6 +1308,9 @@ print(f"Updated: {updated_ct}")
 print(f"Fetched OK: {status['fetched_repos']}")
 if status.get("inaccessible"):
     print(f"Inaccessible: {status['inaccessible']}")
+print(f"Agents source: {status.get('agents_source')}")
+for _a in status.get("agents") or []:
+    print(f"  - {_a.get('id')}: {_a.get('state')} · {_a.get('detail')}")
 PY
 
 rm -f "$TMP"
@@ -1090,12 +1325,15 @@ if [[ $PUSH -eq 1 ]]; then
   gh repo clone "$OWNER/bob-ops-dashboard" "$WORK" -- --quiet
   mkdir -p "$WORK/.github/workflows"
   cp "$ROOT/index.html" "$ROOT/status.json" "$ROOT/README.md" "$ROOT/refresh.sh" "$WORK/"
+  [[ -f "$ROOT/probe-agents-status.sh" ]] && cp "$ROOT/probe-agents-status.sh" "$WORK/"
+  # Do not commit agents-status.json by default (Mac-local probe snapshot); refresh merges it when present.
   if [[ -f "$ROOT/.github/workflows/refresh-dashboard.yml" ]]; then
     cp "$ROOT/.github/workflows/refresh-dashboard.yml" "$WORK/.github/workflows/"
   fi
   chmod +x "$WORK/refresh.sh"
   cd "$WORK"
   git add index.html status.json README.md refresh.sh
+  [[ -f probe-agents-status.sh ]] && git add probe-agents-status.sh
   [[ -f .github/workflows/refresh-dashboard.yml ]] && git add .github/workflows/refresh-dashboard.yml
   if git diff --cached --quiet; then
     echo "No changes to push."

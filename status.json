@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-08-22T20:55:32.181091-05:00",
-  "generated_at_display": "Sat Aug 22, 2026 \u00b7 8:55 PM CDT",
+  "generated_at": "2026-08-22T21:01:45.692523-05:00",
+  "generated_at_display": "Sat Aug 22, 2026 \u00b7 9:01 PM CDT",
   "timezone": "America/Chicago",
   "owner": "rupret007",
   "dashboard": "bob-ops-dashboard",
@@ -336,16 +336,34 @@
       "title": "Active agents NOW",
       "projects": [
         {
+          "name": "Codex",
+          "status": "green",
+          "chip": "Running",
+          "notes": "AdoptIQ PID 26928 \u00b7 gpt-5.6-sol goals \u00b7 codex-local :3210 ready \u00b7 checked 2026-08-22T20:45:00-05:00",
+          "agent_id": "codex",
+          "agent_state": "running"
+        },
+        {
+          "name": "Cursor",
+          "status": "green",
+          "chip": "Running",
+          "notes": "Cursor.app present and running \u00b7 checked 2026-08-22T20:45:00-05:00",
+          "agent_id": "cursor",
+          "agent_state": "running"
+        },
+        {
+          "name": "Claude",
+          "status": "parked",
+          "chip": "Installed",
+          "notes": "Claude.app + claude 2.1.216 installed \u00b7 checked 2026-08-22T20:45:00-05:00",
+          "agent_id": "claude",
+          "agent_state": "installed"
+        },
+        {
           "name": "AdoptIQ Cloud Agent",
           "status": "yellow",
           "chip": "Yellow",
-          "notes": "Cloud Agent + Build 115 path in flight elsewhere."
-        },
-        {
-          "name": "Local Codex fix",
-          "status": "yellow",
-          "chip": "Yellow",
-          "notes": "AdoptIQ local Codex continuation in progress."
+          "notes": "Cloud Agent + Build 115 path in flight elsewhere (Cursor Cloud). High-level only."
         }
       ]
     }
@@ -366,6 +384,30 @@
   ],
   "inaccessible": [],
   "publish_notes": "Public repo -- no secrets, no CSOne customer paths, AdoptIQ high-level only.",
+  "agents": [
+    {
+      "id": "codex",
+      "name": "Codex",
+      "state": "running",
+      "detail": "AdoptIQ PID 26928 \u00b7 gpt-5.6-sol goals \u00b7 codex-local :3210 ready",
+      "checked_at": "2026-08-22T20:45:00-05:00"
+    },
+    {
+      "id": "cursor",
+      "name": "Cursor",
+      "state": "running",
+      "detail": "Cursor.app present and running",
+      "checked_at": "2026-08-22T20:45:00-05:00"
+    },
+    {
+      "id": "claude",
+      "name": "Claude",
+      "state": "installed",
+      "detail": "Claude.app + claude 2.1.216 installed",
+      "checked_at": "2026-08-22T20:45:00-05:00"
+    }
+  ],
+  "agents_source": "file:/workspace/bob-ops-dashboard/agents-status.json",
   "verify": {
     "email": "jeffstory007@gmail.com",
     "sha256": "54f49bb7ea02c1380e7566cae76e22f4e144903f70dd78d1d63989abf2381a31",
