@@ -385,10 +385,24 @@ html = f'''<!DOCTYPE html>
   }}
   .auth button.secondary {{ background:transparent; color:var(--orange); border:1px solid var(--orange); }}
   .auth button:disabled {{ opacity:.45; cursor:not-allowed; }}
-  .auth .status {{ font-size:.85rem; min-height:1.2em; }}
+  .auth .status {{
+    font-size:.82rem; min-height:1.25em; margin-top:.45rem;
+    color:var(--muted); letter-spacing:.01em;
+  }}
   .auth .status.ok {{ color:var(--ok); }}
   .auth .status.bad {{ color:#f87171; }}
   .auth .status.warn {{ color:var(--warn); }}
+  .auth .status.hint {{ color:var(--muted); }}
+  #btn-confirm-code {{
+    min-height:44px; min-width:6.5rem; touch-action:manipulation;
+    cursor:pointer; -webkit-tap-highlight-color:transparent;
+  }}
+  #jeff-code {{
+    min-height:44px; font-size:1.05rem; letter-spacing:.14em;
+    font-variant-numeric:tabular-nums;
+  }}
+  .auth-row {{ align-items:stretch; }}
+  .auth button.secondary {{ min-height:44px; touch-action:manipulation; }}
   .actions {{ margin-top:.75rem; display:none; gap:.5rem; flex-wrap:wrap; }}
   .actions.open {{ display:flex; }}
   .pending-box {{ margin-top:.9rem; padding-top:.75rem; border-top:1px solid var(--border); }}
@@ -447,13 +461,13 @@ html = f'''<!DOCTYPE html>
     </div>
     <div class="auth" id="auth-panel">
       <h2>Jeff verify</h2>
-      <p>Bob sends a 6-digit code to <strong>jeffstory007@gmail.com</strong> (and can repeat it in chat). Paste it here. One address only.</p>
+      <p>Code goes to <strong>jeffstory007@gmail.com</strong>. Enter it below to unlock this device.</p>
       <div class="auth-row" id="code-row">
-        <input id="jeff-code" type="text" inputmode="numeric" maxlength="8" placeholder="6-digit code from email" autocomplete="one-time-code"/>
+        <input id="jeff-code" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="6" placeholder="6-digit code" autocomplete="one-time-code" enterkeyhint="done"/>
         <button type="button" id="btn-confirm-code">Unlock</button>
         <button type="button" id="btn-sign-out" class="secondary" style="display:none">Sign out</button>
       </div>
-      <div class="status" id="auth-status">Say “send dashboard code” to Bob — or use the code from email/chat</div>
+      <div class="status hint" id="auth-status">Unlocked actions stay on this phone only</div>
       <div class="actions" id="jeff-actions">
         <button type="button" data-action="refresh-hint">Copy refresh command</button>
         <button type="button" data-action="open-repo">Open dashboard repo</button>
@@ -496,7 +510,7 @@ html = f'''<!DOCTYPE html>
 
   function setStatus(msg, kind) {{
     statusEl.textContent = msg || "";
-    statusEl.className = "status" + (kind ? " " + kind : "");
+    statusEl.className = "status " + (kind || "hint");
   }}
   function loadAuth() {{
     try {{ return JSON.parse(localStorage.getItem(STORAGE_KEY) || "null"); }}
@@ -521,56 +535,77 @@ html = f'''<!DOCTYPE html>
     codeEl.disabled = ok;
     btnConfirm.disabled = ok;
     if (ok) {{
-      setStatus("Verified as " + JEFF_EMAIL + " on this device.", "ok");
+      setStatus("Unlocked on this phone", "ok");
       document.querySelectorAll(".card").forEach(function (c) {{
         var chip = c.querySelector(".chip");
         if (chip && /jeff-gate/i.test(chip.textContent)) c.classList.add("gated");
       }});
     }} else {{
       document.querySelectorAll(".card.gated").forEach(function (c) {{ c.classList.remove("gated"); }});
-      if (!statusEl.textContent) setStatus("Ask Bob in chat: send dashboard code", "");
+      if (!statusEl.textContent) setStatus("Unlocked actions stay on this phone only", "hint");
     }}
   }}
 
-  btnConfirm.addEventListener("click", async function () {{
+  async function doUnlock() {{
     var code = (codeEl.value || "").replace(/\s+/g, "");
     if (!/^\d{{6}}$/.test(code)) {{
-      setStatus("Enter the 6-digit code from email.", "bad");
+      setStatus("Need all 6 digits", "bad");
       return;
     }}
     setStatus("Checking…", "warn");
+    if (!window.crypto || !crypto.subtle) {{
+      setStatus("This browser can’t verify here. Try Safari again.", "bad");
+      return;
+    }}
     try {{
       var res = await fetch("./status.json?ts=" + Date.now(), {{ cache: "no-store" }});
+      if (!res.ok) throw new Error("status " + res.status);
       var data = await res.json();
       var v = (data && data.verify) || null;
       if (!v || !v.sha256 || !v.exp) {{
-        setStatus("No active code. Ask Bob: send dashboard code", "bad");
+        setStatus("No code active yet. Ask Bob for one.", "bad");
         return;
       }}
       if (Date.now() > Number(v.exp)) {{
-        setStatus("Code expired. Ask Bob for a new one.", "bad");
+        setStatus("That code expired. Ask Bob for a new one.", "bad");
         return;
       }}
       if ((v.email || JEFF_EMAIL).toLowerCase() !== JEFF_EMAIL) {{
-        setStatus("Verify config mismatch. Ask Bob.", "bad");
+        setStatus("Verify mismatch. Ask Bob.", "bad");
         return;
       }}
       var hex = await sha256Hex(code + ":" + JEFF_EMAIL);
       if (hex !== String(v.sha256).toLowerCase()) {{
-        setStatus("Wrong code.", "bad");
+        setStatus("That code doesn’t match. Try again.", "bad");
         return;
       }}
       saveAuth({{ email: JEFF_EMAIL, verifiedAt: new Date().toISOString() }});
       applyVerified(loadAuth());
     }} catch (e) {{
-      setStatus("Could not check code. Try again.", "bad");
+      setStatus("Couldn’t reach status. Pull to refresh, then Unlock.", "bad");
+    }}
+  }}
+
+  btnConfirm.addEventListener("click", function (ev) {{
+    ev.preventDefault();
+    doUnlock();
+  }});
+  btnConfirm.addEventListener("touchend", function (ev) {{
+    if (btnConfirm.disabled) return;
+    ev.preventDefault();
+    doUnlock();
+  }}, {{ passive: false }});
+  codeEl.addEventListener("keydown", function (ev) {{
+    if (ev.key === "Enter") {{
+      ev.preventDefault();
+      doUnlock();
     }}
   }});
 
   btnOut.addEventListener("click", function () {{
     saveAuth(null);
     codeEl.value = "";
-    setStatus("Signed out. Ask Bob for a new code when you need it.", "warn");
+    setStatus("Signed out", "hint");
     applyVerified(null);
   }});
 
@@ -677,7 +712,7 @@ html = f'''<!DOCTYPE html>
       localStorage.setItem("bobOpsLastReviewed", new Date().toISOString());
       setStatus("Board marked reviewed locally at " + new Date().toLocaleString(), "ok");
     }} else if (act === "ask-code") {{
-      setStatus("In Bob chat say: send dashboard code", "warn");
+      setStatus("Say “send dashboard code” in chat", "hint");
     }}
   }});
 
