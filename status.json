@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-08-22T23:00:42.689433-05:00",
-  "generated_at_display": "Sat Aug 22, 2026 \u00b7 11:00 PM CDT",
+  "generated_at": "2026-08-22T23:32:58.363749-05:00",
+  "generated_at_display": "Sat Aug 22, 2026 \u00b7 11:32 PM CDT",
   "timezone": "America/Chicago",
   "owner": "rupret007",
   "dashboard": "bob-ops-dashboard",
@@ -48,9 +48,9 @@
           "status": "jeff-gate",
           "chip": "Jeff-gate",
           "default_branch": "master",
-          "tip_sha": "ca0d3b3",
-          "tip_date": "2026-08-23T03:05:01Z",
-          "open_prs": 1,
+          "tip_sha": "b5dbdd6",
+          "tip_date": "2026-08-23T04:24:18Z",
+          "open_prs": 0,
           "ci": {
             "name": "WebJam CI",
             "conclusion": "success",
@@ -71,15 +71,15 @@
           "status": "green",
           "chip": "Green",
           "default_branch": "main",
-          "tip_sha": "5f380b7",
-          "tip_date": "2026-08-23T03:04:28Z",
+          "tip_sha": "b2251ff",
+          "tip_date": "2026-08-23T04:09:29Z",
           "open_prs": 0,
           "ci": {
             "name": "CI",
             "conclusion": "success",
             "branch": "main",
-            "sha": "5f380b7",
-            "created": "2026-08-23T03:04:31Z"
+            "sha": "b2251ff",
+            "created": "2026-08-23T04:09:32Z"
           },
           "release": null,
           "notes": "PR #1 lint fix merged; confirm main CI from live fetch.",
@@ -299,15 +299,15 @@
           "status": "yellow",
           "chip": "Yellow",
           "default_branch": "main",
-          "tip_sha": "3d4657f",
-          "tip_date": "2026-08-23T03:04:41Z",
-          "open_prs": 1,
+          "tip_sha": "4f7d13b",
+          "tip_date": "2026-08-23T04:15:21Z",
+          "open_prs": 0,
           "ci": {
             "name": "Update token count",
             "conclusion": "skipped",
             "branch": "main",
-            "sha": "3d4657f",
-            "created": "2026-08-23T03:04:43Z"
+            "sha": "4f7d13b",
+            "created": "2026-08-23T04:15:24Z"
           },
           "release": null,
           "notes": "BB AppleScript send preferred. Private API OFF. Approval-fenced sends only.",
@@ -506,7 +506,7 @@
     "AI-Music-Vault"
   ],
   "publish_notes": "Public repo -- no secrets, no CSOne customer paths, AdoptIQ high-level only.",
-  "refresh_started_ms": 1787457625723,
+  "refresh_started_ms": 1787459556755,
   "agents": [
     {
       "id": "codex",
@@ -530,7 +530,7 @@
       "checked_at": "2026-08-22T20:45:00-05:00"
     }
   ],
-  "agents_source": "file:/workspace/agents-status.json",
+  "agents_source": "file:/home/runner/work/bob-ops-dashboard/bob-ops-dashboard/agents-status.json",
   "pending": [
     {
       "id": "webjam-exploratory",
