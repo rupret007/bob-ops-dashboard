@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-08-24T17:09:51.529290-05:00",
-  "generated_at_display": "Mon Aug 24, 2026 \u00b7 5:09 PM CDT",
+  "generated_at": "2026-08-24T17:45:59.075239-05:00",
+  "generated_at_display": "Mon Aug 24, 2026 \u00b7 5:45 PM CDT",
   "timezone": "America/Chicago",
   "owner": "rupret007",
   "dashboard": "bob-ops-dashboard",
@@ -165,8 +165,8 @@
           "tip_sha": "a56c44f",
           "tip_date": "2026-08-21T04:37:57Z",
           "open_prs": 1,
-          "open_pr_url": "https://github.com/rupret007/RadDadSite/pull/6",
-          "open_pr_number": 6,
+          "open_pr_url": "https://github.com/rupret007/RadDadSite/pull/9",
+          "open_pr_number": 9,
           "open_pr_draft": true,
           "agent_url": null,
           "ci": {
@@ -435,9 +435,9 @@
           "default_branch": "main",
           "tip_sha": "1c3cab3",
           "tip_date": "2026-08-19T06:34:19Z",
-          "open_prs": 4,
-          "open_pr_url": "https://github.com/rupret007/story-corner-shelf/pull/1",
-          "open_pr_number": 1,
+          "open_prs": 3,
+          "open_pr_url": "https://github.com/rupret007/story-corner-shelf/pull/3",
+          "open_pr_number": 3,
           "open_pr_draft": false,
           "agent_url": "https://cursor.com/agents/bc-9e25e7a8-3fb6-4495-859e-e483aea6f9ab",
           "ci": {
@@ -587,7 +587,7 @@
     "TACTrack"
   ],
   "publish_notes": "Public repo -- no secrets, no CSOne customer paths, AdoptIQ high-level only.",
-  "refresh_started_ms": 1787609375715,
+  "refresh_started_ms": 1787611536910,
   "agents": [
     {
       "id": "codex",
