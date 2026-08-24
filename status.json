@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-08-24T17:45:59.075239-05:00",
-  "generated_at_display": "Mon Aug 24, 2026 \u00b7 5:45 PM CDT",
+  "generated_at": "2026-08-24T18:25:10.663888-05:00",
+  "generated_at_display": "Mon Aug 24, 2026 \u00b7 6:25 PM CDT",
   "timezone": "America/Chicago",
   "owner": "rupret007",
   "dashboard": "bob-ops-dashboard",
@@ -51,7 +51,7 @@
           "default_branch": "master",
           "tip_sha": "c8955a4",
           "tip_date": "2026-08-23T07:22:41Z",
-          "open_prs": 1,
+          "open_prs": 2,
           "open_pr_url": "https://github.com/rupret007/webjam/pull/31",
           "open_pr_number": 31,
           "open_pr_draft": false,
@@ -587,7 +587,7 @@
     "TACTrack"
   ],
   "publish_notes": "Public repo -- no secrets, no CSOne customer paths, AdoptIQ high-level only.",
-  "refresh_started_ms": 1787611536910,
+  "refresh_started_ms": 1787613887129,
   "agents": [
     {
       "id": "codex",
