@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-08-24T16:10:36.641174-05:00",
-  "generated_at_display": "Mon Aug 24, 2026 \u00b7 4:10 PM CDT",
+  "generated_at": "2026-08-24T16:45:19.514909-05:00",
+  "generated_at_display": "Mon Aug 24, 2026 \u00b7 4:45 PM CDT",
   "timezone": "America/Chicago",
   "owner": "rupret007",
   "dashboard": "bob-ops-dashboard",
@@ -54,7 +54,7 @@
           "open_prs": 1,
           "open_pr_url": "https://github.com/rupret007/webjam/pull/31",
           "open_pr_number": 31,
-          "open_pr_draft": true,
+          "open_pr_draft": false,
           "agent_url": "https://cursor.com/agents/bc-e4bfc7dd-c244-429f-921e-1832592a399d",
           "ci": {
             "name": "WebJam CI",
@@ -83,7 +83,7 @@
           "open_prs": 1,
           "open_pr_url": "https://github.com/rupret007/StoryLiner/pull/10",
           "open_pr_number": 10,
-          "open_pr_draft": true,
+          "open_pr_draft": false,
           "agent_url": "https://cursor.com/agents/bc-4f2ede4c-9812-46b3-a67e-343aaa72c41c",
           "ci": {
             "name": "CI",
@@ -111,7 +111,7 @@
           "open_prs": 1,
           "open_pr_url": "https://github.com/rupret007/StoryBoard/pull/9",
           "open_pr_number": 9,
-          "open_pr_draft": true,
+          "open_pr_draft": false,
           "agent_url": "https://cursor.com/agents/bc-62bc312a-7b7c-493a-82c7-6b8bcfaf1cc3",
           "ci": {
             "name": "Quality",
@@ -368,7 +368,7 @@
           "open_prs": 1,
           "open_pr_url": "https://github.com/rupret007/Andrea_NanoBot/pull/17",
           "open_pr_number": 17,
-          "open_pr_draft": true,
+          "open_pr_draft": false,
           "agent_url": "https://cursor.com/agents/bc-c7f8cc56-b89a-4b4f-88ff-d75d388a979d",
           "ci": {
             "name": "Security",
@@ -587,7 +587,7 @@
     "TACTrack"
   ],
   "publish_notes": "Public repo -- no secrets, no CSOne customer paths, AdoptIQ high-level only.",
-  "refresh_started_ms": 1787605815712,
+  "refresh_started_ms": 1787607901008,
   "agents": [
     {
       "id": "codex",
