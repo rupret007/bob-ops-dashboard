@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-08-24T02:38:49.812309-05:00",
-  "generated_at_display": "Mon Aug 24, 2026 \u00b7 2:38 AM CDT",
+  "generated_at": "2026-08-24T03:28:28.708362-05:00",
+  "generated_at_display": "Mon Aug 24, 2026 \u00b7 3:28 AM CDT",
   "timezone": "America/Chicago",
   "owner": "rupret007",
   "dashboard": "bob-ops-dashboard",
@@ -371,12 +371,12 @@
           "open_pr_draft": true,
           "agent_url": "https://cursor.com/agents/bc-c7f8cc56-b89a-4b4f-88ff-d75d388a979d",
           "ci": {
-            "name": "CI",
+            "name": "Security",
             "conclusion": "success",
             "branch": "main",
             "sha": "d823c4f",
-            "created": "2026-08-23T07:13:29Z",
-            "html_url": "https://github.com/rupret007/Andrea_NanoBot/actions/runs/32624996106"
+            "created": "2026-08-24T07:51:55Z",
+            "html_url": "https://github.com/rupret007/Andrea_NanoBot/actions/runs/32703464857"
           },
           "release": null,
           "notes": "BB AppleScript send preferred. Private API OFF. Approval-fenced sends only.",
@@ -587,7 +587,7 @@
     "TACTrack"
   ],
   "publish_notes": "Public repo -- no secrets, no CSOne customer paths, AdoptIQ high-level only.",
-  "refresh_started_ms": 1787557106457,
+  "refresh_started_ms": 1787560087263,
   "agents": [
     {
       "id": "codex",
