@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-08-24T16:45:19.514909-05:00",
-  "generated_at_display": "Mon Aug 24, 2026 \u00b7 4:45 PM CDT",
+  "generated_at": "2026-08-24T17:09:51.529290-05:00",
+  "generated_at_display": "Mon Aug 24, 2026 \u00b7 5:09 PM CDT",
   "timezone": "America/Chicago",
   "owner": "rupret007",
   "dashboard": "bob-ops-dashboard",
@@ -587,7 +587,7 @@
     "TACTrack"
   ],
   "publish_notes": "Public repo -- no secrets, no CSOne customer paths, AdoptIQ high-level only.",
-  "refresh_started_ms": 1787607901008,
+  "refresh_started_ms": 1787609375715,
   "agents": [
     {
       "id": "codex",
@@ -620,15 +620,6 @@
   "agents_source": "file:/home/runner/work/bob-ops-dashboard/bob-ops-dashboard/agents-status.json:stale->unknown",
   "cloud_agents": [
     {
-      "id": "bc-9cdddbd2-440d-408b-846f-b69a33d81d17",
-      "name": "PR #11",
-      "state": "unknown",
-      "detail": "fix: N open PRs is a tap, not dead text",
-      "url": "https://cursor.com/agents/bc-9cdddbd2-440d-408b-846f-b69a33d81d17",
-      "pr_url": "https://github.com/rupret007/bob-ops-dashboard/pull/11",
-      "checked_at": null
-    },
-    {
       "id": "bc-e4bfc7dd-c244-429f-921e-1832592a399d",
       "name": "PR #31",
       "state": "unknown",
@@ -644,6 +635,15 @@
       "detail": "Jeff: FAILED write-started is not a queued upcoming post",
       "url": "https://cursor.com/agents/bc-4f2ede4c-9812-46b3-a67e-343aaa72c41c",
       "pr_url": "https://github.com/rupret007/StoryLiner/pull/10",
+      "checked_at": null
+    },
+    {
+      "id": "bc-62bc312a-7b7c-493a-82c7-6b8bcfaf1cc3",
+      "name": "PR #9",
+      "state": "unknown",
+      "detail": "Keep Show Night from minting songs Vault already excluded",
+      "url": "https://cursor.com/agents/bc-62bc312a-7b7c-493a-82c7-6b8bcfaf1cc3",
+      "pr_url": "https://github.com/rupret007/StoryBoard/pull/9",
       "checked_at": null
     }
   ],
