@@ -30,11 +30,15 @@ from board_meta import (
     pick_open_pr,
     pick_tip_ci,
     presentation,
+    prune_closed_parked_prs,
+    pulls_url_from_repo,
     resolve_agents,
     safe_actions_url,
     safe_agent_url,
     safe_pr_url,
+    safe_pulls_url,
     safe_repo_url,
+    signal_href,
     sha_matches_tip,
     short_note,
     sort_pending,
@@ -95,6 +99,43 @@ class BoardMetaTests(unittest.TestCase):
         self.assertEqual(ids[-2], "abilities")
         self.assertEqual(ids[-1], "features")
         self.assertEqual([s["id"] for s in out if s["id"] == "abilities"], ["abilities"])
+
+    def test_closed_parked_prs_are_not_presented_as_current_work(self):
+        open_url = "https://github.com/rupret007/story-corner-shelf/pull/3"
+        closed_url = "https://github.com/rupret007/RadDadSite/pull/6"
+        sections = [
+            {
+                "id": "parked",
+                "projects": [
+                    {"name": "Open parked PR", "status": "parked", "url": open_url},
+                    {"name": "Closed parked PR", "status": "parked", "url": closed_url},
+                    {
+                        "name": "Dynamic open parked PR",
+                        "status": "parked",
+                        "url": "https://github.com/rupret007/story-corner-shelf",
+                        "open_pr_url": open_url,
+                    },
+                    {
+                        "name": "Parked non-PR work",
+                        "status": "parked",
+                        "url": "https://github.com/rupret007/story-corner-shelf",
+                    },
+                ],
+            }
+        ]
+        out = prune_closed_parked_prs(sections, [open_url])
+        names = [p["name"] for p in out[0]["projects"]]
+        self.assertEqual(
+            names,
+            ["Open parked PR", "Dynamic open parked PR", "Parked non-PR work"],
+        )
+        self.assertNotIn(closed_url, str(out))
+
+        fail_closed = prune_closed_parked_prs(sections, [])
+        self.assertEqual(
+            [p["name"] for p in fail_closed[0]["projects"]],
+            ["Parked non-PR work"],
+        )
 
     def test_honest_authority(self):
         blob = str(first_class_sections())
@@ -174,6 +215,61 @@ class BoardMetaTests(unittest.TestCase):
         )
         self.assertIsNone(compact_signal({}))
         self.assertIsNone(compact_signal(None))
+
+    def test_open_prs_signal_is_a_tap_not_dead_text(self):
+        one = {
+            "url": "https://github.com/rupret007/StoryBoard",
+            "open_prs": 1,
+            "open_pr_url": "https://github.com/rupret007/StoryBoard/pull/8",
+            "ci": {"conclusion": "success"},
+        }
+        self.assertEqual(compact_signal(one), "1 open PR")
+        self.assertEqual(signal_href(one), "https://github.com/rupret007/StoryBoard/pull/8")
+        many = {
+            "url": "https://github.com/rupret007/story-corner-shelf",
+            "open_prs": 4,
+            "open_pr_url": "https://github.com/rupret007/story-corner-shelf/pull/1",
+            "ci": {"conclusion": "success"},
+        }
+        self.assertEqual(compact_signal(many), "4 open PRs")
+        self.assertEqual(signal_href(many), "https://github.com/rupret007/story-corner-shelf/pulls")
+        orphan = {"url": "https://github.com/rupret007/RadDadSite", "open_prs": 1}
+        self.assertEqual(signal_href(orphan), "https://github.com/rupret007/RadDadSite/pulls")
+        no_repo = {
+            "open_prs": 4,
+            "open_pr_url": "https://github.com/rupret007/story-corner-shelf/pull/1",
+        }
+        self.assertEqual(signal_href(no_repo), "")
+        self.assertEqual(
+            signal_href(
+                {
+                    "url": "https://github.com/rupret007/webjam",
+                    "release": "v0.26.0",
+                    "ci": {
+                        "conclusion": "pending",
+                        "html_url": "https://github.com/rupret007/webjam/actions/runs/9",
+                    },
+                }
+            ),
+            "https://github.com/rupret007/webjam/actions/runs/9",
+        )
+        self.assertEqual(
+            signal_href({"release": "v0.26.0", "ci": {"conclusion": "success"}, "open_prs": 0}),
+            "",
+        )
+        self.assertEqual(signal_href(None), "")
+        self.assertEqual(
+            safe_pulls_url("https://github.com/rupret007/webjam/pulls"),
+            "https://github.com/rupret007/webjam/pulls",
+        )
+        self.assertEqual(safe_pulls_url("https://evil.example/rupret007/webjam/pulls"), "")
+        self.assertEqual(safe_pulls_url("javascript:alert(1)"), "")
+        self.assertEqual(safe_pulls_url("https://github.com/rupret007/webjam/pulls/1"), "")
+        self.assertEqual(
+            pulls_url_from_repo("https://github.com/rupret007/webjam"),
+            "https://github.com/rupret007/webjam/pulls",
+        )
+        self.assertEqual(pulls_url_from_repo("https://evil.example/webjam"), "")
 
     def test_quiet_lane_and_attention(self):
         self.assertTrue(is_quiet_lane({"status": "green"}))
