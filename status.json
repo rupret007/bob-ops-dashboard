@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-08-24T22:33:50.827301-05:00",
-  "generated_at_display": "Mon Aug 24, 2026 \u00b7 10:33 PM CDT",
+  "generated_at": "2026-08-24T23:24:24.780468-05:00",
+  "generated_at_display": "Mon Aug 24, 2026 \u00b7 11:24 PM CDT",
   "timezone": "America/Chicago",
   "owner": "rupret007",
   "dashboard": "bob-ops-dashboard",
@@ -46,8 +46,8 @@
           "url": "https://github.com/rupret007/webjam",
           "repo_url": "https://github.com/rupret007/webjam",
           "private": false,
-          "status": "yellow",
-          "chip": "Yellow",
+          "status": "jeff-gate",
+          "chip": "Jeff-gate",
           "default_branch": "master",
           "tip_sha": "29be7c2",
           "tip_date": "2026-08-25T03:12:34Z",
@@ -58,7 +58,7 @@
           "agent_url": null,
           "ci": {
             "name": "WebJam CI",
-            "conclusion": "in_progress",
+            "conclusion": "success",
             "branch": "master",
             "sha": "29be7c2",
             "created": "2026-08-25T03:12:37Z",
@@ -434,12 +434,12 @@
           "open_pr_draft": false,
           "agent_url": null,
           "ci": {
-            "name": "Validate shelf artifacts",
+            "name": "Validate R11 Gate A-left print overlay v2",
             "conclusion": "success",
             "branch": "main",
             "sha": "cc25e73",
             "created": "2026-08-25T03:14:53Z",
-            "html_url": "https://github.com/rupret007/story-corner-shelf/actions/runs/32804448295"
+            "html_url": "https://github.com/rupret007/story-corner-shelf/actions/runs/32804448258"
           },
           "release": null,
           "notes": "Parked. Open PRs ignored unless Jeff unparks.",
@@ -580,7 +580,7 @@
     "AI-Music-Vault"
   ],
   "publish_notes": "Public repo -- no secrets, no CSOne customer paths, AdoptIQ high-level only.",
-  "refresh_started_ms": 1787628814274,
+  "refresh_started_ms": 1787631846511,
   "agents": [
     {
       "id": "codex",
