@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-08-24T23:24:24.780468-05:00",
-  "generated_at_display": "Mon Aug 24, 2026 \u00b7 11:24 PM CDT",
+  "generated_at": "2026-08-25T00:06:24.860008-05:00",
+  "generated_at_display": "Tue Aug 25, 2026 \u00b7 12:06 AM CDT",
   "timezone": "America/Chicago",
   "owner": "rupret007",
   "dashboard": "bob-ops-dashboard",
@@ -434,12 +434,12 @@
           "open_pr_draft": false,
           "agent_url": null,
           "ci": {
-            "name": "Validate R11 Gate A-left print overlay v2",
+            "name": "Validate shelf artifacts",
             "conclusion": "success",
             "branch": "main",
             "sha": "cc25e73",
             "created": "2026-08-25T03:14:53Z",
-            "html_url": "https://github.com/rupret007/story-corner-shelf/actions/runs/32804448258"
+            "html_url": "https://github.com/rupret007/story-corner-shelf/actions/runs/32804448295"
           },
           "release": null,
           "notes": "Parked. Open PRs ignored unless Jeff unparks.",
@@ -580,7 +580,7 @@
     "AI-Music-Vault"
   ],
   "publish_notes": "Public repo -- no secrets, no CSOne customer paths, AdoptIQ high-level only.",
-  "refresh_started_ms": 1787631846511,
+  "refresh_started_ms": 1787634367088,
   "agents": [
     {
       "id": "codex",
