@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-08-25T15:47:36.395703-05:00",
-  "generated_at_display": "Tue Aug 25, 2026 \u00b7 3:47 PM CDT",
+  "generated_at": "2026-08-25T16:22:36.675863-05:00",
+  "generated_at_display": "Tue Aug 25, 2026 \u00b7 4:22 PM CDT",
   "timezone": "America/Chicago",
   "owner": "rupret007",
   "dashboard": "bob-ops-dashboard",
@@ -178,7 +178,7 @@
             "html_url": "https://github.com/rupret007/RadDadSite/actions/runs/32447624274"
           },
           "release": null,
-          "notes": "Tip green typical; draft #6 prod deploy parked/Jeff-gate if still open.",
+          "notes": "Tip green typical; deploy work comes only from live open PR data.",
           "accessible": true
         },
         {
@@ -204,24 +204,31 @@
         },
         {
           "name": "AI Music Vault",
-          "repo": null,
-          "url": null,
-          "repo_url": null,
-          "private": null,
-          "status": "parked",
-          "chip": "Parked",
-          "default_branch": null,
-          "tip_sha": null,
-          "tip_date": null,
-          "open_prs": null,
-          "open_pr_url": null,
-          "open_pr_number": null,
+          "repo": "rupret007/AI-Music-Vault",
+          "url": "https://github.com/rupret007/AI-Music-Vault",
+          "repo_url": "https://github.com/rupret007/AI-Music-Vault",
+          "private": true,
+          "status": "yellow",
+          "chip": "Yellow",
+          "default_branch": "main",
+          "tip_sha": "2801648",
+          "tip_date": "2026-08-23T07:22:16Z",
+          "open_prs": 1,
+          "open_pr_url": "https://github.com/rupret007/AI-Music-Vault/pull/9",
+          "open_pr_number": 9,
           "open_pr_draft": false,
-          "agent_url": null,
-          "ci": null,
+          "agent_url": "https://cursor.com/agents/bc-d473b803-453b-4928-a7c0-4f17b388563f",
+          "ci": {
+            "name": "catalog-validate",
+            "conclusion": "success",
+            "branch": "main",
+            "sha": "2801648",
+            "created": "2026-08-23T07:22:19Z",
+            "html_url": "https://github.com/rupret007/AI-Music-Vault/actions/runs/32625388130"
+          },
           "release": null,
-          "notes": "Private docs/index. High-level only on public page.",
-          "accessible": false
+          "notes": "Privacy/visibility owner hold. Do not merge or publish.",
+          "accessible": true
         },
         {
           "name": "Turdanoid",
@@ -295,45 +302,59 @@
       "projects": [
         {
           "name": "AdoptIQ",
-          "repo": null,
-          "url": null,
-          "repo_url": null,
-          "private": null,
+          "repo": "rupret007/AdoptIQ",
+          "url": "https://github.com/rupret007/AdoptIQ",
+          "repo_url": "https://github.com/rupret007/AdoptIQ",
+          "private": true,
           "status": "yellow",
           "chip": "Yellow",
-          "default_branch": null,
-          "tip_sha": null,
-          "tip_date": null,
-          "open_prs": null,
-          "open_pr_url": null,
-          "open_pr_number": null,
-          "open_pr_draft": false,
+          "default_branch": "main",
+          "tip_sha": "7be5d2e",
+          "tip_date": "2026-08-23T03:08:20Z",
+          "open_prs": 1,
+          "open_pr_url": "https://github.com/rupret007/AdoptIQ/pull/2",
+          "open_pr_number": 2,
+          "open_pr_draft": true,
           "agent_url": null,
-          "ci": null,
+          "ci": {
+            "name": "Build AdoptIQ",
+            "conclusion": "pending",
+            "branch": "main",
+            "sha": "7be5d2e",
+            "created": null,
+            "html_url": null
+          },
           "release": null,
           "notes": "Cisco CS desktop -- Build 115 in progress (Codex + Cloud Agent). No secrets on this page.",
-          "accessible": false
+          "accessible": true
         },
         {
           "name": "TACTrack",
-          "repo": null,
-          "url": null,
-          "repo_url": null,
-          "private": null,
-          "status": "yellow",
-          "chip": "Yellow",
-          "default_branch": null,
-          "tip_sha": null,
-          "tip_date": null,
-          "open_prs": null,
-          "open_pr_url": null,
-          "open_pr_number": null,
+          "repo": "rupret007/TACTrack",
+          "url": "https://github.com/rupret007/TACTrack",
+          "repo_url": "https://github.com/rupret007/TACTrack",
+          "private": true,
+          "status": "red",
+          "chip": "Red",
+          "default_branch": "main",
+          "tip_sha": "5432348",
+          "tip_date": "2026-08-16T20:52:47Z",
+          "open_prs": 1,
+          "open_pr_url": "https://github.com/rupret007/TACTrack/pull/3",
+          "open_pr_number": 3,
           "open_pr_draft": false,
-          "agent_url": null,
-          "ci": null,
+          "agent_url": "https://cursor.com/agents/bc-28d451e0-393a-40bd-b667-6f764f68246f",
+          "ci": {
+            "name": "macOS validation build (non-production)",
+            "conclusion": "failure",
+            "branch": "main",
+            "sha": "5432348",
+            "created": "2026-08-16T20:53:04Z",
+            "html_url": "https://github.com/rupret007/TACTrack/actions/runs/31971840948"
+          },
           "release": null,
           "notes": "Private. High-level only -- CI / open PRs from live fetch.",
-          "accessible": false
+          "accessible": true
         },
         {
           "name": "AdoptIQ notes",
@@ -450,13 +471,6 @@
           "status": "parked",
           "chip": "Parked",
           "notes": "Catalog/voice feel only -- parked catalog lane."
-        },
-        {
-          "name": "RadDadSite #6",
-          "status": "parked",
-          "chip": "Parked",
-          "url": "https://github.com/rupret007/RadDadSite/pull/6",
-          "notes": "Draft prod deploy -- keep parked pending Che/server facts."
         }
       ]
     },
@@ -528,7 +542,7 @@
           "name": "Soft-paint poll",
           "status": "green",
           "chip": "Feature",
-          "notes": "Client fetches status.json every 30s (pauses when the tab is hidden). Immediate poll on pageshow / visible. Fetch aborts after 8s. Hide / iOS-return abort is not a failed poll. A stale cached status.json cannot rewind the board. Repaints when board content changes -- not on every 15m Actions timestamp. Tip CI is the current SHA; Pages / skipped helpers cannot hide a fail. A skipped or cancelled helper cannot beat a success or become Open CI. Lanes prefer the open PR; CI fail/running taps the Actions run when a run URL is known."
+          "notes": "Client fetches status.json every 30s (pauses when the tab is hidden). Immediate poll on pageshow / visible. Fetch aborts after 8s. Hide / iOS-return abort is not a failed poll. A stale cached status.json cannot rewind the board. Repaints when board content changes -- not on every 15m Actions timestamp. Tip CI is the current SHA; Pages / skipped helpers cannot hide a fail. A skipped or cancelled helper cannot beat a success or become Open CI. Lanes prefer the open PR; CI fail/running taps the Actions run when a run URL is known. N open PRs taps that PR (one) or the repo pulls list (two or more)."
         },
         {
           "name": "Agents strip",
@@ -570,17 +584,16 @@
     "Rad-Dad-Merch",
     "RadDadSite",
     "Turdanoid",
+    "AdoptIQ",
+    "TACTrack",
+    "AI-Music-Vault",
     "rad-dad-show-night",
     "Andrea_NanoBot",
     "story-corner-shelf"
   ],
-  "inaccessible": [
-    "AdoptIQ",
-    "TACTrack",
-    "AI-Music-Vault"
-  ],
+  "inaccessible": [],
   "publish_notes": "Public repo -- no secrets, no CSOne customer paths, AdoptIQ high-level only.",
-  "refresh_started_ms": 1787690832802,
+  "refresh_started_ms": 1787692930082,
   "agents": [
     {
       "id": "codex",
@@ -610,8 +623,27 @@
       "pr_url": null
     }
   ],
-  "agents_source": "file:/home/runner/work/bob-ops-dashboard/bob-ops-dashboard/agents-status.json:stale->unknown",
-  "cloud_agents": [],
+  "agents_source": "file:/private/tmp/bob-ops-final-refresh.RX0jaf/repo/agents-status.json:stale->unknown",
+  "cloud_agents": [
+    {
+      "id": "bc-28d451e0-393a-40bd-b667-6f764f68246f",
+      "name": "PR #3",
+      "state": "unknown",
+      "detail": "fix(test): apply requested mtime to disk in weekly-send harness",
+      "url": "https://cursor.com/agents/bc-28d451e0-393a-40bd-b667-6f764f68246f",
+      "pr_url": "https://github.com/rupret007/TACTrack/pull/3",
+      "checked_at": null
+    },
+    {
+      "id": "bc-d473b803-453b-4928-a7c0-4f17b388563f",
+      "name": "PR #9",
+      "state": "unknown",
+      "detail": "Fail closed when published catalog counts can still lie",
+      "url": "https://cursor.com/agents/bc-d473b803-453b-4928-a7c0-4f17b388563f",
+      "pr_url": "https://github.com/rupret007/AI-Music-Vault/pull/9",
+      "checked_at": null
+    }
+  ],
   "pending": [
     {
       "id": "webjam-exploratory",

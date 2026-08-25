@@ -58,6 +58,8 @@ function run() {
   if (src.indexOf("function pollPaintDecision") === -1) fail("pollPaintDecision missing");
   if (src.indexOf("function safeAgentUrl") === -1) fail("safeAgentUrl missing");
   if (src.indexOf("function laneHrefs") === -1) fail("laneHrefs missing");
+  if (src.indexOf("function signalHref") === -1) fail("signalHref missing");
+  if (src.indexOf("function safePullsUrl") === -1) fail("safePullsUrl missing");
   if (src.indexOf("data-open=\"work\"") === -1 && src.indexOf("data-open=\\\"work\\\"") === -1) {
     if (html.indexOf("data-open=\"work\"") === -1 && html.indexOf("Open agent") === -1) {
       // Generator must know how to paint work links even if this snapshot has none.
@@ -115,6 +117,9 @@ function run() {
       extractFn(src, "laneHrefs") +
       "; })"
   )(safeAgentUrl, safePrUrl, safeActionsUrl, safeRepoUrl);
+  const pullsUrlFromRepo = eval(
+    "(function (safeRepoUrl) { return " + extractFn(src, "pullsUrlFromRepo") + "; })"
+  )(safeRepoUrl);
   const ageGateAgents = eval(
     "(function (parseCheckedAt, safeAgentUrl, safePrUrl) { var AGENT_FRESH_MS = 45 * 60 * 1000; return " +
       extractFn(src, "ageGateAgents") +
@@ -167,6 +172,52 @@ function run() {
   }
   if (compactSignal({ release: "v0.26.0", ci: { conclusion: "success" }, open_prs: 0 }) !== "v0.26.0") {
     fail("green release still shows the tag");
+  }
+
+  const signalHref = eval(
+    "(function (compactSignal, laneHrefs, pullsUrlFromRepo) { return " +
+      extractFn(src, "signalHref") +
+      "; })"
+  )(compactSignal, laneHrefs, pullsUrlFromRepo);
+  if (
+    signalHref({
+      url: "https://github.com/rupret007/StoryBoard",
+      open_prs: 1,
+      open_pr_url: "https://github.com/rupret007/StoryBoard/pull/8",
+      ci: { conclusion: "success" },
+    }) !== "https://github.com/rupret007/StoryBoard/pull/8"
+  ) {
+    fail("1 open PR must tap that PR");
+  }
+  if (
+    signalHref({
+      url: "https://github.com/rupret007/story-corner-shelf",
+      open_prs: 4,
+      open_pr_url: "https://github.com/rupret007/story-corner-shelf/pull/1",
+      ci: { conclusion: "success" },
+    }) !== "https://github.com/rupret007/story-corner-shelf/pulls"
+  ) {
+    fail("N open PRs must tap the pulls list, not one PR");
+  }
+  if (
+    signalHref({
+      url: "https://github.com/rupret007/webjam",
+      release: "v0.26.0",
+      ci: { conclusion: "pending", html_url: "https://github.com/rupret007/webjam/actions/runs/9" },
+    }) !== "https://github.com/rupret007/webjam/actions/runs/9"
+  ) {
+    fail("CI pending must still tap the run");
+  }
+  if (signalHref({ release: "v0.26.0", ci: { conclusion: "success" }, open_prs: 0 })) {
+    fail("release tag must stay dead text");
+  }
+  if (
+    signalHref({
+      open_prs: 4,
+      open_pr_url: "https://github.com/rupret007/story-corner-shelf/pull/1",
+    })
+  ) {
+    fail("N open PRs without a repo must not invent a pulls list or pretend one PR is all");
   }
 
   const parseStampMs = eval("(" + extractFn(src, "parseStampMs") + ")");

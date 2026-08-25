@@ -33,7 +33,7 @@ fetch_repo() {
 import json, subprocess, sys
 owner, repo, root = sys.argv[1], sys.argv[2], sys.argv[3]
 sys.path.insert(0, root)
-from board_meta import extract_cloud_agents_from_prs, pick_open_pr, pick_tip_ci
+from board_meta import extract_cloud_agents_from_prs, pick_open_pr, pick_tip_ci, safe_pr_url
 full = f"{owner}/{repo}"
 
 def api(path, default=None):
@@ -58,6 +58,12 @@ msg = (c.get("message") or "").split("\n", 1)[0]
 prs = api(f"repos/{full}/pulls?state=open&per_page=100", []) or []
 if not isinstance(prs, list):
     prs = []
+open_pr_urls = [
+    url
+    for p in prs
+    if isinstance(p, dict)
+    if (url := safe_pr_url(p.get("html_url") or p.get("url")))
+]
 open_pr = pick_open_pr(prs)
 clouds = extract_cloud_agents_from_prs(prs, limit=1)
 # Default-branch only so PR runs cannot push tip CI out of the window.
@@ -78,6 +84,7 @@ print(json.dumps({
     "tip_date": date,
     "tip_msg": msg,
     "open_prs": len(prs),
+    "open_pr_urls": open_pr_urls,
     "open_pr": open_pr,
     "agent_url": (clouds[0]["url"] if clouds else None),
     "cloud_agents": clouds,
@@ -119,9 +126,11 @@ from board_meta import (
     is_quiet_lane,
     lane_hrefs,
     merge_cloud_agents,
+    signal_href,
     merge_first_class,
     parse_cloud_agents,
     presentation,
+    prune_closed_parked_prs,
     resolve_agents,
     safe_actions_url,
     safe_agent_url,
@@ -205,9 +214,10 @@ status = {
         project("StoryBoard", notes="Quiet green unless CI says otherwise."),
         project("Rad-Dad-Merch", notes="Merch lane; watch Release integrity."),
         project("RadDadSite",
-                notes="Tip green typical; draft #6 prod deploy parked/Jeff-gate if still open."),
+                notes="Tip green typical; deploy work comes only from live open PR data."),
         project("rad-dad-show-night", notes="Show-night run sheet / flyer. No CI is OK."),
-        project("AI-Music-Vault", notes="Private docs/index. High-level only on public page."),
+        project("AI-Music-Vault",
+                notes="Privacy/visibility owner hold. Do not merge or publish."),
         project("Turdanoid",
                 notes="Tip usually green; stale open PRs -> hygiene."),
       ],
@@ -258,9 +268,6 @@ status = {
                 notes="Parked. Open PRs ignored unless Jeff unparks."),
         {"name": "Stalemate / Trailer Swift", "status": "parked", "chip": "Parked",
          "notes": "Catalog/voice feel only -- parked catalog lane."},
-        {"name": "RadDadSite #6", "status": "parked", "chip": "Parked",
-         "url": "https://github.com/rupret007/RadDadSite/pull/6",
-         "notes": "Draft prod deploy -- keep parked pending Che/server facts."},
       ],
     },
     {
@@ -274,6 +281,10 @@ status = {
   "publish_notes": "Public repo -- no secrets, no CSOne customer paths, AdoptIQ high-level only.",
   "refresh_started_ms": refresh_started_ms,
 }
+status["sections"] = prune_closed_parked_prs(
+    status["sections"],
+    [url for row in fetched for url in (row.get("open_pr_urls") or [])],
+)
 status["sections"] = merge_first_class(status["sections"])
 
 # --- Active agents (Codex / Cursor / Claude) — safe public fields only ---
@@ -601,9 +612,10 @@ def lane_html(p):
         if title_url else title
     )
     signal = compact_signal(p)
-    if signal and hrefs.get("ci") and str(signal).startswith("CI"):
+    href = signal_href(p)
+    if signal and href:
         signal_html = (
-            f'<a class="signal" data-open="work" href="{h(hrefs["ci"])}" '
+            f'<a class="signal" data-open="work" href="{h(href)}" '
             f'target="_blank" rel="noopener noreferrer">{h(signal)}</a>'
         )
     else:
@@ -1233,6 +1245,14 @@ html = f'''<!DOCTYPE html>
     var s = cleanPublicUrl(u);
     return /^https:\\/\\/github\\.com\\/rupret007\\/[A-Za-z0-9._-]+$/i.test(s) ? s : "";
   }}
+  function safePullsUrl(u) {{
+    var s = cleanPublicUrl(u);
+    return /^https:\\/\\/github\\.com\\/rupret007\\/[A-Za-z0-9._-]+\\/pulls$/i.test(s) ? s : "";
+  }}
+  function pullsUrlFromRepo(u) {{
+    var repo = safeRepoUrl(u);
+    return repo ? repo + "/pulls" : "";
+  }}
   function laneHrefs(p) {{
     if (!p) return {{}};
     var ci = p.ci && typeof p.ci === "object" ? p.ci : {{}};
@@ -1370,9 +1390,10 @@ html = f'''<!DOCTYPE html>
       ? '<a data-open="work" href="' + esc(hrefs.title) + '" target="_blank" rel="noopener noreferrer">' + esc(title) + "</a>"
       : esc(title);
     var signal = compactSignal(p);
+    var href = signalHref(p);
     var signalHtml = "";
-    if (signal && hrefs.ci && String(signal).indexOf("CI") === 0) {{
-      signalHtml = '<a class="signal" data-open="work" href="' + esc(hrefs.ci) +
+    if (signal && href) {{
+      signalHtml = '<a class="signal" data-open="work" href="' + esc(href) +
         '" target="_blank" rel="noopener noreferrer">' + esc(signal) + "</a>";
     }} else if (signal) {{
       signalHtml = '<span class="signal">' + esc(signal) + "</span>";
@@ -1695,8 +1716,21 @@ html = f'''<!DOCTYPE html>
   var pollTimeout = null;
   lastAgents = readDomAgents();
   lastCloud = readDomCloud();
+  function signalHref(p) {{
+    var signal = compactSignal(p);
+    if (!signal) return "";
+    var hrefs = laneHrefs(p);
+    if (String(signal).indexOf("CI") === 0) return hrefs.ci || "";
+    if (String(signal).indexOf("open PR") !== -1) {{
+      var n = (typeof p.open_prs === "number" && isFinite(p.open_prs)) ? p.open_prs : 0;
+      var pulls = pullsUrlFromRepo(hrefs.repo || "");
+      if (n > 1) return pulls;
+      return hrefs.pr || pulls;
+    }}
+    return "";
+  }}
   function workHref(href) {{
-    return safeAgentUrl(href) || safePrUrl(href) || safeActionsUrl(href) || safeRepoUrl(href);
+    return safeAgentUrl(href) || safePrUrl(href) || safeActionsUrl(href) || safePullsUrl(href) || safeRepoUrl(href);
   }}
   function openWorkLink(href) {{
     var url = workHref(href);
