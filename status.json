@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-08-26T13:31:46.508985-05:00",
-  "generated_at_display": "Wed Aug 26, 2026 \u00b7 1:31 PM CDT",
+  "generated_at": "2026-08-26T13:45:24.392363-05:00",
+  "generated_at_display": "Wed Aug 26, 2026 \u00b7 1:45 PM CDT",
   "timezone": "America/Chicago",
   "owner": "rupret007",
   "dashboard": "bob-ops-dashboard",
@@ -263,8 +263,9 @@
             "html_url": "https://github.com/rupret007/Turdanoid/actions/runs/32609377612"
           },
           "release": null,
-          "notes": "Tip usually green; stale open PRs -> hygiene.",
-          "accessible": true
+          "notes": "Public game hub. Fun/replayability pass remains open; green CI is not completion.",
+          "accessible": true,
+          "live_game_url": "https://rupret007.github.io/Turdanoid/hub.html"
         }
       ]
     },
@@ -403,9 +404,9 @@
           "status": "yellow",
           "chip": "Yellow",
           "default_branch": "main",
-          "tip_sha": "18bf778",
-          "tip_date": "2026-08-26T18:15:27Z",
-          "open_prs": 3,
+          "tip_sha": "9e49780",
+          "tip_date": "2026-08-26T18:44:44Z",
+          "open_prs": 2,
           "open_pr_url": "https://github.com/rupret007/bob-ops-dashboard/pull/18",
           "open_pr_number": 18,
           "open_pr_draft": true,
@@ -416,9 +417,9 @@
             "name": "Refresh Bob Ops Dashboard",
             "conclusion": "in_progress",
             "branch": "main",
-            "sha": "18bf778",
-            "created": "2026-08-26T18:31:05Z",
-            "html_url": "https://github.com/rupret007/bob-ops-dashboard/actions/runs/33000114858"
+            "sha": "9e49780",
+            "created": "2026-08-26T18:44:53Z",
+            "html_url": "https://github.com/rupret007/bob-ops-dashboard/actions/runs/33001392660"
           },
           "release": null,
           "notes": "Source-only feature PRs; the scheduled refresh owns generated index.html and status.json.",
@@ -749,7 +750,7 @@
           "name": "Poll / decide race guards",
           "status": "green",
           "chip": "Feature",
-          "notes": "pollSeq / pendingSeq drop stale fetches. stopPolling bumps pollSeq before abort so tab-hide is not a fail. Approve / Hold / Deny are real GitHub links so iOS cannot swallow a popup. Open agent / Open PR / Open repo / Open CI use the same real target=_blank plus openBlank fallback. decideBusy still debounce double-taps."
+          "notes": "pollSeq / pendingSeq drop stale fetches. stopPolling bumps pollSeq before abort so tab-hide is not a fail. Approve / Hold / Deny are real GitHub links so iOS cannot swallow a popup. Open agent / Open PR / Open repo / Open CI / Play game use the same real target=_blank plus openBlank fallback. decideBusy still debounce double-taps."
         },
         {
           "name": "Public Pages",
@@ -784,7 +785,7 @@
     "Sliding-Glass-Door-PETG-Screw"
   ],
   "publish_notes": "Public board -- no secrets or customer paths. Private repositories stay high-level; AI Music Vault stays private-content-boundary only.",
-  "refresh_started_ms": 1787769076930,
+  "refresh_started_ms": 1787769900776,
   "agents_source": "file:stale->unknown",
   "agents": [
     {
