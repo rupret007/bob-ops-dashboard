@@ -38,7 +38,7 @@ Remembered state is a lead, never authority. If the current head differs from an
 | Billing, runner, helper, credential, or service gate stops work | External block | Name the class of block; do not diagnose a code failure from it |
 | Physical, signing, sending, uploading, live-provider, or production step remains | Owner-only | State the exact decision/action needed from the owner |
 
-Always inspect the failed job or annotation. Do not rerun a billing-blocked job until billing is confirmed fixed. A skipped or cancelled helper does not override a relevant success, and a helper failure does not automatically prove a product failure.
+Always inspect the failed job or annotation. A zero-step hosted failure is runner or billing evidence, not evidence that product code failed. Never auto-rerun it; wait until the external gate is confirmed fixed. A skipped or cancelled helper does not override a relevant success, and a helper failure does not automatically prove a product failure.
 
 ## 5. Review before publishing a draft
 
@@ -81,6 +81,8 @@ Always inspect the failed job or annotation. Do not rerun a billing-blocked job 
 - Use live customer/provider data.
 - Restart a gateway or invoke a live model/runtime action.
 - Sign a build, use a physical device, print, install, fit, upload, or release media.
+
+If merging to a default branch automatically publishes Pages or another production surface, disclose that live impact when requesting exact-head merge approval. A documentation-only diff is not automatically deployment-free.
 
 ## 9. Dated handoff template
 
