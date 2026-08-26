@@ -431,6 +431,23 @@ for p in projects:
             "private lane leaked public metadata (" + ", ".join(leaked) + "): "
             + str(p.get("name"))
         )
+    if p.get("status") == "red":
+        raise SystemExit(
+            "private lane must not diagnose hosted CI as red: " + str(p.get("name"))
+        )
+html = Path(sys.argv[2]).read_text()
+for p in projects:
+    if not p.get("private"):
+        continue
+    name = str(p.get("name") or "")
+    article = re.search(
+        rf'<article class="lane[^"]*"><h3>{re.escape(name)}</h3>.*?</article>',
+        html,
+    )
+    if not article:
+        continue
+    if any(sig in article.group(0) for sig in ("CI fail", "CI pending", "CI running")):
+        raise SystemExit("private lane published a CI diagnosis signal: " + name)
 agents = st.get("agents") if isinstance(st, dict) else None
 if isinstance(agents, list):
     for a in agents:
@@ -532,6 +549,21 @@ if "hosted billing blocks CI" in refresh_text or "billing blocks CI" in refresh_
     raise SystemExit("CSS Conductor note must not diagnose hosted CI as a billing block")
 if "High-level only; hosted-job cause stays unconfirmed." not in refresh_text:
     raise SystemExit("CSS Conductor must stay a high-level note with unconfirmed hosted-job cause")
+if "high_level=bool(r.get(\"private\") or high_level_only)" not in refresh_text:
+    raise SystemExit("refresh.sh must keep private/high-level lanes off hosted-CI diagnosis")
+if "if (p.private) return \"\";" not in refresh_text:
+    raise SystemExit("refresh.sh JS compactSignal must hide private-lane CI diagnosis")
+sys.path.insert(0, str(refresh.parent))
+from board_meta import compact_signal, status_from_fetch
+private_fail = {
+    "accessible": True,
+    "private": True,
+    "ci": {"conclusion": "failure"},
+}
+if status_from_fetch(private_fail, high_level=True) == "red":
+    raise SystemExit("private/high-level lanes must not paint hosted CI as red")
+if compact_signal({"private": True, "ci": {"conclusion": "failure"}}) == "CI fail":
+    raise SystemExit("private/high-level lanes must not publish a CI fail signal")
 for md in [readme, *sorted(docs.rglob("*.md"))]:
     for match in re.finditer(
         r"GitHub-backed rows use live repository, default-branch CI, and open-PR state for [^.]+",

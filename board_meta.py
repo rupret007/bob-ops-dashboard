@@ -769,6 +769,7 @@ def status_from_fetch(
     *,
     override: str | None = None,
     jeff_gate: bool = False,
+    high_level: bool = False,
 ) -> str:
     """Lane status from live gh. Missing CI is OK (green). Inaccessible is parked.
 
@@ -777,10 +778,22 @@ def status_from_fetch(
     Red behind Jeff-gate + a release tag. Empty ``ci: {}`` stays green
     (Show Night). Cisco high-level notes keep an explicit yellow override
     when inaccessible.
+
+    Private / high-level lanes never paint hosted CI as Red. The public board
+    cannot inspect a private job, so a hosted conclusion cannot diagnose a
+    code failure or confirm the external cause.
     """
     if override == "parked":
         return "parked"
     accessible = isinstance(repo, dict) and bool(repo.get("accessible"))
+    if high_level:
+        if override:
+            return override
+        if not accessible:
+            return "parked"
+        if jeff_gate:
+            return "jeff-gate"
+        return "yellow"
     concl = ci_conclusion(repo) if accessible else ""
     if accessible and concl in CI_FAIL_CONCLUSIONS:
         return "red"
@@ -806,8 +819,14 @@ def status_from_fetch(
 
 
 def compact_signal(project: Any) -> str | None:
-    """One scan signal. Live CI, then review work, beat a release tag."""
+    """One scan signal. Live CI, then review work, beat a release tag.
+
+    Private / high-level lanes publish no CI or review signal. A hosted
+    conclusion on those rows is not a public diagnosis.
+    """
     if not isinstance(project, dict):
+        return None
+    if project.get("private"):
         return None
     concl = ci_conclusion(project)
     if concl in CI_FAIL_CONCLUSIONS:
