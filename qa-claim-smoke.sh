@@ -139,12 +139,15 @@ grep -q 'function safeAgentUrl' "$INDEX" || fail "safeAgentUrl missing"
 grep -q 'function laneHrefs' "$INDEX" || fail "laneHrefs missing"
 grep -q 'function signalHref' "$INDEX" || fail "signalHref missing"
 grep -q 'function safePullsUrl' "$INDEX" || fail "safePullsUrl missing"
+grep -q 'function safeGameUrl' "$INDEX" || fail "safeGameUrl missing"
+grep -q 'function safeGameUrl' "$REFRESH" || fail "refresh.sh safeGameUrl missing"
 grep -q 'concl === "skipped"' "$INDEX" || fail "laneHrefs must drop skipped Open CI"
 grep -q 'concl === "skipped"' "$REFRESH" || fail "refresh.sh laneHrefs must drop skipped Open CI"
 grep -q 'data-open="work"' "$REFRESH" || fail "refresh.sh missing work-link taps"
 grep -q 'Open agent' "$REFRESH" || fail "refresh.sh missing Open agent"
 grep -q 'Open repo' "$REFRESH" || fail "refresh.sh missing Open repo"
 grep -q 'Open CI' "$REFRESH" || fail "refresh.sh missing Open CI"
+grep -q 'Play game' "$REFRESH" || fail "refresh.sh missing Play game"
 grep -q 'function handleWorkClick' "$INDEX" || fail "handleWorkClick missing"
 grep -q 'function openWorkLink' "$INDEX" || fail "openWorkLink missing"
 grep -q 'window.openBlank = openBlank' "$INDEX" || fail "openBlank not exposed"
@@ -286,7 +289,7 @@ required_lanes = {
     "CSS Conductor", "TACTrack", "Barker", "StoryBoard", "StoryDesk",
     "Andrea NanoBot", "OpenClaw Runtime", "StoryLiner", "AI Music Vault",
     "Bob Ops Dashboard", "RadDadSite", "Cursor-OpenClaw Integration",
-    "Sliding Glass Door Screw", "Private media",
+    "Sliding Glass Door Screw", "Turdanoid", "Private media",
 }
 projects = [
     p
@@ -299,6 +302,16 @@ names = {str(p.get("name") or "") for p in projects}
 missing = sorted(required_lanes - names)
 if missing:
     raise SystemExit("dashboard missing inherited lanes: " + ", ".join(missing))
+turdanoid = [p for p in projects if p.get("name") == "Turdanoid"]
+if len(turdanoid) != 1:
+    raise SystemExit("dashboard must expose exactly one Turdanoid lane")
+turdanoid = turdanoid[0]
+if turdanoid.get("status") not in {"yellow", "red"}:
+    raise SystemExit("Turdanoid gameplay-improvement lane must remain visibly open")
+if turdanoid.get("live_game_url") != "https://rupret007.github.io/Turdanoid/hub.html":
+    raise SystemExit("Turdanoid lane missing the allowlisted public game hub")
+if "remains open" not in str(turdanoid.get("notes") or "").lower():
+    raise SystemExit("Turdanoid lane must not claim the gameplay pass is complete")
 media_sections = [
     sec for sec in (st.get("sections") or [])
     if isinstance(sec, dict) and sec.get("id") == "private-media"
@@ -380,7 +393,7 @@ if re.search(rf"\b{re.escape(private_markers[5])}s?\b", public_blob, re.I):
 private_sensitive = (
     "repo", "url", "repo_url", "default_branch", "tip_sha", "tip_date",
     "product_sha", "open_prs", "open_pr_url", "open_pr_number",
-    "open_pr_draft", "pr_listing_complete", "agent_url", "release",
+    "open_pr_draft", "pr_listing_complete", "agent_url", "live_game_url", "release",
 )
 for p in projects:
     if not p.get("private"):
@@ -447,6 +460,8 @@ function extract(name) {
 }
 eval(extract("esc"));
 eval(extract("safeHref"));
+eval(extract("cleanPublicUrl"));
+eval(extract("safeGameUrl"));
 if (esc("<img onerror=x>") !== "&lt;img onerror=x&gt;") throw new Error("esc lt");
 if (esc('"') !== "&quot;") throw new Error("esc quote");
 if (safeHref("javascript:alert(1)") !== "") throw new Error("js url");
@@ -459,6 +474,11 @@ if (safeHref('https://x.com/"onclick="') !== "") throw new Error("quoted url");
 if (safeHref("./status.json") !== "./status.json") throw new Error("relative url");
 if (safeHref("./evil:foo") !== "") throw new Error("colon relative");
 if (safeHref("./ok\\\\x") !== "") throw new Error("backslash relative");
+if (safeGameUrl("https://rupret007.github.io/Turdanoid/hub.html?from=board") !== "https://rupret007.github.io/Turdanoid/hub.html") {
+  throw new Error("live game url");
+}
+if (safeGameUrl("https://rupret007.github.io/Turdanoid/") !== "") throw new Error("broad pages url");
+if (safeGameUrl("https://evil.example/Turdanoid/hub.html") !== "") throw new Error("evil game url");
 if (!src.includes("pollSeq") || !src.includes("decideBusy")) {
   throw new Error("guards missing in extracted JS");
 }

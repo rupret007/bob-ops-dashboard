@@ -8,7 +8,7 @@ Public, mobile-friendly status board for projects Bob is working on (Jeff Story 
 
 - `index.html` -- human dashboard (Claude orange `#d97757` on near-black `#0a0a0a`)
 - Phone-first board: one **pulse strip** (freshness + agents) → **Decisions** (high/medium first; lower-risk collapsed) → **Live shipping** as compact status lanes → quieter secondary lanes. **Abilities** are a collapsed footer. Engineer notes stay behind collapsed **How this board works**.
-- Tap-to-open: Cloud Agent pills with a real `cursor.com/agents/bc-…` URL (never invented) → Open agent / Open PR. Lanes prefer the open PR, plus Open repo / Open CI when those URLs are known. A complete same-repository PR chain shows safe base-to-tip order (for example, **Stack #10 -> #11 -> #12**) and taps the repository pull list; ambiguous, forked, branching, or partial chains fall back to the honest open-PR count. iOS-safe: real `<a target=_blank>` plus `openBlank` fallback. Never invent a bc-id, stack, or green status.
+- Tap-to-open: Cloud Agent pills with a real `cursor.com/agents/bc-…` URL (never invented) → Open agent / Open PR. Lanes prefer the open PR, plus Open repo / Open CI when those URLs are known. Turdanoid also exposes one exact-allowlisted **Play game** link; neighboring or foreign Pages URLs fail closed. A complete same-repository PR chain shows safe base-to-tip order (for example, **Stack #10 -> #11 -> #12**) and taps the repository pull list; ambiguous, forked, branching, or partial chains fall back to the honest open-PR count. iOS-safe: real `<a target=_blank>` plus `openBlank` fallback. Never invent a bc-id, stack, or green status.
 - `status.json` -- machine-readable snapshot (client polls every ~30s)
 - `.github/workflows/refresh-dashboard.yml` -- Actions cron every 15 minutes
 - No secrets, tokens, CSOne customer paths, Keeper material, or private handoff text
@@ -16,7 +16,9 @@ Public, mobile-friendly status board for projects Bob is working on (Jeff Story 
 
 ## Portfolio coverage
 
-The board follows every inherited product lane. GitHub-backed rows use live repository, default-branch CI, and open-PR state for WebJam, Story Shelf, AdoptIQ, StoryOps-AI, Ball Beacon, CSS Conductor, TACTrack, canonical `0xc0re/barker` (not the unrelated `rupret007/barker` history), StoryBoard, Andrea NanoBot, StoryLiner, AI Music Vault, Bob Ops Dashboard, RadDadSite, Cursor-OpenClaw Integration, and Sliding Glass Door Screw. StoryDesk and OpenClaw Runtime are explicitly **Local-only** because no authoritative remote can be claimed; private-media work appears only as a high-level **Owner-only** boundary because upload and publishing stay outside this board.
+The board follows every inherited product lane. GitHub-backed rows use live repository, default-branch CI, and open-PR state for WebJam, Turdanoid, Story Shelf, AdoptIQ, StoryOps-AI, Ball Beacon, CSS Conductor, TACTrack, canonical `0xc0re/barker` (not the unrelated `rupret007/barker` history), StoryBoard, Andrea NanoBot, StoryLiner, AI Music Vault, Bob Ops Dashboard, RadDadSite, Cursor-OpenClaw Integration, and Sliding Glass Door Screw. StoryDesk and OpenClaw Runtime are explicitly **Local-only** because no authoritative remote can be claimed; private-media work appears only as a high-level **Owner-only** boundary because upload and publishing stay outside this board.
+
+Turdanoid is an independent public gameplay-improvement lane. Its row links the repository, current-tip CI, and the curated [live game hub](https://rupret007.github.io/Turdanoid/hub.html). Green CI proves the current tip's automated checks; green Pages proves the hub deployed. Neither claims the fun/replayability pass is complete.
 
 Private repositories expose only high-level status. Private PR bodies can never contribute Cursor agent links to the public page, and local probe work links are published only when a live refresh proves their PR repository is public. AI Music Vault remains private-content-boundary only.
 

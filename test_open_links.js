@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 "use strict";
 /**
- * Fail-closed smoke: agent / PR / CI taps are real hrefs + iOS openBlank fallback.
+ * Fail-closed smoke: agent / PR / CI / game taps are real hrefs + iOS openBlank fallback.
  * No invented bc-ids. Auth stays gone.
  */
 const fs = require("fs");
@@ -47,6 +47,7 @@ function run() {
   if (refresh.indexOf("Open PR") === -1) fail("refresh.sh missing Open PR");
   if (refresh.indexOf("Open repo") === -1) fail("refresh.sh missing Open repo");
   if (refresh.indexOf("Open CI") === -1) fail("refresh.sh missing Open CI");
+  if (refresh.indexOf("Play game") === -1) fail("refresh.sh missing Play game");
   if (refresh.indexOf("lane-links") === -1) fail("refresh.sh missing lane-links");
   if (refresh.indexOf('data-open="work"') === -1) fail("refresh.sh missing data-open=work");
   if (src.indexOf("function safeAgentUrl") === -1) fail("safeAgentUrl missing from page");
@@ -55,6 +56,7 @@ function run() {
   if (src.indexOf("function workHref") === -1) fail("workHref missing from page");
   if (src.indexOf("function signalHref") === -1) fail("signalHref missing from page");
   if (src.indexOf("function safePullsUrl") === -1) fail("safePullsUrl missing from page");
+  if (src.indexOf("function safeGameUrl") === -1) fail("safeGameUrl missing from page");
   if (src.indexOf("function openWorkLink") === -1) fail("openWorkLink missing from page");
   if (src.indexOf("function handleWorkClick") === -1) fail("handleWorkClick missing from page");
   if (src.indexOf("window.openBlank = openBlank") === -1) fail("openBlank not exposed");
@@ -77,11 +79,14 @@ function run() {
   const safePullsUrl = eval(
     "(function (cleanPublicUrl) { return " + extractFn(src, "safePullsUrl") + "; })"
   )(cleanPublicUrl);
+  const safeGameUrl = eval(
+    "(function (cleanPublicUrl) { return " + extractFn(src, "safeGameUrl") + "; })"
+  )(cleanPublicUrl);
   const workHref = eval(
-    "(function (safeAgentUrl, safePrUrl, safeActionsUrl, safePullsUrl, safeRepoUrl) { return " +
+    "(function (safeAgentUrl, safePrUrl, safeActionsUrl, safePullsUrl, safeRepoUrl, safeGameUrl) { return " +
       extractFn(src, "workHref") +
       "; })"
-  )(safeAgentUrl, safePrUrl, safeActionsUrl, safePullsUrl, safeRepoUrl);
+  )(safeAgentUrl, safePrUrl, safeActionsUrl, safePullsUrl, safeRepoUrl, safeGameUrl);
 
   const good = "https://cursor.com/agents/bc-8e16f06d-f73f-482c-987f-e13f2d3b9fb1";
   if (safeAgentUrl(good) !== good) fail("good agent url dropped");
@@ -115,6 +120,12 @@ function run() {
   if (workHref("https://github.com/0xc0re/barker/pulls") !== "https://github.com/0xc0re/barker/pulls") {
     fail("workHref must keep canonical Barker pulls list");
   }
+  const gameHub = "https://rupret007.github.io/Turdanoid/hub.html";
+  if (safeGameUrl(gameHub + "?from=board") !== gameHub) fail("game hub must canonicalize");
+  if (workHref(gameHub) !== gameHub) fail("workHref must keep the allowlisted game hub");
+  if (workHref("https://rupret007.github.io/Turdanoid/")) fail("workHref must drop broad Pages roots");
+  if (workHref("https://rupret007.github.io/Turdanoid/index.html")) fail("workHref must drop sibling game pages");
+  if (workHref("https://evil.example/Turdanoid/hub.html")) fail("workHref must drop foreign game hubs");
   if (workHref("https://github.com/0xc0re/other")) fail("workHref must drop unlisted external repos");
   if (workHref("https://github.com/rupret007/webjam") !== "https://github.com/rupret007/webjam") {
     fail("workHref must not rewrite repo home into /pulls");
@@ -264,6 +275,7 @@ function run() {
   if (paint.indexOf('<span class="signal">4 open PRs</span>') !== -1) {
     fail("first paint still has dead N open PRs text");
   }
+  if (paint.indexOf(">Play game</a>") === -1) fail("first paint missing Turdanoid Play game link");
   const openPrSignals = Array.from(
     paint.matchAll(/<a class="signal" data-open="work" href="([^"]+)"[^>]*>(\d+) open PRs?<\/a>/g)
   );

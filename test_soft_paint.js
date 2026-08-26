@@ -60,6 +60,7 @@ function run() {
   if (src.indexOf("function laneHrefs") === -1) fail("laneHrefs missing");
   if (src.indexOf("function signalHref") === -1) fail("signalHref missing");
   if (src.indexOf("function safePullsUrl") === -1) fail("safePullsUrl missing");
+  if (src.indexOf("function safeGameUrl") === -1) fail("safeGameUrl missing");
   if (src.indexOf("data-open=\"work\"") === -1 && src.indexOf("data-open=\\\"work\\\"") === -1) {
     if (html.indexOf("data-open=\"work\"") === -1 && html.indexOf("Open agent") === -1) {
       // Generator must know how to paint work links even if this snapshot has none.
@@ -115,6 +116,18 @@ function run() {
   if (boardFingerprint(stackA) === boardFingerprint(stackB)) {
     fail("fingerprint must change when stack order appears");
   }
+  const gameA = {
+    sections: [{ id: "live-shipping", projects: [{ name: "Turdanoid" }] }],
+  };
+  const gameB = {
+    sections: [{
+      id: "live-shipping",
+      projects: [{ name: "Turdanoid", live_game_url: "https://rupret007.github.io/Turdanoid/hub.html" }],
+    }],
+  };
+  if (boardFingerprint(gameA) === boardFingerprint(gameB)) {
+    fail("fingerprint must change when the game hub link appears");
+  }
 
   const parseCheckedAt = eval("(" + extractFn(src, "parseCheckedAt") + ")");
   const cleanPublicUrl = eval("(" + extractFn(src, "cleanPublicUrl") + ")");
@@ -131,11 +144,14 @@ function run() {
   const safeRepoUrl = eval(
     "(function (cleanPublicUrl) { return " + extractFn(src, "safeRepoUrl") + "; })"
   )(cleanPublicUrl);
+  const safeGameUrl = eval(
+    "(function (cleanPublicUrl) { return " + extractFn(src, "safeGameUrl") + "; })"
+  )(cleanPublicUrl);
   const laneHrefs = eval(
-    "(function (safeAgentUrl, safePrUrl, safeActionsUrl, safeRepoUrl) { return " +
+    "(function (safeAgentUrl, safePrUrl, safeActionsUrl, safeRepoUrl, safeGameUrl) { return " +
       extractFn(src, "laneHrefs") +
       "; })"
-  )(safeAgentUrl, safePrUrl, safeActionsUrl, safeRepoUrl);
+  )(safeAgentUrl, safePrUrl, safeActionsUrl, safeRepoUrl, safeGameUrl);
   const pullsUrlFromRepo = eval(
     "(function (safeRepoUrl) { return " + extractFn(src, "pullsUrlFromRepo") + "; })"
   )(safeRepoUrl);
@@ -341,6 +357,7 @@ function run() {
     url: "https://github.com/rupret007/webjam",
     open_pr_url: "https://github.com/rupret007/webjam/pull/21",
     agent_url: goodAgent,
+    live_game_url: "https://rupret007.github.io/Turdanoid/hub.html",
     ci: { html_url: "https://github.com/rupret007/webjam/actions/runs/9", conclusion: "failure" },
   });
   if (hrefs.title !== "https://github.com/rupret007/webjam/pull/21") fail("lane title must prefer open PR");
@@ -348,8 +365,10 @@ function run() {
   if (hrefs.repo !== "https://github.com/rupret007/webjam") fail("lane repo href missing");
   if (hrefs.ci !== "https://github.com/rupret007/webjam/actions/runs/9") fail("lane CI href missing");
   if (hrefs.agent !== goodAgent) fail("lane agent href missing");
+  if (hrefs.game !== "https://rupret007.github.io/Turdanoid/hub.html") fail("lane game href missing");
+  if (safeGameUrl("https://rupret007.github.io/Turdanoid/index.html")) fail("sibling game page must drop");
   const empty = laneHrefs({ name: "Show Night" });
-  if (empty.pr || empty.agent || empty.ci) fail("missing URLs must not invent taps");
+  if (empty.pr || empty.agent || empty.ci || empty.game) fail("missing URLs must not invent taps");
   const skipped = laneHrefs({
     url: "https://github.com/rupret007/Andrea_NanoBot",
     ci: {
