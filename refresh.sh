@@ -170,6 +170,7 @@ from board_meta import (
     resolve_agents,
     safe_actions_url,
     safe_agent_url,
+    safe_game_url,
     safe_pr_url,
     short_note,
     split_pending,
@@ -192,7 +193,7 @@ CHIP = {
     "parked": "Parked", "jeff-gate": "Jeff-gate",
 }
 
-def project(name, *, status=None, notes="", product_sha=None, jeff_gate=False, extra=None):
+def project(name, *, status=None, notes="", product_sha=None, jeff_gate=False, live_game_url=None, extra=None):
     r = g(name)
     st = status_from_fetch(r, override=status, jeff_gate=jeff_gate)
     p = {
@@ -220,6 +221,8 @@ def project(name, *, status=None, notes="", product_sha=None, jeff_gate=False, e
     }
     if product_sha:
         p["product_sha"] = product_sha
+    if live_game_url:
+        p["live_game_url"] = safe_game_url(live_game_url)
     if extra:
         p.update(extra)
     if p.get("private"):
@@ -277,8 +280,9 @@ status = {
         project("rad-dad-show-night", notes="Show-night run sheet / flyer. No CI is OK."),
         project("AI-Music-Vault",
                 notes="Private-content boundary hold. Keep private; do not publish catalog content."),
-        project("Turdanoid",
-                notes="Tip usually green; stale open PRs -> hygiene."),
+        project("Turdanoid", status="yellow",
+                live_game_url="https://rupret007.github.io/Turdanoid/hub.html",
+                notes="Public game hub. Fun/replayability pass remains open; green CI is not completion."),
       ],
     },
     {
@@ -726,6 +730,8 @@ def lane_html(p):
         links.append(tap_link(hrefs["repo"], "Open repo"))
     if hrefs.get("ci"):
         links.append(tap_link(hrefs["ci"], "Open CI"))
+    if hrefs.get("game"):
+        links.append(tap_link(hrefs["game"], "Play game"))
     links_html = ('<div class="lane-links">' + "".join(links) + "</div>") if links else ""
     return (
         f'<article class="lane{quiet}">'
@@ -1339,6 +1345,11 @@ html = f'''<!DOCTYPE html>
     var s = cleanPublicUrl(u);
     return /^https:\\/\\/github\\.com\\/(?:rupret007\\/[A-Za-z0-9._-]+|0xc0re\\/barker)$/i.test(s) ? s : "";
   }}
+  function safeGameUrl(u) {{
+    var s = cleanPublicUrl(u);
+    return /^https:\\/\\/rupret007\\.github\\.io\\/Turdanoid\\/hub\\.html$/i.test(s)
+      ? "https://rupret007.github.io/Turdanoid/hub.html" : "";
+  }}
   function safePullsUrl(u) {{
     var s = cleanPublicUrl(u);
     return /^https:\\/\\/github\\.com\\/(?:rupret007\\/[A-Za-z0-9._-]+|0xc0re\\/barker)\\/pulls$/i.test(s) ? s : "";
@@ -1353,6 +1364,7 @@ html = f'''<!DOCTYPE html>
     var repo = safeRepoUrl(p.repo_url || p.html_url) || safeRepoUrl(p.url);
     var pr = safePrUrl(p.open_pr_url) || safePrUrl(p.url);
     var agent = safeAgentUrl(p.agent_url) || safeAgentUrl(p.url);
+    var game = safeGameUrl(p.live_game_url);
     var concl = String(ci.conclusion || "").toLowerCase();
     var actions = (concl === "skipped" || concl === "cancelled") ? "" : safeActionsUrl(ci.html_url || p.ci_url);
     var out = {{ title: pr || repo || "" }};
@@ -1360,6 +1372,7 @@ html = f'''<!DOCTYPE html>
     if (pr) out.pr = pr;
     if (repo) out.repo = repo;
     if (actions) out.ci = actions;
+    if (game) out.game = game;
     return out;
   }}
   function tapLink(href, label) {{
@@ -1526,6 +1539,7 @@ html = f'''<!DOCTYPE html>
     if (hrefs.pr) links += tapLink(hrefs.pr, "Open PR");
     if (hrefs.repo) links += tapLink(hrefs.repo, "Open repo");
     if (hrefs.ci) links += tapLink(hrefs.ci, "Open CI");
+    if (hrefs.game) links += tapLink(hrefs.game, "Play game");
     var linksHtml = links ? '<div class="lane-links">' + links + "</div>" : "";
     return '<article class="lane' + quiet + '"><h3>' + titleHtml + '</h3><div class="lane-end">' +
       chip + signalHtml + "</div>" + linksHtml + notesHtml + "</article>";
@@ -1668,7 +1682,7 @@ html = f'''<!DOCTYPE html>
     function projectKey(p) {{
       if (!p) return [];
       var ci = p.ci && typeof p.ci === "object" ? p.ci : {{}};
-      return [p.name, p.status, p.chip, p.notes, p.open_prs, p.open_pr_url || "", p.open_pr_stack || [], p.release, p.tip_sha, p.agent_url || "", ci.conclusion || "", ci.sha || "", ci.name || "", ci.html_url || ""];
+      return [p.name, p.status, p.chip, p.notes, p.open_prs, p.open_pr_url || "", p.open_pr_stack || [], p.release, p.tip_sha, p.agent_url || "", p.live_game_url || "", ci.conclusion || "", ci.sha || "", ci.name || "", ci.html_url || ""];
     }}
     var sections = (data.sections || []).map(function (sec) {{
       if (!sec) return [];
@@ -1850,7 +1864,7 @@ html = f'''<!DOCTYPE html>
     return "";
   }}
   function workHref(href) {{
-    return safeAgentUrl(href) || safePrUrl(href) || safeActionsUrl(href) || safePullsUrl(href) || safeRepoUrl(href);
+    return safeAgentUrl(href) || safePrUrl(href) || safeActionsUrl(href) || safePullsUrl(href) || safeRepoUrl(href) || safeGameUrl(href);
   }}
   function openWorkLink(href) {{
     var url = workHref(href);

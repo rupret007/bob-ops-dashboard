@@ -116,6 +116,7 @@ ACTIONS_URL_RE = re.compile(
 )
 REPO_URL_RE = re.compile(rf"^https://github\.com/{GITHUB_REPO_PATH}$", re.I)
 PULLS_URL_RE = re.compile(rf"^https://github\.com/{GITHUB_REPO_PATH}/pulls$", re.I)
+TURDANOID_HUB_URL = "https://rupret007.github.io/Turdanoid/hub.html"
 CLOUD_AGENT_LIMIT = 3
 
 
@@ -169,6 +170,12 @@ def safe_pulls_url(url: Any) -> str:
     """Only a rupret007 repo /pulls index. Never invent a repo name."""
     s = _clean_public_url(url)
     return s if PULLS_URL_RE.match(s) else ""
+
+
+def safe_game_url(url: Any) -> str:
+    """Allow only the explicitly public Turdanoid game hub."""
+    s = _clean_public_url(url)
+    return TURDANOID_HUB_URL if s.lower() == TURDANOID_HUB_URL.lower() else ""
 
 
 def pulls_url_from_repo(url: Any) -> str:
@@ -533,6 +540,7 @@ def lane_hrefs(project: Any) -> dict[str, str]:
         repo = safe_repo_url(raw)
     pr = safe_pr_url(project.get("open_pr_url")) or safe_pr_url(project.get("url"))
     agent = safe_agent_url(project.get("agent_url")) or agent_url_from_fields(project)
+    game = safe_game_url(project.get("live_game_url"))
     concl = str(ci.get("conclusion") or "").strip().lower()
     actions = ""
     if concl not in CI_SKIP_CONCLUSIONS:
@@ -547,6 +555,8 @@ def lane_hrefs(project: Any) -> dict[str, str]:
         out["repo"] = repo
     if actions:
         out["ci"] = actions
+    if game:
+        out["game"] = game
     return out
 
 
@@ -1083,6 +1093,7 @@ def board_content_fingerprint(data: Any) -> str:
             p.get("release"),
             p.get("tip_sha"),
             p.get("agent_url"),
+            p.get("live_game_url"),
             ci.get("conclusion") if ci else None,
             ci.get("sha") if ci else None,
             ci.get("name") if ci else None,
@@ -1259,7 +1270,7 @@ def first_class_sections() -> list[dict[str, Any]]:
                 ),
                 _card(
                     "Poll / decide race guards",
-                    "pollSeq / pendingSeq drop stale fetches. stopPolling bumps pollSeq before abort so tab-hide is not a fail. Approve / Hold / Deny are real GitHub links so iOS cannot swallow a popup. Open agent / Open PR / Open repo / Open CI use the same real target=_blank plus openBlank fallback. decideBusy still debounce double-taps.",
+                    "pollSeq / pendingSeq drop stale fetches. stopPolling bumps pollSeq before abort so tab-hide is not a fail. Approve / Hold / Deny are real GitHub links so iOS cannot swallow a popup. Open agent / Open PR / Open repo / Open CI / Play game use the same real target=_blank plus openBlank fallback. decideBusy still debounce double-taps.",
                     chip="Feature",
                 ),
                 _card(

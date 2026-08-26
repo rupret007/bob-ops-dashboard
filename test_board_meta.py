@@ -36,6 +36,7 @@ from board_meta import (
     resolve_agents,
     safe_actions_url,
     safe_agent_url,
+    safe_game_url,
     safe_pr_url,
     safe_pulls_url,
     safe_repo_url,
@@ -164,6 +165,7 @@ class BoardMetaTests(unittest.TestCase):
         self.assertIn("openBlank", blob)
         self.assertIn("Open repo", blob)
         self.assertIn("Open CI", blob)
+        self.assertIn("Play game", blob)
 
     def test_security_features_from_pr1_survive_without_unlock(self):
         blob = str(first_class_sections())
@@ -815,6 +817,25 @@ class BoardMetaTests(unittest.TestCase):
         self.assertNotEqual(
             board_content_fingerprint(stack_a), board_content_fingerprint(stack_b)
         )
+        live_a = {
+            "sections": [{"id": "live-shipping", "projects": [{"name": "Turdanoid"}]}]
+        }
+        live_b = {
+            "sections": [
+                {
+                    "id": "live-shipping",
+                    "projects": [
+                        {
+                            "name": "Turdanoid",
+                            "live_game_url": "https://rupret007.github.io/Turdanoid/hub.html",
+                        }
+                    ],
+                }
+            ]
+        }
+        self.assertNotEqual(
+            board_content_fingerprint(live_a), board_content_fingerprint(live_b)
+        )
 
     def test_agent_and_work_urls_are_fail_closed(self):
         good_bc = "bc-8e16f06d-f73f-482c-987f-e13f2d3b9fb1"
@@ -868,6 +889,14 @@ class BoardMetaTests(unittest.TestCase):
             "https://github.com/0xc0re/barker/pulls",
         )
         self.assertEqual(safe_repo_url("https://github.com/0xc0re/other"), "")
+        self.assertEqual(
+            safe_game_url("https://rupret007.github.io/Turdanoid/hub.html?from=board"),
+            "https://rupret007.github.io/Turdanoid/hub.html",
+        )
+        self.assertEqual(safe_game_url("https://rupret007.github.io/Turdanoid/"), "")
+        self.assertEqual(safe_game_url("https://rupret007.github.io/Turdanoid/index.html"), "")
+        self.assertEqual(safe_game_url("https://evil.example/Turdanoid/hub.html"), "")
+        self.assertEqual(safe_game_url("javascript:alert(1)"), "")
 
     def test_pick_open_pr_prefers_ready_and_is_safe(self):
         picked = pick_open_pr(
@@ -1045,6 +1074,7 @@ class BoardMetaTests(unittest.TestCase):
                 "url": "https://github.com/rupret007/webjam",
                 "open_pr_url": "https://github.com/rupret007/webjam/pull/21",
                 "agent_url": "https://cursor.com/agents/bc-8e16f06d-f73f-482c-987f-e13f2d3b9fb1",
+                "live_game_url": "https://rupret007.github.io/Turdanoid/hub.html",
                 "ci": {
                     "conclusion": "failure",
                     "html_url": "https://github.com/rupret007/webjam/actions/runs/44",
@@ -1055,6 +1085,7 @@ class BoardMetaTests(unittest.TestCase):
         self.assertEqual(hrefs["pr"], "https://github.com/rupret007/webjam/pull/21")
         self.assertEqual(hrefs["repo"], "https://github.com/rupret007/webjam")
         self.assertEqual(hrefs["ci"], "https://github.com/rupret007/webjam/actions/runs/44")
+        self.assertEqual(hrefs["game"], "https://rupret007.github.io/Turdanoid/hub.html")
         self.assertTrue(hrefs["agent"].startswith("https://cursor.com/agents/bc-"))
         bare = lane_hrefs({"name": "Show Night", "url": None, "ci": {}})
         self.assertEqual(bare, {"title": ""})
