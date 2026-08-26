@@ -528,6 +528,10 @@ if "High-level only; no customer data on this board." not in refresh_text:
     raise SystemExit("StoryOps-AI must stay a high-level private utility note")
 if "No live-repo, CI, or PR taps on this board." not in refresh_text:
     raise SystemExit("TACTrack must stay a high-level private note with no tap claim")
+if "hosted billing blocks CI" in refresh_text or "billing blocks CI" in refresh_text:
+    raise SystemExit("CSS Conductor note must not diagnose hosted CI as a billing block")
+if "High-level only; hosted-job cause stays unconfirmed." not in refresh_text:
+    raise SystemExit("CSS Conductor must stay a high-level note with unconfirmed hosted-job cause")
 for md in [readme, *sorted(docs.rglob("*.md"))]:
     for match in re.finditer(
         r"GitHub-backed rows use live repository, default-branch CI, and open-PR state for [^.]+",
