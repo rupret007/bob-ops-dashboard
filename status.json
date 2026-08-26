@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-08-26T14:33:01.345784-05:00",
-  "generated_at_display": "Wed Aug 26, 2026 \u00b7 2:33 PM CDT",
+  "generated_at": "2026-08-26T14:48:19.936348-05:00",
+  "generated_at_display": "Wed Aug 26, 2026 \u00b7 2:48 PM CDT",
   "timezone": "America/Chicago",
   "owner": "rupret007",
   "dashboard": "bob-ops-dashboard",
@@ -49,8 +49,8 @@
           "status": "yellow",
           "chip": "Yellow",
           "default_branch": "master",
-          "tip_sha": "2755a35",
-          "tip_date": "2026-08-26T19:20:39Z",
+          "tip_sha": "72fd88c",
+          "tip_date": "2026-08-26T19:46:02Z",
           "open_prs": 0,
           "open_pr_url": null,
           "open_pr_number": null,
@@ -60,11 +60,11 @@
           "agent_url": null,
           "ci": {
             "name": "WebJam CI",
-            "conclusion": "in_progress",
+            "conclusion": "pending",
             "branch": "master",
-            "sha": "2755a35",
-            "created": "2026-08-26T19:20:41Z",
-            "html_url": "https://github.com/rupret007/webjam/actions/runs/33004648848"
+            "sha": "72fd88c",
+            "created": "2026-08-26T19:46:05Z",
+            "html_url": "https://github.com/rupret007/webjam/actions/runs/33006906568"
           },
           "release": "v0.26.0",
           "notes": "Music Host/Join app. Software CI is live; exploratory feel and physical audio checks stay owner-only.",
@@ -106,15 +106,15 @@
           "url": "https://github.com/rupret007/StoryBoard",
           "repo_url": "https://github.com/rupret007/StoryBoard",
           "private": false,
-          "status": "green",
-          "chip": "Green",
+          "status": "yellow",
+          "chip": "Yellow",
           "default_branch": "main",
           "tip_sha": "7148f91",
           "tip_date": "2026-08-26T19:10:13Z",
-          "open_prs": 0,
-          "open_pr_url": null,
-          "open_pr_number": null,
-          "open_pr_draft": false,
+          "open_prs": 1,
+          "open_pr_url": "https://github.com/rupret007/StoryBoard/pull/14",
+          "open_pr_number": 14,
+          "open_pr_draft": true,
           "open_pr_stack": [],
           "pr_listing_complete": true,
           "agent_url": null,
@@ -266,7 +266,7 @@
           "private": true,
           "status": "red",
           "chip": "Red",
-          "notes": "Private workflow utility. Live CI and review state only; no customer data on this board.",
+          "notes": "Private workflow utility. High-level only; no customer data on this board.",
           "accessible": true,
           "ci": {
             "conclusion": "failure"
@@ -342,22 +342,22 @@
           "status": "yellow",
           "chip": "Yellow",
           "default_branch": "main",
-          "tip_sha": "eeb80a6",
-          "tip_date": "2026-08-26T19:10:32Z",
-          "open_prs": 2,
-          "open_pr_url": "https://github.com/rupret007/bob-ops-dashboard/pull/20",
-          "open_pr_number": 20,
+          "tip_sha": "abef332",
+          "tip_date": "2026-08-26T19:36:36Z",
+          "open_prs": 1,
+          "open_pr_url": "https://github.com/rupret007/bob-ops-dashboard/pull/12",
+          "open_pr_number": 12,
           "open_pr_draft": true,
           "open_pr_stack": [],
           "pr_listing_complete": true,
-          "agent_url": "https://cursor.com/agents/bc-8f1adea4-cd20-4250-b009-3aa87553625d",
+          "agent_url": null,
           "ci": {
-            "name": "Refresh Bob Ops Dashboard",
-            "conclusion": "pending",
+            "name": "QA claim smoke",
+            "conclusion": "success",
             "branch": "main",
-            "sha": "eeb80a6",
-            "created": null,
-            "html_url": null
+            "sha": "abef332",
+            "created": "2026-08-26T19:36:39Z",
+            "html_url": "https://github.com/rupret007/bob-ops-dashboard/actions/runs/33006065429"
           },
           "release": null,
           "notes": "Source-only feature PRs; the scheduled refresh owns generated index.html and status.json.",
@@ -474,7 +474,7 @@
           "private": true,
           "status": "red",
           "chip": "Red",
-          "notes": "Private. High-level only -- CI / open PRs from live fetch.",
+          "notes": "Private. High-level only. No live-repo, CI, or PR taps on this board.",
           "accessible": true,
           "ci": {
             "conclusion": "failure"
@@ -696,7 +696,7 @@
   ],
   "inaccessible": [],
   "publish_notes": "Public board -- no secrets or customer paths. Private repositories stay high-level; AI Music Vault stays private-content-boundary only.",
-  "refresh_started_ms": 1787772728976,
+  "refresh_started_ms": 1787773650029,
   "agents_source": "file:stale->unknown",
   "agents": [
     {
@@ -721,17 +721,7 @@
       "checked_at": null
     }
   ],
-  "cloud_agents": [
-    {
-      "id": "bc-8f1adea4-cd20-4250-b009-3aa87553625d",
-      "name": "PR #20",
-      "state": "unknown",
-      "detail": "fix: stop claiming private lanes as live-repo tap rows",
-      "url": "https://cursor.com/agents/bc-8f1adea4-cd20-4250-b009-3aa87553625d",
-      "pr_url": "https://github.com/rupret007/bob-ops-dashboard/pull/20",
-      "checked_at": null
-    }
-  ],
+  "cloud_agents": [],
   "pending": [
     {
       "id": "webjam-exploratory",
