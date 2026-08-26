@@ -20,12 +20,12 @@ OPS_SECTION_ORDER = (
     "active-agents",
     "cisco",
     "messaging",
-    "music-producer",
+    "private-media",
     "parked",
 )
 PRIMARY_SECTION_IDS = frozenset({"live-shipping"})
 SECONDARY_SECTION_IDS = frozenset(
-    {"apps-utilities", "cisco", "messaging", "music-producer", "parked"}
+    {"apps-utilities", "cisco", "messaging", "private-media", "parked"}
 )
 COLLAPSED_SECTION_IDS = frozenset({"abilities", "features"})
 # Agents live in the top pulse strip -- do not paint as a card grid.
@@ -1024,6 +1024,16 @@ def resolve_agents(
     now: float | None = None,
 ) -> tuple[list[dict[str, Any]], str]:
     """First parseable source wins, then age-gate. Do not fall through to an older Running."""
+    def safe_source_class(label: str) -> str:
+        source = str(label or "").strip().lower()
+        if source.startswith("file"):
+            return "file"
+        if source.startswith("env"):
+            return "env"
+        if source == "previous":
+            return "previous"
+        return "unknown"
+
     candidates: list[tuple[Any, str]] = []
     if env_blob:
         candidates.append((env_blob, "env:AGENTS_STATUS_JSON"))
@@ -1035,10 +1045,11 @@ def resolve_agents(
         parsed = parse_agents_blob(blob)
         if not parsed:
             continue
+        safe_src = safe_source_class(src)
         gated = [age_gate_agent(a, now=now) for a in parsed]
         if any(agent_is_fresh(a, now=now) for a in parsed):
-            return gated, src
-        return gated, src + ":stale->unknown"
+            return gated, safe_src
+        return gated, safe_src + ":stale->unknown"
     return default_agents(), "default:unknown"
 
 
@@ -1167,10 +1178,10 @@ def first_class_sections() -> list[dict[str, Any]]:
                     chip="After yes",
                 ),
                 _card(
-                    "Music producer help",
-                    "Logic Pro is home. Moises / Suno need Jeff login. LogicProMCP needs Jeff GUI grants.",
+                    "Private media boundary",
+                    "Private content stays high-level. Upload and publishing require an explicit owner decision.",
                     status="jeff-gate",
-                    chip="Jeff-gate",
+                    chip="Owner-only",
                 ),
                 _card(
                     "Cisco CS desktop (high-level)",

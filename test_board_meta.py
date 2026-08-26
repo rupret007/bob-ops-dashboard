@@ -709,13 +709,19 @@ class BoardMetaTests(unittest.TestCase):
             {"id": "claude", "state": "running", "detail": "old", "checked_at": "2026-08-22T18:00:00-05:00"},
         ]
         agents, src = resolve_agents(
-            file_texts=[("file:agents-status.json", json.dumps(stale))],
+            file_texts=[("file:/home/runner/work/dashboard/agents-status.json", json.dumps(stale))],
             previous=older_running,
             now=now,
         )
-        self.assertTrue(src.endswith("stale->unknown"))
+        self.assertEqual(src, "file:stale->unknown")
         self.assertEqual([a["state"] for a in agents], ["unknown", "unknown", "unknown"])
         self.assertNotIn("running", [a["state"] for a in agents])
+
+        _, local_src = resolve_agents(
+            file_texts=[("file:/Users/owner/private/agents-status.json", json.dumps(stale))],
+            now=now,
+        )
+        self.assertEqual(local_src, "file:stale->unknown")
 
     def test_parse_agents_drops_extra_ids_and_redacts_secrets(self):
         parsed = parse_agents_blob(
