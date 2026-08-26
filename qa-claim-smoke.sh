@@ -431,6 +431,23 @@ for p in projects:
             "private lane leaked public metadata (" + ", ".join(leaked) + "): "
             + str(p.get("name"))
         )
+    if p.get("status") == "red":
+        raise SystemExit(
+            "private lane must not diagnose hosted CI as red: " + str(p.get("name"))
+        )
+html = Path(sys.argv[2]).read_text()
+for p in projects:
+    if not p.get("private"):
+        continue
+    name = str(p.get("name") or "")
+    article = re.search(
+        rf'<article class="lane[^"]*"><h3>{re.escape(name)}</h3>.*?</article>',
+        html,
+    )
+    if not article:
+        continue
+    if any(sig in article.group(0) for sig in ("CI fail", "CI pending", "CI running")):
+        raise SystemExit("private lane published a CI diagnosis signal: " + name)
 agents = st.get("agents") if isinstance(st, dict) else None
 if isinstance(agents, list):
     for a in agents:
@@ -532,6 +549,21 @@ if "hosted billing blocks CI" in refresh_text or "billing blocks CI" in refresh_
     raise SystemExit("CSS Conductor note must not diagnose hosted CI as a billing block")
 if "High-level only; hosted-job cause stays unconfirmed." not in refresh_text:
     raise SystemExit("CSS Conductor must stay a high-level note with unconfirmed hosted-job cause")
+if "high_level=bool(r.get(\"private\") or high_level_only)" not in refresh_text:
+    raise SystemExit("refresh.sh must keep private/high-level lanes off hosted-CI diagnosis")
+if "if (p.private) return \"\";" not in refresh_text:
+    raise SystemExit("refresh.sh JS compactSignal must hide private-lane CI diagnosis")
+sys.path.insert(0, str(refresh.parent))
+from board_meta import compact_signal, status_from_fetch
+private_fail = {
+    "accessible": True,
+    "private": True,
+    "ci": {"conclusion": "failure"},
+}
+if status_from_fetch(private_fail, high_level=True) == "red":
+    raise SystemExit("private/high-level lanes must not paint hosted CI as red")
+if compact_signal({"private": True, "ci": {"conclusion": "failure"}}) == "CI fail":
+    raise SystemExit("private/high-level lanes must not publish a CI fail signal")
 for md in [readme, *sorted(docs.rglob("*.md"))]:
     for match in re.finditer(
         r"GitHub-backed rows use live repository, default-branch CI, and open-PR state for [^.]+",
@@ -753,6 +785,37 @@ if args[:1] == ["api"] and len(args) >= 2:
         }]}
     elif path == "repos/rupret007/Bob-the-Bot/releases?per_page=1":
         value = [{"tag_name": "bob-private-release"}]
+    elif path == "repos/rupret007/CSS_Conductor":
+        value = {
+            "name": "CSS_Conductor",
+            "full_name": "rupret007/CSS_Conductor",
+            "private": True,
+            "html_url": "https://github.com/rupret007/CSS_Conductor",
+            "default_branch": "css-private-main",
+        }
+    elif path == "repos/rupret007/CSS_Conductor/commits/css-private-main":
+        value = {
+            "sha": "c55c55c55c55c55c55c55c55c55c55c55c55c55c",
+            "commit": {
+                "message": "css-private-commit-subject",
+                "committer": {"date": "2026-08-26T00:00:00Z"},
+            },
+        }
+    elif path == "repos/rupret007/CSS_Conductor/pulls?state=open&per_page=100&page=1":
+        value = []
+    elif path == "repos/rupret007/CSS_Conductor/actions/runs?per_page=20&branch=css-private-main":
+        value = {"workflow_runs": [{
+            "name": "CSS private validation",
+            "path": ".github/workflows/css-private.yml",
+            "head_branch": "css-private-main",
+            "head_sha": "c55c55c55c55c55c55c55c55c55c55c55c55c55c",
+            "status": "completed",
+            "conclusion": "failure",
+            "html_url": "https://github.com/rupret007/CSS_Conductor/actions/runs/93",
+            "updated_at": "2026-08-26T00:00:00Z",
+        }]}
+    elif path == "repos/rupret007/CSS_Conductor/releases?per_page=1":
+        value = []
     elif path == "repos/rupret007/bob-ops-dashboard/pulls?state=open&per_page=20":
         value = []
     else:
@@ -773,6 +836,7 @@ PY
   python3 - "$PRIVATE_E2E/status.json" "$PRIVATE_E2E/index.html" <<'PY' \
     || fail "private fixture leaked repository metadata"
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -805,6 +869,16 @@ if bob.get("status") != "yellow" or bob.get("chip") != "Yellow":
 bob_ci = bob.get("ci") if isinstance(bob.get("ci"), dict) else {}
 if set(bob_ci) - {"conclusion"} or bob_ci.get("conclusion") != "success":
     raise SystemExit("Bob application CI must expose conclusion only")
+css = next((p for p in projects if p.get("name") == "CSS Conductor"), None)
+if not css or not css.get("private") or not css.get("accessible"):
+    raise SystemExit("fixture did not exercise an accessible CSS Conductor hosted failure")
+if set(css) - allowed:
+    raise SystemExit("CSS Conductor row contains non-allowlisted keys")
+if css.get("status") == "red" or css.get("chip") == "Red":
+    raise SystemExit("accessible CSS Conductor must not diagnose hosted CI as red")
+css_ci = css.get("ci") if isinstance(css.get("ci"), dict) else {}
+if set(css_ci) - {"conclusion"} or css_ci.get("conclusion") != "failure":
+    raise SystemExit("CSS Conductor CI must expose the hosted conclusion only")
 public_blob = status_path.read_text() + "\n" + index_path.read_text()
 for secret in (
     "super-secret-branch", "private-feature-branch", "deadbeefdeadbeef",
@@ -813,9 +887,15 @@ for secret in (
     "bob-private-main", "bob-private-feature", "b0bb0bb0bb0b",
     "bob-private-pr-title", "bob-private-release", "Bob-the-Bot/pull/91",
     "Bob-the-Bot/actions/runs/92", "bc-99999999-9999-9999-9999-999999999999",
+    "css-private-main", "c55c55c55c55", "CSS_Conductor/actions/runs/93",
 ):
     if secret in public_blob:
         raise SystemExit("private fixture leaked: " + secret)
+if re.search(
+    r'<article class="lane[^"]*"><h3>CSS Conductor</h3>.*?(CI fail|CI pending|CI running)',
+    index_path.read_text(),
+):
+    raise SystemExit("accessible CSS Conductor published a CI diagnosis signal")
 print("accessible private fixture stayed high-level")
 PY
   pass "accessible private repository metadata stays allowlisted"

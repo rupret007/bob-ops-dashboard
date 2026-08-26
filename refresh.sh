@@ -205,7 +205,12 @@ def project(
     extra=None,
 ):
     r = g(name)
-    st = status_from_fetch(r, override=status, jeff_gate=jeff_gate)
+    st = status_from_fetch(
+        r,
+        override=status,
+        jeff_gate=jeff_gate,
+        high_level=bool(r.get("private") or high_level_only),
+    )
     p = {
         "name": name if not r.get("name") else r["name"],
         "repo": r.get("full_name"),
@@ -241,6 +246,8 @@ def project(
         # The board itself is public. A private lane may expose its product
         # name, high-level color/accessibility, and CI conclusion only. Build
         # a new allowlisted object so future repository fields fail closed.
+        # Hosted conclusion never paints Red or a CI signal; the public board
+        # cannot confirm the hosted-job cause.
         p = {
             "name": p.get("name"),
             "private": True,
@@ -1417,6 +1424,7 @@ html = f'''<!DOCTYPE html>
   }}
   function compactSignal(p) {{
     if (!p) return "";
+    if (p.private) return "";
     var ci = p.ci;
     var concl = (ci && typeof ci === "object") ? String(ci.conclusion || "").toLowerCase() : "";
     if (concl === "failure" || concl === "timed_out" || concl === "action_required" || concl === "startup_failure") {{

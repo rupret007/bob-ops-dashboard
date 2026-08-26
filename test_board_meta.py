@@ -384,6 +384,39 @@ class BoardMetaTests(unittest.TestCase):
             "red",
         )
 
+    def test_high_level_lanes_do_not_diagnose_hosted_ci(self):
+        private_fail = {
+            "accessible": True,
+            "private": True,
+            "open_prs": 0,
+            "ci": {"conclusion": "failure"},
+        }
+        self.assertEqual(status_from_fetch(private_fail, high_level=True), "yellow")
+        self.assertEqual(
+            status_from_fetch(private_fail, override="yellow", high_level=True),
+            "yellow",
+        )
+        self.assertEqual(
+            status_from_fetch(private_fail, jeff_gate=True, high_level=True),
+            "jeff-gate",
+        )
+        self.assertEqual(status_from_fetch(private_fail), "red")
+        self.assertEqual(
+            status_from_fetch(
+                {"accessible": False, "ci": {"conclusion": "failure"}},
+                override="yellow",
+                high_level=True,
+            ),
+            "yellow",
+        )
+        self.assertIsNone(
+            compact_signal({"private": True, "ci": {"conclusion": "failure"}})
+        )
+        self.assertIsNone(
+            compact_signal({"private": True, "ci": {"conclusion": "pending"}})
+        )
+        self.assertEqual(compact_signal({"ci": {"conclusion": "failure"}}), "CI fail")
+
     def test_pick_tip_ci_does_not_skip_in_progress(self):
         runs = [
             {
