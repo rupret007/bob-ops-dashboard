@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-08-26T17:50:15.935055-05:00",
-  "generated_at_display": "Wed Aug 26, 2026 \u00b7 5:50 PM CDT",
+  "generated_at": "2026-08-26T18:07:23.982269-05:00",
+  "generated_at_display": "Wed Aug 26, 2026 \u00b7 6:07 PM CDT",
   "timezone": "America/Chicago",
   "owner": "rupret007",
   "dashboard": "bob-ops-dashboard",
@@ -404,8 +404,8 @@
           "status": "yellow",
           "chip": "Yellow",
           "default_branch": "main",
-          "tip_sha": "2a6ed09",
-          "tip_date": "2026-08-26T22:35:01Z",
+          "tip_sha": "7c65384",
+          "tip_date": "2026-08-26T22:50:23Z",
           "open_prs": 2,
           "open_pr_url": "https://github.com/rupret007/bob-ops-dashboard/pull/21",
           "open_pr_number": 21,
@@ -417,9 +417,9 @@
             "name": "Refresh Bob Ops Dashboard",
             "conclusion": "in_progress",
             "branch": "main",
-            "sha": "2a6ed09",
-            "created": "2026-08-26T22:49:49Z",
-            "html_url": "https://github.com/rupret007/bob-ops-dashboard/actions/runs/33020957973"
+            "sha": "7c65384",
+            "created": "2026-08-26T23:07:00Z",
+            "html_url": "https://github.com/rupret007/bob-ops-dashboard/actions/runs/33022088582"
           },
           "release": null,
           "notes": "Source-only feature PRs; the scheduled refresh owns generated index.html and status.json.",
@@ -795,7 +795,7 @@
     "Sliding-Glass-Door-PETG-Screw"
   ],
   "publish_notes": "Public board -- no secrets or customer paths. Private repositories stay high-level; AI Music Vault stays private-content-boundary only.",
-  "refresh_started_ms": 1787784596020,
+  "refresh_started_ms": 1787785625268,
   "agents_source": "file:stale->unknown",
   "agents": [
     {
