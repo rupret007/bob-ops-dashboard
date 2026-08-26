@@ -35,10 +35,11 @@ Remembered state is a lead, never authority. If the current head differs from an
 | --- | --- | --- |
 | Current-tip hosted product workflow succeeds | Hosted green | Name the workflow and exact SHA in the private work record |
 | Strong local tests/build succeed | Locally green | Record commands and exact local commit; do not claim hosted green |
-| Billing, runner, helper, credential, or service gate stops work | External block | Name the class of block; do not diagnose a code failure from it |
+| Hosted execution does not begin | External block | Report the observed zero-step result; leave its cause unconfirmed unless direct platform evidence identifies it |
+| A confirmed billing, runner, helper, credential, or service gate stops work | External block | Name the evidenced class of block; do not diagnose a code failure from it |
 | Physical, signing, sending, uploading, live-provider, or production step remains | Owner-only | State the exact decision/action needed from the owner |
 
-Always inspect the failed job or annotation. A zero-step hosted failure is runner or billing evidence, not evidence that product code failed. Never auto-rerun it; wait until the external gate is confirmed fixed. A skipped or cancelled helper does not override a relevant success, and a helper failure does not automatically prove a product failure.
+Always inspect the failed job or annotation. A zero-step hosted failure proves only that hosted execution did not begin; it neither identifies the external cause nor proves that product code failed. Never auto-rerun it; wait until the cause is identified and confirmed resolved. A skipped or cancelled helper does not override a relevant success, and a helper failure does not automatically prove a product failure.
 
 ## 5. Review before publishing a draft
 
@@ -106,7 +107,7 @@ Status: immutable public handoff
 ## Verification distinctions
 - Hosted green: <public evidence>
 - Locally green: <high-level private summary>
-- External blocks: <billing/runner/helper class>
+- External blocks: <observed result and whether the cause is confirmed>
 - Owner-only: <physical/live action>
 
 ## Next actions
