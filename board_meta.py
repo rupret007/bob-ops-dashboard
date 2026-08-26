@@ -446,7 +446,7 @@ def merge_cloud_agents(*groups: Any, limit: int = CLOUD_AGENT_LIMIT) -> list[dic
 
 
 def extract_cloud_agents_from_prs(prs: Any, *, limit: int = CLOUD_AGENT_LIMIT) -> list[dict[str, Any]]:
-    """Cloud agents mentioned in open PR bodies. Newest first. No invented bc-ids."""
+    """Cloud agents from open same-repository PRs. Newest first; no forks."""
     rows: list[dict[str, Any]] = []
     items = [p for p in (prs or []) if isinstance(p, dict)]
     items.sort(
@@ -454,6 +454,19 @@ def extract_cloud_agents_from_prs(prs: Any, *, limit: int = CLOUD_AGENT_LIMIT) -
         reverse=True,
     )
     for p in items:
+        if str(p.get("state") or "").strip().lower() != "open":
+            continue
+        pr_url = safe_pr_url(p.get("html_url") or p.get("url"))
+        base = p.get("base") if isinstance(p.get("base"), dict) else {}
+        head = p.get("head") if isinstance(p.get("head"), dict) else {}
+        base_repo = base.get("repo") if isinstance(base.get("repo"), dict) else {}
+        head_repo = head.get("repo") if isinstance(head.get("repo"), dict) else {}
+        base_full = str(base_repo.get("full_name") or "").strip().lower()
+        head_full = str(head_repo.get("full_name") or "").strip().lower()
+        if not pr_url or not base_full or base_full != head_full:
+            continue
+        if not pr_url.lower().startswith("https://github.com/" + base_full + "/pull/"):
+            continue
         url = extract_agent_url(
             " ".join(
                 [
@@ -473,7 +486,7 @@ def extract_cloud_agents_from_prs(prs: Any, *, limit: int = CLOUD_AGENT_LIMIT) -
                 "name": name,
                 "detail": title[:160] or "Open Cloud Agent",
                 "url": url,
-                "pr_url": safe_pr_url(p.get("html_url") or p.get("url")),
+                "pr_url": pr_url,
             }
         )
     return merge_cloud_agents(rows, limit=limit)
@@ -762,6 +775,8 @@ def status_from_fetch(
     if accessible and concl in CI_FAIL_CONCLUSIONS:
         return "red"
     if accessible and concl in CI_ACTIVE_CONCLUSIONS:
+        return "yellow"
+    if accessible and repo.get("pr_listing_complete") is False:
         return "yellow"
     if jeff_gate:
         return "jeff-gate"
@@ -1218,7 +1233,7 @@ def first_class_sections() -> list[dict[str, Any]]:
                 ),
                 _card(
                     "Agents strip",
-                    "Codex / Cursor / Claude from a Mac probe. Stale or untimestamped probes paint Unknown. Never invent Running. Cloud pills appear only with a real cursor.com/agents/bc- UUID (from probe or an open PR body). Tap Open agent / Open PR (real target=_blank plus openBlank fallback). Token-like words redacted.",
+                    "Codex / Cursor / Claude from a Mac probe. Stale or untimestamped probes paint Unknown. Never invent Running. Work links require the exact real cursor.com/agents/bc- UUID to be advertised by a currently open same-repository PR in an allowlisted public repository; probe-only and fork-PR links are dropped. Tap Open agent / Open PR (real target=_blank plus openBlank fallback). Token-like words redacted.",
                     chip="Feature",
                 ),
                 _card(

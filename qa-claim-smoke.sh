@@ -16,6 +16,7 @@ pass() { echo "PASS: $*"; }
 command -v node >/dev/null || fail "node required"
 command -v python3 >/dev/null || fail "python3 required"
 [[ -f "$INDEX" ]] || fail "missing $INDEX"
+[[ -f "$ROOT/qa-source-only.sh" ]] || fail "missing source-only QA wrapper"
 
 # 1) Extract inline scripts and node --check
 python3 - "$INDEX" "$TMP" <<'PY'
@@ -298,9 +299,25 @@ names = {str(p.get("name") or "") for p in projects}
 missing = sorted(required_lanes - names)
 if missing:
     raise SystemExit("dashboard missing inherited lanes: " + ", ".join(missing))
+private_sensitive = (
+    "repo", "url", "repo_url", "default_branch", "tip_sha", "tip_date",
+    "product_sha", "open_prs", "open_pr_url", "open_pr_number",
+    "open_pr_draft", "pr_listing_complete", "agent_url", "release",
+)
 for p in projects:
-    if p.get("private") and (p.get("agent_url") or p.get("cloud_agents")):
-        raise SystemExit("private lane leaked agent metadata: " + str(p.get("name")))
+    if not p.get("private"):
+        continue
+    leaked = [key for key in private_sensitive if p.get(key) not in (None, "", [], {})]
+    if p.get("open_pr_stack") not in (None, []):
+        leaked.append("open_pr_stack")
+    ci = p.get("ci") if isinstance(p.get("ci"), dict) else {}
+    if set(ci) - {"conclusion"}:
+        leaked.append("ci metadata")
+    if leaked:
+        raise SystemExit(
+            "private lane leaked public metadata (" + ", ".join(leaked) + "): "
+            + str(p.get("name"))
+        )
 agents = st.get("agents") if isinstance(st, dict) else None
 if isinstance(agents, list):
     for a in agents:
@@ -419,6 +436,123 @@ pass "python html helpers"
 
 # 10) e2e: leftover verify must be stripped by refresh.sh
 if command -v gh >/dev/null; then
+  PRIVATE_E2E="$TMP/private-e2e"
+  MOCK_BIN="$PRIVATE_E2E/bin"
+  mkdir -p "$MOCK_BIN"
+  cp "$ROOT/refresh.sh" "$ROOT/board_meta.py" "$ROOT/README.md" "$PRIVATE_E2E/"
+  chmod +x "$PRIVATE_E2E/refresh.sh"
+  python3 - "$MOCK_BIN/gh" <<'PY' || fail "private fixture setup failed"
+from pathlib import Path
+import sys
+
+Path(sys.argv[1]).write_text(r'''#!/usr/bin/env python3
+import json
+import sys
+
+args = sys.argv[1:]
+if args[:1] == ["api"] and len(args) >= 2:
+    path = args[1]
+    if path == "repos/rupret007/AI-Music-Vault":
+        value = {
+            "name": "AI-Music-Vault",
+            "full_name": "rupret007/AI-Music-Vault",
+            "private": True,
+            "html_url": "https://github.com/rupret007/AI-Music-Vault",
+            "default_branch": "super-secret-branch",
+        }
+    elif path == "repos/rupret007/AI-Music-Vault/commits/super-secret-branch":
+        value = {
+            "sha": "deadbeefdeadbeefdeadbeefdeadbeefdeadbeef",
+            "commit": {
+                "message": "private commit subject",
+                "committer": {"date": "2026-08-25T00:00:00Z"},
+            },
+        }
+    elif path == "repos/rupret007/AI-Music-Vault/pulls?state=open&per_page=100&page=1":
+        value = [{
+            "number": 77,
+            "state": "open",
+            "draft": True,
+            "title": "private-pr-title",
+            "body": "https://cursor.com/agents/bc-12345678-1234-1234-1234-123456789abc",
+            "html_url": "https://github.com/rupret007/AI-Music-Vault/pull/77",
+            "base": {
+                "ref": "super-secret-branch",
+                "repo": {"full_name": "rupret007/AI-Music-Vault"},
+            },
+            "head": {
+                "ref": "private-feature-branch",
+                "repo": {"full_name": "rupret007/AI-Music-Vault"},
+            },
+            "updated_at": "2026-08-25T00:00:00Z",
+        }]
+    elif path == "repos/rupret007/AI-Music-Vault/actions/runs?per_page=20&branch=super-secret-branch":
+        value = {"workflow_runs": [{
+            "name": "Private validation",
+            "path": ".github/workflows/private.yml",
+            "head_branch": "super-secret-branch",
+            "head_sha": "deadbeefdeadbeefdeadbeefdeadbeefdeadbeef",
+            "status": "completed",
+            "conclusion": "success",
+            "html_url": "https://github.com/rupret007/AI-Music-Vault/actions/runs/88",
+            "updated_at": "2026-08-25T00:00:00Z",
+        }]}
+    elif path == "repos/rupret007/AI-Music-Vault/releases?per_page=1":
+        value = [{"tag_name": "private-release-v9"}]
+    elif path == "repos/rupret007/bob-ops-dashboard/pulls?state=open&per_page=20":
+        value = []
+    else:
+        value = None
+    print(json.dumps(value))
+    raise SystemExit(0)
+if args[:2] == ["issue", "list"]:
+    print("[]")
+    raise SystemExit(0)
+raise SystemExit(1)
+''')
+PY
+  chmod +x "$MOCK_BIN/gh"
+  (
+    cd "$PRIVATE_E2E"
+    PATH="$MOCK_BIN:$PATH" BOB_DASHBOARD_APPLY_DECISIONS=0 ./refresh.sh
+  ) || fail "private fixture refresh failed"
+  python3 - "$PRIVATE_E2E/status.json" "$PRIVATE_E2E/index.html" <<'PY' \
+    || fail "private fixture leaked repository metadata"
+import json
+import sys
+from pathlib import Path
+
+status_path, index_path = map(Path, sys.argv[1:])
+st = json.loads(status_path.read_text())
+projects = [
+    p
+    for section in (st.get("sections") or [])
+    if isinstance(section, dict)
+    for p in (section.get("projects") or [])
+    if isinstance(p, dict)
+]
+private = next((p for p in projects if p.get("name") == "AI Music Vault"), None)
+if not private or not private.get("private") or not private.get("accessible"):
+    raise SystemExit("fixture did not exercise an accessible private lane")
+allowed = {"name", "private", "status", "chip", "notes", "accessible", "ci"}
+extra = sorted(set(private) - allowed)
+if extra:
+    raise SystemExit("private row contains non-allowlisted keys: " + ", ".join(extra))
+ci = private.get("ci") if isinstance(private.get("ci"), dict) else {}
+if set(ci) - {"conclusion"} or ci.get("conclusion") != "success":
+    raise SystemExit("private CI must expose conclusion only")
+public_blob = status_path.read_text() + "\n" + index_path.read_text()
+for secret in (
+    "super-secret-branch", "private-feature-branch", "deadbeefdeadbeef",
+    "private-pr-title", "private-release-v9", "AI-Music-Vault/pull/77",
+    "AI-Music-Vault/actions/runs/88", "bc-12345678-1234-1234-1234-123456789abc",
+):
+    if secret in public_blob:
+        raise SystemExit("private fixture leaked: " + secret)
+print("accessible private fixture stayed high-level")
+PY
+  pass "accessible private repository metadata stays allowlisted"
+
   E2E="$TMP/refresh-e2e"
   mkdir -p "$E2E"
   cp "$ROOT/refresh.sh" "$ROOT/board_meta.py" "$ROOT/README.md" "$E2E/"
@@ -537,11 +671,8 @@ seed_present = any(
     for a in cloud
     if isinstance(a, dict)
 )
-if "bob-ops-dashboard" in (st.get("fetched_repos") or []):
-    if not seed_present:
-        raise SystemExit("public-PR-backed cloud agent URL missing")
-elif seed_present:
-    raise SystemExit("cloud agent survived without proof its PR repository is public")
+if seed_present:
+    raise SystemExit("probe-only cloud agent survived without an open same-repo PR binding")
 if any("evil.example" in str(a.get("url") or "") for a in cloud if isinstance(a, dict)):
     raise SystemExit("evil cloud agent URL leaked")
 if any(str(a.get("state") or "") == "running" for a in cloud if isinstance(a, dict)):

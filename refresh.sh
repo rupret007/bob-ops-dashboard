@@ -63,6 +63,19 @@ def api(path, default=None):
     except Exception:
         return default
 
+def api_all(path):
+    """Fetch every REST list page; return no rows when completeness is unknown."""
+    rows = []
+    separator = "&" if "?" in path else "?"
+    for page in range(1, 101):
+        batch = api(f"{path}{separator}page={page}", None)
+        if not isinstance(batch, list):
+            return [], False
+        rows.extend(batch)
+        if len(batch) < 100:
+            return rows, True
+    return [], False
+
 meta = api(f"repos/{full}")
 if not meta:
     print(json.dumps({"name": repo, "accessible": False, "error": "inaccessible"}))
@@ -76,20 +89,18 @@ c = (commit.get("commit") or {})
 date = ((c.get("committer") or {}).get("date")) or ((c.get("author") or {}).get("date"))
 msg = (c.get("message") or "").split("\n", 1)[0]
 
-prs = api(f"repos/{full}/pulls?state=open&per_page=100", []) or []
-if not isinstance(prs, list):
-    prs = []
+prs, prs_complete = api_all(f"repos/{full}/pulls?state=open&per_page=100")
 open_pr_urls = [
     url
     for p in prs
     if isinstance(p, dict)
     if (url := safe_pr_url(p.get("html_url") or p.get("url")))
 ]
-open_pr = pick_open_pr(prs)
-open_pr_stack = detect_linear_pr_stack(prs, branch)
+open_pr = pick_open_pr(prs) if prs_complete else None
+open_pr_stack = detect_linear_pr_stack(prs, branch) if prs_complete else []
 # A Cursor agent URL can grant access beyond high-level repository status.
 # Never materialize one from a private PR onto this public dashboard.
-clouds = [] if private else extract_cloud_agents_from_prs(prs, limit=1)
+clouds = [] if private or not prs_complete else extract_cloud_agents_from_prs(prs, limit=1)
 # Default-branch only so PR runs cannot push tip CI out of the window.
 runs = api(f"repos/{full}/actions/runs?per_page=20&branch={branch}", {}) or {}
 ci = pick_tip_ci(runs.get("workflow_runs") or [], branch, sha)
@@ -107,7 +118,8 @@ print(json.dumps({
     "tip_sha": sha or None,
     "tip_date": date,
     "tip_msg": msg,
-    "open_prs": len(prs),
+    "open_prs": len(prs) if prs_complete else None,
+    "pr_listing_complete": prs_complete,
     "open_pr_urls": open_pr_urls,
     "open_pr": open_pr,
     "open_pr_stack": open_pr_stack,
@@ -153,7 +165,6 @@ from board_meta import (
     merge_cloud_agents,
     signal_href,
     merge_first_class,
-    parse_cloud_agents,
     presentation,
     prune_closed_parked_prs,
     resolve_agents,
@@ -200,6 +211,7 @@ def project(name, *, status=None, notes="", product_sha=None, jeff_gate=False, e
         "open_pr_number": (r.get("open_pr") or {}).get("number") if isinstance(r.get("open_pr"), dict) else None,
         "open_pr_draft": bool((r.get("open_pr") or {}).get("draft")) if isinstance(r.get("open_pr"), dict) else False,
         "open_pr_stack": r.get("open_pr_stack") if isinstance(r.get("open_pr_stack"), list) else [],
+        "pr_listing_complete": r.get("pr_listing_complete"),
         "agent_url": r.get("agent_url"),
         "ci": r.get("ci"),
         "release": r.get("release"),
@@ -210,6 +222,21 @@ def project(name, *, status=None, notes="", product_sha=None, jeff_gate=False, e
         p["product_sha"] = product_sha
     if extra:
         p.update(extra)
+    if p.get("private"):
+        raw_ci = p.get("ci") if isinstance(p.get("ci"), dict) else {}
+        conclusion = str(raw_ci.get("conclusion") or "").strip().lower()
+        # The board itself is public. A private lane may expose its product
+        # name, high-level color/accessibility, and CI conclusion only. Build
+        # a new allowlisted object so future repository fields fail closed.
+        p = {
+            "name": p.get("name"),
+            "private": True,
+            "status": p.get("status"),
+            "chip": p.get("chip"),
+            "notes": p.get("notes"),
+            "accessible": bool(p.get("accessible")),
+            "ci": {"conclusion": conclusion} if conclusion else {},
+        }
     # Friendly display names
     rename = {
         "webjam": "WebJam",
@@ -343,19 +370,6 @@ status["sections"] = prune_closed_parked_prs(
 )
 status["sections"] = merge_first_class(status["sections"])
 
-public_pr_prefixes = tuple(
-    str(row.get("html_url") or "").rstrip("/") + "/pull/"
-    for row in fetched
-    if isinstance(row, dict)
-    and row.get("accessible")
-    and not row.get("private")
-    and row.get("html_url")
-)
-
-def public_pr_url(raw):
-    pr = safe_pr_url(raw)
-    return pr if pr and any(pr.startswith(prefix) for prefix in public_pr_prefixes) else ""
-
 # --- Active agents (Codex / Cursor / Claude) — safe public fields only ---
 prev_early = {}
 try:
@@ -377,21 +391,8 @@ agents, src = resolve_agents(
     file_texts=file_texts,
     previous=prev_agents,
 )
-# Keep the high-level Mac state, but only publish work links backed by a PR in
-# a repository that this same refresh proved public.
-for agent in agents:
-    if not public_pr_url(agent.get("pr_url")):
-        agent.pop("url", None)
-        agent.pop("pr_url", None)
-status["agents"] = agents
 status["agents_source"] = src
 
-probe_cloud = []
-if os.environ.get("AGENTS_STATUS_JSON"):
-    probe_cloud.extend(parse_cloud_agents(os.environ.get("AGENTS_STATUS_JSON")))
-for _label, _text in file_texts:
-    probe_cloud.extend(parse_cloud_agents(_text))
-probe_cloud = [a for a in probe_cloud if public_pr_url(a.get("pr_url"))]
 dash_prs = []
 try:
     dash_raw = subprocess.check_output(
@@ -408,11 +409,23 @@ repo_cloud = []
 for row in fetched:
     if isinstance(row, dict):
         repo_cloud.extend(row.get("cloud_agents") or [])
-status["cloud_agents"] = merge_cloud_agents(
-    probe_cloud,
+trusted_cloud = merge_cloud_agents(
     extract_cloud_agents_from_prs(dash_prs),
     repo_cloud,
 )
+trusted_by_url = {row.get("url"): row for row in trusted_cloud if row.get("url")}
+# Keep high-level Mac state, but publish a work link only when the same agent
+# URL is advertised by a currently open, same-repository PR fetched above.
+for agent in agents:
+    trusted = trusted_by_url.get(safe_agent_url(agent.get("url")))
+    if trusted:
+        agent["url"] = trusted["url"]
+        agent["pr_url"] = trusted.get("pr_url")
+    else:
+        agent.pop("url", None)
+        agent.pop("pr_url", None)
+status["agents"] = agents
+status["cloud_agents"] = trusted_cloud
 
 # Pulse data only -- do not invent a fourth Yellow "Cloud Agent" card.
 agent_projects = []
@@ -1996,6 +2009,7 @@ if [[ $PUSH -eq 1 ]]; then
   [[ -f "$ROOT/board_meta.py" ]] && cp "$ROOT/board_meta.py" "$WORK/"
   [[ -f "$ROOT/probe-agents-status.sh" ]] && cp "$ROOT/probe-agents-status.sh" "$WORK/"
   [[ -f "$ROOT/qa-claim-smoke.sh" ]] && cp "$ROOT/qa-claim-smoke.sh" "$WORK/"
+  [[ -f "$ROOT/qa-source-only.sh" ]] && cp "$ROOT/qa-source-only.sh" "$WORK/"
   [[ -f "$ROOT/test_board_meta.py" ]] && cp "$ROOT/test_board_meta.py" "$WORK/"
   [[ -f "$ROOT/test_open_decision.js" ]] && cp "$ROOT/test_open_decision.js" "$WORK/"
   [[ -f "$ROOT/test_open_links.js" ]] && cp "$ROOT/test_open_links.js" "$WORK/"
@@ -2010,11 +2024,13 @@ if [[ $PUSH -eq 1 ]]; then
   fi
   chmod +x "$WORK/refresh.sh"
   [[ -f "$WORK/qa-claim-smoke.sh" ]] && chmod +x "$WORK/qa-claim-smoke.sh"
+  [[ -f "$WORK/qa-source-only.sh" ]] && chmod +x "$WORK/qa-source-only.sh"
   cd "$WORK"
   git add index.html status.json README.md refresh.sh
   [[ -f board_meta.py ]] && git add board_meta.py
   [[ -f probe-agents-status.sh ]] && git add probe-agents-status.sh
   [[ -f qa-claim-smoke.sh ]] && git add qa-claim-smoke.sh
+  [[ -f qa-source-only.sh ]] && git add qa-source-only.sh
   [[ -f test_board_meta.py ]] && git add test_board_meta.py
   [[ -f test_open_decision.js ]] && git add test_open_decision.js
   [[ -f test_open_links.js ]] && git add test_open_links.js

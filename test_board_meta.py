@@ -343,6 +343,17 @@ class BoardMetaTests(unittest.TestCase):
             "red",
         )
         self.assertEqual(status_from_fetch({"accessible": True, "open_prs": 2, "ci": None}), "yellow")
+        self.assertEqual(
+            status_from_fetch(
+                {
+                    "accessible": True,
+                    "open_prs": None,
+                    "pr_listing_complete": False,
+                    "ci": {"conclusion": "success"},
+                }
+            ),
+            "yellow",
+        )
         self.assertEqual(status_from_fetch({"accessible": False}), "parked")
         self.assertEqual(status_from_fetch({"accessible": False}, override="yellow"), "yellow")
         self.assertEqual(status_from_fetch(green_empty, jeff_gate=True), "jeff-gate")
@@ -985,7 +996,36 @@ class BoardMetaTests(unittest.TestCase):
                     "html_url": "https://github.com/rupret007/bob-ops-dashboard/pull/8",
                     "body": "See " + good + "?cursor_ref=pr_footer",
                     "updated_at": "2026-08-23T06:48:00Z",
-                }
+                    "state": "open",
+                    "base": {"repo": {"full_name": "rupret007/bob-ops-dashboard"}},
+                    "head": {"repo": {"full_name": "rupret007/bob-ops-dashboard"}},
+                },
+                {
+                    "number": 9,
+                    "title": "fork cannot advertise a public work link",
+                    "html_url": "https://github.com/rupret007/bob-ops-dashboard/pull/9",
+                    "body": "See " + good,
+                    "state": "open",
+                    "base": {"repo": {"full_name": "rupret007/bob-ops-dashboard"}},
+                    "head": {"repo": {"full_name": "other/fork"}},
+                },
+                {
+                    "number": 10,
+                    "title": "closed cannot advertise a public work link",
+                    "html_url": "https://github.com/rupret007/bob-ops-dashboard/pull/10",
+                    "body": "See " + good,
+                    "state": "closed",
+                    "base": {"repo": {"full_name": "rupret007/bob-ops-dashboard"}},
+                    "head": {"repo": {"full_name": "rupret007/bob-ops-dashboard"}},
+                },
+                {
+                    "number": 11,
+                    "title": "unknown state cannot advertise a public work link",
+                    "html_url": "https://github.com/rupret007/bob-ops-dashboard/pull/11",
+                    "body": "See " + good,
+                    "base": {"repo": {"full_name": "rupret007/bob-ops-dashboard"}},
+                    "head": {"repo": {"full_name": "rupret007/bob-ops-dashboard"}},
+                },
             ]
         )
         self.assertEqual(len(found), 1)
