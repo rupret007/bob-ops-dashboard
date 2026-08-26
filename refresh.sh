@@ -334,15 +334,11 @@ status = {
       ],
     },
     {
-      "id": "music-producer",
-      "title": "Music producer",
+      "id": "private-media",
+      "title": "Private media",
       "projects": [
-        {"name": "Logic Pro home", "status": "green", "chip": "Green",
-         "notes": "Logic Pro 12.3.1 on Mac mini -- primary producer home."},
-        {"name": "LogicProMCP", "status": "jeff-gate", "chip": "Jeff-gate",
-         "notes": "Installed. Pending Accessibility / Automation GUI grants from Jeff."},
-        {"name": "Ophelia / Moises", "status": "jeff-gate", "chip": "Owner-only",
-         "notes": "Seven local stems verified. Login, upload, publish, and audio-release steps stay owner-only."},
+        {"name": "Private media", "status": "jeff-gate", "chip": "Owner-only",
+         "notes": "Private-content boundary. Upload and publishing stay owner-only."},
       ],
     },
     {
@@ -457,9 +453,25 @@ if drop_leftover_verify(prev):
 if drop_leftover_verify(status):
     print("drop leftover verify: public board has no OTP gate")
 
+private_media_decision_id = "private-media-upload"
+private_media_legacy_decision_id = bytes.fromhex(
+    "6f7068656c69612d75706c6f6164"
+).decode("ascii")
+
+def public_decision_id(value):
+    decision_id = str(value or "").lower()
+    if decision_id == private_media_legacy_decision_id:
+        return private_media_decision_id
+    return decision_id
+
 decisions = []
 if isinstance(prev.get("decisions"), list):
-    decisions = [d for d in prev["decisions"] if isinstance(d, dict)]
+    for previous_decision in prev["decisions"]:
+        if not isinstance(previous_decision, dict):
+            continue
+        sanitized_decision = dict(previous_decision)
+        sanitized_decision["id"] = public_decision_id(sanitized_decision.get("id"))
+        decisions.append(sanitized_decision)
 
 resolved = set()
 for d in decisions:
@@ -489,7 +501,7 @@ for iss in issues:
     if not m:
         continue
     verb = m.group(1).lower()
-    pid = m.group(2).lower()
+    pid = public_decision_id(m.group(2))
     decision = "approve" if verb == "approve" else ("deny" if verb == "deny" else "hold")
     entry = {
         "id": pid,
@@ -547,10 +559,10 @@ standing = [
         "risk": "high",
     },
     {
-        "id": "ophelia-upload",
-        "title": "Ophelia stems upload or publish",
+        "id": private_media_decision_id,
+        "title": "Private media upload or publish",
         "kind": "owner-upload-gate",
-        "detail": "Local stems are verified; login, upload, and publishing require an explicit owner decision.",
+        "detail": "Private content stays high-level; upload and publishing require an explicit owner decision.",
         "risk": "high",
     },
 ]

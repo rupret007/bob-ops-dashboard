@@ -16,7 +16,7 @@ Public, mobile-friendly status board for projects Bob is working on (Jeff Story 
 
 ## Portfolio coverage
 
-The board follows every inherited product lane. GitHub-backed rows use live repository, default-branch CI, and open-PR state for WebJam, Story Shelf, AdoptIQ, StoryOps-AI, Ball Beacon, CSS Conductor, TACTrack, canonical `0xc0re/barker` (not the unrelated `rupret007/barker` history), StoryBoard, Andrea NanoBot, StoryLiner, AI Music Vault, Bob Ops Dashboard, RadDadSite, Cursor-OpenClaw Integration, and Sliding Glass Door Screw. StoryDesk and OpenClaw Runtime are explicitly **Local-only** because no authoritative remote can be claimed; Ophelia / Moises is explicitly **Owner-only** because login, upload, and publishing are outside this board.
+The board follows every inherited product lane. GitHub-backed rows use live repository, default-branch CI, and open-PR state for WebJam, Story Shelf, AdoptIQ, StoryOps-AI, Ball Beacon, CSS Conductor, TACTrack, canonical `0xc0re/barker` (not the unrelated `rupret007/barker` history), StoryBoard, Andrea NanoBot, StoryLiner, AI Music Vault, Bob Ops Dashboard, RadDadSite, Cursor-OpenClaw Integration, and Sliding Glass Door Screw. StoryDesk and OpenClaw Runtime are explicitly **Local-only** because no authoritative remote can be claimed; private-media work appears only as a high-level **Owner-only** boundary because upload and publishing stay outside this board.
 
 Private repositories expose only high-level status. Private PR bodies can never contribute Cursor agent links to the public page, and local probe work links are published only when a live refresh proves their PR repository is public. AI Music Vault remains private-content-boundary only.
 

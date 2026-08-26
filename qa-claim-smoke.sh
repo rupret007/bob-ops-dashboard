@@ -269,7 +269,7 @@ pass "open-links smoke"
 
 # 7) status.json must not carry a verify challenge
 if [[ -f "$STATUS" ]]; then
-  python3 - "$STATUS" <<'PY' || fail "status.json still has verify"
+python3 - "$STATUS" "$INDEX" <<'PY' || fail "status.json still has verify or private-media detail"
 import json, sys
 st = json.load(open(sys.argv[1]))
 if not isinstance(st, dict):
@@ -286,7 +286,7 @@ required_lanes = {
     "CSS Conductor", "TACTrack", "Barker", "StoryBoard", "StoryDesk",
     "Andrea NanoBot", "OpenClaw Runtime", "StoryLiner", "AI Music Vault",
     "Bob Ops Dashboard", "RadDadSite", "Cursor-OpenClaw Integration",
-    "Sliding Glass Door Screw", "Ophelia / Moises",
+    "Sliding Glass Door Screw", "Private media",
 }
 projects = [
     p
@@ -299,6 +299,69 @@ names = {str(p.get("name") or "") for p in projects}
 missing = sorted(required_lanes - names)
 if missing:
     raise SystemExit("dashboard missing inherited lanes: " + ", ".join(missing))
+media_sections = [
+    sec for sec in (st.get("sections") or [])
+    if isinstance(sec, dict) and sec.get("id") == "private-media"
+]
+expected_media = {
+    "name": "Private media",
+    "status": "jeff-gate",
+    "chip": "Owner-only",
+    "notes": "Private-content boundary. Upload and publishing stay owner-only.",
+}
+if len(media_sections) != 1:
+    raise SystemExit("dashboard must have exactly one private-media section")
+if media_sections[0].get("title") != "Private media":
+    raise SystemExit("private-media section title must stay generic")
+if media_sections[0].get("projects") != [expected_media]:
+    raise SystemExit("private-media section must expose only the generic owner gate")
+abilities = next(
+    (sec for sec in (st.get("sections") or []) if isinstance(sec, dict) and sec.get("id") == "abilities"),
+    {},
+)
+media_abilities = [
+    row for row in (abilities.get("projects") or [])
+    if isinstance(row, dict) and row.get("name") == "Private media boundary"
+]
+if media_abilities != [{
+    "name": "Private media boundary",
+    "status": "jeff-gate",
+    "chip": "Owner-only",
+    "notes": "Private content stays high-level. Upload and publishing require an explicit owner decision.",
+}]:
+    raise SystemExit("private-media ability must stay a generic owner gate")
+private_pending = [
+    row for row in (st.get("pending") or [])
+    if isinstance(row, dict) and row.get("id") == "private-media-upload"
+]
+expected_private_pending = {
+    "id": "private-media-upload",
+    "title": "Private media upload or publish",
+    "kind": "owner-upload-gate",
+    "detail": "Private content stays high-level; upload and publishing require an explicit owner decision.",
+    "risk": "high",
+}
+if len(private_pending) > 1 or (private_pending and private_pending != [expected_private_pending]):
+    raise SystemExit("private-media pending item must stay a generic owner gate")
+from pathlib import Path
+public_blob = Path(sys.argv[1]).read_text() + "\n" + Path(sys.argv[2]).read_text()
+private_markers = tuple(
+    bytes.fromhex(encoded).decode("ascii")
+    for encoded in (
+        "6f7068656c6961",  # private project name
+        "6d6f69736573",    # media provider
+        "73756e6f",        # media provider
+        "6c6f6769632070726f",  # media provider
+        "6c6f67696370726f6d6370",  # provider integration
+        "7374656d",        # private asset type/count detail
+    )
+)
+for marker in private_markers[:-1]:
+    if marker in public_blob.lower():
+        raise SystemExit("generated public artifacts leaked private-media detail")
+import re
+if re.search(rf"\b{re.escape(private_markers[-1])}s?\b", public_blob, re.I):
+    raise SystemExit("generated public artifacts leaked private-media asset detail")
 private_sensitive = (
     "repo", "url", "repo_url", "default_branch", "tip_sha", "tip_date",
     "product_sha", "open_prs", "open_pr_url", "open_pr_number",
@@ -562,6 +625,11 @@ import json, sys
 from pathlib import Path
 Path(sys.argv[1]).write_text(json.dumps({
     "generated_at": "e2e-seed",
+    "decisions": [{
+        "id": bytes.fromhex("6f7068656c69612d75706c6f6164").decode("ascii"),
+        "decision": "hold",
+        "issue": 1,
+    }],
     "verify": {
         "email": "jeffstory007@gmail.com",
         "sha256": "aa" * 32,
@@ -600,6 +668,15 @@ from pathlib import Path
 st = json.load(open(sys.argv[1]))
 if "verify" in st:
     raise SystemExit("refresh.sh kept leftover verify")
+private_media_decisions = [
+    row for row in (st.get("decisions") or [])
+    if isinstance(row, dict) and row.get("id") == "private-media-upload"
+]
+if len(private_media_decisions) != 1:
+    raise SystemExit("refresh.sh did not normalize the legacy private-media decision id")
+legacy_media_name = bytes.fromhex("6f7068656c6961").decode("ascii")
+if legacy_media_name in Path(sys.argv[1]).read_text().lower():
+    raise SystemExit("refresh.sh retained a private project name in decision history")
 ids = [s.get("id") for s in (st.get("sections") or [])]
 for need in ("abilities", "controls", "features"):
     if need not in ids:
