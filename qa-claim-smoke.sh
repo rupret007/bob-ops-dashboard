@@ -460,6 +460,44 @@ else
   echo "SKIP: status.json missing"
 fi
 
+python3 - "$ROOT/README.md" "$REFRESH" "$ROOT/docs" <<'PY' \
+  || fail "README Bob live-repo honesty"
+from pathlib import Path
+import re
+import sys
+
+readme, refresh, docs = map(Path, sys.argv[1:4])
+text = readme.read_text()
+backed = re.search(
+    r"GitHub-backed rows use live repository, default-branch CI, and open-PR state for [^.]+",
+    text,
+)
+if not backed:
+    raise SystemExit("README missing GitHub-backed live-repo sentence")
+if "Bob the Bot" in backed.group(0):
+    raise SystemExit(
+        "README GitHub-backed sentence must not list Bob the Bot as a live-repo tap lane"
+    )
+coverage = text.split("## Portfolio coverage", 1)[-1].split("## Public agent continuity", 1)[0]
+if "Bob the Bot" not in coverage or "high-level only" not in coverage:
+    raise SystemExit("README must keep Bob the Bot high-level only in portfolio coverage")
+if "not a public live-repo, CI, or PR tap row" not in coverage:
+    raise SystemExit("README must say Bob the Bot is not a public live-repo tap row")
+if 'project("Bob-the-Bot", status="yellow", high_level_only=True,' not in refresh.read_text():
+    raise SystemExit("Bob the Bot must stay high_level_only in refresh.sh")
+for md in [readme, *sorted(docs.rglob("*.md"))]:
+    for match in re.finditer(
+        r"GitHub-backed rows use live repository, default-branch CI, and open-PR state for [^.]+",
+        md.read_text(),
+    ):
+        if "Bob the Bot" in match.group(0):
+            raise SystemExit(
+                f"{md} lists Bob the Bot as a GitHub-backed live-repo tap lane"
+            )
+print("Bob the Bot stays high-level only; not a GitHub-backed tap lane")
+PY
+pass "README does not list Bob the Bot as a GitHub-backed tap lane"
+
 # 8) Functional XSS helpers from extracted page JS
 HELPER_JS="$TMP/helper-smoke.js"
 cat > "$HELPER_JS" <<'JS'
