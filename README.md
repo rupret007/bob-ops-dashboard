@@ -20,6 +20,13 @@ The board follows every inherited product lane. GitHub-backed rows use live repo
 
 Private repositories expose only high-level status. Private PR bodies can never contribute Cursor agent links to the public page, and local probe work links are published only when a live refresh proves their PR repository is public. AI Music Vault remains private-content-boundary only.
 
+## Public agent continuity
+
+- [Batch A portfolio handoff — 2026-08-26](docs/handoffs/2026-08-26-batch-a.md) is the immutable completion snapshot for the latest portfolio round.
+- [Agent handoff runbook](docs/AGENT_HANDOFF_RUNBOOK.md) is the reusable checklist and template for Grok Bot, Codex, and future agents.
+
+These are sanitized operational-continuity records, not private handoff text. This repository is public: add a new dated handoff for each completed round instead of rewriting an old snapshot, and keep private lanes high-level. Never copy private repository metadata, creative details, customer data, credentials, or local paths into a handoff.
+
 ## Public board (no Unlock / OTP)
 
 Possession of the public URL is enough. There is no Jeff verify card, no 6-digit code, and no `localStorage` gate.
