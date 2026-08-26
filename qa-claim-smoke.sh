@@ -289,7 +289,7 @@ required_lanes = {
     "CSS Conductor", "TACTrack", "Barker", "StoryBoard", "StoryDesk",
     "Andrea NanoBot", "Bob the Bot", "OpenClaw Runtime", "StoryLiner",
     "AI Music Vault", "Bob Ops Dashboard", "RadDadSite", "Rad Dad Merch",
-    "Cursor-OpenClaw Integration",
+    "Cursor-OpenClaw Integration", "Show Night",
     "Sliding Glass Door Screw", "Turdanoid", "Private media",
 }
 projects = [
@@ -461,7 +461,7 @@ else
 fi
 
 python3 - "$ROOT/README.md" "$REFRESH" "$ROOT/docs" <<'PY' \
-  || fail "README Bob live-repo honesty"
+  || fail "README / private-lane live-repo honesty"
 from pathlib import Path
 import re
 import sys
@@ -474,29 +474,74 @@ backed = re.search(
 )
 if not backed:
     raise SystemExit("README missing GitHub-backed live-repo sentence")
-if "Bob the Bot" in backed.group(0):
+public_tap_lanes = (
+    "WebJam",
+    "Turdanoid",
+    "Show Night",
+    "Story Shelf",
+    "StoryBoard",
+    "Andrea NanoBot",
+    "StoryLiner",
+    "Bob Ops Dashboard",
+    "RadDadSite",
+    "Rad Dad Merch",
+    "Cursor-OpenClaw Integration",
+)
+private_not_tap = (
+    "AdoptIQ",
+    "StoryOps-AI",
+    "Ball Beacon",
+    "CSS Conductor",
+    "TACTrack",
+    "0xc0re/barker",
+    "AI Music Vault",
+    "Sliding Glass Door Screw",
+    "Bob the Bot",
+    "Barker",
+)
+missing_public = [name for name in public_tap_lanes if name not in backed.group(0)]
+if missing_public:
     raise SystemExit(
-        "README GitHub-backed sentence must not list Bob the Bot as a live-repo tap lane"
+        "README GitHub-backed sentence missing public tap lane: " + ", ".join(missing_public)
+    )
+listed_private = [name for name in private_not_tap if name in backed.group(0)]
+if listed_private:
+    raise SystemExit(
+        "README GitHub-backed sentence must not list private/high-level lanes as "
+        "live-repo tap rows: " + ", ".join(listed_private)
     )
 coverage = text.split("## Portfolio coverage", 1)[-1].split("## Public agent continuity", 1)[0]
 if "Bob the Bot" not in coverage or "high-level only" not in coverage:
     raise SystemExit("README must keep Bob the Bot high-level only in portfolio coverage")
 if "not a public live-repo, CI, or PR tap row" not in coverage:
     raise SystemExit("README must say Bob the Bot is not a public live-repo tap row")
+if "private GitHub lanes stay **high-level only**" not in coverage:
+    raise SystemExit("README must say private GitHub lanes are not public tap rows")
 if 'project("Bob-the-Bot", status="yellow", high_level_only=True,' not in refresh.read_text():
     raise SystemExit("Bob the Bot must stay high_level_only in refresh.sh")
+refresh_text = refresh.read_text()
+if "Live CI and review state only" in refresh_text:
+    raise SystemExit("StoryOps-AI note still claims live CI / review state")
+if "CI / open PRs from live fetch" in refresh_text:
+    raise SystemExit("TACTrack note still claims live CI / open-PR fetch")
+if "High-level only; no customer data on this board." not in refresh_text:
+    raise SystemExit("StoryOps-AI must stay a high-level private utility note")
+if "No live-repo, CI, or PR taps on this board." not in refresh_text:
+    raise SystemExit("TACTrack must stay a high-level private note with no tap claim")
 for md in [readme, *sorted(docs.rglob("*.md"))]:
     for match in re.finditer(
         r"GitHub-backed rows use live repository, default-branch CI, and open-PR state for [^.]+",
         md.read_text(),
     ):
-        if "Bob the Bot" in match.group(0):
+        listed = [name for name in private_not_tap if name in match.group(0)]
+        if listed:
             raise SystemExit(
-                f"{md} lists Bob the Bot as a GitHub-backed live-repo tap lane"
+                f"{md} lists private/high-level lanes as GitHub-backed tap rows: "
+                + ", ".join(listed)
             )
-print("Bob the Bot stays high-level only; not a GitHub-backed tap lane")
+print("Private/high-level lanes stay off the GitHub-backed tap sentence")
 PY
-pass "README does not list Bob the Bot as a GitHub-backed tap lane"
+pass "README / private-lane notes do not claim live-repo taps"
 
 # 8) Functional XSS helpers from extracted page JS
 HELPER_JS="$TMP/helper-smoke.js"
