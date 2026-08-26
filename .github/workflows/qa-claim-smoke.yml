@@ -7,14 +7,30 @@ on:
     branches: [main]
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   smoke:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-      - name: Run qa-claim-smoke.sh
+      - name: Generate and validate disposable dashboard artifacts
+        env:
+          GH_TOKEN: ${{ github.token }}
+          OWNER: rupret007
         run: |
           set -euo pipefail
-          chmod +x ./qa-claim-smoke.sh
-          ./qa-claim-smoke.sh
+          scratch="$(mktemp -d)"
+          trap 'rm -rf "$scratch"' EXIT
+          cp README.md board_meta.py index.html refresh.sh status.json "$scratch/"
+          chmod +x "$scratch/refresh.sh" ./qa-claim-smoke.sh
+          (
+            cd "$scratch"
+            ./refresh.sh
+          )
+          REFRESH_SH="$scratch/refresh.sh" \
+            STATUS_JSON="$scratch/status.json" \
+            ./qa-claim-smoke.sh "$scratch/index.html"
+          test -z "$(git status --porcelain)"

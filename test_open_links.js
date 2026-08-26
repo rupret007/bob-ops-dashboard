@@ -53,6 +53,8 @@ function run() {
   if (src.indexOf("function laneHrefs") === -1) fail("laneHrefs missing from page");
   if (src.indexOf("function isBcId") === -1) fail("isBcId missing from page");
   if (src.indexOf("function workHref") === -1) fail("workHref missing from page");
+  if (src.indexOf("function signalHref") === -1) fail("signalHref missing from page");
+  if (src.indexOf("function safePullsUrl") === -1) fail("safePullsUrl missing from page");
   if (src.indexOf("function openWorkLink") === -1) fail("openWorkLink missing from page");
   if (src.indexOf("function handleWorkClick") === -1) fail("handleWorkClick missing from page");
   if (src.indexOf("window.openBlank = openBlank") === -1) fail("openBlank not exposed");
@@ -72,11 +74,14 @@ function run() {
   const safeRepoUrl = eval(
     "(function (cleanPublicUrl) { return " + extractFn(src, "safeRepoUrl") + "; })"
   )(cleanPublicUrl);
+  const safePullsUrl = eval(
+    "(function (cleanPublicUrl) { return " + extractFn(src, "safePullsUrl") + "; })"
+  )(cleanPublicUrl);
   const workHref = eval(
-    "(function (safeAgentUrl, safePrUrl, safeActionsUrl, safeRepoUrl) { return " +
+    "(function (safeAgentUrl, safePrUrl, safeActionsUrl, safePullsUrl, safeRepoUrl) { return " +
       extractFn(src, "workHref") +
       "; })"
-  )(safeAgentUrl, safePrUrl, safeActionsUrl, safeRepoUrl);
+  )(safeAgentUrl, safePrUrl, safeActionsUrl, safePullsUrl, safeRepoUrl);
 
   const good = "https://cursor.com/agents/bc-8e16f06d-f73f-482c-987f-e13f2d3b9fb1";
   if (safeAgentUrl(good) !== good) fail("good agent url dropped");
@@ -98,6 +103,14 @@ function run() {
   if (workHref("https://github.com/rupret007/webjam/actions/runs/3") !== "https://github.com/rupret007/webjam/actions/runs/3") {
     fail("workHref must keep allowlisted CI run");
   }
+  if (workHref("https://github.com/rupret007/story-corner-shelf/pulls") !== "https://github.com/rupret007/story-corner-shelf/pulls") {
+    fail("workHref must keep allowlisted pulls list");
+  }
+  if (workHref("https://github.com/rupret007/webjam") !== "https://github.com/rupret007/webjam") {
+    fail("workHref must not rewrite repo home into /pulls");
+  }
+  if (workHref("https://evil.example/rupret007/webjam/pulls")) fail("workHref must drop foreign pulls");
+  if (workHref("https://github.com/rupret007/webjam/pulls/1")) fail("workHref must drop pulls/N");
   if (workHref("https://evil.example/agents/bc-8e16f06d-f73f-482c-987f-e13f2d3b9fb1")) {
     fail("workHref must drop foreign host");
   }
@@ -234,6 +247,26 @@ function run() {
   if (!handleWorkClick(fallbackEv)) fail("missing target must use openBlank");
   if (!prevented) fail("openBlank fallback path must preventDefault");
   if (opened.length !== 1 || opened[0].url !== good) fail("fallback must openBlank the allowlisted href");
+
+  if (paint.indexOf('<span class="signal">1 open PR</span>') !== -1) {
+    fail("first paint still has dead 1 open PR text");
+  }
+  if (paint.indexOf('<span class="signal">4 open PRs</span>') !== -1) {
+    fail("first paint still has dead N open PRs text");
+  }
+  const openPrSignals = Array.from(
+    paint.matchAll(/<a class="signal" data-open="work" href="([^"]+)"[^>]*>(\d+) open PRs?<\/a>/g)
+  );
+  openPrSignals.forEach(function (match) {
+    const href = match[1];
+    const count = Number(match[2]);
+    if (count === 1 && !safePrUrl(href)) {
+      fail("first-paint 1 open PR signal must tap one allowlisted PR: " + href);
+    }
+    if (count > 1 && !safePullsUrl(href)) {
+      fail("first-paint N open PRs signal must tap one allowlisted pulls list: " + href);
+    }
+  });
 
   const fakeBc = paint.match(/cursor\.com\/agents\/bc-[^"'?\s<]+/g) || [];
   fakeBc.forEach(function (u) {
