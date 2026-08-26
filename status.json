@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-08-26T08:08:02.382095-05:00",
-  "generated_at_display": "Wed Aug 26, 2026 \u00b7 8:08 AM CDT",
+  "generated_at": "2026-08-26T09:05:12.730773-05:00",
+  "generated_at_display": "Wed Aug 26, 2026 \u00b7 9:05 AM CDT",
   "timezone": "America/Chicago",
   "owner": "rupret007",
   "dashboard": "bob-ops-dashboard",
@@ -46,8 +46,8 @@
           "url": "https://github.com/rupret007/webjam",
           "repo_url": "https://github.com/rupret007/webjam",
           "private": false,
-          "status": "yellow",
-          "chip": "Yellow",
+          "status": "jeff-gate",
+          "chip": "Jeff-gate",
           "default_branch": "master",
           "tip_sha": "e74d88b",
           "tip_date": "2026-08-26T12:51:18Z",
@@ -60,7 +60,7 @@
           "agent_url": null,
           "ci": {
             "name": "WebJam CI",
-            "conclusion": "pending",
+            "conclusion": "success",
             "branch": "master",
             "sha": "e74d88b",
             "created": "2026-08-26T12:51:21Z",
@@ -403,11 +403,11 @@
           "status": "yellow",
           "chip": "Yellow",
           "default_branch": "main",
-          "tip_sha": "d1ab1ee",
-          "tip_date": "2026-08-26T12:45:37Z",
-          "open_prs": 1,
-          "open_pr_url": "https://github.com/rupret007/bob-ops-dashboard/pull/12",
-          "open_pr_number": 12,
+          "tip_sha": "7e5652e",
+          "tip_date": "2026-08-26T13:08:08Z",
+          "open_prs": 3,
+          "open_pr_url": "https://github.com/rupret007/bob-ops-dashboard/pull/16",
+          "open_pr_number": 16,
           "open_pr_draft": true,
           "open_pr_stack": [],
           "pr_listing_complete": true,
@@ -416,9 +416,9 @@
             "name": "Refresh Bob Ops Dashboard",
             "conclusion": "in_progress",
             "branch": "main",
-            "sha": "d1ab1ee",
-            "created": "2026-08-26T13:07:37Z",
-            "html_url": "https://github.com/rupret007/bob-ops-dashboard/actions/runs/32972373447"
+            "sha": "7e5652e",
+            "created": "2026-08-26T14:04:39Z",
+            "html_url": "https://github.com/rupret007/bob-ops-dashboard/actions/runs/32978038307"
           },
           "release": null,
           "notes": "Source-only feature PRs; the scheduled refresh owns generated index.html and status.json.",
@@ -466,12 +466,12 @@
           "pr_listing_complete": true,
           "agent_url": null,
           "ci": {
-            "name": "Validate R11 Gate A-left print overlay v2",
+            "name": "Validate shelf artifacts",
             "conclusion": "success",
             "branch": "main",
             "sha": "cc25e73",
             "created": "2026-08-25T03:14:53Z",
-            "html_url": "https://github.com/rupret007/story-corner-shelf/actions/runs/32804448258"
+            "html_url": "https://github.com/rupret007/story-corner-shelf/actions/runs/32804448295"
           },
           "release": null,
           "notes": "Story Shelf utility. Software and documentation work only; physical installation stays owner-only.",
@@ -796,7 +796,7 @@
     "Sliding-Glass-Door-PETG-Screw"
   ],
   "publish_notes": "Public board -- no secrets or customer paths. Private repositories stay high-level; AI Music Vault stays private-content-boundary only.",
-  "refresh_started_ms": 1787749662342,
+  "refresh_started_ms": 1787753089309,
   "agents_source": "file:/home/runner/work/bob-ops-dashboard/bob-ops-dashboard/agents-status.json:stale->unknown",
   "agents": [
     {
