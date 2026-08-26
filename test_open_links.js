@@ -267,6 +267,14 @@ function run() {
       fail("first-paint N open PRs signal must tap one allowlisted pulls list: " + href);
     }
   });
+  const stackSignals = Array.from(
+    paint.matchAll(/<a class="signal" data-open="work" href="([^"]+)"[^>]*>(?:Stack #[^<]+|[0-9]+-PR stack)<\/a>/g)
+  );
+  stackSignals.forEach(function (match) {
+    if (!safePullsUrl(match[1])) {
+      fail("first-paint stack signal must tap one allowlisted pulls list: " + match[1]);
+    }
+  });
 
   const fakeBc = paint.match(/cursor\.com\/agents\/bc-[^"'?\s<]+/g) || [];
   fakeBc.forEach(function (u) {

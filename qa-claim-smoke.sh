@@ -235,6 +235,11 @@ fi
 grep -q 'function handleWorkClick' "$REFRESH" || fail "refresh.sh missing handleWorkClick"
 grep -q 'function openWorkLink' "$REFRESH" || fail "refresh.sh missing openWorkLink"
 grep -q 'window.openBlank = openBlank' "$REFRESH" || fail "refresh.sh must expose openBlank"
+grep -q 'BOB_DASHBOARD_APPLY_DECISIONS:-0' "$REFRESH" || fail "decision mutation must default off"
+grep -q 'if apply_decisions:' "$REFRESH" || fail "issue close/comment path must be explicitly gated"
+if grep -R -q 'BOB_DASHBOARD_APPLY_DECISIONS.*1' "$ROOT/.github/workflows" 2>/dev/null; then
+  fail "scheduled workflow must not enable issue close/comment mutations"
+fi
 if grep -q 'from preserve_verify' "$REFRESH"; then
   fail "refresh.sh still imports preserve_verify"
 fi
@@ -275,6 +280,27 @@ if "unlock" in str(ctrl).lower() or "verified ui" in str(ctrl).lower():
     raise SystemExit("control metadata still claims a verify gate")
 if ctrl.get("jeff_github") != "rupret007":
     raise SystemExit("control.jeff_github must stay rupret007")
+required_lanes = {
+    "WebJam", "Story Shelf", "AdoptIQ", "StoryOps-AI", "Ball Beacon",
+    "CSS Conductor", "TACTrack", "Barker", "StoryBoard", "StoryDesk",
+    "Andrea NanoBot", "OpenClaw Runtime", "StoryLiner", "AI Music Vault",
+    "Bob Ops Dashboard", "RadDadSite", "Cursor-OpenClaw Integration",
+    "Sliding Glass Door Screw", "Ophelia / Moises",
+}
+projects = [
+    p
+    for sec in (st.get("sections") or [])
+    if isinstance(sec, dict)
+    for p in (sec.get("projects") or [])
+    if isinstance(p, dict)
+]
+names = {str(p.get("name") or "") for p in projects}
+missing = sorted(required_lanes - names)
+if missing:
+    raise SystemExit("dashboard missing inherited lanes: " + ", ".join(missing))
+for p in projects:
+    if p.get("private") and (p.get("agent_url") or p.get("cloud_agents")):
+        raise SystemExit("private lane leaked agent metadata: " + str(p.get("name")))
 agents = st.get("agents") if isinstance(st, dict) else None
 if isinstance(agents, list):
     for a in agents:
@@ -506,12 +532,16 @@ if any(str(a.get("id") or "") not in ("codex", "cursor", "claude") for a in agen
 if any(str(a.get("state") or "") != "unknown" for a in agents):
     raise SystemExit("stale probe must fail closed to unknown")
 cloud = st.get("cloud_agents") or []
-if not any(
+seed_present = any(
     str(a.get("url") or "") == "https://cursor.com/agents/bc-12345678-1234-1234-1234-123456789abc"
     for a in cloud
     if isinstance(a, dict)
-):
-    raise SystemExit("seeded cloud agent URL missing")
+)
+if "bob-ops-dashboard" in (st.get("fetched_repos") or []):
+    if not seed_present:
+        raise SystemExit("public-PR-backed cloud agent URL missing")
+elif seed_present:
+    raise SystemExit("cloud agent survived without proof its PR repository is public")
 if any("evil.example" in str(a.get("url") or "") for a in cloud if isinstance(a, dict)):
     raise SystemExit("evil cloud agent URL leaked")
 if any(str(a.get("state") or "") == "running" for a in cloud if isinstance(a, dict)):

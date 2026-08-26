@@ -15,6 +15,7 @@ from board_meta import (
     board_content_fingerprint,
     compact_signal,
     decision_href,
+    detect_linear_pr_stack,
     drop_leftover_verify,
     extract_agent_url,
     extract_cloud_agents_from_prs,
@@ -194,6 +195,23 @@ class BoardMetaTests(unittest.TestCase):
         self.assertEqual(compact_signal({"release": "v0.26.0", "tip_sha": "abc1234", "open_prs": 0}), "v0.26.0")
         self.assertEqual(compact_signal({"open_prs": 1, "tip_sha": "abc1234"}), "1 open PR")
         self.assertEqual(compact_signal({"open_prs": 4}), "4 open PRs")
+        self.assertEqual(
+            compact_signal({"release": "v0.26.0", "open_prs": 1}),
+            "1 open PR",
+        )
+        stack = [
+            {"number": 10, "url": "https://github.com/rupret007/repo/pull/10"},
+            {"number": 11, "url": "https://github.com/rupret007/repo/pull/11"},
+            {"number": 12, "url": "https://github.com/rupret007/repo/pull/12"},
+        ]
+        self.assertEqual(
+            compact_signal({"release": "v1", "open_prs": 3, "open_pr_stack": stack}),
+            "Stack #10 -> #11 -> #12",
+        )
+        self.assertEqual(
+            compact_signal({"release": "v1", "open_prs": 4, "open_pr_stack": stack}),
+            "4 open PRs",
+        )
         self.assertIsNone(compact_signal({"tip_sha": "abc1234", "open_prs": 0, "product_sha": "deadbee"}))
         self.assertIsNone(compact_signal({"ci": {"name": "CI", "conclusion": "success"}, "open_prs": 0}))
         self.assertEqual(compact_signal({"ci": {"conclusion": "failure"}}), "CI fail")
@@ -233,6 +251,18 @@ class BoardMetaTests(unittest.TestCase):
         }
         self.assertEqual(compact_signal(many), "4 open PRs")
         self.assertEqual(signal_href(many), "https://github.com/rupret007/story-corner-shelf/pulls")
+        stacked = {
+            "url": "https://github.com/rupret007/StoryLiner",
+            "open_prs": 2,
+            "open_pr_stack": [
+                {"number": 11, "url": "https://github.com/rupret007/StoryLiner/pull/11"},
+                {"number": 12, "url": "https://github.com/rupret007/StoryLiner/pull/12"},
+            ],
+            "release": "v1.0.0",
+            "ci": {"conclusion": "success"},
+        }
+        self.assertEqual(compact_signal(stacked), "Stack #11 -> #12")
+        self.assertEqual(signal_href(stacked), "https://github.com/rupret007/StoryLiner/pulls")
         orphan = {"url": "https://github.com/rupret007/RadDadSite", "open_prs": 1}
         self.assertEqual(signal_href(orphan), "https://github.com/rupret007/RadDadSite/pulls")
         no_repo = {
@@ -738,6 +768,36 @@ class BoardMetaTests(unittest.TestCase):
             }
         ]
         self.assertNotEqual(board_content_fingerprint(d), board_content_fingerprint(e))
+        stack_a = {
+            "sections": [
+                {
+                    "id": "live-shipping",
+                    "projects": [
+                        {"name": "StoryLiner", "open_prs": 2, "open_pr_stack": []}
+                    ],
+                }
+            ]
+        }
+        stack_b = {
+            "sections": [
+                {
+                    "id": "live-shipping",
+                    "projects": [
+                        {
+                            "name": "StoryLiner",
+                            "open_prs": 2,
+                            "open_pr_stack": [
+                                {"number": 11, "url": "https://github.com/rupret007/StoryLiner/pull/11"},
+                                {"number": 12, "url": "https://github.com/rupret007/StoryLiner/pull/12"},
+                            ],
+                        }
+                    ],
+                }
+            ]
+        }
+        self.assertNotEqual(
+            board_content_fingerprint(stack_a), board_content_fingerprint(stack_b)
+        )
 
     def test_agent_and_work_urls_are_fail_closed(self):
         good_bc = "bc-8e16f06d-f73f-482c-987f-e13f2d3b9fb1"
@@ -801,6 +861,49 @@ class BoardMetaTests(unittest.TestCase):
         self.assertFalse(picked["draft"])
         self.assertIsNone(pick_open_pr([{"html_url": "https://evil.example/pull/1"}]))
         self.assertIsNone(pick_open_pr(None))
+
+    def test_linear_pr_stack_requires_one_complete_same_repo_chain(self):
+        repo = {"full_name": "rupret007/repo"}
+
+        def row(number, base, head, *, head_repo=repo, url_repo="repo"):
+            return {
+                "number": number,
+                "html_url": f"https://github.com/rupret007/{url_repo}/pull/{number}",
+                "base": {"ref": base, "repo": repo},
+                "head": {"ref": head, "repo": head_repo},
+            }
+
+        shuffled = [
+            row(12, "feature-eleven", "feature-twelve"),
+            row(10, "main", "feature-ten"),
+            row(11, "feature-ten", "feature-eleven"),
+        ]
+        self.assertEqual(
+            detect_linear_pr_stack(shuffled, "main"),
+            [
+                {"number": 10, "url": "https://github.com/rupret007/repo/pull/10"},
+                {"number": 11, "url": "https://github.com/rupret007/repo/pull/11"},
+                {"number": 12, "url": "https://github.com/rupret007/repo/pull/12"},
+            ],
+        )
+        self.assertEqual(
+            detect_linear_pr_stack(
+                [row(10, "main", "a"), row(11, "main", "b")], "main"
+            ),
+            [],
+        )
+        self.assertEqual(
+            detect_linear_pr_stack(
+                [row(10, "main", "a"), row(11, "a", "b", head_repo={"full_name": "fork/repo"})],
+                "main",
+            ),
+            [],
+        )
+        missing = row(10, "main", "a")
+        missing["head"].pop("repo")
+        self.assertEqual(detect_linear_pr_stack([missing, row(11, "a", "b")], "main"), [])
+        self.assertEqual(detect_linear_pr_stack([row(10, "main", "a")], "main"), [])
+        self.assertEqual(detect_linear_pr_stack(None, "main"), [])
 
     def test_cloud_agents_never_invent_bc_or_running(self):
         good_bc = "bc-8e16f06d-f73f-482c-987f-e13f2d3b9fb1"
