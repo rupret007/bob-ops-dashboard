@@ -287,8 +287,9 @@ if ctrl.get("jeff_github") != "rupret007":
 required_lanes = {
     "WebJam", "Story Shelf", "AdoptIQ", "StoryOps-AI", "Ball Beacon",
     "CSS Conductor", "TACTrack", "Barker", "StoryBoard", "StoryDesk",
-    "Andrea NanoBot", "OpenClaw Runtime", "StoryLiner", "AI Music Vault",
-    "Bob Ops Dashboard", "RadDadSite", "Cursor-OpenClaw Integration",
+    "Andrea NanoBot", "Bob the Bot", "OpenClaw Runtime", "StoryLiner",
+    "AI Music Vault", "Bob Ops Dashboard", "RadDadSite", "Rad Dad Merch",
+    "Cursor-OpenClaw Integration",
     "Sliding Glass Door Screw", "Turdanoid", "Private media",
 }
 projects = [
@@ -312,6 +313,27 @@ if turdanoid.get("live_game_url") != "https://rupret007.github.io/Turdanoid/hub.
     raise SystemExit("Turdanoid lane missing the allowlisted public game hub")
 if "remains open" not in str(turdanoid.get("notes") or "").lower():
     raise SystemExit("Turdanoid lane must not claim the gameplay pass is complete")
+bob_rows = [
+    (str(sec.get("id") or ""), p)
+    for sec in (st.get("sections") or [])
+    if isinstance(sec, dict)
+    for p in (sec.get("projects") or [])
+    if isinstance(p, dict) and p.get("name") == "Bob the Bot"
+]
+if len(bob_rows) != 1 or bob_rows[0][0] != "messaging":
+    raise SystemExit("Bob the Bot must be one distinct messaging application lane")
+bob = bob_rows[0][1]
+if not bob.get("private") or bob.get("status") not in {"yellow", "red"}:
+    raise SystemExit("Bob the Bot must remain a private active-bootstrap lane")
+expected_bob_note = (
+    "Bob application — private bootstrap. Reuses the Andrea messaging engine and "
+    "guarded OpenClaw delegation; no live sends, restarts, credentials, or production actions."
+)
+if bob.get("notes") != expected_bob_note:
+    raise SystemExit("Bob the Bot public note drifted from its guarded boundary")
+for distinct in ("Andrea NanoBot", "OpenClaw Runtime", "Bob Ops Dashboard"):
+    if sum(1 for p in projects if p.get("name") == distinct) != 1:
+        raise SystemExit("Bob application boundary lost distinct lane: " + distinct)
 media_sections = [
     sec for sec in (st.get("sections") or [])
     if isinstance(sec, dict) and sec.get("id") == "private-media"
@@ -597,6 +619,53 @@ if args[:1] == ["api"] and len(args) >= 2:
         }]}
     elif path == "repos/rupret007/AI-Music-Vault/releases?per_page=1":
         value = [{"tag_name": "private-release-v9"}]
+    elif path == "repos/rupret007/Bob-the-Bot":
+        value = {
+            "name": "Bob-the-Bot",
+            "full_name": "rupret007/Bob-the-Bot",
+            "private": True,
+            "html_url": "https://github.com/rupret007/Bob-the-Bot",
+            "default_branch": "bob-private-main",
+        }
+    elif path == "repos/rupret007/Bob-the-Bot/commits/bob-private-main":
+        value = {
+            "sha": "b0bb0bb0bb0bb0bb0bb0bb0bb0bb0bb0bb0bb0bb",
+            "commit": {
+                "message": "bob-private-commit-subject",
+                "committer": {"date": "2026-08-26T00:00:00Z"},
+            },
+        }
+    elif path == "repos/rupret007/Bob-the-Bot/pulls?state=open&per_page=100&page=1":
+        value = [{
+            "number": 91,
+            "state": "open",
+            "draft": True,
+            "title": "bob-private-pr-title",
+            "body": "https://cursor.com/agents/bc-99999999-9999-9999-9999-999999999999",
+            "html_url": "https://github.com/rupret007/Bob-the-Bot/pull/91",
+            "base": {
+                "ref": "bob-private-main",
+                "repo": {"full_name": "rupret007/Bob-the-Bot"},
+            },
+            "head": {
+                "ref": "bob-private-feature",
+                "repo": {"full_name": "rupret007/Bob-the-Bot"},
+            },
+            "updated_at": "2026-08-26T00:00:00Z",
+        }]
+    elif path == "repos/rupret007/Bob-the-Bot/actions/runs?per_page=20&branch=bob-private-main":
+        value = {"workflow_runs": [{
+            "name": "Bob private validation",
+            "path": ".github/workflows/bob-private.yml",
+            "head_branch": "bob-private-main",
+            "head_sha": "b0bb0bb0bb0bb0bb0bb0bb0bb0bb0bb0bb0bb0bb",
+            "status": "completed",
+            "conclusion": "success",
+            "html_url": "https://github.com/rupret007/Bob-the-Bot/actions/runs/92",
+            "updated_at": "2026-08-26T00:00:00Z",
+        }]}
+    elif path == "repos/rupret007/Bob-the-Bot/releases?per_page=1":
+        value = [{"tag_name": "bob-private-release"}]
     elif path == "repos/rupret007/bob-ops-dashboard/pulls?state=open&per_page=20":
         value = []
     else:
@@ -639,11 +708,24 @@ if extra:
 ci = private.get("ci") if isinstance(private.get("ci"), dict) else {}
 if set(ci) - {"conclusion"} or ci.get("conclusion") != "success":
     raise SystemExit("private CI must expose conclusion only")
+bob = next((p for p in projects if p.get("name") == "Bob the Bot"), None)
+if not bob or not bob.get("private") or not bob.get("accessible"):
+    raise SystemExit("fixture did not exercise the accessible private Bob application lane")
+if set(bob) - allowed:
+    raise SystemExit("Bob application row contains non-allowlisted keys")
+if bob.get("status") != "yellow" or bob.get("chip") != "Yellow":
+    raise SystemExit("Bob application must remain an active private bootstrap")
+bob_ci = bob.get("ci") if isinstance(bob.get("ci"), dict) else {}
+if set(bob_ci) - {"conclusion"} or bob_ci.get("conclusion") != "success":
+    raise SystemExit("Bob application CI must expose conclusion only")
 public_blob = status_path.read_text() + "\n" + index_path.read_text()
 for secret in (
     "super-secret-branch", "private-feature-branch", "deadbeefdeadbeef",
     "private-pr-title", "private-release-v9", "AI-Music-Vault/pull/77",
     "AI-Music-Vault/actions/runs/88", "bc-12345678-1234-1234-1234-123456789abc",
+    "bob-private-main", "bob-private-feature", "b0bb0bb0bb0b",
+    "bob-private-pr-title", "bob-private-release", "Bob-the-Bot/pull/91",
+    "Bob-the-Bot/actions/runs/92", "bc-99999999-9999-9999-9999-999999999999",
 ):
     if secret in public_blob:
         raise SystemExit("private fixture leaked: " + secret)

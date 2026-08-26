@@ -17,7 +17,7 @@ export REFRESH_STARTED_MS
 OWNER="${OWNER:-rupret007}"
 REPOS=(
   webjam StoryLiner StoryBoard Rad-Dad-Merch RadDadSite Turdanoid
-  AdoptIQ TACTrack AI-Music-Vault rad-dad-show-night Andrea_NanoBot story-corner-shelf
+  AdoptIQ TACTrack AI-Music-Vault rad-dad-show-night Andrea_NanoBot Bob-the-Bot story-corner-shelf
   StoryOps-AI ballbeacon CSS_Conductor 0xc0re/barker bob-ops-dashboard
   Cursor-OpenClaw-Integration Sliding-Glass-Door-PETG-Screw
 )
@@ -193,7 +193,17 @@ CHIP = {
     "parked": "Parked", "jeff-gate": "Jeff-gate",
 }
 
-def project(name, *, status=None, notes="", product_sha=None, jeff_gate=False, live_game_url=None, extra=None):
+def project(
+    name,
+    *,
+    status=None,
+    notes="",
+    product_sha=None,
+    jeff_gate=False,
+    live_game_url=None,
+    high_level_only=False,
+    extra=None,
+):
     r = g(name)
     st = status_from_fetch(r, override=status, jeff_gate=jeff_gate)
     p = {
@@ -225,7 +235,7 @@ def project(name, *, status=None, notes="", product_sha=None, jeff_gate=False, l
         p["live_game_url"] = safe_game_url(live_game_url)
     if extra:
         p.update(extra)
-    if p.get("private"):
+    if p.get("private") or high_level_only:
         raw_ci = p.get("ci") if isinstance(p.get("ci"), dict) else {}
         conclusion = str(raw_ci.get("conclusion") or "").strip().lower()
         # The board itself is public. A private lane may expose its product
@@ -252,6 +262,7 @@ def project(name, *, status=None, notes="", product_sha=None, jeff_gate=False, l
         "rad-dad-show-night": "Show Night",
         "AI-Music-Vault": "AI Music Vault",
         "Andrea_NanoBot": "Andrea NanoBot",
+        "Bob-the-Bot": "Bob the Bot",
         "Sliding-Glass-Door-PETG-Screw": "Sliding Glass Door Screw",
         "story-corner-shelf": "Story Shelf",
     }
@@ -331,6 +342,11 @@ status = {
       "projects": [
         project("Andrea_NanoBot",
                 notes="BB AppleScript send preferred. Private API OFF. Approval-fenced sends only."),
+        project("Bob-the-Bot", status="yellow", high_level_only=True,
+                notes=(
+                    "Bob application — private bootstrap. Reuses the Andrea messaging engine and "
+                    "guarded OpenClaw delegation; no live sends, restarts, credentials, or production actions."
+                )),
         {"name": "Telegram Bot the Bot", "status": "green", "chip": "Green",
          "notes": "Whisper + Chrome mop shipped. Bob front-door via Telegram."},
         {"name": "Codex local goals", "status": "green", "chip": "Green",

@@ -16,15 +16,18 @@ Public, mobile-friendly status board for projects Bob is working on (Jeff Story 
 
 ## Portfolio coverage
 
-The board follows every inherited product lane. GitHub-backed rows use live repository, default-branch CI, and open-PR state for WebJam, Turdanoid, Story Shelf, AdoptIQ, StoryOps-AI, Ball Beacon, CSS Conductor, TACTrack, canonical `0xc0re/barker` (not the unrelated `rupret007/barker` history), StoryBoard, Andrea NanoBot, StoryLiner, AI Music Vault, Bob Ops Dashboard, RadDadSite, Cursor-OpenClaw Integration, and Sliding Glass Door Screw. StoryDesk and OpenClaw Runtime are explicitly **Local-only** because no authoritative remote can be claimed; private-media work appears only as a high-level **Owner-only** boundary because upload and publishing stay outside this board.
+The board follows every inherited product lane. GitHub-backed rows use live repository, default-branch CI, and open-PR state for WebJam, Turdanoid, Story Shelf, AdoptIQ, StoryOps-AI, Ball Beacon, CSS Conductor, TACTrack, canonical `0xc0re/barker` (not the unrelated `rupret007/barker` history), StoryBoard, Andrea NanoBot, Bob the Bot, StoryLiner, AI Music Vault, Bob Ops Dashboard, RadDadSite, Rad Dad Merch, Cursor-OpenClaw Integration, and Sliding Glass Door Screw. StoryDesk and OpenClaw Runtime are explicitly **Local-only** because no authoritative remote can be claimed; private-media work appears only as a high-level **Owner-only** boundary because upload and publishing stay outside this board.
 
 Turdanoid is an independent public gameplay-improvement lane. Its row links the repository, current-tip CI, and the curated [live game hub](https://rupret007.github.io/Turdanoid/hub.html). Green CI proves the current tip's automated checks; green Pages proves the hub deployed. Neither claims the fun/replayability pass is complete.
 
 Private repositories expose only high-level status. Private PR bodies can never contribute Cursor agent links to the public page, and local probe work links are published only when a live refresh proves their PR repository is public. AI Music Vault remains private-content-boundary only.
 
+Bob the Bot is a distinct private application lane, not an alias for Andrea NanoBot, the local OpenClaw Runtime, or this Bob Ops Dashboard. Its public row is deliberately limited to a coarse bootstrap state and operating boundaries; repository links, branches, pull requests, commit identifiers, paths, and implementation content stay off the public board.
+
 ## Public agent continuity
 
 - [Batch A portfolio handoff — 2026-08-26](docs/handoffs/2026-08-26-batch-a.md) is the immutable completion snapshot for the latest portfolio round.
+- [Bob application registration handoff — 2026-08-26](docs/handoffs/2026-08-26-bob-application-registration.md) records the private application boundary and remaining owner gates.
 - [Agent handoff runbook](docs/AGENT_HANDOFF_RUNBOOK.md) is the reusable checklist and template for Grok Bot, Codex, and future agents.
 
 These are sanitized operational-continuity records, not private handoff text. This repository is public: add a new dated handoff for each completed round instead of rewriting an old snapshot, and keep private lanes high-level. Never copy private repository metadata, creative details, customer data, credentials, or local paths into a handoff.
