@@ -116,6 +116,10 @@ REPO_URL_RE = re.compile(
     r"^https://github\.com/rupret007/[A-Za-z0-9._-]+$",
     re.I,
 )
+PULLS_URL_RE = re.compile(
+    r"^https://github\.com/rupret007/[A-Za-z0-9._-]+/pulls$",
+    re.I,
+)
 CLOUD_AGENT_LIMIT = 3
 
 
@@ -163,6 +167,50 @@ def safe_repo_url(url: Any) -> str:
     """Only a rupret007 repository home URL."""
     s = _clean_public_url(url)
     return s if REPO_URL_RE.match(s) else ""
+
+
+def safe_pulls_url(url: Any) -> str:
+    """Only a rupret007 repo /pulls index. Never invent a repo name."""
+    s = _clean_public_url(url)
+    return s if PULLS_URL_RE.match(s) else ""
+
+
+def pulls_url_from_repo(url: Any) -> str:
+    """Derive /pulls from an allowlisted repo home. Empty if the repo is unknown."""
+    repo = safe_repo_url(url)
+    return (repo + "/pulls") if repo else ""
+
+
+def prune_closed_parked_prs(
+    sections: list[Any] | None, open_pr_urls: Any
+) -> list[dict[str, Any]]:
+    """Keep a parked PR only when the current refresh proved it is open."""
+    current = {
+        url
+        for raw in (open_pr_urls or [])
+        if (url := safe_pr_url(raw))
+    }
+    out: list[dict[str, Any]] = []
+    for raw_section in sections or []:
+        if not isinstance(raw_section, dict):
+            continue
+        section = dict(raw_section)
+        projects: list[Any] = []
+        for raw_project in raw_section.get("projects") or []:
+            if not isinstance(raw_project, dict):
+                continue
+            project = dict(raw_project)
+            parked_pr = ""
+            if str(project.get("status") or "").lower() == "parked":
+                parked_pr = safe_pr_url(project.get("open_pr_url")) or safe_pr_url(
+                    project.get("url")
+                )
+            if parked_pr and parked_pr not in current:
+                continue
+            projects.append(project)
+        section["projects"] = projects
+        out.append(section)
+    return out
 
 
 def extract_agent_url(text: Any) -> str:
@@ -361,6 +409,35 @@ def lane_hrefs(project: Any) -> dict[str, str]:
     if actions:
         out["ci"] = actions
     return out
+
+
+def signal_href(project: Any) -> str:
+    """Tap target for the compact signal. Empty means dead text; never invent.
+
+    CI fail/running/pending already tap the Actions run when a run URL is
+    known. N open PRs must do the same: one known PR opens that PR;
+    two or more open the repo pulls list. Never pretend one PR is all of
+    them. Never invent a PR number or host.
+    """
+    if not isinstance(project, dict):
+        return ""
+    signal = compact_signal(project)
+    if not signal:
+        return ""
+    hrefs = lane_hrefs(project)
+    text = str(signal)
+    if text.startswith("CI"):
+        return hrefs.get("ci") or ""
+    if "open PR" in text:
+        try:
+            n = int(project.get("open_prs") or 0)
+        except (TypeError, ValueError):
+            n = 0
+        pulls = pulls_url_from_repo(hrefs.get("repo") or "")
+        if n > 1:
+            return pulls
+        return hrefs.get("pr") or pulls
+    return ""
 
 
 def visible_chip(project: Any) -> str | None:
@@ -1006,7 +1083,7 @@ def first_class_sections() -> list[dict[str, Any]]:
                 ),
                 _card(
                     "Soft-paint poll",
-                    "Client fetches status.json every 30s (pauses when the tab is hidden). Immediate poll on pageshow / visible. Fetch aborts after 8s. Hide / iOS-return abort is not a failed poll. A stale cached status.json cannot rewind the board. Repaints when board content changes -- not on every 15m Actions timestamp. Tip CI is the current SHA; Pages / skipped helpers cannot hide a fail. A skipped or cancelled helper cannot beat a success or become Open CI. Lanes prefer the open PR; CI fail/running taps the Actions run when a run URL is known.",
+                    "Client fetches status.json every 30s (pauses when the tab is hidden). Immediate poll on pageshow / visible. Fetch aborts after 8s. Hide / iOS-return abort is not a failed poll. A stale cached status.json cannot rewind the board. Repaints when board content changes -- not on every 15m Actions timestamp. Tip CI is the current SHA; Pages / skipped helpers cannot hide a fail. A skipped or cancelled helper cannot beat a success or become Open CI. Lanes prefer the open PR; CI fail/running taps the Actions run when a run URL is known. N open PRs taps that PR (one) or the repo pulls list (two or more).",
                     chip="Feature",
                 ),
                 _card(
