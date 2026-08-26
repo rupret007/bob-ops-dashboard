@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-08-26T09:05:12.730773-05:00",
-  "generated_at_display": "Wed Aug 26, 2026 \u00b7 9:05 AM CDT",
+  "generated_at": "2026-08-26T10:54:18.891964-05:00",
+  "generated_at_display": "Wed Aug 26, 2026 \u00b7 10:54 AM CDT",
   "timezone": "America/Chicago",
   "owner": "rupret007",
   "dashboard": "bob-ops-dashboard",
@@ -403,11 +403,11 @@
           "status": "yellow",
           "chip": "Yellow",
           "default_branch": "main",
-          "tip_sha": "7e5652e",
-          "tip_date": "2026-08-26T13:08:08Z",
-          "open_prs": 3,
-          "open_pr_url": "https://github.com/rupret007/bob-ops-dashboard/pull/16",
-          "open_pr_number": 16,
+          "tip_sha": "a8d63a9",
+          "tip_date": "2026-08-26T14:26:27Z",
+          "open_prs": 2,
+          "open_pr_url": "https://github.com/rupret007/bob-ops-dashboard/pull/17",
+          "open_pr_number": 17,
           "open_pr_draft": true,
           "open_pr_stack": [],
           "pr_listing_complete": true,
@@ -416,9 +416,9 @@
             "name": "Refresh Bob Ops Dashboard",
             "conclusion": "in_progress",
             "branch": "main",
-            "sha": "7e5652e",
-            "created": "2026-08-26T14:04:39Z",
-            "html_url": "https://github.com/rupret007/bob-ops-dashboard/actions/runs/32978038307"
+            "sha": "a8d63a9",
+            "created": "2026-08-26T15:53:40Z",
+            "html_url": "https://github.com/rupret007/bob-ops-dashboard/actions/runs/32986290489"
           },
           "release": null,
           "notes": "Source-only feature PRs; the scheduled refresh owns generated index.html and status.json.",
@@ -634,26 +634,14 @@
       ]
     },
     {
-      "id": "music-producer",
-      "title": "Music producer",
+      "id": "private-media",
+      "title": "Private media",
       "projects": [
         {
-          "name": "Logic Pro home",
-          "status": "green",
-          "chip": "Green",
-          "notes": "Logic Pro 12.3.1 on Mac mini -- primary producer home."
-        },
-        {
-          "name": "LogicProMCP",
-          "status": "jeff-gate",
-          "chip": "Jeff-gate",
-          "notes": "Installed. Pending Accessibility / Automation GUI grants from Jeff."
-        },
-        {
-          "name": "Ophelia / Moises",
+          "name": "Private media",
           "status": "jeff-gate",
           "chip": "Owner-only",
-          "notes": "Seven local stems verified. Login, upload, publish, and audio-release steps stay owner-only."
+          "notes": "Private-content boundary. Upload and publishing stay owner-only."
         }
       ]
     },
@@ -662,10 +650,10 @@
       "title": "Parked",
       "projects": [
         {
-          "name": "Stalemate / Trailer Swift",
+          "name": "Parked private catalog",
           "status": "parked",
           "chip": "Parked",
-          "notes": "Catalog/voice feel only -- parked catalog lane."
+          "notes": "Private-content boundary. Parked catalog work stays private and owner-only."
         }
       ]
     },
@@ -704,10 +692,10 @@
           "notes": "Food, errands, Domino's: chat yes only. Honest: there is no order button on this board."
         },
         {
-          "name": "Music producer help",
+          "name": "Private media boundary",
           "status": "jeff-gate",
-          "chip": "Jeff-gate",
-          "notes": "Logic Pro is home. Moises / Suno need Jeff login. LogicProMCP needs Jeff GUI grants."
+          "chip": "Owner-only",
+          "notes": "Private content stays high-level. Upload and publishing require an explicit owner decision."
         },
         {
           "name": "Cisco CS desktop (high-level)",
@@ -796,8 +784,8 @@
     "Sliding-Glass-Door-PETG-Screw"
   ],
   "publish_notes": "Public board -- no secrets or customer paths. Private repositories stay high-level; AI Music Vault stays private-content-boundary only.",
-  "refresh_started_ms": 1787753089309,
-  "agents_source": "file:/home/runner/work/bob-ops-dashboard/bob-ops-dashboard/agents-status.json:stale->unknown",
+  "refresh_started_ms": 1787759640266,
+  "agents_source": "file:stale->unknown",
   "agents": [
     {
       "id": "codex",
@@ -852,10 +840,10 @@
       "risk": "high"
     },
     {
-      "id": "ophelia-upload",
-      "title": "Ophelia stems upload or publish",
+      "id": "private-media-upload",
+      "title": "Private media upload or publish",
       "kind": "owner-upload-gate",
-      "detail": "Local stems are verified; login, upload, and publishing require an explicit owner decision.",
+      "detail": "Private content stays high-level; upload and publishing require an explicit owner decision.",
       "risk": "high"
     }
   ],
