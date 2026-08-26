@@ -18,7 +18,7 @@ OWNER="${OWNER:-rupret007}"
 REPOS=(
   webjam StoryLiner StoryBoard Rad-Dad-Merch RadDadSite Turdanoid
   AdoptIQ TACTrack AI-Music-Vault rad-dad-show-night Andrea_NanoBot story-corner-shelf
-  StoryOps-AI ballbeacon CSS_Conductor barker bob-ops-dashboard
+  StoryOps-AI ballbeacon CSS_Conductor 0xc0re/barker bob-ops-dashboard
   Cursor-OpenClaw-Integration Sliding-Glass-Door-PETG-Screw
 )
 PUSH=0
@@ -36,8 +36,14 @@ need_gh() {
 }
 
 fetch_repo() {
-  local r="$1"
-  python3 - "$OWNER" "$r" "$ROOT" <<'PY'
+  local spec="$1"
+  local repo_owner="$OWNER"
+  local repo_name="$spec"
+  if [[ "$spec" == */* ]]; then
+    repo_owner="${spec%%/*}"
+    repo_name="${spec#*/}"
+  fi
+  python3 - "$repo_owner" "$repo_name" "$ROOT" <<'PY'
 import json, subprocess, sys
 owner, repo, root = sys.argv[1], sys.argv[2], sys.argv[3]
 sys.path.insert(0, root)
@@ -114,7 +120,7 @@ PY
 }
 
 need_gh
-echo "Fetching ${#REPOS[@]} repos as $OWNER ..."
+echo "Fetching ${#REPOS[@]} portfolio repositories ..."
 TMP="$(mktemp)"
 echo '[' > "$TMP"
 first=1
@@ -1298,19 +1304,19 @@ html = f'''<!DOCTYPE html>
   }}
   function safePrUrl(u) {{
     var s = cleanPublicUrl(u);
-    return /^https:\\/\\/github\\.com\\/rupret007\\/[A-Za-z0-9._-]+\\/pull\\/[1-9][0-9]*$/i.test(s) ? s : "";
+    return /^https:\\/\\/github\\.com\\/(?:rupret007\\/[A-Za-z0-9._-]+|0xc0re\\/barker)\\/pull\\/[1-9][0-9]*$/i.test(s) ? s : "";
   }}
   function safeActionsUrl(u) {{
     var s = cleanPublicUrl(u);
-    return /^https:\\/\\/github\\.com\\/rupret007\\/[A-Za-z0-9._-]+\\/actions\\/runs\\/[1-9][0-9]*$/i.test(s) ? s : "";
+    return /^https:\\/\\/github\\.com\\/(?:rupret007\\/[A-Za-z0-9._-]+|0xc0re\\/barker)\\/actions\\/runs\\/[1-9][0-9]*$/i.test(s) ? s : "";
   }}
   function safeRepoUrl(u) {{
     var s = cleanPublicUrl(u);
-    return /^https:\\/\\/github\\.com\\/rupret007\\/[A-Za-z0-9._-]+$/i.test(s) ? s : "";
+    return /^https:\\/\\/github\\.com\\/(?:rupret007\\/[A-Za-z0-9._-]+|0xc0re\\/barker)$/i.test(s) ? s : "";
   }}
   function safePullsUrl(u) {{
     var s = cleanPublicUrl(u);
-    return /^https:\\/\\/github\\.com\\/rupret007\\/[A-Za-z0-9._-]+\\/pulls$/i.test(s) ? s : "";
+    return /^https:\\/\\/github\\.com\\/(?:rupret007\\/[A-Za-z0-9._-]+|0xc0re\\/barker)\\/pulls$/i.test(s) ? s : "";
   }}
   function pullsUrlFromRepo(u) {{
     var repo = safeRepoUrl(u);
@@ -1381,7 +1387,7 @@ html = f'''<!DOCTYPE html>
           valid = false;
           break;
         }}
-        var match = url.match(/^https:\/\/github\.com\/rupret007\/[A-Za-z0-9._-]+\/pull\/([1-9][0-9]*)$/i);
+        var match = url.match(/^https:\/\/github\.com\/(?:rupret007\/[A-Za-z0-9._-]+|0xc0re\/barker)\/pull\/([1-9][0-9]*)$/i);
         if (!match || Number(match[1]) !== number) {{
           valid = false;
           break;

@@ -107,22 +107,15 @@ AGENT_BCID_QUERY_RE = re.compile(
     r"(bc-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})",
     re.I,
 )
+GITHUB_REPO_PATH = r"(?:rupret007/[A-Za-z0-9._-]+|0xc0re/barker)"
 PR_URL_RE = re.compile(
-    r"^https://github\.com/rupret007/[A-Za-z0-9._-]+/pull/[1-9][0-9]*$",
-    re.I,
+    rf"^https://github\.com/{GITHUB_REPO_PATH}/pull/[1-9][0-9]*$", re.I
 )
 ACTIONS_URL_RE = re.compile(
-    r"^https://github\.com/rupret007/[A-Za-z0-9._-]+/actions/runs/[1-9][0-9]*$",
-    re.I,
+    rf"^https://github\.com/{GITHUB_REPO_PATH}/actions/runs/[1-9][0-9]*$", re.I
 )
-REPO_URL_RE = re.compile(
-    r"^https://github\.com/rupret007/[A-Za-z0-9._-]+$",
-    re.I,
-)
-PULLS_URL_RE = re.compile(
-    r"^https://github\.com/rupret007/[A-Za-z0-9._-]+/pulls$",
-    re.I,
-)
+REPO_URL_RE = re.compile(rf"^https://github\.com/{GITHUB_REPO_PATH}$", re.I)
+PULLS_URL_RE = re.compile(rf"^https://github\.com/{GITHUB_REPO_PATH}/pulls$", re.I)
 CLOUD_AGENT_LIMIT = 3
 
 
@@ -314,7 +307,7 @@ def detect_linear_pr_stack(prs: Any, default_branch: Any) -> list[dict[str, Any]
         if not url:
             return []
         url_match = re.fullmatch(
-            r"https://github\.com/(rupret007/[A-Za-z0-9._-]+)/pull/([1-9][0-9]*)",
+            rf"https://github\.com/({GITHUB_REPO_PATH})/pull/([1-9][0-9]*)",
             url,
             re.I,
         )

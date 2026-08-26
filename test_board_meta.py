@@ -834,6 +834,23 @@ class BoardMetaTests(unittest.TestCase):
         self.assertEqual(safe_actions_url("https://github.com/rupret007/Andrea_NanoBot/actions"), "")
         self.assertEqual(safe_repo_url("https://github.com/rupret007/webjam/"), "https://github.com/rupret007/webjam")
         self.assertEqual(safe_repo_url("https://github.com/rupret007/webjam/issues"), "")
+        self.assertEqual(
+            safe_pr_url("https://github.com/0xc0re/barker/pull/41"),
+            "https://github.com/0xc0re/barker/pull/41",
+        )
+        self.assertEqual(
+            safe_actions_url("https://github.com/0xc0re/barker/actions/runs/9"),
+            "https://github.com/0xc0re/barker/actions/runs/9",
+        )
+        self.assertEqual(
+            safe_repo_url("https://github.com/0xc0re/barker"),
+            "https://github.com/0xc0re/barker",
+        )
+        self.assertEqual(
+            safe_pulls_url("https://github.com/0xc0re/barker/pulls"),
+            "https://github.com/0xc0re/barker/pulls",
+        )
+        self.assertEqual(safe_repo_url("https://github.com/0xc0re/other"), "")
 
     def test_pick_open_pr_prefers_ready_and_is_safe(self):
         picked = pick_open_pr(
@@ -904,6 +921,28 @@ class BoardMetaTests(unittest.TestCase):
         self.assertEqual(detect_linear_pr_stack([missing, row(11, "a", "b")], "main"), [])
         self.assertEqual(detect_linear_pr_stack([row(10, "main", "a")], "main"), [])
         self.assertEqual(detect_linear_pr_stack(None, "main"), [])
+        barker_repo = {"full_name": "0xc0re/barker"}
+        barker = [
+            {
+                "number": 42,
+                "html_url": "https://github.com/0xc0re/barker/pull/42",
+                "base": {"ref": "feature-41", "repo": barker_repo},
+                "head": {"ref": "feature-42", "repo": barker_repo},
+            },
+            {
+                "number": 41,
+                "html_url": "https://github.com/0xc0re/barker/pull/41",
+                "base": {"ref": "main", "repo": barker_repo},
+                "head": {"ref": "feature-41", "repo": barker_repo},
+            },
+        ]
+        self.assertEqual(
+            detect_linear_pr_stack(barker, "main"),
+            [
+                {"number": 41, "url": "https://github.com/0xc0re/barker/pull/41"},
+                {"number": 42, "url": "https://github.com/0xc0re/barker/pull/42"},
+            ],
+        )
 
     def test_cloud_agents_never_invent_bc_or_running(self):
         good_bc = "bc-8e16f06d-f73f-482c-987f-e13f2d3b9fb1"

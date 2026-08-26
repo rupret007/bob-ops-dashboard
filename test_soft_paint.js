@@ -203,6 +203,13 @@ function run() {
   if (compactSignal({ release: "v1", open_prs: 4, open_pr_stack: stack }) !== "4 open PRs") {
     fail("mismatched stack must fail closed to the honest open-PR count");
   }
+  const barkerStack = [
+    { number: 41, url: "https://github.com/0xc0re/barker/pull/41" },
+    { number: 42, url: "https://github.com/0xc0re/barker/pull/42" },
+  ];
+  if (compactSignal({ open_prs: 2, open_pr_stack: barkerStack }) !== "Stack #41 -> #42") {
+    fail("canonical Barker stack must pass the exact external-repo allowlist");
+  }
 
   const signalHref = eval(
     "(function (compactSignal, laneHrefs, pullsUrlFromRepo) { return " +
@@ -242,6 +249,16 @@ function run() {
     }) !== "https://github.com/rupret007/StoryLiner/pulls"
   ) {
     fail("stack signal must tap the allowlisted pulls list");
+  }
+  if (
+    signalHref({
+      url: "https://github.com/0xc0re/barker",
+      open_prs: 2,
+      open_pr_stack: barkerStack,
+      ci: { conclusion: "success" },
+    }) !== "https://github.com/0xc0re/barker/pulls"
+  ) {
+    fail("canonical Barker stack must tap its exact allowlisted pulls list");
   }
   if (
     signalHref({
