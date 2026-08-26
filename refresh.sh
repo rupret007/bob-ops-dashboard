@@ -305,7 +305,7 @@ status = {
         project("ballbeacon",
                 notes="Private iOS utility. Software validation only; device and signing steps stay owner-only."),
         project("CSS_Conductor",
-                notes="Private developer utility. Local verification remains authoritative when hosted billing blocks CI."),
+                notes="Private developer utility. High-level only; hosted-job cause stays unconfirmed."),
         project("barker",
                 notes="Private app. No live sends, production changes, or credential operations from this board."),
         project("Cursor-OpenClaw-Integration",
