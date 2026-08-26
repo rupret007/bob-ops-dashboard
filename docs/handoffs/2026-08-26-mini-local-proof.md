@@ -17,7 +17,7 @@ The four evidence classes below are deliberate: **hosted green**, **locally gree
 | StoryBoard | #13 is on `main` at `7148f9119b2a9c3634a2d312261d9fd1a9d1bf72`. Draft #14 at exact head `c228be2766755e14187be49d070900e1b1afcd4b` prevents reconciled-away catalog rows from still appearing in the create preview. Both hosted Quality jobs pass. | hosted green |
 | Andrea NanoBot | #20 is on `main` at `27414fd455da820ab6561f9eaf962b567af6b517`. A stored test fixture cannot become the real send yes-fence. Nothing was sent. | hosted green |
 | StoryLiner | #16 is on `main` at `81469c374471245a617d709a6bc1c376831426d5`. Empty Approved-state copy now stays honest. | hosted green |
-| Bob Ops Dashboard | #19 is on `main`; the scheduler-owned generated tip observed for this snapshot was `c1234ddcf997a55c82e96f4c0f47bf94a7e50d2d`. No manual refresh was dispatched. | hosted green |
+| Bob Ops Dashboard | #19 and privacy-honesty #20 are on `main`; private/high-level lanes are no longer described as live repository taps. The scheduler-owned generated tip observed for this snapshot was `c1234ddcf997a55c82e96f4c0f47bf94a7e50d2d`. No manual refresh was dispatched. | hosted green |
 
 The private-content vault also landed Bob's latest privacy-boundary follow-on. Its local validator, export check, and 113-test suite pass. Exact private repository metadata and implementation details remain outside this public handoff.
 
