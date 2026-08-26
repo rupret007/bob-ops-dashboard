@@ -301,7 +301,7 @@ status = {
       "title": "Apps & utilities",
       "projects": [
         project("StoryOps-AI",
-                notes="Private workflow utility. Live CI and review state only; no customer data on this board."),
+                notes="Private workflow utility. High-level only; no customer data on this board."),
         project("ballbeacon",
                 notes="Private iOS utility. Software validation only; device and signing steps stay owner-only."),
         project("CSS_Conductor",
@@ -329,7 +329,7 @@ status = {
         project("AdoptIQ", status="yellow",
                 notes="Private, draft, and offline-only; ready_for_live_cisco=false. No secrets or customer data on this page."),
         project("TACTrack", status="yellow",
-                notes="Private. High-level only -- CI / open PRs from live fetch."),
+                notes="Private. High-level only. No live-repo, CI, or PR taps on this board."),
         {
           "name": "AdoptIQ notes", "status": "parked", "chip": "Parked",
           "notes": "High-level only: manager-decision UX and offline candidate path. No CSOne paths, customer rows, or tokens.",
