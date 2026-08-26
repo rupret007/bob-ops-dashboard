@@ -18,9 +18,17 @@ OWNER="${OWNER:-rupret007}"
 REPOS=(
   webjam StoryLiner StoryBoard Rad-Dad-Merch RadDadSite Turdanoid
   AdoptIQ TACTrack AI-Music-Vault rad-dad-show-night Andrea_NanoBot story-corner-shelf
+  StoryOps-AI ballbeacon CSS_Conductor 0xc0re/barker bob-ops-dashboard
+  Cursor-OpenClaw-Integration Sliding-Glass-Door-PETG-Screw
 )
 PUSH=0
 [[ "${1:-}" == "--push" ]] && PUSH=1
+APPLY_DECISIONS="${BOB_DASHBOARD_APPLY_DECISIONS:-0}"
+[[ "$APPLY_DECISIONS" == "0" || "$APPLY_DECISIONS" == "1" ]] || {
+  echo "BOB_DASHBOARD_APPLY_DECISIONS must be 0 or 1" >&2
+  exit 2
+}
+export BOB_DASHBOARD_APPLY_DECISIONS="$APPLY_DECISIONS"
 
 need_gh() {
   command -v gh >/dev/null || { echo "gh required"; exit 1; }
@@ -28,12 +36,24 @@ need_gh() {
 }
 
 fetch_repo() {
-  local r="$1"
-  python3 - "$OWNER" "$r" "$ROOT" <<'PY'
+  local spec="$1"
+  local repo_owner="$OWNER"
+  local repo_name="$spec"
+  if [[ "$spec" == */* ]]; then
+    repo_owner="${spec%%/*}"
+    repo_name="${spec#*/}"
+  fi
+  python3 - "$repo_owner" "$repo_name" "$ROOT" <<'PY'
 import json, subprocess, sys
 owner, repo, root = sys.argv[1], sys.argv[2], sys.argv[3]
 sys.path.insert(0, root)
-from board_meta import extract_cloud_agents_from_prs, pick_open_pr, pick_tip_ci, safe_pr_url
+from board_meta import (
+    detect_linear_pr_stack,
+    extract_cloud_agents_from_prs,
+    pick_open_pr,
+    pick_tip_ci,
+    safe_pr_url,
+)
 full = f"{owner}/{repo}"
 
 def api(path, default=None):
@@ -43,29 +63,44 @@ def api(path, default=None):
     except Exception:
         return default
 
+def api_all(path):
+    """Fetch every REST list page; return no rows when completeness is unknown."""
+    rows = []
+    separator = "&" if "?" in path else "?"
+    for page in range(1, 101):
+        batch = api(f"{path}{separator}page={page}", None)
+        if not isinstance(batch, list):
+            return [], False
+        rows.extend(batch)
+        if len(batch) < 100:
+            return rows, True
+    return [], False
+
 meta = api(f"repos/{full}")
 if not meta:
     print(json.dumps({"name": repo, "accessible": False, "error": "inaccessible"}))
     sys.exit(0)
 
 branch = meta.get("default_branch") or "main"
+private = bool(meta.get("private"))
 commit = api(f"repos/{full}/commits/{branch}", {}) or {}
 sha = (commit.get("sha") or "")[:7]
 c = (commit.get("commit") or {})
 date = ((c.get("committer") or {}).get("date")) or ((c.get("author") or {}).get("date"))
 msg = (c.get("message") or "").split("\n", 1)[0]
 
-prs = api(f"repos/{full}/pulls?state=open&per_page=100", []) or []
-if not isinstance(prs, list):
-    prs = []
+prs, prs_complete = api_all(f"repos/{full}/pulls?state=open&per_page=100")
 open_pr_urls = [
     url
     for p in prs
     if isinstance(p, dict)
     if (url := safe_pr_url(p.get("html_url") or p.get("url")))
 ]
-open_pr = pick_open_pr(prs)
-clouds = extract_cloud_agents_from_prs(prs, limit=1)
+open_pr = pick_open_pr(prs) if prs_complete else None
+open_pr_stack = detect_linear_pr_stack(prs, branch) if prs_complete else []
+# A Cursor agent URL can grant access beyond high-level repository status.
+# Never materialize one from a private PR onto this public dashboard.
+clouds = [] if private or not prs_complete else extract_cloud_agents_from_prs(prs, limit=1)
 # Default-branch only so PR runs cannot push tip CI out of the window.
 runs = api(f"repos/{full}/actions/runs?per_page=20&branch={branch}", {}) or {}
 ci = pick_tip_ci(runs.get("workflow_runs") or [], branch, sha)
@@ -77,15 +112,17 @@ print(json.dumps({
     "accessible": True,
     "name": meta.get("name"),
     "full_name": full,
-    "private": bool(meta.get("private")),
+    "private": private,
     "html_url": meta.get("html_url"),
     "default_branch": branch,
     "tip_sha": sha or None,
     "tip_date": date,
     "tip_msg": msg,
-    "open_prs": len(prs),
+    "open_prs": len(prs) if prs_complete else None,
+    "pr_listing_complete": prs_complete,
     "open_pr_urls": open_pr_urls,
     "open_pr": open_pr,
+    "open_pr_stack": open_pr_stack,
     "agent_url": (clouds[0]["url"] if clouds else None),
     "cloud_agents": clouds,
     "ci": ci,
@@ -95,7 +132,7 @@ PY
 }
 
 need_gh
-echo "Fetching ${#REPOS[@]} repos as $OWNER ..."
+echo "Fetching ${#REPOS[@]} portfolio repositories ..."
 TMP="$(mktemp)"
 echo '[' > "$TMP"
 first=1
@@ -128,7 +165,6 @@ from board_meta import (
     merge_cloud_agents,
     signal_href,
     merge_first_class,
-    parse_cloud_agents,
     presentation,
     prune_closed_parked_prs,
     resolve_agents,
@@ -141,6 +177,7 @@ from board_meta import (
     visible_chip,
 )
 refresh_started_ms = int(os.environ.get("REFRESH_STARTED_MS") or 0) or int(time.time() * 1000)
+apply_decisions = os.environ.get("BOB_DASHBOARD_APPLY_DECISIONS") == "1"
 fetched = json.loads(Path(sys.argv[2]).read_text())
 by = {x.get("name") or x.get("full_name","").split("/")[-1]: x for x in fetched}
 now = datetime.now(ZoneInfo("America/Chicago"))
@@ -173,6 +210,8 @@ def project(name, *, status=None, notes="", product_sha=None, jeff_gate=False, e
         "open_pr_url": (r.get("open_pr") or {}).get("url") if isinstance(r.get("open_pr"), dict) else None,
         "open_pr_number": (r.get("open_pr") or {}).get("number") if isinstance(r.get("open_pr"), dict) else None,
         "open_pr_draft": bool((r.get("open_pr") or {}).get("draft")) if isinstance(r.get("open_pr"), dict) else False,
+        "open_pr_stack": r.get("open_pr_stack") if isinstance(r.get("open_pr_stack"), list) else [],
+        "pr_listing_complete": r.get("pr_listing_complete"),
         "agent_url": r.get("agent_url"),
         "ci": r.get("ci"),
         "release": r.get("release"),
@@ -183,20 +222,40 @@ def project(name, *, status=None, notes="", product_sha=None, jeff_gate=False, e
         p["product_sha"] = product_sha
     if extra:
         p.update(extra)
+    if p.get("private"):
+        raw_ci = p.get("ci") if isinstance(p.get("ci"), dict) else {}
+        conclusion = str(raw_ci.get("conclusion") or "").strip().lower()
+        # The board itself is public. A private lane may expose its product
+        # name, high-level color/accessibility, and CI conclusion only. Build
+        # a new allowlisted object so future repository fields fail closed.
+        p = {
+            "name": p.get("name"),
+            "private": True,
+            "status": p.get("status"),
+            "chip": p.get("chip"),
+            "notes": p.get("notes"),
+            "accessible": bool(p.get("accessible")),
+            "ci": {"conclusion": conclusion} if conclusion else {},
+        }
     # Friendly display names
     rename = {
         "webjam": "WebJam",
+        "ballbeacon": "Ball Beacon",
+        "barker": "Barker",
+        "bob-ops-dashboard": "Bob Ops Dashboard",
+        "CSS_Conductor": "CSS Conductor",
+        "Cursor-OpenClaw-Integration": "Cursor-OpenClaw Integration",
         "Rad-Dad-Merch": "Rad Dad Merch",
         "rad-dad-show-night": "Show Night",
         "AI-Music-Vault": "AI Music Vault",
         "Andrea_NanoBot": "Andrea NanoBot",
-        "story-corner-shelf": "Closet shelf",
+        "Sliding-Glass-Door-PETG-Screw": "Sliding Glass Door Screw",
+        "story-corner-shelf": "Story Shelf",
     }
     p["name"] = rename.get(name, p["name"])
     return p
 
 # Curated narrative notes (safe / no secrets) -- live SHAs/CI come from gh
-web = g("webjam")
 status = {
   "generated_at": updated_iso,
   "generated_at_display": updated_ct,
@@ -208,9 +267,9 @@ status = {
       "id": "live-shipping",
       "title": "Live shipping",
       "projects": [
-        project("webjam", jeff_gate=True, product_sha="5ca6ba5",
-                notes="PR #21 merged (docs on 5ca6ba5). Release stays v0.26.0 until Jeff names v0.27. Exploratory click-through Jeff-gated."),
-        project("StoryLiner", notes="PR #1 lint fix merged; confirm main CI from live fetch."),
+        project("webjam", jeff_gate=True,
+                notes="Music Host/Join app. Software CI is live; exploratory feel and physical audio checks stay owner-only."),
+        project("StoryLiner", notes="Story workflow app. Current review stack and default-branch CI come from the live refresh."),
         project("StoryBoard", notes="Quiet green unless CI says otherwise."),
         project("Rad-Dad-Merch", notes="Merch lane; watch Release integrity."),
         project("RadDadSite",
@@ -223,16 +282,42 @@ status = {
       ],
     },
     {
+      "id": "apps-utilities",
+      "title": "Apps & utilities",
+      "projects": [
+        project("StoryOps-AI",
+                notes="Private workflow utility. Live CI and review state only; no customer data on this board."),
+        project("ballbeacon",
+                notes="Private iOS utility. Software validation only; device and signing steps stay owner-only."),
+        project("CSS_Conductor",
+                notes="Private developer utility. Local verification remains authoritative when hosted billing blocks CI."),
+        project("barker",
+                notes="Private app. No live sends, production changes, or credential operations from this board."),
+        project("Cursor-OpenClaw-Integration",
+                notes="Integration utility. Never restart gateways or alter credentials automatically."),
+        project("bob-ops-dashboard",
+                notes="Source-only feature PRs; the scheduled refresh owns generated index.html and status.json."),
+        project("Sliding-Glass-Door-PETG-Screw", jeff_gate=True,
+                notes="Software/design artifact only. Printing, installation, and physical fit stay owner-only."),
+        project("story-corner-shelf",
+                notes="Story Shelf utility. Software and documentation work only; physical installation stays owner-only."),
+        {"name": "StoryDesk", "status": "parked", "chip": "Local-only",
+         "notes": "No authoritative GitHub remote. Local code can be verified, but hosted or merged status cannot be claimed."},
+        {"name": "OpenClaw Runtime", "status": "parked", "chip": "Local-only",
+         "notes": "Local runtime lane. No gateway restart, credential change, or live operation from this board."},
+      ],
+    },
+    {
       "id": "cisco",
       "title": "Cisco work",
       "projects": [
         project("AdoptIQ", status="yellow",
-                notes="Cisco CS desktop -- Build 115 in progress (Codex + Cloud Agent). No secrets on this page."),
+                notes="Private, draft, and offline-only; ready_for_live_cisco=false. No secrets or customer data on this page."),
         project("TACTrack", status="yellow",
                 notes="Private. High-level only -- CI / open PRs from live fetch."),
         {
           "name": "AdoptIQ notes", "status": "parked", "chip": "Parked",
-          "notes": "High-level only: manager-decision UX + Build 115 candidate path. No CSOne paths, customer rows, or tokens.",
+          "notes": "High-level only: manager-decision UX and offline candidate path. No CSOne paths, customer rows, or tokens.",
         },
       ],
     },
@@ -256,16 +341,14 @@ status = {
          "notes": "Logic Pro 12.3.1 on Mac mini -- primary producer home."},
         {"name": "LogicProMCP", "status": "jeff-gate", "chip": "Jeff-gate",
          "notes": "Installed. Pending Accessibility / Automation GUI grants from Jeff."},
-        {"name": "Moises / Suno", "status": "jeff-gate", "chip": "Jeff-gate",
-         "notes": "Jeff-login gated for stems/covers/demos."},
+        {"name": "Ophelia / Moises", "status": "jeff-gate", "chip": "Owner-only",
+         "notes": "Seven local stems verified. Login, upload, publish, and audio-release steps stay owner-only."},
       ],
     },
     {
       "id": "parked",
       "title": "Parked",
       "projects": [
-        project("story-corner-shelf", status="parked",
-                notes="Parked. Open PRs ignored unless Jeff unparks."),
         {"name": "Stalemate / Trailer Swift", "status": "parked", "chip": "Parked",
          "notes": "Catalog/voice feel only -- parked catalog lane."},
       ],
@@ -278,7 +361,7 @@ status = {
   ],
   "fetched_repos": [x.get("name") for x in fetched if x.get("accessible")],
   "inaccessible": [x.get("name") for x in fetched if not x.get("accessible")],
-  "publish_notes": "Public repo -- no secrets, no CSOne customer paths, AdoptIQ high-level only.",
+  "publish_notes": "Public board -- no secrets or customer paths. Private repositories stay high-level; AI Music Vault stays private-content-boundary only.",
   "refresh_started_ms": refresh_started_ms,
 }
 status["sections"] = prune_closed_parked_prs(
@@ -308,14 +391,8 @@ agents, src = resolve_agents(
     file_texts=file_texts,
     previous=prev_agents,
 )
-status["agents"] = agents
 status["agents_source"] = src
 
-probe_cloud = []
-if os.environ.get("AGENTS_STATUS_JSON"):
-    probe_cloud.extend(parse_cloud_agents(os.environ.get("AGENTS_STATUS_JSON")))
-for _label, _text in file_texts:
-    probe_cloud.extend(parse_cloud_agents(_text))
 dash_prs = []
 try:
     dash_raw = subprocess.check_output(
@@ -332,11 +409,23 @@ repo_cloud = []
 for row in fetched:
     if isinstance(row, dict):
         repo_cloud.extend(row.get("cloud_agents") or [])
-status["cloud_agents"] = merge_cloud_agents(
-    probe_cloud,
+trusted_cloud = merge_cloud_agents(
     extract_cloud_agents_from_prs(dash_prs),
     repo_cloud,
 )
+trusted_by_url = {row.get("url"): row for row in trusted_cloud if row.get("url")}
+# Keep high-level Mac state, but publish a work link only when the same agent
+# URL is advertised by a currently open, same-repository PR fetched above.
+for agent in agents:
+    trusted = trusted_by_url.get(safe_agent_url(agent.get("url")))
+    if trusted:
+        agent["url"] = trusted["url"]
+        agent["pr_url"] = trusted.get("pr_url")
+    else:
+        agent.pop("url", None)
+        agent.pop("pr_url", None)
+status["agents"] = agents
+status["cloud_agents"] = trusted_cloud
 
 # Pulse data only -- do not invent a fourth Yellow "Cloud Agent" card.
 agent_projects = []
@@ -414,18 +503,19 @@ for iss in issues:
     decisions.append(entry)
     if decision in ("approve", "deny"):
         resolved.add(pid)
-    try:
-        subprocess.check_call(
-            [
-                "gh", "issue", "close", str(iss["number"]),
-                "-R", "rupret007/bob-ops-dashboard",
-                "--comment", f"Recorded as {decision} for Bob.",
-            ],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-        )
-    except Exception:
-        pass
+    if apply_decisions:
+        try:
+            subprocess.check_call(
+                [
+                    "gh", "issue", "close", str(iss["number"]),
+                    "-R", "rupret007/bob-ops-dashboard",
+                    "--comment", f"Recorded as {decision} for Bob.",
+                ],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+        except Exception:
+            pass
 
 standing = [
     {
@@ -436,44 +526,36 @@ standing = [
         "risk": "low",
     },
     {
-        "id": "dashboard-refresh",
-        "title": "Force dashboard refresh + push",
-        "kind": "ops",
-        "detail": "Safe. Rebuilds status from live gh and pushes Pages.",
-        "risk": "low",
-    },
-    {
-        "id": "adoptiq-cloud-relaunch",
-        "title": "Relaunch AdoptIQ Cloud Agent",
-        "kind": "cloud-agent",
-        "detail": "Needs Cursor on-demand on. Stays inside $10 hard ceiling.",
-        "risk": "medium",
-    },
-    {
-        "id": "codex-goal-launch",
-        "title": "Launch next Codex goal on Mac",
-        "kind": "codex-launch",
-        "detail": "High risk. Bob still shows the exact goal before acting.",
+        "id": "adoptiq-live-cisco",
+        "title": "AdoptIQ live Cisco readiness",
+        "kind": "owner-live-gate",
+        "detail": "Offline candidate only. Keep ready_for_live_cisco=false until an explicit owner decision.",
         "risk": "high",
     },
     {
-        "id": "text-send",
-        "title": "Send a drafted text via Andrea",
-        "kind": "text-send",
-        "detail": "High risk. Never auto-send. Draft must already exist.",
+        "id": "ballbeacon-signing",
+        "title": "Ball Beacon device signing",
+        "kind": "owner-device-gate",
+        "detail": "Software can be green; Xcode device, account, and signing steps stay owner-only.",
+        "risk": "high",
+    },
+    {
+        "id": "sliding-door-physical",
+        "title": "Sliding door print and fit",
+        "kind": "owner-physical-gate",
+        "detail": "Printing, installation, and fit validation require the owner at the hardware.",
+        "risk": "high",
+    },
+    {
+        "id": "ophelia-upload",
+        "title": "Ophelia stems upload or publish",
+        "kind": "owner-upload-gate",
+        "detail": "Local stems are verified; login, upload, and publishing require an explicit owner decision.",
         "risk": "high",
     },
 ]
 
 pending_out = [s for s in standing if s["id"] not in resolved]
-if isinstance(prev.get("pending"), list):
-    for item in prev["pending"]:
-        if not isinstance(item, dict):
-            continue
-        iid = str(item.get("id") or "").lower()
-        if not iid or iid in resolved or any(s["id"] == iid for s in pending_out):
-            continue
-        pending_out.append(item)
 
 status["pending"] = pending_out
 status["decisions"] = decisions[-40:]
@@ -1235,19 +1317,19 @@ html = f'''<!DOCTYPE html>
   }}
   function safePrUrl(u) {{
     var s = cleanPublicUrl(u);
-    return /^https:\\/\\/github\\.com\\/rupret007\\/[A-Za-z0-9._-]+\\/pull\\/[1-9][0-9]*$/i.test(s) ? s : "";
+    return /^https:\\/\\/github\\.com\\/(?:rupret007\\/[A-Za-z0-9._-]+|0xc0re\\/barker)\\/pull\\/[1-9][0-9]*$/i.test(s) ? s : "";
   }}
   function safeActionsUrl(u) {{
     var s = cleanPublicUrl(u);
-    return /^https:\\/\\/github\\.com\\/rupret007\\/[A-Za-z0-9._-]+\\/actions\\/runs\\/[1-9][0-9]*$/i.test(s) ? s : "";
+    return /^https:\\/\\/github\\.com\\/(?:rupret007\\/[A-Za-z0-9._-]+|0xc0re\\/barker)\\/actions\\/runs\\/[1-9][0-9]*$/i.test(s) ? s : "";
   }}
   function safeRepoUrl(u) {{
     var s = cleanPublicUrl(u);
-    return /^https:\\/\\/github\\.com\\/rupret007\\/[A-Za-z0-9._-]+$/i.test(s) ? s : "";
+    return /^https:\\/\\/github\\.com\\/(?:rupret007\\/[A-Za-z0-9._-]+|0xc0re\\/barker)$/i.test(s) ? s : "";
   }}
   function safePullsUrl(u) {{
     var s = cleanPublicUrl(u);
-    return /^https:\\/\\/github\\.com\\/rupret007\\/[A-Za-z0-9._-]+\\/pulls$/i.test(s) ? s : "";
+    return /^https:\\/\\/github\\.com\\/(?:rupret007\\/[A-Za-z0-9._-]+|0xc0re\\/barker)\\/pulls$/i.test(s) ? s : "";
   }}
   function pullsUrlFromRepo(u) {{
     var repo = safeRepoUrl(u);
@@ -1305,11 +1387,37 @@ html = f'''<!DOCTYPE html>
     if (concl === "queued" || concl === "pending" || concl === "requested") {{
       return "CI pending";
     }}
-    var rel = String(p.release || "").trim();
-    if (rel) return rel;
+    var stack = p.open_pr_stack;
+    if (Array.isArray(stack) && stack.length >= 2 && p.open_prs === stack.length) {{
+      var numbers = [];
+      var seen = {{}};
+      var valid = true;
+      for (var i = 0; i < stack.length; i++) {{
+        var row = stack[i];
+        var number = row && row.number;
+        var url = row && String(row.url || "");
+        if (typeof number !== "number" || !isFinite(number) || number <= 0 || Math.floor(number) !== number || seen[number]) {{
+          valid = false;
+          break;
+        }}
+        var match = url.match(/^https:\/\/github\.com\/(?:rupret007\/[A-Za-z0-9._-]+|0xc0re\/barker)\/pull\/([1-9][0-9]*)$/i);
+        if (!match || Number(match[1]) !== number) {{
+          valid = false;
+          break;
+        }}
+        seen[number] = true;
+        numbers.push(number);
+      }}
+      if (valid) {{
+        if (numbers.length <= 4) return "Stack " + numbers.map(function (n) {{ return "#" + n; }}).join(" -> ");
+        return numbers.length + "-PR stack";
+      }}
+    }}
     if (typeof p.open_prs === "number" && isFinite(p.open_prs) && p.open_prs > 0) {{
       return p.open_prs + (p.open_prs === 1 ? " open PR" : " open PRs");
     }}
+    var rel = String(p.release || "").trim();
+    if (rel) return rel;
     if (concl && concl !== "success" && concl !== "skipped" && concl !== "cancelled") return concl;
     return "";
   }}
@@ -1548,7 +1656,7 @@ html = f'''<!DOCTYPE html>
     function projectKey(p) {{
       if (!p) return [];
       var ci = p.ci && typeof p.ci === "object" ? p.ci : {{}};
-      return [p.name, p.status, p.chip, p.notes, p.open_prs, p.open_pr_url || "", p.release, p.tip_sha, p.agent_url || "", ci.conclusion || "", ci.sha || "", ci.name || "", ci.html_url || ""];
+      return [p.name, p.status, p.chip, p.notes, p.open_prs, p.open_pr_url || "", p.open_pr_stack || [], p.release, p.tip_sha, p.agent_url || "", ci.conclusion || "", ci.sha || "", ci.name || "", ci.html_url || ""];
     }}
     var sections = (data.sections || []).map(function (sec) {{
       if (!sec) return [];
@@ -1721,7 +1829,7 @@ html = f'''<!DOCTYPE html>
     if (!signal) return "";
     var hrefs = laneHrefs(p);
     if (String(signal).indexOf("CI") === 0) return hrefs.ci || "";
-    if (String(signal).indexOf("open PR") !== -1) {{
+    if (String(signal).indexOf("Stack ") === 0 || String(signal).slice(-9) === "-PR stack" || String(signal).indexOf("open PR") !== -1) {{
       var n = (typeof p.open_prs === "number" && isFinite(p.open_prs)) ? p.open_prs : 0;
       var pulls = pullsUrlFromRepo(hrefs.repo || "");
       if (n > 1) return pulls;
@@ -1901,6 +2009,7 @@ if [[ $PUSH -eq 1 ]]; then
   [[ -f "$ROOT/board_meta.py" ]] && cp "$ROOT/board_meta.py" "$WORK/"
   [[ -f "$ROOT/probe-agents-status.sh" ]] && cp "$ROOT/probe-agents-status.sh" "$WORK/"
   [[ -f "$ROOT/qa-claim-smoke.sh" ]] && cp "$ROOT/qa-claim-smoke.sh" "$WORK/"
+  [[ -f "$ROOT/qa-source-only.sh" ]] && cp "$ROOT/qa-source-only.sh" "$WORK/"
   [[ -f "$ROOT/test_board_meta.py" ]] && cp "$ROOT/test_board_meta.py" "$WORK/"
   [[ -f "$ROOT/test_open_decision.js" ]] && cp "$ROOT/test_open_decision.js" "$WORK/"
   [[ -f "$ROOT/test_open_links.js" ]] && cp "$ROOT/test_open_links.js" "$WORK/"
@@ -1915,11 +2024,13 @@ if [[ $PUSH -eq 1 ]]; then
   fi
   chmod +x "$WORK/refresh.sh"
   [[ -f "$WORK/qa-claim-smoke.sh" ]] && chmod +x "$WORK/qa-claim-smoke.sh"
+  [[ -f "$WORK/qa-source-only.sh" ]] && chmod +x "$WORK/qa-source-only.sh"
   cd "$WORK"
   git add index.html status.json README.md refresh.sh
   [[ -f board_meta.py ]] && git add board_meta.py
   [[ -f probe-agents-status.sh ]] && git add probe-agents-status.sh
   [[ -f qa-claim-smoke.sh ]] && git add qa-claim-smoke.sh
+  [[ -f qa-source-only.sh ]] && git add qa-source-only.sh
   [[ -f test_board_meta.py ]] && git add test_board_meta.py
   [[ -f test_open_decision.js ]] && git add test_open_decision.js
   [[ -f test_open_links.js ]] && git add test_open_links.js

@@ -16,6 +16,18 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Enforce source-only feature PRs
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+          if ! git diff --quiet "$BASE_SHA"...HEAD -- index.html status.json; then
+            echo "Feature PRs must not change scheduler-owned index.html or status.json." >&2
+            exit 1
+          fi
       - name: Generate and validate disposable dashboard artifacts
         env:
           GH_TOKEN: ${{ github.token }}

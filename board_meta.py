@@ -16,6 +16,7 @@ CONTROL_ACTIONS = frozenset({"refresh-hint", "open-repo", "mark-reviewed"})
 # Visual board: pulse (agents) is outside sections. Ops lanes after pending.
 OPS_SECTION_ORDER = (
     "live-shipping",
+    "apps-utilities",
     "active-agents",
     "cisco",
     "messaging",
@@ -23,7 +24,9 @@ OPS_SECTION_ORDER = (
     "parked",
 )
 PRIMARY_SECTION_IDS = frozenset({"live-shipping"})
-SECONDARY_SECTION_IDS = frozenset({"cisco", "messaging", "music-producer", "parked"})
+SECONDARY_SECTION_IDS = frozenset(
+    {"apps-utilities", "cisco", "messaging", "music-producer", "parked"}
+)
 COLLAPSED_SECTION_IDS = frozenset({"abilities", "features"})
 # Agents live in the top pulse strip -- do not paint as a card grid.
 PULSE_SECTION_IDS = frozenset({"active-agents"})
@@ -104,22 +107,15 @@ AGENT_BCID_QUERY_RE = re.compile(
     r"(bc-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})",
     re.I,
 )
+GITHUB_REPO_PATH = r"(?:rupret007/[A-Za-z0-9._-]+|0xc0re/barker)"
 PR_URL_RE = re.compile(
-    r"^https://github\.com/rupret007/[A-Za-z0-9._-]+/pull/[1-9][0-9]*$",
-    re.I,
+    rf"^https://github\.com/{GITHUB_REPO_PATH}/pull/[1-9][0-9]*$", re.I
 )
 ACTIONS_URL_RE = re.compile(
-    r"^https://github\.com/rupret007/[A-Za-z0-9._-]+/actions/runs/[1-9][0-9]*$",
-    re.I,
+    rf"^https://github\.com/{GITHUB_REPO_PATH}/actions/runs/[1-9][0-9]*$", re.I
 )
-REPO_URL_RE = re.compile(
-    r"^https://github\.com/rupret007/[A-Za-z0-9._-]+$",
-    re.I,
-)
-PULLS_URL_RE = re.compile(
-    r"^https://github\.com/rupret007/[A-Za-z0-9._-]+/pulls$",
-    re.I,
-)
+REPO_URL_RE = re.compile(rf"^https://github\.com/{GITHUB_REPO_PATH}$", re.I)
+PULLS_URL_RE = re.compile(rf"^https://github\.com/{GITHUB_REPO_PATH}/pulls$", re.I)
 CLOUD_AGENT_LIMIT = 3
 
 
@@ -282,6 +278,136 @@ def pick_open_pr(prs: Any) -> dict[str, Any] | None:
     return top
 
 
+def detect_linear_pr_stack(prs: Any, default_branch: Any) -> list[dict[str, Any]]:
+    """Return a complete base-to-tip PR chain, otherwise fail closed.
+
+    A stack is only useful when every open PR belongs to one same-repository,
+    non-branching chain rooted at the default branch. Partial or ambiguous
+    ordering is worse than the honest open-PR count, so any malformed row,
+    fork head, duplicate base/head/number, cycle, or unrelated PR returns
+    an empty list.
+    """
+    branch = str(default_branch or "").strip()
+    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._/-]{0,254}", branch):
+        return []
+    if ".." in branch or "@{" in branch or "//" in branch or branch.endswith(("/", ".")):
+        return []
+    if not isinstance(prs, list) or len(prs) < 2:
+        return []
+
+    parsed: list[dict[str, Any]] = []
+    repo_name = ""
+    numbers: set[int] = set()
+    heads: set[str] = set()
+    bases: set[str] = set()
+    for raw in prs:
+        if not isinstance(raw, dict):
+            return []
+        url = safe_pr_url(raw.get("html_url") or raw.get("url"))
+        if not url:
+            return []
+        url_match = re.fullmatch(
+            rf"https://github\.com/({GITHUB_REPO_PATH})/pull/([1-9][0-9]*)",
+            url,
+            re.I,
+        )
+        if not url_match:
+            return []
+        this_repo = url_match.group(1).lower()
+        if repo_name and this_repo != repo_name:
+            return []
+        repo_name = this_repo
+
+        if isinstance(raw.get("number"), bool):
+            return []
+        try:
+            number = int(raw.get("number"))
+        except (TypeError, ValueError):
+            return []
+        if number <= 0 or number in numbers or number != int(url_match.group(2)):
+            return []
+
+        base = raw.get("base") if isinstance(raw.get("base"), dict) else {}
+        head = raw.get("head") if isinstance(raw.get("head"), dict) else {}
+        base_ref = str(base.get("ref") or "").strip()
+        head_ref = str(head.get("ref") or "").strip()
+        for ref in (base_ref, head_ref):
+            if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._/-]{0,254}", ref):
+                return []
+            if ".." in ref or "@{" in ref or "//" in ref or ref.endswith(("/", ".")):
+                return []
+        if head_ref == base_ref or head_ref in heads or base_ref in bases:
+            return []
+
+        base_repo = base.get("repo") if isinstance(base.get("repo"), dict) else {}
+        head_repo = head.get("repo") if isinstance(head.get("repo"), dict) else {}
+        base_full = str(base_repo.get("full_name") or "").strip().lower()
+        head_full = str(head_repo.get("full_name") or "").strip().lower()
+        # GitHub's pulls endpoint supplies these fields. Missing/deleted/forked
+        # head metadata is not enough evidence to advertise a safe stack.
+        if base_full != repo_name or head_full != repo_name:
+            return []
+
+        numbers.add(number)
+        heads.add(head_ref)
+        bases.add(base_ref)
+        parsed.append(
+            {
+                "number": number,
+                "url": url,
+                "base": base_ref,
+                "head": head_ref,
+            }
+        )
+
+    roots = [p for p in parsed if p["base"] == branch]
+    if len(roots) != 1:
+        return []
+    by_base = {p["base"]: p for p in parsed}
+    ordered: list[dict[str, Any]] = []
+    seen: set[int] = set()
+    current: dict[str, Any] | None = roots[0]
+    while current is not None:
+        number = int(current["number"])
+        if number in seen:
+            return []
+        seen.add(number)
+        ordered.append({"number": number, "url": current["url"]})
+        current = by_base.get(str(current["head"]))
+    if len(ordered) != len(parsed):
+        return []
+    return ordered
+
+
+def _stack_signal(project: dict[str, Any]) -> str:
+    """Validated compact label for a complete stack; empty when uncertain."""
+    stack = project.get("open_pr_stack")
+    if not isinstance(stack, list) or len(stack) < 2:
+        return ""
+    try:
+        count = int(project.get("open_prs") or 0)
+    except (TypeError, ValueError):
+        return ""
+    if count != len(stack):
+        return ""
+    numbers: list[int] = []
+    seen: set[int] = set()
+    for raw in stack:
+        if not isinstance(raw, dict) or isinstance(raw.get("number"), bool):
+            return ""
+        number = raw.get("number")
+        if not isinstance(number, int):
+            return ""
+        url = safe_pr_url(raw.get("url"))
+        if number <= 0 or number in seen or not url or not url.endswith("/pull/" + str(number)):
+            return ""
+        seen.add(number)
+        numbers.append(number)
+    if len(numbers) <= 4:
+        return "Stack " + " -> ".join("#" + str(number) for number in numbers)
+    return str(len(numbers)) + "-PR stack"
+
+
 def parse_cloud_agent_row(raw: Any) -> dict[str, Any] | None:
     """One cloud-agent row. Requires a real agent URL. State is never invented Running."""
     if not isinstance(raw, dict):
@@ -320,7 +446,7 @@ def merge_cloud_agents(*groups: Any, limit: int = CLOUD_AGENT_LIMIT) -> list[dic
 
 
 def extract_cloud_agents_from_prs(prs: Any, *, limit: int = CLOUD_AGENT_LIMIT) -> list[dict[str, Any]]:
-    """Cloud agents mentioned in open PR bodies. Newest first. No invented bc-ids."""
+    """Cloud agents from open same-repository PRs. Newest first; no forks."""
     rows: list[dict[str, Any]] = []
     items = [p for p in (prs or []) if isinstance(p, dict)]
     items.sort(
@@ -328,6 +454,19 @@ def extract_cloud_agents_from_prs(prs: Any, *, limit: int = CLOUD_AGENT_LIMIT) -
         reverse=True,
     )
     for p in items:
+        if str(p.get("state") or "").strip().lower() != "open":
+            continue
+        pr_url = safe_pr_url(p.get("html_url") or p.get("url"))
+        base = p.get("base") if isinstance(p.get("base"), dict) else {}
+        head = p.get("head") if isinstance(p.get("head"), dict) else {}
+        base_repo = base.get("repo") if isinstance(base.get("repo"), dict) else {}
+        head_repo = head.get("repo") if isinstance(head.get("repo"), dict) else {}
+        base_full = str(base_repo.get("full_name") or "").strip().lower()
+        head_full = str(head_repo.get("full_name") or "").strip().lower()
+        if not pr_url or not base_full or base_full != head_full:
+            continue
+        if not pr_url.lower().startswith("https://github.com/" + base_full + "/pull/"):
+            continue
         url = extract_agent_url(
             " ".join(
                 [
@@ -347,7 +486,7 @@ def extract_cloud_agents_from_prs(prs: Any, *, limit: int = CLOUD_AGENT_LIMIT) -
                 "name": name,
                 "detail": title[:160] or "Open Cloud Agent",
                 "url": url,
-                "pr_url": safe_pr_url(p.get("html_url") or p.get("url")),
+                "pr_url": pr_url,
             }
         )
     return merge_cloud_agents(rows, limit=limit)
@@ -428,7 +567,7 @@ def signal_href(project: Any) -> str:
     text = str(signal)
     if text.startswith("CI"):
         return hrefs.get("ci") or ""
-    if "open PR" in text:
+    if text.startswith("Stack ") or text.endswith("-PR stack") or "open PR" in text:
         try:
             n = int(project.get("open_prs") or 0)
         except (TypeError, ValueError):
@@ -637,6 +776,8 @@ def status_from_fetch(
         return "red"
     if accessible and concl in CI_ACTIVE_CONCLUSIONS:
         return "yellow"
+    if accessible and repo.get("pr_listing_complete") is False:
+        return "yellow"
     if jeff_gate:
         return "jeff-gate"
     if override:
@@ -655,7 +796,7 @@ def status_from_fetch(
 
 
 def compact_signal(project: Any) -> str | None:
-    """One scan signal. Live CI fail/running/pending beat a release tag."""
+    """One scan signal. Live CI, then review work, beat a release tag."""
     if not isinstance(project, dict):
         return None
     concl = ci_conclusion(project)
@@ -665,9 +806,9 @@ def compact_signal(project: Any) -> str | None:
         return "CI running"
     if concl in CI_PENDING_CONCLUSIONS:
         return "CI pending"
-    rel = str(project.get("release") or "").strip()
-    if rel:
-        return rel
+    stack = _stack_signal(project)
+    if stack:
+        return stack
     n = project.get("open_prs")
     try:
         count = int(n) if n is not None else 0
@@ -675,6 +816,9 @@ def compact_signal(project: Any) -> str | None:
         count = 0
     if count > 0:
         return str(count) + (" open PR" if count == 1 else " open PRs")
+    rel = str(project.get("release") or "").strip()
+    if rel:
+        return rel
     if concl and concl not in CI_OK_CONCLUSIONS:
         return concl
     return None
@@ -924,6 +1068,7 @@ def board_content_fingerprint(data: Any) -> str:
             p.get("notes"),
             p.get("open_prs"),
             p.get("open_pr_url"),
+            p.get("open_pr_stack"),
             p.get("release"),
             p.get("tip_sha"),
             p.get("agent_url"),
@@ -1083,12 +1228,12 @@ def first_class_sections() -> list[dict[str, Any]]:
                 ),
                 _card(
                     "Soft-paint poll",
-                    "Client fetches status.json every 30s (pauses when the tab is hidden). Immediate poll on pageshow / visible. Fetch aborts after 8s. Hide / iOS-return abort is not a failed poll. A stale cached status.json cannot rewind the board. Repaints when board content changes -- not on every 15m Actions timestamp. Tip CI is the current SHA; Pages / skipped helpers cannot hide a fail. A skipped or cancelled helper cannot beat a success or become Open CI. Lanes prefer the open PR; CI fail/running taps the Actions run when a run URL is known. N open PRs taps that PR (one) or the repo pulls list (two or more).",
+                    "Client fetches status.json every 30s (pauses when the tab is hidden). Immediate poll on pageshow / visible. Fetch aborts after 8s. Hide / iOS-return abort is not a failed poll. A stale cached status.json cannot rewind the board. Repaints when board content changes -- not on every 15m Actions timestamp. Tip CI is the current SHA; Pages / skipped helpers cannot hide a fail. A skipped or cancelled helper cannot beat a success or become Open CI. Lanes prefer the open PR; CI fail/running taps the Actions run when a run URL is known. A complete same-repo stack shows safe base-to-tip PR order and taps the pulls list; ambiguous chains fall back to the honest open-PR count.",
                     chip="Feature",
                 ),
                 _card(
                     "Agents strip",
-                    "Codex / Cursor / Claude from a Mac probe. Stale or untimestamped probes paint Unknown. Never invent Running. Cloud pills appear only with a real cursor.com/agents/bc- UUID (from probe or an open PR body). Tap Open agent / Open PR (real target=_blank plus openBlank fallback). Token-like words redacted.",
+                    "Codex / Cursor / Claude from a Mac probe. Stale or untimestamped probes paint Unknown. Never invent Running. Work links require the exact real cursor.com/agents/bc- UUID to be advertised by a currently open same-repository PR in an allowlisted public repository; probe-only and fork-PR links are dropped. Tap Open agent / Open PR (real target=_blank plus openBlank fallback). Token-like words redacted.",
                     chip="Feature",
                 ),
                 _card(

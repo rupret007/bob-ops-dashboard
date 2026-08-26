@@ -106,6 +106,16 @@ function run() {
   if (workHref("https://github.com/rupret007/story-corner-shelf/pulls") !== "https://github.com/rupret007/story-corner-shelf/pulls") {
     fail("workHref must keep allowlisted pulls list");
   }
+  if (workHref("https://github.com/0xc0re/barker/pull/41") !== "https://github.com/0xc0re/barker/pull/41") {
+    fail("workHref must keep canonical Barker PR");
+  }
+  if (workHref("https://github.com/0xc0re/barker/actions/runs/9") !== "https://github.com/0xc0re/barker/actions/runs/9") {
+    fail("workHref must keep canonical Barker Actions run");
+  }
+  if (workHref("https://github.com/0xc0re/barker/pulls") !== "https://github.com/0xc0re/barker/pulls") {
+    fail("workHref must keep canonical Barker pulls list");
+  }
+  if (workHref("https://github.com/0xc0re/other")) fail("workHref must drop unlisted external repos");
   if (workHref("https://github.com/rupret007/webjam") !== "https://github.com/rupret007/webjam") {
     fail("workHref must not rewrite repo home into /pulls");
   }
@@ -265,6 +275,14 @@ function run() {
     }
     if (count > 1 && !safePullsUrl(href)) {
       fail("first-paint N open PRs signal must tap one allowlisted pulls list: " + href);
+    }
+  });
+  const stackSignals = Array.from(
+    paint.matchAll(/<a class="signal" data-open="work" href="([^"]+)"[^>]*>(?:Stack #[^<]+|[0-9]+-PR stack)<\/a>/g)
+  );
+  stackSignals.forEach(function (match) {
+    if (!safePullsUrl(match[1])) {
+      fail("first-paint stack signal must tap one allowlisted pulls list: " + match[1]);
     }
   });
 

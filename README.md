@@ -8,11 +8,17 @@ Public, mobile-friendly status board for projects Bob is working on (Jeff Story 
 
 - `index.html` -- human dashboard (Claude orange `#d97757` on near-black `#0a0a0a`)
 - Phone-first board: one **pulse strip** (freshness + agents) → **Decisions** (high/medium first; lower-risk collapsed) → **Live shipping** as compact status lanes → quieter secondary lanes. **Abilities** are a collapsed footer. Engineer notes stay behind collapsed **How this board works**.
-- Tap-to-open: Cloud Agent pills with a real `cursor.com/agents/bc-…` URL (never invented) → Open agent / Open PR. Lanes prefer the open PR, plus Open repo / Open CI when those URLs are known. **N open PRs** taps that PR (one) or the repo pulls list (two or more). iOS-safe: real `<a target=_blank>` plus `openBlank` fallback. Never invent a bc-id or a green status.
+- Tap-to-open: Cloud Agent pills with a real `cursor.com/agents/bc-…` URL (never invented) → Open agent / Open PR. Lanes prefer the open PR, plus Open repo / Open CI when those URLs are known. A complete same-repository PR chain shows safe base-to-tip order (for example, **Stack #10 -> #11 -> #12**) and taps the repository pull list; ambiguous, forked, branching, or partial chains fall back to the honest open-PR count. iOS-safe: real `<a target=_blank>` plus `openBlank` fallback. Never invent a bc-id, stack, or green status.
 - `status.json` -- machine-readable snapshot (client polls every ~30s)
 - `.github/workflows/refresh-dashboard.yml` -- Actions cron every 15 minutes
 - No secrets, tokens, CSOne customer paths, Keeper material, or private handoff text
-- AdoptIQ appears only as a high-level "Cisco CS desktop -- Build 115" summary
+- AdoptIQ appears only as a high-level private/offline summary with `ready_for_live_cisco=false`
+
+## Portfolio coverage
+
+The board follows every inherited product lane. GitHub-backed rows use live repository, default-branch CI, and open-PR state for WebJam, Story Shelf, AdoptIQ, StoryOps-AI, Ball Beacon, CSS Conductor, TACTrack, canonical `0xc0re/barker` (not the unrelated `rupret007/barker` history), StoryBoard, Andrea NanoBot, StoryLiner, AI Music Vault, Bob Ops Dashboard, RadDadSite, Cursor-OpenClaw Integration, and Sliding Glass Door Screw. StoryDesk and OpenClaw Runtime are explicitly **Local-only** because no authoritative remote can be claimed; Ophelia / Moises is explicitly **Owner-only** because login, upload, and publishing are outside this board.
+
+Private repositories expose only high-level status. Private PR bodies can never contribute Cursor agent links to the public page, and local probe work links are published only when a live refresh proves their PR repository is public. AI Music Vault remains private-content-boundary only.
 
 ## Public board (no Unlock / OTP)
 
@@ -28,9 +34,11 @@ Pending **Approve / Hold / Deny** opens a GitHub issue titled `BOB-APPROVE: <id>
 |-------|---------|--------------|
 | GitHub Actions | every **15 minutes** (+ manual `workflow_dispatch`) | runs `./refresh.sh`, commits `index.html` + `status.json` to `main` |
 | Browser client | every **30 seconds** (pauses when tab hidden) | fetches `./status.json`; hide / iOS-return abort is not a failed poll; stale cached JSON cannot rewind freshness or the board; soft-paints only when board content changes (not on every 15m timestamp); freshness says `Live` only inside the ~15m Actions window |
-| Manual | on demand | `./refresh.sh` or `./refresh.sh --push` from a box with `gh` |
+| Manual | on demand | `./refresh.sh` or `./refresh.sh --push` from a box with `gh`; decision issues are read-only by default |
 
 Optional: a Bob / Grok routine can also call `./refresh.sh --push` on meaningful events (merge, release, CI red). That is additive -- Actions remains the baseline; do not block shipping on the routine.
+
+Refreshes read decision issues but do not comment on or close them. That remote mutation is guarded behind the explicit `BOB_DASHBOARD_APPLY_DECISIONS=1` operator opt-in, and the scheduled workflow does not enable it. Builds and QA must leave the flag unset.
 
 ### Actions token limits
 
@@ -43,8 +51,8 @@ Workflow uses default `GITHUB_TOKEN` (`permissions: contents: write`) plus `gh a
 - Theme + public Controls/pending + client poll live in `refresh.sh` (source of truth) so they survive rebuilds.
 - Board HTML is escaped (`html.escape` / JS `esc` + `safeHref`). Do not render raw notes/URLs.
 - Soft-paint keeps `pollSeq` / `pendingSeq` / `decideBusy` race guards and a content fingerprint so timestamp-only refreshes do not flash the board. Tab-hide / bfcache abort invalidates the in-flight seq (not a fail). A stale cached `status.json` cannot rewind freshness or rewrite lanes. Work taps keep a real href and use `openBlank` when native `_blank` is not available.
-- Tip CI is the current default-branch SHA. Pages / docs deploys and a skipped helper cannot hide a failing test workflow. A skipped or cancelled helper cannot beat a success on the same SHA or become **Open CI**. A new tip with no matching run yet paints **CI pending**, not last-SHA green + a release tag. Compact **N open PRs** is a tap (that PR, or the repo pulls list when there are two or more) -- not dead text next to a title that already opens the PR.
-- Agents strip is fail-closed: stale or untimestamped Codex/Cursor/Claude probes paint **Unknown**. Never invent Running. Cloud pills require a real `cursor.com/agents/bc-` URL from probe or an open PR body.
+- Tip CI is the current default-branch SHA. Pages / docs deploys and a skipped helper cannot hide a failing test workflow. A skipped or cancelled helper cannot beat a success on the same SHA or become **Open CI**. A new tip with no matching run yet paints **CI pending**, not last-SHA green + a release tag. CI failure/running/pending stays first; then actionable stack/open-PR review work; only then a release tag. Stack and open-PR signals are taps (one PR, or the repository pull list for multiple PRs) -- not dead text next to a title that already opens the PR.
+- Agents strip is fail-closed: stale or untimestamped Codex/Cursor/Claude probes paint **Unknown**. Never invent Running. A work link appears only when a currently open, same-repository PR in an allowlisted public repository advertises that exact real `cursor.com/agents/bc-` URL; probe-only and fork-PR links are dropped.
 - Do not merge unrelated PRs as part of a refresh.
 
 ## refresh.sh
@@ -54,4 +62,4 @@ Workflow uses default `GITHUB_TOKEN` (`permissions: contents: write`) plus `gh a
 ./refresh.sh --push   # rebuild and push to Pages (main / root)
 ```
 
-QA: `./qa-claim-smoke.sh` (fail-closed `node --check`, ASCII-safe scripts, XSS helpers, no OTP leftovers, first-class sections, Approve draft URL).
+QA from a source-only branch: `./qa-source-only.sh`. It rebuilds `index.html` and `status.json` in a disposable directory, runs the full fail-closed claim smoke, and proves the scheduler-owned files in the checkout were not touched. `./qa-claim-smoke.sh` is the lower-level command for an already generated page.

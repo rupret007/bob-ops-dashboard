@@ -15,6 +15,7 @@ from board_meta import (
     board_content_fingerprint,
     compact_signal,
     decision_href,
+    detect_linear_pr_stack,
     drop_leftover_verify,
     extract_agent_url,
     extract_cloud_agents_from_prs,
@@ -194,6 +195,23 @@ class BoardMetaTests(unittest.TestCase):
         self.assertEqual(compact_signal({"release": "v0.26.0", "tip_sha": "abc1234", "open_prs": 0}), "v0.26.0")
         self.assertEqual(compact_signal({"open_prs": 1, "tip_sha": "abc1234"}), "1 open PR")
         self.assertEqual(compact_signal({"open_prs": 4}), "4 open PRs")
+        self.assertEqual(
+            compact_signal({"release": "v0.26.0", "open_prs": 1}),
+            "1 open PR",
+        )
+        stack = [
+            {"number": 10, "url": "https://github.com/rupret007/repo/pull/10"},
+            {"number": 11, "url": "https://github.com/rupret007/repo/pull/11"},
+            {"number": 12, "url": "https://github.com/rupret007/repo/pull/12"},
+        ]
+        self.assertEqual(
+            compact_signal({"release": "v1", "open_prs": 3, "open_pr_stack": stack}),
+            "Stack #10 -> #11 -> #12",
+        )
+        self.assertEqual(
+            compact_signal({"release": "v1", "open_prs": 4, "open_pr_stack": stack}),
+            "4 open PRs",
+        )
         self.assertIsNone(compact_signal({"tip_sha": "abc1234", "open_prs": 0, "product_sha": "deadbee"}))
         self.assertIsNone(compact_signal({"ci": {"name": "CI", "conclusion": "success"}, "open_prs": 0}))
         self.assertEqual(compact_signal({"ci": {"conclusion": "failure"}}), "CI fail")
@@ -233,6 +251,18 @@ class BoardMetaTests(unittest.TestCase):
         }
         self.assertEqual(compact_signal(many), "4 open PRs")
         self.assertEqual(signal_href(many), "https://github.com/rupret007/story-corner-shelf/pulls")
+        stacked = {
+            "url": "https://github.com/rupret007/StoryLiner",
+            "open_prs": 2,
+            "open_pr_stack": [
+                {"number": 11, "url": "https://github.com/rupret007/StoryLiner/pull/11"},
+                {"number": 12, "url": "https://github.com/rupret007/StoryLiner/pull/12"},
+            ],
+            "release": "v1.0.0",
+            "ci": {"conclusion": "success"},
+        }
+        self.assertEqual(compact_signal(stacked), "Stack #11 -> #12")
+        self.assertEqual(signal_href(stacked), "https://github.com/rupret007/StoryLiner/pulls")
         orphan = {"url": "https://github.com/rupret007/RadDadSite", "open_prs": 1}
         self.assertEqual(signal_href(orphan), "https://github.com/rupret007/RadDadSite/pulls")
         no_repo = {
@@ -313,6 +343,17 @@ class BoardMetaTests(unittest.TestCase):
             "red",
         )
         self.assertEqual(status_from_fetch({"accessible": True, "open_prs": 2, "ci": None}), "yellow")
+        self.assertEqual(
+            status_from_fetch(
+                {
+                    "accessible": True,
+                    "open_prs": None,
+                    "pr_listing_complete": False,
+                    "ci": {"conclusion": "success"},
+                }
+            ),
+            "yellow",
+        )
         self.assertEqual(status_from_fetch({"accessible": False}), "parked")
         self.assertEqual(status_from_fetch({"accessible": False}, override="yellow"), "yellow")
         self.assertEqual(status_from_fetch(green_empty, jeff_gate=True), "jeff-gate")
@@ -738,6 +779,36 @@ class BoardMetaTests(unittest.TestCase):
             }
         ]
         self.assertNotEqual(board_content_fingerprint(d), board_content_fingerprint(e))
+        stack_a = {
+            "sections": [
+                {
+                    "id": "live-shipping",
+                    "projects": [
+                        {"name": "StoryLiner", "open_prs": 2, "open_pr_stack": []}
+                    ],
+                }
+            ]
+        }
+        stack_b = {
+            "sections": [
+                {
+                    "id": "live-shipping",
+                    "projects": [
+                        {
+                            "name": "StoryLiner",
+                            "open_prs": 2,
+                            "open_pr_stack": [
+                                {"number": 11, "url": "https://github.com/rupret007/StoryLiner/pull/11"},
+                                {"number": 12, "url": "https://github.com/rupret007/StoryLiner/pull/12"},
+                            ],
+                        }
+                    ],
+                }
+            ]
+        }
+        self.assertNotEqual(
+            board_content_fingerprint(stack_a), board_content_fingerprint(stack_b)
+        )
 
     def test_agent_and_work_urls_are_fail_closed(self):
         good_bc = "bc-8e16f06d-f73f-482c-987f-e13f2d3b9fb1"
@@ -774,6 +845,23 @@ class BoardMetaTests(unittest.TestCase):
         self.assertEqual(safe_actions_url("https://github.com/rupret007/Andrea_NanoBot/actions"), "")
         self.assertEqual(safe_repo_url("https://github.com/rupret007/webjam/"), "https://github.com/rupret007/webjam")
         self.assertEqual(safe_repo_url("https://github.com/rupret007/webjam/issues"), "")
+        self.assertEqual(
+            safe_pr_url("https://github.com/0xc0re/barker/pull/41"),
+            "https://github.com/0xc0re/barker/pull/41",
+        )
+        self.assertEqual(
+            safe_actions_url("https://github.com/0xc0re/barker/actions/runs/9"),
+            "https://github.com/0xc0re/barker/actions/runs/9",
+        )
+        self.assertEqual(
+            safe_repo_url("https://github.com/0xc0re/barker"),
+            "https://github.com/0xc0re/barker",
+        )
+        self.assertEqual(
+            safe_pulls_url("https://github.com/0xc0re/barker/pulls"),
+            "https://github.com/0xc0re/barker/pulls",
+        )
+        self.assertEqual(safe_repo_url("https://github.com/0xc0re/other"), "")
 
     def test_pick_open_pr_prefers_ready_and_is_safe(self):
         picked = pick_open_pr(
@@ -801,6 +889,71 @@ class BoardMetaTests(unittest.TestCase):
         self.assertFalse(picked["draft"])
         self.assertIsNone(pick_open_pr([{"html_url": "https://evil.example/pull/1"}]))
         self.assertIsNone(pick_open_pr(None))
+
+    def test_linear_pr_stack_requires_one_complete_same_repo_chain(self):
+        repo = {"full_name": "rupret007/repo"}
+
+        def row(number, base, head, *, head_repo=repo, url_repo="repo"):
+            return {
+                "number": number,
+                "html_url": f"https://github.com/rupret007/{url_repo}/pull/{number}",
+                "base": {"ref": base, "repo": repo},
+                "head": {"ref": head, "repo": head_repo},
+            }
+
+        shuffled = [
+            row(12, "feature-eleven", "feature-twelve"),
+            row(10, "main", "feature-ten"),
+            row(11, "feature-ten", "feature-eleven"),
+        ]
+        self.assertEqual(
+            detect_linear_pr_stack(shuffled, "main"),
+            [
+                {"number": 10, "url": "https://github.com/rupret007/repo/pull/10"},
+                {"number": 11, "url": "https://github.com/rupret007/repo/pull/11"},
+                {"number": 12, "url": "https://github.com/rupret007/repo/pull/12"},
+            ],
+        )
+        self.assertEqual(
+            detect_linear_pr_stack(
+                [row(10, "main", "a"), row(11, "main", "b")], "main"
+            ),
+            [],
+        )
+        self.assertEqual(
+            detect_linear_pr_stack(
+                [row(10, "main", "a"), row(11, "a", "b", head_repo={"full_name": "fork/repo"})],
+                "main",
+            ),
+            [],
+        )
+        missing = row(10, "main", "a")
+        missing["head"].pop("repo")
+        self.assertEqual(detect_linear_pr_stack([missing, row(11, "a", "b")], "main"), [])
+        self.assertEqual(detect_linear_pr_stack([row(10, "main", "a")], "main"), [])
+        self.assertEqual(detect_linear_pr_stack(None, "main"), [])
+        barker_repo = {"full_name": "0xc0re/barker"}
+        barker = [
+            {
+                "number": 42,
+                "html_url": "https://github.com/0xc0re/barker/pull/42",
+                "base": {"ref": "feature-41", "repo": barker_repo},
+                "head": {"ref": "feature-42", "repo": barker_repo},
+            },
+            {
+                "number": 41,
+                "html_url": "https://github.com/0xc0re/barker/pull/41",
+                "base": {"ref": "main", "repo": barker_repo},
+                "head": {"ref": "feature-41", "repo": barker_repo},
+            },
+        ]
+        self.assertEqual(
+            detect_linear_pr_stack(barker, "main"),
+            [
+                {"number": 41, "url": "https://github.com/0xc0re/barker/pull/41"},
+                {"number": 42, "url": "https://github.com/0xc0re/barker/pull/42"},
+            ],
+        )
 
     def test_cloud_agents_never_invent_bc_or_running(self):
         good_bc = "bc-8e16f06d-f73f-482c-987f-e13f2d3b9fb1"
@@ -843,7 +996,36 @@ class BoardMetaTests(unittest.TestCase):
                     "html_url": "https://github.com/rupret007/bob-ops-dashboard/pull/8",
                     "body": "See " + good + "?cursor_ref=pr_footer",
                     "updated_at": "2026-08-23T06:48:00Z",
-                }
+                    "state": "open",
+                    "base": {"repo": {"full_name": "rupret007/bob-ops-dashboard"}},
+                    "head": {"repo": {"full_name": "rupret007/bob-ops-dashboard"}},
+                },
+                {
+                    "number": 9,
+                    "title": "fork cannot advertise a public work link",
+                    "html_url": "https://github.com/rupret007/bob-ops-dashboard/pull/9",
+                    "body": "See " + good,
+                    "state": "open",
+                    "base": {"repo": {"full_name": "rupret007/bob-ops-dashboard"}},
+                    "head": {"repo": {"full_name": "other/fork"}},
+                },
+                {
+                    "number": 10,
+                    "title": "closed cannot advertise a public work link",
+                    "html_url": "https://github.com/rupret007/bob-ops-dashboard/pull/10",
+                    "body": "See " + good,
+                    "state": "closed",
+                    "base": {"repo": {"full_name": "rupret007/bob-ops-dashboard"}},
+                    "head": {"repo": {"full_name": "rupret007/bob-ops-dashboard"}},
+                },
+                {
+                    "number": 11,
+                    "title": "unknown state cannot advertise a public work link",
+                    "html_url": "https://github.com/rupret007/bob-ops-dashboard/pull/11",
+                    "body": "See " + good,
+                    "base": {"repo": {"full_name": "rupret007/bob-ops-dashboard"}},
+                    "head": {"repo": {"full_name": "rupret007/bob-ops-dashboard"}},
+                },
             ]
         )
         self.assertEqual(len(found), 1)
