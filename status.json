@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-08-26T16:43:00.916958-05:00",
-  "generated_at_display": "Wed Aug 26, 2026 \u00b7 4:43 PM CDT",
+  "generated_at": "2026-08-26T17:02:40.885032-05:00",
+  "generated_at_display": "Wed Aug 26, 2026 \u00b7 5:02 PM CDT",
   "timezone": "America/Chicago",
   "owner": "rupret007",
   "dashboard": "bob-ops-dashboard",
@@ -46,25 +46,25 @@
           "url": "https://github.com/rupret007/webjam",
           "repo_url": "https://github.com/rupret007/webjam",
           "private": false,
-          "status": "jeff-gate",
-          "chip": "Jeff-gate",
+          "status": "yellow",
+          "chip": "Yellow",
           "default_branch": "master",
-          "tip_sha": "48f6867",
-          "tip_date": "2026-08-26T20:57:15Z",
+          "tip_sha": "36a6c1e",
+          "tip_date": "2026-08-26T21:48:29Z",
           "open_prs": 2,
-          "open_pr_url": "https://github.com/rupret007/webjam/pull/39",
-          "open_pr_number": 39,
+          "open_pr_url": "https://github.com/rupret007/webjam/pull/40",
+          "open_pr_number": 40,
           "open_pr_draft": true,
           "open_pr_stack": [],
           "pr_listing_complete": true,
-          "agent_url": null,
+          "agent_url": "https://cursor.com/agents/bc-f48c2143-b8d8-4e07-9141-13165ca03cff",
           "ci": {
             "name": "WebJam CI",
-            "conclusion": "success",
+            "conclusion": "in_progress",
             "branch": "master",
-            "sha": "48f6867",
-            "created": "2026-08-26T20:57:18Z",
-            "html_url": "https://github.com/rupret007/webjam/actions/runs/33012994048"
+            "sha": "36a6c1e",
+            "created": "2026-08-26T21:48:32Z",
+            "html_url": "https://github.com/rupret007/webjam/actions/runs/33017045558"
           },
           "release": "v0.26.0",
           "notes": "Music Host/Join app. Software CI is live; exploratory feel and physical audio checks stay owner-only.",
@@ -404,8 +404,8 @@
           "status": "yellow",
           "chip": "Yellow",
           "default_branch": "main",
-          "tip_sha": "de36478",
-          "tip_date": "2026-08-26T21:40:46Z",
+          "tip_sha": "25c8d91",
+          "tip_date": "2026-08-26T21:43:07Z",
           "open_prs": 2,
           "open_pr_url": "https://github.com/rupret007/bob-ops-dashboard/pull/21",
           "open_pr_number": 21,
@@ -417,9 +417,9 @@
             "name": "Refresh Bob Ops Dashboard",
             "conclusion": "in_progress",
             "branch": "main",
-            "sha": "de36478",
-            "created": "2026-08-26T21:42:29Z",
-            "html_url": "https://github.com/rupret007/bob-ops-dashboard/actions/runs/33016600869"
+            "sha": "25c8d91",
+            "created": "2026-08-26T22:02:05Z",
+            "html_url": "https://github.com/rupret007/bob-ops-dashboard/actions/runs/33017951668"
           },
           "release": null,
           "notes": "Source-only feature PRs; the scheduled refresh owns generated index.html and status.json.",
@@ -795,7 +795,7 @@
     "Sliding-Glass-Door-PETG-Screw"
   ],
   "publish_notes": "Public board -- no secrets or customer paths. Private repositories stay high-level; AI Music Vault stays private-content-boundary only.",
-  "refresh_started_ms": 1787780557472,
+  "refresh_started_ms": 1787781731820,
   "agents_source": "file:stale->unknown",
   "agents": [
     {
@@ -820,7 +820,17 @@
       "checked_at": null
     }
   ],
-  "cloud_agents": [],
+  "cloud_agents": [
+    {
+      "id": "bc-f48c2143-b8d8-4e07-9141-13165ca03cff",
+      "name": "PR #40",
+      "state": "unknown",
+      "detail": "fix: Podcast/Review Host HUD says one next step",
+      "url": "https://cursor.com/agents/bc-f48c2143-b8d8-4e07-9141-13165ca03cff",
+      "pr_url": "https://github.com/rupret007/webjam/pull/40",
+      "checked_at": null
+    }
+  ],
   "pending": [
     {
       "id": "webjam-exploratory",
