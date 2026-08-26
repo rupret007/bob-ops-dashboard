@@ -1,6 +1,6 @@
 # Portfolio handoff: Mini local proof and Bob coordination
 
-Snapshot: 2026-08-26 15:08 CDT
+Snapshot: 2026-08-26 15:23 CDT
 Status: immutable public handoff; revalidate every head before acting
 
 ## Read this first
@@ -19,7 +19,7 @@ The four evidence classes below are deliberate: **hosted green**, **locally gree
 | StoryLiner | #16 is on `main` at `81469c374471245a617d709a6bc1c376831426d5`. Empty Approved-state copy now stays honest. | hosted green |
 | Bob Ops Dashboard | #19 and privacy-honesty #20 are on `main`; private/high-level lanes are no longer described as live repository taps. The scheduler-owned generated tip observed for this snapshot was `c1234ddcf997a55c82e96f4c0f47bf94a7e50d2d`. No manual refresh was dispatched. | hosted green |
 
-The private-content vault also landed Bob's latest privacy-boundary follow-on. Its local validator, export check, and 113-test suite pass. Exact private repository metadata and implementation details remain outside this public handoff.
+The private-content vault also landed Bob's latest privacy-boundary follow-on. Its current exact-tip local validator, export check, and 116-test suite pass. Exact private repository metadata and implementation details remain outside this public handoff.
 
 ## Mac mini proof table
 
@@ -29,8 +29,8 @@ The private-content vault also landed Bob's latest privacy-boundary follow-on. I
 | WebJam draft #37 | Focused canvas/controller tests 72/72. Exact-base fresh-process partitions passed 6,570 tests plus 95 subtests with 25 intentional skips. Ruff, compile, dependency integrity, UX smoke, vulnerability audit, and diff checks pass. | locally green |
 | Andrea NanoBot current `main` | Send-fence proof 43/43; full hermetic suite 3,874/3,874 across 296 result files; documentation check passed 82 files. No outbound action ran. | hosted green |
 | StoryLiner current `main` | 23/23 suites and 271/271 tests; production build passed with existing unused-variable warnings. | hosted green |
-| Private-content vault | High-level local validation, 113 tests, and export consistency check passed; private content was not printed or copied here. | locally green |
-| Bob Ops handoff source | `qa-source-only.sh` passed its 39 unit tests plus JavaScript, URL, open-link, privacy, authenticated-refresh, private-metadata, and end-to-end smokes. Checked-in `index.html` and `status.json` stayed unchanged. | locally green |
+| Private-content vault | High-level exact-tip local validation, 116 tests, and export consistency check passed; private content was not printed or copied here. | locally green |
+| Bob Ops handoff source | `qa-source-only.sh` passed its 39 unit tests plus JavaScript, URL, open-link, privacy, authenticated-refresh, private-metadata, and end-to-end smokes. Checked-in `index.html` and `status.json` stayed unchanged; the hosted smoke also passed. | hosted green |
 
 WebJam's long one-process macOS Qt run completed once on the pre-#36 base. On the exact #36 base, two later one-process attempts hit native segmentation faults at different pre-existing UI tests after thousands of passes; each named case passed alone, and every exact-base test passed in the fresh-process partitions above. That is a local runner/process-lifetime issue, not evidence that draft #37's canvas logic failed. Hosted jobs remain the platform authority.
 
@@ -40,6 +40,7 @@ WebJam's long one-process macOS Qt run completed once on the pre-#36 base. On th
 | --- | --- | --- | --- |
 | WebJam #37 | locally green | Let hosted jobs finish; review the exact draft head | Merge needs exact-head approval; physical two-Mac, Drawpile, audio, signing, and release work are owner-only |
 | StoryBoard #14 | hosted green | Review the exact draft head | Merge needs exact-head approval; green CI authorizes no production action |
+| Bob Ops handoff #21 | hosted green | Review this source-only documentation draft at its exact current PR head | Merge needs exact-head approval and naturally exposes the link through the scheduled refresh/Pages flow; never dispatch manually |
 | Bob Ops #12 | owner-only | Preserve the existing conflicted draft until Jeff chooses its disposition | Do not rebase, close, or merge without explicit direction |
 | Turdanoid #8 | owner-only | Perform the phone/desktop fun-and-feel check | Merge needs exact-head approval; Pages impact follows a merge |
 | RadDadSite #10 | owner-only | Review the song/QR/NFC experience at its current head | Merge and any production rollout need exact approval |
