@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-08-26T16:12:34.500177-05:00",
-  "generated_at_display": "Wed Aug 26, 2026 \u00b7 4:12 PM CDT",
+  "generated_at": "2026-08-26T16:38:59.499228-05:00",
+  "generated_at_display": "Wed Aug 26, 2026 \u00b7 4:38 PM CDT",
   "timezone": "America/Chicago",
   "owner": "rupret007",
   "dashboard": "bob-ops-dashboard",
@@ -46,8 +46,8 @@
           "url": "https://github.com/rupret007/webjam",
           "repo_url": "https://github.com/rupret007/webjam",
           "private": false,
-          "status": "yellow",
-          "chip": "Yellow",
+          "status": "jeff-gate",
+          "chip": "Jeff-gate",
           "default_branch": "master",
           "tip_sha": "48f6867",
           "tip_date": "2026-08-26T20:57:15Z",
@@ -60,7 +60,7 @@
           "agent_url": null,
           "ci": {
             "name": "WebJam CI",
-            "conclusion": "in_progress",
+            "conclusion": "success",
             "branch": "master",
             "sha": "48f6867",
             "created": "2026-08-26T20:57:18Z",
@@ -342,22 +342,22 @@
           "status": "yellow",
           "chip": "Yellow",
           "default_branch": "main",
-          "tip_sha": "3229018",
-          "tip_date": "2026-08-26T20:49:39Z",
-          "open_prs": 2,
-          "open_pr_url": "https://github.com/rupret007/bob-ops-dashboard/pull/21",
-          "open_pr_number": 21,
+          "tip_sha": "7cc8d42",
+          "tip_date": "2026-08-26T21:12:36Z",
+          "open_prs": 3,
+          "open_pr_url": "https://github.com/rupret007/bob-ops-dashboard/pull/23",
+          "open_pr_number": 23,
           "open_pr_draft": true,
           "open_pr_stack": [],
           "pr_listing_complete": true,
-          "agent_url": null,
+          "agent_url": "https://cursor.com/agents/bc-e74a40ed-f0b2-41ed-ba4b-0f1c89405434",
           "ci": {
             "name": "QA claim smoke",
             "conclusion": "success",
             "branch": "main",
-            "sha": "3229018",
-            "created": "2026-08-26T20:49:42Z",
-            "html_url": "https://github.com/rupret007/bob-ops-dashboard/actions/runs/33012349788"
+            "sha": "7cc8d42",
+            "created": "2026-08-26T21:12:40Z",
+            "html_url": "https://github.com/rupret007/bob-ops-dashboard/actions/runs/33014271974"
           },
           "release": null,
           "notes": "Source-only feature PRs; the scheduled refresh owns generated index.html and status.json.",
@@ -696,7 +696,7 @@
   ],
   "inaccessible": [],
   "publish_notes": "Public board -- no secrets or customer paths. Private repositories stay high-level; AI Music Vault stays private-content-boundary only.",
-  "refresh_started_ms": 1787778704224,
+  "refresh_started_ms": 1787780288790,
   "agents_source": "file:stale->unknown",
   "agents": [
     {
@@ -721,7 +721,17 @@
       "checked_at": null
     }
   ],
-  "cloud_agents": [],
+  "cloud_agents": [
+    {
+      "id": "bc-e74a40ed-f0b2-41ed-ba4b-0f1c89405434",
+      "name": "PR #23",
+      "state": "unknown",
+      "detail": "fix: stop diagnosing private hosted CI as a public fail",
+      "url": "https://cursor.com/agents/bc-e74a40ed-f0b2-41ed-ba4b-0f1c89405434",
+      "pr_url": "https://github.com/rupret007/bob-ops-dashboard/pull/23",
+      "checked_at": null
+    }
+  ],
   "pending": [
     {
       "id": "webjam-exploratory",
