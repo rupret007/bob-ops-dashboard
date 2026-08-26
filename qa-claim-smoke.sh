@@ -315,6 +315,18 @@ if media_sections[0].get("title") != "Private media":
     raise SystemExit("private-media section title must stay generic")
 if media_sections[0].get("projects") != [expected_media]:
     raise SystemExit("private-media section must expose only the generic owner gate")
+parked_sections = [
+    sec for sec in (st.get("sections") or [])
+    if isinstance(sec, dict) and sec.get("id") == "parked"
+]
+expected_parked_catalog = {
+    "name": "Parked private catalog",
+    "status": "parked",
+    "chip": "Parked",
+    "notes": "Private-content boundary. Parked catalog work stays private and owner-only.",
+}
+if len(parked_sections) != 1 or parked_sections[0].get("projects") != [expected_parked_catalog]:
+    raise SystemExit("parked private catalog must expose only the generic owner gate")
 abilities = next(
     (sec for sec in (st.get("sections") or []) if isinstance(sec, dict) and sec.get("id") == "abilities"),
     {},
@@ -354,13 +366,16 @@ private_markers = tuple(
         "6c6f6769632070726f",  # media provider
         "6c6f67696370726f6d6370",  # provider integration
         "7374656d",        # private asset type/count detail
+        "7374616c656d617465",  # private creative title
+        "747261696c6572207377696674",  # private creative title
+        "766f696365206665656c",  # private catalog detail
     )
 )
-for marker in private_markers[:-1]:
+for marker in private_markers[:5] + private_markers[6:]:
     if marker in public_blob.lower():
         raise SystemExit("generated public artifacts leaked private-media detail")
 import re
-if re.search(rf"\b{re.escape(private_markers[-1])}s?\b", public_blob, re.I):
+if re.search(rf"\b{re.escape(private_markers[5])}s?\b", public_blob, re.I):
     raise SystemExit("generated public artifacts leaked private-media asset detail")
 private_sensitive = (
     "repo", "url", "repo_url", "default_branch", "tip_sha", "tip_date",
@@ -668,6 +683,12 @@ from pathlib import Path
 st = json.load(open(sys.argv[1]))
 if "verify" in st:
     raise SystemExit("refresh.sh kept leftover verify")
+if st.get("agents_source") != "file:stale->unknown":
+    raise SystemExit("refresh.sh exposed more than the safe agents source class/state")
+public_artifacts = Path(sys.argv[1]).read_text() + "\n" + Path(sys.argv[2]).read_text()
+for unsafe_path in ("/home/runner", "/Users", "file:/"):
+    if unsafe_path in public_artifacts:
+        raise SystemExit("refresh.sh leaked an absolute agent-source path")
 private_media_decisions = [
     row for row in (st.get("decisions") or [])
     if isinstance(row, dict) and row.get("id") == "private-media-upload"

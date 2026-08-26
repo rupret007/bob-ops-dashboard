@@ -345,8 +345,8 @@ status = {
       "id": "parked",
       "title": "Parked",
       "projects": [
-        {"name": "Stalemate / Trailer Swift", "status": "parked", "chip": "Parked",
-         "notes": "Catalog/voice feel only -- parked catalog lane."},
+        {"name": "Parked private catalog", "status": "parked", "chip": "Parked",
+         "notes": "Private-content boundary. Parked catalog work stays private and owner-only."},
       ],
     },
     {
