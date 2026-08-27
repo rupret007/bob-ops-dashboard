@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-08-27T13:48:52.069185-05:00",
-  "generated_at_display": "Thu Aug 27, 2026 \u00b7 1:48 PM CDT",
+  "generated_at": "2026-08-27T14:05:46.250223-05:00",
+  "generated_at_display": "Thu Aug 27, 2026 \u00b7 2:05 PM CDT",
   "timezone": "America/Chicago",
   "owner": "rupret007",
   "dashboard": "bob-ops-dashboard",
@@ -46,25 +46,25 @@
           "url": "https://github.com/rupret007/webjam",
           "repo_url": "https://github.com/rupret007/webjam",
           "private": false,
-          "status": "jeff-gate",
-          "chip": "Jeff-gate",
+          "status": "yellow",
+          "chip": "Yellow",
           "default_branch": "master",
-          "tip_sha": "1fc25f8",
-          "tip_date": "2026-08-27T06:22:12Z",
-          "open_prs": 3,
-          "open_pr_url": "https://github.com/rupret007/webjam/pull/50",
-          "open_pr_number": 50,
+          "tip_sha": "c271864",
+          "tip_date": "2026-08-27T18:54:00Z",
+          "open_prs": 2,
+          "open_pr_url": "https://github.com/rupret007/webjam/pull/49",
+          "open_pr_number": 49,
           "open_pr_draft": true,
           "open_pr_stack": [],
           "pr_listing_complete": true,
           "agent_url": "https://cursor.com/agents/bc-48233059-c14e-4168-ae78-15566aa55495",
           "ci": {
             "name": "WebJam CI",
-            "conclusion": "success",
+            "conclusion": "in_progress",
             "branch": "master",
-            "sha": "1fc25f8",
-            "created": "2026-08-27T06:22:17Z",
-            "html_url": "https://github.com/rupret007/webjam/actions/runs/33045614242"
+            "sha": "c271864",
+            "created": "2026-08-27T18:54:02Z",
+            "html_url": "https://github.com/rupret007/webjam/actions/runs/33105770642"
           },
           "release": "v0.27.1",
           "release_sha": "1fc25f8",
@@ -174,25 +174,25 @@
           "url": "https://github.com/rupret007/RadDadSite",
           "repo_url": "https://github.com/rupret007/RadDadSite",
           "private": false,
-          "status": "yellow",
-          "chip": "Yellow",
+          "status": "green",
+          "chip": "Green",
           "default_branch": "main",
-          "tip_sha": "8383023",
-          "tip_date": "2026-08-27T06:00:18Z",
-          "open_prs": 1,
-          "open_pr_url": "https://github.com/rupret007/RadDadSite/pull/14",
-          "open_pr_number": 14,
-          "open_pr_draft": true,
+          "tip_sha": "a1f8729",
+          "tip_date": "2026-08-27T18:55:54Z",
+          "open_prs": 0,
+          "open_pr_url": null,
+          "open_pr_number": null,
+          "open_pr_draft": false,
           "open_pr_stack": [],
           "pr_listing_complete": true,
-          "agent_url": "https://cursor.com/agents/bc-18fd392b-2ec9-47a2-be0b-41b445ee8dab",
+          "agent_url": null,
           "ci": {
             "name": "Test, Package, and Deploy Site",
             "conclusion": "success",
             "branch": "main",
-            "sha": "8383023",
-            "created": "2026-08-27T06:00:21Z",
-            "html_url": "https://github.com/rupret007/RadDadSite/actions/runs/33044329111"
+            "sha": "a1f8729",
+            "created": "2026-08-27T18:55:57Z",
+            "html_url": "https://github.com/rupret007/RadDadSite/actions/runs/33105935655"
           },
           "release": null,
           "release_sha": null,
@@ -228,13 +228,11 @@
         {
           "name": "AI Music Vault",
           "private": true,
-          "status": "yellow",
-          "chip": "Yellow",
+          "status": "parked",
+          "chip": "Parked",
           "notes": "Private catalog spine for StoryBoard / Show Night. Do not publish catalog content.",
-          "accessible": true,
-          "ci": {
-            "conclusion": "failure"
-          }
+          "accessible": false,
+          "ci": {}
         },
         {
           "name": "Turdanoid",
@@ -277,45 +275,87 @@
       "projects": [
         {
           "name": "StoryOps-AI",
-          "private": true,
-          "status": "yellow",
-          "chip": "Yellow",
+          "repo": null,
+          "url": null,
+          "repo_url": null,
+          "private": null,
+          "status": "parked",
+          "chip": "Parked",
+          "default_branch": null,
+          "tip_sha": null,
+          "tip_date": null,
+          "open_prs": null,
+          "open_pr_url": null,
+          "open_pr_number": null,
+          "open_pr_draft": false,
+          "open_pr_stack": [],
+          "pr_listing_complete": null,
+          "agent_url": null,
+          "ci": null,
+          "release": null,
+          "release_sha": null,
+          "release_url": null,
           "notes": "Private workflow utility. High-level only; no customer data on this board.",
-          "accessible": true,
-          "ci": {
-            "conclusion": "failure"
-          }
+          "accessible": false
         },
         {
           "name": "Ball Beacon",
-          "private": true,
-          "status": "yellow",
-          "chip": "Yellow",
+          "repo": null,
+          "url": null,
+          "repo_url": null,
+          "private": null,
+          "status": "parked",
+          "chip": "Parked",
+          "default_branch": null,
+          "tip_sha": null,
+          "tip_date": null,
+          "open_prs": null,
+          "open_pr_url": null,
+          "open_pr_number": null,
+          "open_pr_draft": false,
+          "open_pr_stack": [],
+          "pr_listing_complete": null,
+          "agent_url": null,
+          "ci": null,
+          "release": null,
+          "release_sha": null,
+          "release_url": null,
           "notes": "Private iOS utility. Software validation only; device and signing steps stay owner-only.",
-          "accessible": true,
-          "ci": {}
+          "accessible": false
         },
         {
           "name": "CSS Conductor",
           "private": true,
-          "status": "yellow",
-          "chip": "Yellow",
+          "status": "parked",
+          "chip": "Parked",
           "notes": "Private developer utility. High-level only; hosted-job cause stays unconfirmed.",
-          "accessible": true,
-          "ci": {
-            "conclusion": "failure"
-          }
+          "accessible": false,
+          "ci": {}
         },
         {
           "name": "Barker",
-          "private": true,
-          "status": "yellow",
-          "chip": "Yellow",
+          "repo": null,
+          "url": null,
+          "repo_url": null,
+          "private": null,
+          "status": "parked",
+          "chip": "Parked",
+          "default_branch": null,
+          "tip_sha": null,
+          "tip_date": null,
+          "open_prs": null,
+          "open_pr_url": null,
+          "open_pr_number": null,
+          "open_pr_draft": false,
+          "open_pr_stack": [],
+          "pr_listing_complete": null,
+          "agent_url": null,
+          "ci": null,
+          "release": null,
+          "release_sha": null,
+          "release_url": null,
           "notes": "Private app. No live sends, production changes, or credential operations from this board.",
-          "accessible": true,
-          "ci": {
-            "conclusion": "failure"
-          }
+          "accessible": false
         },
         {
           "name": "Cursor-OpenClaw Integration",
@@ -358,8 +398,8 @@
           "status": "yellow",
           "chip": "Yellow",
           "default_branch": "main",
-          "tip_sha": "9702480",
-          "tip_date": "2026-08-27T18:36:15Z",
+          "tip_sha": "ce4645a",
+          "tip_date": "2026-08-27T18:48:54Z",
           "open_prs": 2,
           "open_pr_url": "https://github.com/rupret007/bob-ops-dashboard/pull/21",
           "open_pr_number": 21,
@@ -371,9 +411,9 @@
             "name": "QA claim smoke",
             "conclusion": "success",
             "branch": "main",
-            "sha": "9702480",
-            "created": "2026-08-27T18:36:19Z",
-            "html_url": "https://github.com/rupret007/bob-ops-dashboard/actions/runs/33104305767"
+            "sha": "ce4645a",
+            "created": "2026-08-27T18:48:59Z",
+            "html_url": "https://github.com/rupret007/bob-ops-dashboard/actions/runs/33105351018"
           },
           "release": null,
           "release_sha": null,
@@ -383,14 +423,28 @@
         },
         {
           "name": "Sliding Glass Door Screw",
-          "private": true,
+          "repo": null,
+          "url": null,
+          "repo_url": null,
+          "private": null,
           "status": "jeff-gate",
           "chip": "Jeff-gate",
+          "default_branch": null,
+          "tip_sha": null,
+          "tip_date": null,
+          "open_prs": null,
+          "open_pr_url": null,
+          "open_pr_number": null,
+          "open_pr_draft": false,
+          "open_pr_stack": [],
+          "pr_listing_complete": null,
+          "agent_url": null,
+          "ci": null,
+          "release": null,
+          "release_sha": null,
+          "release_url": null,
           "notes": "Software/design artifact only. Printing, installation, and physical fit stay owner-only.",
-          "accessible": true,
-          "ci": {
-            "conclusion": "failure"
-          }
+          "accessible": false
         },
         {
           "name": "Story Shelf",
@@ -411,12 +465,12 @@
           "pr_listing_complete": true,
           "agent_url": null,
           "ci": {
-            "name": "Validate R11 Gate A-left print overlay v2",
+            "name": "Validate shelf artifacts",
             "conclusion": "success",
             "branch": "main",
             "sha": "cc25e73",
             "created": "2026-08-25T03:14:53Z",
-            "html_url": "https://github.com/rupret007/story-corner-shelf/actions/runs/32804448258"
+            "html_url": "https://github.com/rupret007/story-corner-shelf/actions/runs/32804448295"
           },
           "release": null,
           "release_sha": null,
@@ -484,10 +538,8 @@
           "status": "yellow",
           "chip": "Yellow",
           "notes": "Private, draft, and offline-only; ready_for_live_cisco=false. No secrets or customer data on this page.",
-          "accessible": true,
-          "ci": {
-            "conclusion": "pending"
-          }
+          "accessible": false,
+          "ci": {}
         },
         {
           "name": "TACTrack",
@@ -495,10 +547,8 @@
           "status": "yellow",
           "chip": "Yellow",
           "notes": "Private. High-level only. No live-repo, CI, or PR taps on this board.",
-          "accessible": true,
-          "ci": {
-            "conclusion": "failure"
-          }
+          "accessible": false,
+          "ci": {}
         },
         {
           "name": "AdoptIQ notes",
@@ -550,7 +600,7 @@
           "status": "yellow",
           "chip": "Yellow",
           "notes": "Bob application \u2014 private bootstrap. Reuses the Andrea messaging engine and guarded OpenClaw delegation; no live sends, restarts, credentials, or production actions.",
-          "accessible": true,
+          "accessible": false,
           "ci": {}
         },
         {
@@ -713,24 +763,25 @@
     "Rad-Dad-Merch",
     "RadDadSite",
     "Turdanoid",
+    "rad-dad-show-night",
+    "Andrea_NanoBot",
+    "story-corner-shelf",
+    "bob-ops-dashboard",
+    "Cursor-OpenClaw-Integration"
+  ],
+  "inaccessible": [
     "AdoptIQ",
     "TACTrack",
     "AI-Music-Vault",
-    "rad-dad-show-night",
-    "Andrea_NanoBot",
     "Bob-the-Bot",
-    "story-corner-shelf",
     "StoryOps-AI",
     "ballbeacon",
     "CSS_Conductor",
     "barker",
-    "bob-ops-dashboard",
-    "Cursor-OpenClaw-Integration",
     "Sliding-Glass-Door-PETG-Screw"
   ],
-  "inaccessible": [],
   "publish_notes": "Public board -- no secrets or customer paths. Private repositories stay high-level; AI Music Vault stays private-content-boundary only.",
-  "refresh_started_ms": 1787856476509,
+  "refresh_started_ms": 1787857507233,
   "agents_source": "file:stale->unknown",
   "agents": [
     {
@@ -763,15 +814,6 @@
       "detail": "Rebuild Pocket Stage kit on Mac desktop CI",
       "url": "https://cursor.com/agents/bc-48233059-c14e-4168-ae78-15566aa55495",
       "pr_url": "https://github.com/rupret007/webjam/pull/49",
-      "checked_at": null
-    },
-    {
-      "id": "bc-18fd392b-2ec9-47a2-be0b-41b445ee8dab",
-      "name": "PR #14",
-      "state": "unknown",
-      "detail": "Name The Fault Lines on the September 19 Guitars & Growlers show",
-      "url": "https://cursor.com/agents/bc-18fd392b-2ec9-47a2-be0b-41b445ee8dab",
-      "pr_url": "https://github.com/rupret007/RadDadSite/pull/14",
       "checked_at": null
     }
   ],
