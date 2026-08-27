@@ -567,6 +567,11 @@ if "Music stack" not in meta_text or stack_card not in meta_text:
     raise SystemExit("How-this-board must keep a phone-visible Music stack card")
 if len(stack_card) > 88:
     raise SystemExit("Music stack How-this-board card exceeds the 88-char phone clip")
+type_tabs_card = "Each GitHub type is its own tab. First screen is status plus tabs, not the wall."
+if "Type tabs" not in meta_text or type_tabs_card not in meta_text:
+    raise SystemExit("How-this-board must keep a phone-visible Type tabs card")
+if len(type_tabs_card) > 88:
+    raise SystemExit("Type tabs How-this-board card exceeds the 88-char phone clip")
 refresh_text = refresh.read_text()
 phone_stack_notes = (
     "Making room. Latest is the published test candidate; source can be ahead.",
@@ -1270,7 +1275,7 @@ grep -q 'id="active-agents"' "$REFRESH" || fail "refresh.sh missing agents pulse
 grep -q 'class="abilities-foot"' "$REFRESH" || fail "refresh.sh missing collapsed abilities"
 python3 - "$INDEX" "$STATUS" <<'PY' || fail "hierarchy / collapsed honesty"
 from pathlib import Path
-import json, sys
+import json, re, sys
 html = Path(sys.argv[1]).read_text()
 st = json.loads(Path(sys.argv[2]).read_text()) if Path(sys.argv[2]).is_file() else {}
 for needle in ("Decisions", "Live shipping", "How this board works", "No send button", "no order button"):
@@ -1288,6 +1293,8 @@ if "Agents strip" in pre_how:
     raise SystemExit("Agents strip Feature card leaked above collapsed details")
 if "Copy refresh command" in pre_how or "Mark board reviewed" in pre_how:
     raise SystemExit("engineer control cards leaked onto the default scroll")
+if "Each GitHub type is its own tab" in pre_how:
+    raise SystemExit("Type tabs Feature card leaked above collapsed details")
 pre_ab = html.split('<details class="abilities-foot">', 1)[0]
 if "Rebuild this board" in pre_ab or "Life-ops" in pre_ab:
     raise SystemExit("Abilities card grid leaked onto the default phone scroll")
@@ -1310,6 +1317,30 @@ if not (idx_c < idx_l < idx_a < idx_f):
     raise SystemExit("board order must be decisions, live shipping, abilities, how-board")
 if 'id="active-agents"' in board:
     raise SystemExit("active-agents must live in the pulse strip, not the board card list")
+if 'id="type-tabs"' not in html:
+    raise SystemExit("phone type tabs missing")
+if 'id="board-glance"' not in html:
+    raise SystemExit("first-screen short status missing")
+if 'id="music"' in html or 'data-tab="music"' in html:
+    raise SystemExit("do not invent a music section; Live already holds the music stack")
+allowed_tabs = {
+    "controls",
+    "live-shipping",
+    "apps-utilities",
+    "cisco",
+    "messaging",
+    "private-media",
+    "parked",
+}
+tab_ids = set(re.findall(r'data-tab="([^"]+)"', html))
+bad_tabs = sorted(tab_ids - allowed_tabs)
+if bad_tabs:
+    raise SystemExit("invented type tab ids: " + ", ".join(bad_tabs))
+for sid in ("live-shipping", "apps-utilities", "cisco", "parked"):
+    if not re.search(r'id="' + sid + r'"[^>]*\bhidden\b', html):
+        raise SystemExit(sid + " must stay hidden on first paint")
+if 'aria-selected="true"' in html:
+    raise SystemExit("first paint must not open a type tab")
 pending = st.get("pending") if isinstance(st, dict) else None
 if isinstance(pending, list) and pending:
     if "pending-item" not in html:

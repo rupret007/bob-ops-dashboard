@@ -30,6 +30,25 @@ SECONDARY_SECTION_IDS = frozenset(
 COLLAPSED_SECTION_IDS = frozenset({"abilities", "features"})
 # Agents live in the top pulse strip -- do not paint as a card grid.
 PULSE_SECTION_IDS = frozenset({"active-agents"})
+# Phone tabs use types already on the board. Do not invent ids.
+TYPE_TAB_IDS = (
+    "controls",
+    "live-shipping",
+    "apps-utilities",
+    "cisco",
+    "messaging",
+    "private-media",
+    "parked",
+)
+TYPE_TAB_LABELS = {
+    "controls": "Decisions",
+    "live-shipping": "Live",
+    "apps-utilities": "Apps",
+    "cisco": "Cisco",
+    "messaging": "Bob",
+    "private-media": "Media",
+    "parked": "Parked",
+}
 # Section-type labels -- noisy on phone. Real status chips (Green / Jeff-gate) stay.
 SECTION_TYPE_CHIPS = frozenset({"Ability", "Control", "Feature"})
 ATTENTION_ORDER = {
@@ -665,6 +684,115 @@ def presentation(section_id: Any) -> str:
     if sid in COLLAPSED_SECTION_IDS:
         return "footer"
     return "secondary"
+
+
+def tab_id(raw: Any) -> str:
+    """Allowlisted type id only. Invented hashes and leftover ids stay empty."""
+    sid = str(raw or "")
+    return sid if sid in TYPE_TAB_LABELS else ""
+
+
+def tab_label(section_id: Any) -> str:
+    """Short phone label for an existing type. Empty when the id is unknown."""
+    sid = tab_id(section_id)
+    return TYPE_TAB_LABELS.get(sid, "")
+
+
+def is_type_tab(section_id: Any) -> bool:
+    """True for the real project-type sections that get a phone tab."""
+    return bool(tab_id(section_id))
+
+
+def type_tab_ids_for(sections: Any, pending: Any) -> list[str]:
+    """Tabs to paint. Decisions only when something needs a yes."""
+    present = {
+        str(sec.get("id") or "")
+        for sec in (sections or [])
+        if isinstance(sec, dict)
+    }
+    out: list[str] = []
+    for sid in TYPE_TAB_IDS:
+        if sid == "controls":
+            if any(isinstance(it, dict) for it in (pending or [])):
+                out.append(sid)
+            continue
+        if sid in present:
+            out.append(sid)
+    return out
+
+
+def glance_status(pending: Any, sections: Any) -> dict[str, str]:
+    """One short first-screen line. Not a project dump."""
+    rows = [it for it in (pending or []) if isinstance(it, dict)]
+    if rows:
+        n = len(rows)
+        return {
+            "text": "1 needs a yes" if n == 1 else str(n) + " need a yes",
+            "tab": "controls",
+        }
+    worst_rank = 99
+    worst_id = ""
+    for sec in sections or []:
+        if not isinstance(sec, dict):
+            continue
+        sid = tab_id(sec.get("id"))
+        if not sid or sid == "controls":
+            continue
+        for project in sec.get("projects") or []:
+            rank = attention_rank(project)
+            if rank < worst_rank:
+                worst_rank = rank
+                worst_id = sid
+    if worst_rank <= 2 and worst_id:
+        label = tab_label(worst_id)
+        if worst_rank == 0:
+            return {"text": label + " is red", "tab": worst_id}
+        if worst_rank == 1:
+            return {"text": label + " is waiting on Jeff", "tab": worst_id}
+        return {"text": label + " needs a look", "tab": worst_id}
+    return {"text": "Quiet", "tab": ""}
+
+
+def glance_html(pending: Any, sections: Any) -> str:
+    """First-screen status. Taps an existing type when there is somewhere to go."""
+    glance = glance_status(pending, sections)
+    text = html_lib.escape(str(glance.get("text") or "Quiet"))
+    sid = tab_id(glance.get("tab"))
+    extra = ' data-tab="' + html_lib.escape(sid) + '"' if sid else ""
+    return (
+        '<button type="button" class="board-glance" id="board-glance"'
+        + extra
+        + ">"
+        + text
+        + "</button>"
+    )
+
+
+def type_tabs_html(sections: Any, pending: Any, selected: Any = "") -> str:
+    """Phone tab bar for types already in the data. First paint selects none."""
+    want = tab_id(selected)
+    buttons: list[str] = []
+    for sid in type_tab_ids_for(sections, pending):
+        label = html_lib.escape(tab_label(sid))
+        sid_e = html_lib.escape(sid)
+        aria = "true" if sid == want else "false"
+        buttons.append(
+            '<button type="button" role="tab" id="tab-'
+            + sid_e
+            + '" data-tab="'
+            + sid_e
+            + '" aria-controls="'
+            + sid_e
+            + '" aria-selected="'
+            + aria
+            + '">'
+            + label
+            + "</button>"
+        )
+    return (
+        '<nav class="type-tabs" id="type-tabs" role="tablist" '
+        'aria-label="Project type">' + "".join(buttons) + "</nav>"
+    )
 
 
 def attention_rank(project: Any) -> int:
@@ -1326,6 +1454,11 @@ def first_class_sections() -> list[dict[str, Any]]:
                 _card(
                     "Music stack",
                     "Vault, StoryBoard, Show Night, and WebJam work together. Latest != source.",
+                    chip="Feature",
+                ),
+                _card(
+                    "Type tabs",
+                    "Each GitHub type is its own tab. First screen is status plus tabs, not the wall.",
                     chip="Feature",
                 ),
                 _card(

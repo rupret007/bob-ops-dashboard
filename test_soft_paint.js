@@ -474,6 +474,45 @@ function run() {
   });
   if (cancelled.ci) fail("cancelled helper must not become Open CI");
 
+  if (src.indexOf("function tabId") === -1) fail("tabId missing");
+  if (src.indexOf("function glanceStatus") === -1) fail("glanceStatus missing");
+  if (src.indexOf("function applyTypeTab") === -1) fail("applyTypeTab missing");
+  if (src.indexOf("data-tab-panel") === -1 && html.indexOf("data-tab-panel") === -1) {
+    fail("type tab panels missing");
+  }
+  const tabId = eval("(" + extractFn(src, "tabId") + ")");
+  if (tabId("live-shipping") !== "live-shipping") fail("live-shipping is a real type tab");
+  if (tabId("music") !== "") fail("invented music tab must drop");
+  if (tabId("abilities") !== "") fail("footer sections are not type tabs");
+  if (tabId("javascript:alert(1)") !== "") fail("evil tab id must drop");
+  const attentionRank = eval("(" + extractFn(src, "attentionRank") + ")");
+  const glanceStatus = eval(
+    "(function (tabId, attentionRank) { " +
+      "var TYPE_TAB_LABELS = { controls:'Decisions', 'live-shipping':'Live', " +
+      "'apps-utilities':'Apps', cisco:'Cisco', messaging:'Bob', " +
+      "'private-media':'Media', parked:'Parked' }; " +
+      "function tabLabel(id) { return TYPE_TAB_LABELS[tabId(id)] || ''; } " +
+      "return " + extractFn(src, "glanceStatus") + "; })"
+  )(tabId, attentionRank);
+  const g = glanceStatus([{ id: "x" }], [{ id: "live-shipping", projects: [{ status: "yellow" }] }]);
+  if (g.text !== "1 needs a yes" || g.tab !== "controls") fail("pending glance must beat live yellow");
+  const live = glanceStatus([], [{ id: "live-shipping", projects: [{ status: "yellow" }] }]);
+  if (live.text !== "Live needs a look" || live.tab !== "live-shipping") {
+    fail("live yellow must be one short glance");
+  }
+  const quiet = glanceStatus([], [{ id: "live-shipping", projects: [{ status: "green" }] }]);
+  if (quiet.text !== "Quiet" || quiet.tab !== "") fail("all-green glance must stay Quiet");
+  if (html.indexOf('id="type-tabs"') === -1) fail("type tab bar missing from first paint");
+  if (html.indexOf('id="board-glance"') === -1) fail("short status missing from first paint");
+  const livePanel = html.split('id="live-shipping"', 1)[1] || "";
+  if (livePanel.indexOf("data-tab-panel") === -1) fail("live-shipping must be a tab panel");
+  if (!/id="live-shipping"[^>]*\bhidden\b/.test(html)) {
+    fail("first paint must hide live-shipping so the wall is not the first screen");
+  }
+  if (!/id="controls"[^>]*\bhidden\b/.test(html)) {
+    fail("first paint must hide Decisions until that tab is opened");
+  }
+
   console.log("soft-paint / agent age-gate smoke ok");
 }
 
