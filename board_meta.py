@@ -1324,6 +1324,11 @@ def first_class_sections() -> list[dict[str, Any]]:
                     chip="Feature",
                 ),
                 _card(
+                    "Music stack",
+                    "Vault, StoryBoard, Show Night, and WebJam work together. Latest != source.",
+                    chip="Feature",
+                ),
+                _card(
                     "Soft-paint poll",
                     "Client fetches status.json every 30s (pauses when the tab is hidden). Immediate poll on pageshow / visible. Fetch aborts after 8s. Hide / iOS-return abort is not a failed poll. A stale cached status.json cannot rewind the board. Repaints when board content changes -- not on every 15m Actions timestamp. Tip CI is the current SHA; Pages / skipped helpers / this board's refresh publisher cannot hide a fail. A skipped or cancelled helper cannot beat a success or become Open CI. Lanes prefer the open PR; CI fail/running taps the Actions run when a run URL is known. A complete same-repo stack shows safe base-to-tip PR order and taps the pulls list; ambiguous chains fall back to the honest open-PR count. Vault, StoryBoard, Show Night, and WebJam work together as one music stack. WebJam Latest is the published test candidate and is not unpublished source; a proven Latest != source signal taps /releases/latest -- not dead text.",
                     chip="Feature",

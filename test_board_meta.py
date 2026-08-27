@@ -174,6 +174,8 @@ class BoardMetaTests(unittest.TestCase):
         self.assertIn("Vault, StoryBoard, Show Night, and WebJam work together", blob)
         self.assertIn("Latest != source", blob)
         self.assertIn("/releases/latest", blob)
+        names = [p["name"] for s in first_class_sections() for p in s["projects"]]
+        self.assertIn("Music stack", names)
 
     def test_security_features_from_pr1_survive_without_unlock(self):
         blob = str(first_class_sections())

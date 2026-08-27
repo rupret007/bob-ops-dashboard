@@ -561,6 +561,12 @@ if "Vault, StoryBoard, Show Night, and WebJam work together as one music stack" 
     raise SystemExit("README must say the music stack works together")
 if "Latest != source" not in text:
     raise SystemExit("README must say Latest != source is a tap")
+meta_text = (refresh.parent / "board_meta.py").read_text()
+stack_card = "Vault, StoryBoard, Show Night, and WebJam work together. Latest != source."
+if "Music stack" not in meta_text or stack_card not in meta_text:
+    raise SystemExit("How-this-board must keep a phone-visible Music stack card")
+if len(stack_card) > 88:
+    raise SystemExit("Music stack How-this-board card exceeds the 88-char phone clip")
 refresh_text = refresh.read_text()
 phone_stack_notes = (
     "Making room. Latest is the published test candidate; source can be ahead.",
@@ -1214,6 +1220,8 @@ if boundary not in html or boundary not in str(st):
     raise SystemExit("generated board missing private catalog spine hold")
 if "Making room. Latest is the published test candidate; source can be ahead." not in str(st):
     raise SystemExit("generated board missing WebJam Latest vs source note")
+if "Vault, StoryBoard, Show Night, and WebJam work together. Latest != source." not in html:
+    raise SystemExit("generated board missing phone-visible Music stack card")
 if "Band-business engine. Consumes Vault; not a second catalog." not in str(st):
     raise SystemExit("generated board missing StoryBoard engine note")
 if "Live run sheet. GitHub is source; live Latest is Sites." not in str(st):
