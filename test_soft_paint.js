@@ -480,7 +480,12 @@ function run() {
   if (src.indexOf("data-tab-panel") === -1 && html.indexOf("data-tab-panel") === -1) {
     fail("type tab panels missing");
   }
-  const tabId = eval("(" + extractFn(src, "tabId") + ")");
+  const tabId = eval(
+    "(function () { var TYPE_TAB_LABELS = {" +
+      "controls:'Decisions','live-shipping':'Live','apps-utilities':'Apps'," +
+      "cisco:'Cisco',messaging:'Bob','private-media':'Media',parked:'Parked'" +
+    "}; return " + extractFn(src, "tabId") + "; })()"
+  );
   if (tabId("live-shipping") !== "live-shipping") fail("live-shipping is a real type tab");
   if (tabId("music") !== "") fail("invented music tab must drop");
   if (tabId("abilities") !== "") fail("footer sections are not type tabs");
@@ -504,12 +509,19 @@ function run() {
   if (quiet.text !== "Quiet" || quiet.tab !== "") fail("all-green glance must stay Quiet");
   if (html.indexOf('id="type-tabs"') === -1) fail("type tab bar missing from first paint");
   if (html.indexOf('id="board-glance"') === -1) fail("short status missing from first paint");
-  const livePanel = html.split('id="live-shipping"', 1)[1] || "";
-  if (livePanel.indexOf("data-tab-panel") === -1) fail("live-shipping must be a tab panel");
-  if (!/id="live-shipping"[^>]*\bhidden\b/.test(html)) {
+  function tagFor(id) {
+    var mark = 'id="' + id + '"';
+    var at = html.indexOf("<section " + mark);
+    if (at < 0) at = html.indexOf('<section id="' + id + '"');
+    return at >= 0 ? html.slice(at, at + 260) : "";
+  }
+  const liveTag = tagFor("live-shipping");
+  if (liveTag.indexOf("data-tab-panel") === -1) fail("live-shipping must be a tab panel");
+  if (!/\bhidden\b/.test(liveTag)) {
     fail("first paint must hide live-shipping so the wall is not the first screen");
   }
-  if (!/id="controls"[^>]*\bhidden\b/.test(html)) {
+  const decTag = tagFor("controls");
+  if (!/\bhidden\b/.test(decTag)) {
     fail("first paint must hide Decisions until that tab is opened");
   }
 

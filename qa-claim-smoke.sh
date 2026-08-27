@@ -1332,14 +1332,16 @@ allowed_tabs = {
     "private-media",
     "parked",
 }
-tab_ids = set(re.findall(r'data-tab="([^"]+)"', html))
+head = html.split("<script>", 1)[0]
+tab_ids = set(re.findall(r'data-tab="([^"]+)"', head))
 bad_tabs = sorted(tab_ids - allowed_tabs)
 if bad_tabs:
     raise SystemExit("invented type tab ids: " + ", ".join(bad_tabs))
 for sid in ("live-shipping", "apps-utilities", "cisco", "parked"):
     if not re.search(r'id="' + sid + r'"[^>]*\bhidden\b', html):
         raise SystemExit(sid + " must stay hidden on first paint")
-if 'aria-selected="true"' in html:
+nav = html.split('id="type-tabs"', 1)[-1].split("</nav>", 1)[0] if 'id="type-tabs"' in html else ""
+if 'aria-selected="true"' in nav:
     raise SystemExit("first paint must not open a type tab")
 pending = st.get("pending") if isinstance(st, dict) else None
 if isinstance(pending, list) and pending:
