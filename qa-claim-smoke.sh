@@ -422,20 +422,20 @@ HIGH_LEVEL_PUBLIC_NAMES = {
 }
 for p in projects:
     name = str(p.get("name") or "")
-    if not (p.get("private") or name in HIGH_LEVEL_PUBLIC_NAMES):
-        continue
-    leaked = [key for key in private_sensitive if p.get(key) not in (None, "", [], {})]
-    if p.get("open_pr_stack") not in (None, []):
-        leaked.append("open_pr_stack")
-    ci = p.get("ci") if isinstance(p.get("ci"), dict) else {}
-    if set(ci) - {"conclusion"}:
-        leaked.append("ci metadata")
-    if leaked:
-        raise SystemExit(
-            "private lane leaked public metadata (" + ", ".join(leaked) + "): "
-            + name
-        )
-    if p.get("status") == "red" or p.get("chip") == "Red":
+    high_level_row = bool(p.get("private")) or name in HIGH_LEVEL_PUBLIC_NAMES
+    if p.get("private"):
+        leaked = [key for key in private_sensitive if p.get(key) not in (None, "", [], {})]
+        if p.get("open_pr_stack") not in (None, []):
+            leaked.append("open_pr_stack")
+        ci = p.get("ci") if isinstance(p.get("ci"), dict) else {}
+        if set(ci) - {"conclusion"}:
+            leaked.append("ci metadata")
+        if leaked:
+            raise SystemExit(
+                "private lane leaked public metadata (" + ", ".join(leaked) + "): "
+                + name
+            )
+    if high_level_row and (p.get("status") == "red" or p.get("chip") == "Red"):
         raise SystemExit(
             "private/high-level lane must not diagnose hosted CI as red: " + name
         )
