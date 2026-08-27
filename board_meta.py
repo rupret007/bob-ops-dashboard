@@ -670,6 +670,44 @@ def visible_chip(project: Any) -> str | None:
     return label
 
 
+def mac_probe_known(agent: Any) -> bool:
+    """True when a Codex/Cursor/Claude pill has a live non-unknown state."""
+    if not isinstance(agent, dict):
+        return False
+    aid = str(agent.get("id") or "")
+    if aid not in AGENT_IDS:
+        return False
+    state = str(agent.get("state") or "unknown").strip().lower()
+    return state in AGENT_STATES and state != "unknown"
+
+
+def compact_unknown_mac_probes(agents: Any) -> bool:
+    """True when the box has no live Mac probe. Never treat missing as Running."""
+    rows = [
+        a
+        for a in (agents or [])
+        if isinstance(a, dict) and str(a.get("id") or "") in AGENT_IDS
+    ]
+    return not any(mac_probe_known(a) for a in rows)
+
+
+def unknown_mac_probes_html(agents: Any = None) -> str:
+    """One honest first-screen line. Visible text is never Running."""
+    detail = "No Mac probe yet -- run probe-agents-status.sh"
+    for a in agents or []:
+        if not isinstance(a, dict) or str(a.get("id") or "") not in AGENT_IDS:
+            continue
+        text = str(a.get("detail") or "").strip()
+        if text:
+            detail = text
+            break
+    return (
+        '<p class="agents-unknown" id="agents-unknown" title="'
+        + html_lib.escape(detail)
+        + '">Agents unknown</p>'
+    )
+
+
 def presentation(section_id: Any) -> str:
     """How a section should paint: pending, pulse, primary, secondary, footer, other."""
     sid = str(section_id or "")
@@ -1468,7 +1506,7 @@ def first_class_sections() -> list[dict[str, Any]]:
                 ),
                 _card(
                     "Agents strip",
-                    "Codex / Cursor / Claude from a Mac probe. Stale or untimestamped probes paint Unknown. Never invent Running. Work links require the exact real cursor.com/agents/bc- UUID to be advertised by a currently open same-repository PR in an allowlisted public repository; probe-only and fork-PR links are dropped. Tap Open agent / Open PR (real target=_blank plus openBlank fallback). Token-like words redacted.",
+                    "Codex / Cursor / Claude from a Mac probe. Stale or untimestamped probes paint Unknown. Never invent Running. When the box has no live Mac probe, the three pills collapse to one Agents unknown line. Work links require the exact real cursor.com/agents/bc- UUID to be advertised by a currently open same-repository PR in an allowlisted public repository; probe-only and fork-PR links are dropped. Tap Open agent / Open PR (real target=_blank plus openBlank fallback). Token-like words redacted.",
                     chip="Feature",
                 ),
                 _card(

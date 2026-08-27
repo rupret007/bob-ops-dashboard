@@ -166,10 +166,12 @@ from zoneinfo import ZoneInfo
 root = Path(sys.argv[1])
 sys.path.insert(0, str(root))
 from board_meta import (
+    AGENT_IDS,
     AGENT_STATE_CHIP,
     CONTROL_ACTIONS,
     attention_rank,
     compact_signal,
+    compact_unknown_mac_probes,
     decision_href,
     drop_leftover_verify,
     extract_cloud_agents_from_prs,
@@ -193,6 +195,7 @@ from board_meta import (
     short_note,
     split_pending,
     status_from_fetch,
+    unknown_mac_probes_html,
     visible_chip,
 )
 refresh_started_ms = int(os.environ.get("REFRESH_STARTED_MS") or 0) or int(time.time() * 1000)
@@ -817,19 +820,31 @@ def agent_pill_html(a):
         links.append(tap_link(pr, "Open PR"))
     links_html = ('<span class="agent-links">' + "".join(links) + "</span>") if links else ""
     extra = " has-links" if links else ""
+    probe = "mac" if str((a or {}).get("id") or "") in AGENT_IDS else "cloud"
     return (
-        f'<div class="agent-pill{extra}" data-agent-id="{aid}" data-state="{state}" '
+        f'<div class="agent-pill{extra}" data-probe="{probe}" data-agent-id="{aid}" data-state="{state}" '
         f'data-checked-at="{checked}" data-agent-url="{h(url)}" data-pr-url="{h(pr)}" title="{detail}">'
         f'{name_html}{chip}{links_html}</div>'
     )
 
 def agents_strip_html(agents_list, cloud_list=None):
-    pills = [agent_pill_html(a) for a in (agents_list or [])]
+    compact = compact_unknown_mac_probes(agents_list)
+    cls = "agents-strip is-unknown-mac" if compact else "agents-strip"
+    pills = [unknown_mac_probes_html(agents_list)]
+    pills.extend(agent_pill_html(a) for a in (agents_list or []))
     pills.extend(agent_pill_html(a) for a in (cloud_list or []))
     return (
-        '<div class="agents-strip" id="agents-strip">'
+        f'<div class="{cls}" id="agents-strip">'
         + "".join(pills)
         + "</div>"
+    )
+
+def fetched_line_html(repos):
+    names = [str(x).strip() for x in (repos or []) if str(x).strip()]
+    return (
+        '<p id="fetched-line">Live CI via <code>gh</code>: '
+        + h(", ".join(names))
+        + ".</p>"
     )
 
 for sec in status["sections"]:
@@ -856,6 +871,7 @@ for sec in status["sections"]:
             '<p class="pending-help">Public board -- Approve opens a GitHub issue; submit while logged in as <code>rupret007</code>.</p>'
             + tools_row(control_projects)
             + lanes_html(projects)
+            + fetched_line_html(status.get("fetched_repos"))
             + "</details>"
         )
         sections_html.append(
@@ -968,6 +984,7 @@ html = f'''<!DOCTYPE html>
   code {{ background:var(--panel2); padding:.05rem .35rem; border-radius:6px; font-size:.78rem; }}
   footer {{ margin-top:1.25rem; padding-top:1rem; border-top:1px solid var(--hair); color:var(--muted); font-size:.75rem; }}
   .status {{ font-size:.78rem; min-height:1.1em; margin-top:.4rem; color:var(--muted); }}
+  #panel-status:empty {{ display:none; min-height:0; margin:0; }}
   .status.ok {{ color:var(--ok); }}
   .status.bad {{ color:#f87171; }}
   .status.warn {{ color:var(--warn); }}
@@ -1023,6 +1040,10 @@ html = f'''<!DOCTYPE html>
   #board {{ min-height:2rem; }}
   #active-agents {{ margin:0; }}
   .agents-strip {{ display:flex; flex-wrap:wrap; gap:.55rem .85rem; align-items:flex-start; margin:0; padding:0; border:0; background:transparent; }}
+  .agents-unknown {{ display:none; margin:0; color:var(--muted); font-size:.8rem; font-weight:600; }}
+  .agents-strip.is-unknown-mac .agents-unknown {{ display:block; }}
+  .agents-strip.is-unknown-mac .agent-pill[data-probe="mac"] {{ display:none; }}
+  body.tab-home section.block.foot {{ display:none; }}
   .agent-pill {{ display:inline-flex; align-items:center; gap:.35rem; border:0; background:transparent; padding:0; }}
   .agent-pill.has-links {{ flex-direction:column; align-items:flex-start; gap:.3rem; }}
   .agent-pill .name {{ font-weight:600; font-size:.8rem; }}
@@ -1057,7 +1078,7 @@ html = f'''<!DOCTYPE html>
   }}
 </style>
 </head>
-<body>
+<body class="tab-home">
 <div class="wrap">
   <header class="pulse">
     <h1><span class="mark">Bob</span> Ops</h1>
@@ -1075,7 +1096,6 @@ html = f'''<!DOCTYPE html>
   <footer>
     <p><a href="https://github.com/rupret007/bob-ops-dashboard">rupret007/bob-ops-dashboard</a>
     · <a href="./status.json">status.json</a></p>
-    <p id="fetched-line">Live CI via <code>gh</code>: {h(', '.join(status.get('fetched_repos') or []))}.</p>
   </footer>
 </div>
 <script>
@@ -1356,7 +1376,6 @@ html = f'''<!DOCTYPE html>
   var SILENCE_LIMIT_MS = Math.max(45 * 60 * 1000, 3 * EXPECTED_REFRESH_MS);
   var silenceEl = document.getElementById("silence-banner");
   var boardEl = document.getElementById("board");
-  var fetchedLine = document.getElementById("fetched-line");
   var pollFailStreak = 0;
 
   var CHIP_COLORS = {{
@@ -1654,6 +1673,9 @@ html = f'''<!DOCTYPE html>
       else panel.setAttribute("hidden", "");
     }});
     try {{
+      document.body.classList.toggle("tab-home", !want);
+    }} catch (e2) {{}}
+    try {{
       if (want) history.replaceState(null, "", "#" + want);
       else if ((location.hash || "").length > 1) history.replaceState(null, "", location.pathname + location.search);
     }} catch (e) {{}}
@@ -1818,7 +1840,9 @@ html = f'''<!DOCTYPE html>
     if (url) links += tapLink(url, "Open agent");
     if (pr) links += tapLink(pr, "Open PR");
     var extra = links ? " has-links" : "";
-    return '<div class="agent-pill' + extra + '" data-agent-id="' + esc(row.id || name) +
+    var id = String(row.id || "");
+    var probe = (id === "codex" || id === "cursor" || id === "claude") ? "mac" : "cloud";
+    return '<div class="agent-pill' + extra + '" data-probe="' + probe + '" data-agent-id="' + esc(row.id || name) +
       '" data-state="' + esc(row.state || "unknown") +
       '" data-checked-at="' + esc(row.checked_at || "") +
       '" data-agent-url="' + esc(url) +
@@ -1827,11 +1851,45 @@ html = f'''<!DOCTYPE html>
       nameHtml + agentStateChip(row.state) +
       (links ? '<span class="agent-links">' + links + "</span>" : "") + "</div>";
   }}
+  function compactUnknownMacProbes(agents) {{
+    var known = false;
+    (agents || []).forEach(function (a) {{
+      if (!a) return;
+      var id = String(a.id || "");
+      if (id !== "codex" && id !== "cursor" && id !== "claude") return;
+      var state = String(a.state || "unknown").toLowerCase();
+      if (state && state !== "unknown") known = true;
+    }});
+    return !known;
+  }}
+  function unknownMacProbesHtml(agents) {{
+    var detail = "No Mac probe yet -- run probe-agents-status.sh";
+    var i;
+    for (i = 0; i < (agents || []).length; i++) {{
+      var a = agents[i];
+      if (!a) continue;
+      var id = String(a.id || "");
+      if (id !== "codex" && id !== "cursor" && id !== "claude") continue;
+      var text = String(a.detail || "").trim();
+      if (text) {{ detail = text; break; }}
+    }}
+    return '<p class="agents-unknown" id="agents-unknown" title="' + esc(detail) + '">Agents unknown</p>';
+  }}
   function agentsStripHtml(agents, cloud) {{
-    var pills = "";
+    var compact = compactUnknownMacProbes(agents);
+    var cls = "agents-strip" + (compact ? " is-unknown-mac" : "");
+    var pills = unknownMacProbesHtml(agents);
     (agents || []).forEach(function (a) {{ pills += agentPillHtml(a); }});
     (cloud || []).forEach(function (a) {{ pills += agentPillHtml(a); }});
-    return '<div class="agents-strip" id="agents-strip">' + pills + "</div>";
+    return '<div class="' + cls + '" id="agents-strip">' + pills + "</div>";
+  }}
+  function fetchedLineHtml(repos) {{
+    var names = [];
+    (repos || []).forEach(function (x) {{
+      var s = String(x || "").trim();
+      if (s) names.push(s);
+    }});
+    return '<p id="fetched-line">Live CI via <code>gh</code>: ' + esc(names.join(", ")) + ".</p>";
   }}
   function sanitizeCloudAgents(rows) {{
     var out = [];
@@ -1991,7 +2049,7 @@ html = f'''<!DOCTYPE html>
           '<details class="how-board"><summary>How this board works</summary>' +
           '<p class="pending-help">Engineer notes -- not the daily ops list.</p>' +
           '<p class="pending-help">Public board -- Approve opens a GitHub issue; submit while logged in as <code>rupret007</code>.</p>' +
-          toolsRow(controlProjects) + lanesHtml(sec.projects || []) + "</details></section>";
+          toolsRow(controlProjects) + lanesHtml(sec.projects || []) + fetchedLineHtml(data.fetched_repos) + "</details></section>";
         return;
       }}
       if (sec.id === "abilities") {{
@@ -2014,10 +2072,6 @@ html = f'''<!DOCTYPE html>
     boardEl.innerHTML = html;
     boardEl.setAttribute("data-fp", html);
     restoreOpen(open);
-    if (fetchedLine && Array.isArray(data.fetched_repos)) {{
-      var fl = 'Live CI via <code>gh</code>: ' + esc(data.fetched_repos.join(", ")) + ".";
-      if (fetchedLine.innerHTML !== fl) fetchedLine.innerHTML = fl;
-    }}
     window.dispatchEvent(new CustomEvent("bob-ops-painted"));
   }}
 
