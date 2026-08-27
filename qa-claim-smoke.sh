@@ -1358,6 +1358,8 @@ if "#panel-status:empty" not in html:
     raise SystemExit("empty panel-status must collapse")
 if "body.tab-home section.block.foot" not in html:
     raise SystemExit("home screen must hide Abilities / How-this-board chrome")
+if "body.tab-home .agent-links" not in html:
+    raise SystemExit("home screen must keep cloud work links compact")
 if 'class="tab-home"' not in html:
     raise SystemExit("first paint must start as the home tab screen")
 pending = st.get("pending") if isinstance(st, dict) else None

@@ -538,6 +538,7 @@ function run() {
   if (html.indexOf("is-unknown-mac") === -1) fail("first paint must collapse unknown Mac pills");
   if (html.indexOf("#panel-status:empty") === -1) fail("empty panel-status must not reserve first-screen space");
   if (html.indexOf("body.tab-home section.block.foot") === -1) fail("home screen must hide footer chrome");
+  if (html.indexOf("body.tab-home .agent-links") === -1) fail("home screen must not stack Open agent buttons");
   if (html.indexOf('class="tab-home"') === -1) fail("first paint must start on the home tab screen");
   const preHow = html.split('<details class="how-board">')[0] || "";
   if (preHow.indexOf("Live CI via") !== -1) fail("fetched-repo line must not lead the first phone screen");

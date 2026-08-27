@@ -1044,6 +1044,9 @@ html = f'''<!DOCTYPE html>
   .agents-strip.is-unknown-mac .agents-unknown {{ display:block; }}
   .agents-strip.is-unknown-mac .agent-pill[data-probe="mac"] {{ display:none; }}
   body.tab-home section.block.foot {{ display:none; }}
+  body.tab-home .agent-links {{ display:none; }}
+  body.tab-home .agent-pill.has-links {{ flex-direction:row; flex-wrap:wrap; align-items:center; }}
+  body.tab-home .agent-pill[data-probe="cloud"] .chip {{ display:none; }}
   .agent-pill {{ display:inline-flex; align-items:center; gap:.35rem; border:0; background:transparent; padding:0; }}
   .agent-pill.has-links {{ flex-direction:column; align-items:flex-start; gap:.3rem; }}
   .agent-pill .name {{ font-weight:600; font-size:.8rem; }}
