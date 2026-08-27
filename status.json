@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-08-27T15:21:40.187859-05:00",
-  "generated_at_display": "Thu Aug 27, 2026 \u00b7 3:21 PM CDT",
+  "generated_at": "2026-08-27T15:46:38.880472-05:00",
+  "generated_at_display": "Thu Aug 27, 2026 \u00b7 3:46 PM CDT",
   "timezone": "America/Chicago",
   "owner": "rupret007",
   "dashboard": "bob-ops-dashboard",
@@ -46,8 +46,8 @@
           "url": "https://github.com/rupret007/webjam",
           "repo_url": "https://github.com/rupret007/webjam",
           "private": false,
-          "status": "yellow",
-          "chip": "Yellow",
+          "status": "jeff-gate",
+          "chip": "Jeff-gate",
           "default_branch": "master",
           "tip_sha": "09ceb2a",
           "tip_date": "2026-08-27T20:09:02Z",
@@ -60,7 +60,7 @@
           "agent_url": "https://cursor.com/agents/bc-48233059-c14e-4168-ae78-15566aa55495",
           "ci": {
             "name": "WebJam CI",
-            "conclusion": "in_progress",
+            "conclusion": "success",
             "branch": "master",
             "sha": "09ceb2a",
             "created": "2026-08-27T20:09:05Z",
@@ -398,8 +398,8 @@
           "status": "yellow",
           "chip": "Yellow",
           "default_branch": "main",
-          "tip_sha": "290332d",
-          "tip_date": "2026-08-27T20:08:11Z",
+          "tip_sha": "f83a1b5",
+          "tip_date": "2026-08-27T20:21:47Z",
           "open_prs": 2,
           "open_pr_url": "https://github.com/rupret007/bob-ops-dashboard/pull/21",
           "open_pr_number": 21,
@@ -409,11 +409,11 @@
           "agent_url": null,
           "ci": {
             "name": "QA claim smoke",
-            "conclusion": "success",
+            "conclusion": "pending",
             "branch": "main",
-            "sha": "290332d",
-            "created": "2026-08-27T20:08:15Z",
-            "html_url": "https://github.com/rupret007/bob-ops-dashboard/actions/runs/33111842487"
+            "sha": "f83a1b5",
+            "created": null,
+            "html_url": null
           },
           "release": null,
           "release_sha": null,
@@ -781,7 +781,7 @@
     "Sliding-Glass-Door-PETG-Screw"
   ],
   "publish_notes": "Public board -- no secrets or customer paths. Private repositories stay high-level; AI Music Vault stays private-content-boundary only.",
-  "refresh_started_ms": 1787862071769,
+  "refresh_started_ms": 1787863580038,
   "agents_source": "file:stale->unknown",
   "agents": [
     {
