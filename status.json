@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-08-26T22:06:51.020598-05:00",
-  "generated_at_display": "Wed Aug 26, 2026 \u00b7 10:06 PM CDT",
+  "generated_at": "2026-08-26T22:19:39.468794-05:00",
+  "generated_at_display": "Wed Aug 26, 2026 \u00b7 10:19 PM CDT",
   "timezone": "America/Chicago",
   "owner": "rupret007",
   "dashboard": "bob-ops-dashboard",
@@ -342,8 +342,8 @@
           "status": "yellow",
           "chip": "Yellow",
           "default_branch": "main",
-          "tip_sha": "ffed454",
-          "tip_date": "2026-08-27T02:40:20Z",
+          "tip_sha": "110aba3",
+          "tip_date": "2026-08-27T03:06:53Z",
           "open_prs": 2,
           "open_pr_url": "https://github.com/rupret007/bob-ops-dashboard/pull/21",
           "open_pr_number": 21,
@@ -355,9 +355,9 @@
             "name": "QA claim smoke",
             "conclusion": "success",
             "branch": "main",
-            "sha": "ffed454",
-            "created": "2026-08-27T02:40:23Z",
-            "html_url": "https://github.com/rupret007/bob-ops-dashboard/actions/runs/33033998740"
+            "sha": "110aba3",
+            "created": "2026-08-27T03:06:56Z",
+            "html_url": "https://github.com/rupret007/bob-ops-dashboard/actions/runs/33035374848"
           },
           "release": null,
           "notes": "Source-only feature PRs; the scheduled refresh owns generated index.html and status.json.",
@@ -498,8 +498,8 @@
           "url": "https://github.com/rupret007/Andrea_NanoBot",
           "repo_url": "https://github.com/rupret007/Andrea_NanoBot",
           "private": false,
-          "status": "yellow",
-          "chip": "Yellow",
+          "status": "green",
+          "chip": "Green",
           "default_branch": "main",
           "tip_sha": "b6c0adf",
           "tip_date": "2026-08-27T03:04:59Z",
@@ -511,12 +511,12 @@
           "pr_listing_complete": true,
           "agent_url": null,
           "ci": {
-            "name": "AGI Layer CI",
-            "conclusion": "in_progress",
+            "name": "CI",
+            "conclusion": "success",
             "branch": "main",
             "sha": "b6c0adf",
             "created": "2026-08-27T03:05:02Z",
-            "html_url": "https://github.com/rupret007/Andrea_NanoBot/actions/runs/33035276197"
+            "html_url": "https://github.com/rupret007/Andrea_NanoBot/actions/runs/33035276150"
           },
           "release": null,
           "notes": "BB AppleScript send preferred. Private API OFF. Approval-fenced sends only.",
@@ -696,7 +696,7 @@
   ],
   "inaccessible": [],
   "publish_notes": "Public board -- no secrets or customer paths. Private repositories stay high-level; AI Music Vault stays private-content-boundary only.",
-  "refresh_started_ms": 1787799960385,
+  "refresh_started_ms": 1787800727699,
   "agents_source": "file:stale->unknown",
   "agents": [
     {
