@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-08-26T20:50:04.427774-05:00",
-  "generated_at_display": "Wed Aug 26, 2026 \u00b7 8:50 PM CDT",
+  "generated_at": "2026-08-26T21:03:54.301534-05:00",
+  "generated_at_display": "Wed Aug 26, 2026 \u00b7 9:03 PM CDT",
   "timezone": "America/Chicago",
   "owner": "rupret007",
   "dashboard": "bob-ops-dashboard",
@@ -51,13 +51,13 @@
           "default_branch": "master",
           "tip_sha": "210d796",
           "tip_date": "2026-08-27T00:56:40Z",
-          "open_prs": 1,
-          "open_pr_url": "https://github.com/rupret007/webjam/pull/37",
-          "open_pr_number": 37,
+          "open_prs": 2,
+          "open_pr_url": "https://github.com/rupret007/webjam/pull/46",
+          "open_pr_number": 46,
           "open_pr_draft": true,
           "open_pr_stack": [],
           "pr_listing_complete": true,
-          "agent_url": null,
+          "agent_url": "https://cursor.com/agents/bc-0ba39f27-37a9-4f03-b462-b1dc935b0d17",
           "ci": {
             "name": "WebJam CI",
             "conclusion": "success",
@@ -342,8 +342,8 @@
           "status": "yellow",
           "chip": "Yellow",
           "default_branch": "main",
-          "tip_sha": "92238d9",
-          "tip_date": "2026-08-27T01:34:13Z",
+          "tip_sha": "a78ed79",
+          "tip_date": "2026-08-27T01:50:06Z",
           "open_prs": 2,
           "open_pr_url": "https://github.com/rupret007/bob-ops-dashboard/pull/21",
           "open_pr_number": 21,
@@ -355,9 +355,9 @@
             "name": "QA claim smoke",
             "conclusion": "success",
             "branch": "main",
-            "sha": "92238d9",
-            "created": "2026-08-27T01:34:17Z",
-            "html_url": "https://github.com/rupret007/bob-ops-dashboard/actions/runs/33030515625"
+            "sha": "a78ed79",
+            "created": "2026-08-27T01:50:10Z",
+            "html_url": "https://github.com/rupret007/bob-ops-dashboard/actions/runs/33031365119"
           },
           "release": null,
           "notes": "Source-only feature PRs; the scheduled refresh owns generated index.html and status.json.",
@@ -696,7 +696,7 @@
   ],
   "inaccessible": [],
   "publish_notes": "Public board -- no secrets or customer paths. Private repositories stay high-level; AI Music Vault stays private-content-boundary only.",
-  "refresh_started_ms": 1787795354128,
+  "refresh_started_ms": 1787796183314,
   "agents_source": "file:stale->unknown",
   "agents": [
     {
@@ -721,7 +721,17 @@
       "checked_at": null
     }
   ],
-  "cloud_agents": [],
+  "cloud_agents": [
+    {
+      "id": "bc-0ba39f27-37a9-4f03-b462-b1dc935b0d17",
+      "name": "PR #46",
+      "state": "unknown",
+      "detail": "Bump packaged identity to unpublished v0.27.0",
+      "url": "https://cursor.com/agents/bc-0ba39f27-37a9-4f03-b462-b1dc935b0d17",
+      "pr_url": "https://github.com/rupret007/webjam/pull/46",
+      "checked_at": null
+    }
+  ],
   "pending": [
     {
       "id": "webjam-exploratory",
