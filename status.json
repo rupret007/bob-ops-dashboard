@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-08-27T16:16:23.207089-05:00",
-  "generated_at_display": "Thu Aug 27, 2026 \u00b7 4:16 PM CDT",
+  "generated_at": "2026-08-27T16:23:06.720299-05:00",
+  "generated_at_display": "Thu Aug 27, 2026 \u00b7 4:23 PM CDT",
   "timezone": "America/Chicago",
   "owner": "rupret007",
   "dashboard": "bob-ops-dashboard",
@@ -177,22 +177,22 @@
           "status": "yellow",
           "chip": "Yellow",
           "default_branch": "main",
-          "tip_sha": "a1f8729",
-          "tip_date": "2026-08-27T18:55:54Z",
-          "open_prs": 1,
-          "open_pr_url": "https://github.com/rupret007/RadDadSite/pull/15",
-          "open_pr_number": 15,
-          "open_pr_draft": true,
+          "tip_sha": "0d4d651",
+          "tip_date": "2026-08-27T21:22:16Z",
+          "open_prs": 0,
+          "open_pr_url": null,
+          "open_pr_number": null,
+          "open_pr_draft": false,
           "open_pr_stack": [],
           "pr_listing_complete": true,
           "agent_url": null,
           "ci": {
             "name": "Test, Package, and Deploy Site",
-            "conclusion": "success",
+            "conclusion": "in_progress",
             "branch": "main",
-            "sha": "a1f8729",
-            "created": "2026-08-27T18:55:57Z",
-            "html_url": "https://github.com/rupret007/RadDadSite/actions/runs/33105935655"
+            "sha": "0d4d651",
+            "created": "2026-08-27T21:22:19Z",
+            "html_url": "https://github.com/rupret007/RadDadSite/actions/runs/33117832037"
           },
           "release": null,
           "release_sha": null,
@@ -398,8 +398,8 @@
           "status": "yellow",
           "chip": "Yellow",
           "default_branch": "main",
-          "tip_sha": "ef5a86a",
-          "tip_date": "2026-08-27T21:05:16Z",
+          "tip_sha": "80dd391",
+          "tip_date": "2026-08-27T21:16:30Z",
           "open_prs": 2,
           "open_pr_url": "https://github.com/rupret007/bob-ops-dashboard/pull/21",
           "open_pr_number": 21,
@@ -409,11 +409,11 @@
           "agent_url": null,
           "ci": {
             "name": "QA claim smoke",
-            "conclusion": "success",
+            "conclusion": "pending",
             "branch": "main",
-            "sha": "ef5a86a",
-            "created": "2026-08-27T21:05:22Z",
-            "html_url": "https://github.com/rupret007/bob-ops-dashboard/actions/runs/33116479045"
+            "sha": "80dd391",
+            "created": null,
+            "html_url": null
           },
           "release": null,
           "release_sha": null,
@@ -781,7 +781,7 @@
     "Sliding-Glass-Door-PETG-Screw"
   ],
   "publish_notes": "Public board -- no secrets or customer paths. Private repositories stay high-level; AI Music Vault stays private-content-boundary only.",
-  "refresh_started_ms": 1787865359097,
+  "refresh_started_ms": 1787865762704,
   "agents_source": "file:stale->unknown",
   "agents": [
     {
