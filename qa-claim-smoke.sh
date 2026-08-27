@@ -139,6 +139,9 @@ grep -q 'function safeAgentUrl' "$INDEX" || fail "safeAgentUrl missing"
 grep -q 'function laneHrefs' "$INDEX" || fail "laneHrefs missing"
 grep -q 'function signalHref' "$INDEX" || fail "signalHref missing"
 grep -q 'function safePullsUrl' "$INDEX" || fail "safePullsUrl missing"
+grep -q 'function safeReleaseUrl' "$INDEX" || fail "safeReleaseUrl missing"
+grep -q 'function latestReleaseUrlFromRepo' "$INDEX" || fail "latestReleaseUrlFromRepo missing"
+grep -q 'Latest != source' "$INDEX" || fail "Latest != source missing from page"
 grep -q 'function safeGameUrl' "$INDEX" || fail "safeGameUrl missing"
 grep -q 'function safeGameUrl' "$REFRESH" || fail "refresh.sh safeGameUrl missing"
 grep -q 'concl === "skipped"' "$INDEX" || fail "laneHrefs must drop skipped Open CI"
@@ -220,8 +223,12 @@ grep -q 'safe_agent_url' "$ROOT/board_meta.py" || fail "board_meta.py missing sa
 grep -q 'lane_hrefs' "$ROOT/board_meta.py" || fail "board_meta.py missing lane_hrefs"
 grep -q 'signal_href' "$ROOT/board_meta.py" || fail "board_meta.py missing signal_href"
 grep -q 'safe_pulls_url' "$ROOT/board_meta.py" || fail "board_meta.py missing safe_pulls_url"
+grep -q 'safe_release_url' "$ROOT/board_meta.py" || fail "board_meta.py missing safe_release_url"
+grep -q 'Latest != source' "$ROOT/board_meta.py" || fail "board_meta.py missing Latest != source"
 grep -q 'function signalHref' "$REFRESH" || fail "refresh.sh missing signalHref"
 grep -q 'function safePullsUrl' "$REFRESH" || fail "refresh.sh missing safePullsUrl"
+grep -q 'function safeReleaseUrl' "$REFRESH" || fail "refresh.sh missing safeReleaseUrl"
+grep -q 'Latest != source' "$REFRESH" || fail "refresh.sh missing Latest != source"
 if grep -q '<span class="signal">1 open PR</span>' "$INDEX"; then
   fail "1 open PR signal is still dead text"
 fi
@@ -234,7 +241,10 @@ grep -q 'prune_closed_parked_prs' "$REFRESH" || fail "refresh.sh missing parked-
 if grep -q 'RadDadSite #6' "$REFRESH"; then
   fail "refresh.sh still presents closed RadDadSite #6 as current work"
 fi
-grep -q 'Private-content boundary hold. Keep private; do not publish catalog content.' "$REFRESH" || fail "refresh.sh missing private-content boundary hold"
+grep -q 'Private catalog spine for StoryBoard / Show Night. Keep private; do not publish catalog content.' "$REFRESH" || fail "refresh.sh missing private catalog spine hold"
+grep -q 'Making room. Latest is the published test candidate; source can be ahead.' "$REFRESH" || fail "refresh.sh missing WebJam Latest vs source note"
+grep -q 'Band-business engine. Consumes Vault; not a second catalog.' "$REFRESH" || fail "refresh.sh missing StoryBoard engine note"
+grep -q 'Live run sheet. GitHub is source; live Latest is Sites.' "$REFRESH" || fail "refresh.sh missing Show Night Latest vs source note"
 if grep -q 'Private docs/index' "$REFRESH"; then
   fail "refresh.sh leaked private catalog path detail"
 fi
@@ -547,6 +557,10 @@ if "private GitHub lanes stay **high-level only**" not in coverage:
     raise SystemExit("README must say private GitHub lanes are not public tap rows")
 if "scheduled refresh publisher cannot hide a failing test workflow" not in text:
     raise SystemExit("README must say the scheduled refresh publisher is not tip CI")
+if "Vault, StoryBoard, Show Night, and WebJam work together as one music stack" not in text:
+    raise SystemExit("README must say the music stack works together")
+if "Latest != source" not in text:
+    raise SystemExit("README must say Latest != source is a tap")
 refresh_text = refresh.read_text()
 high_level_source_pins = (
     'project("AI-Music-Vault", high_level_only=True,',
@@ -578,7 +592,7 @@ if "high_level=bool(r.get(\"private\") or high_level_only)" not in refresh_text:
 if "if (p.private) return \"\";" not in refresh_text:
     raise SystemExit("refresh.sh JS compactSignal must hide private-lane CI diagnosis")
 sys.path.insert(0, str(refresh.parent))
-from board_meta import compact_signal, is_ci_noise, pick_tip_ci, status_from_fetch
+from board_meta import compact_signal, is_ci_noise, pick_tip_ci, signal_href, status_from_fetch
 # Empty-runner / 0-step hosted red is not a product fail on a public high-level row.
 empty_runner = {
     "accessible": True,
@@ -623,6 +637,33 @@ if not picked or picked.get("name") != "QA claim smoke" or picked.get("conclusio
     raise SystemExit("refresh publisher must not beat QA claim smoke")
 if compact_signal({"ci": picked, "open_prs": 2}) != "2 open PRs":
     raise SystemExit("refresh publisher must not hide the open-PR signal")
+if (
+    compact_signal(
+        {
+            "release": "v0.26.0",
+            "release_sha": "4b52080",
+            "tip_sha": "27530d8",
+            "open_prs": 0,
+            "ci": {"conclusion": "success"},
+        }
+    )
+    != "Latest != source"
+):
+    raise SystemExit("proven Latest vs source must not paint the tag as current")
+if (
+    signal_href(
+        {
+            "url": "https://github.com/rupret007/webjam",
+            "release": "v0.26.0",
+            "release_sha": "4b52080",
+            "tip_sha": "27530d8",
+            "open_prs": 0,
+            "ci": {"conclusion": "success"},
+        }
+    )
+    != "https://github.com/rupret007/webjam/releases/latest"
+):
+    raise SystemExit("Latest != source must tap /releases/latest, not dead text")
 if status_from_fetch({"accessible": True, "open_prs": 2, "ci": picked}) == "red":
     raise SystemExit("refresh publisher must not paint the dashboard lane Red")
 if pick_tip_ci([refresh_running], "main", "9c38307") is not None:
@@ -1138,6 +1179,8 @@ if "function safeAgentUrl" not in html or "function laneHrefs" not in html:
     raise SystemExit("generated page missing work-link helpers")
 if "function signalHref" not in html or "function safePullsUrl" not in html:
     raise SystemExit("generated page missing open-PR signal helpers")
+if "function safeReleaseUrl" not in html or "Latest != source" not in html:
+    raise SystemExit("generated page missing Latest vs source helpers")
 if '<span class="signal">1 open PR</span>' in html or '<span class="signal">4 open PRs</span>' in html:
     raise SystemExit("generated page still has dead open-PR signal text")
 if "function handleWorkClick" not in html or "function openWorkLink" not in html:
@@ -1154,9 +1197,15 @@ if "RadDadSite #6" in html or "RadDadSite #6" in str(st):
     raise SystemExit("closed RadDadSite #6 leaked into generated current work")
 if "Private docs/index" in html or "Private docs/index" in str(st):
     raise SystemExit("generated board leaked private catalog path detail")
-boundary = "Private-content boundary hold. Keep private; do not publish catalog content."
+boundary = "Private catalog spine for StoryBoard / Show Night. Keep private; do not publish catalog content."
 if boundary not in html or boundary not in str(st):
-    raise SystemExit("generated board missing private-content boundary hold")
+    raise SystemExit("generated board missing private catalog spine hold")
+if "Making room. Latest is the published test candidate; source can be ahead." not in str(st):
+    raise SystemExit("generated board missing WebJam Latest vs source note")
+if "Band-business engine. Consumes Vault; not a second catalog." not in str(st):
+    raise SystemExit("generated board missing StoryBoard engine note")
+if "Live run sheet. GitHub is source; live Latest is Sites." not in str(st):
+    raise SystemExit("generated board missing Show Night Latest vs source note")
 if "lane-links" not in html and "data-open=\"work\"" not in html:
     raise SystemExit("generated page missing work links")
 agents = st.get("agents") or []

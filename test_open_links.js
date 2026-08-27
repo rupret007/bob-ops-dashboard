@@ -56,6 +56,8 @@ function run() {
   if (src.indexOf("function workHref") === -1) fail("workHref missing from page");
   if (src.indexOf("function signalHref") === -1) fail("signalHref missing from page");
   if (src.indexOf("function safePullsUrl") === -1) fail("safePullsUrl missing from page");
+  if (src.indexOf("function safeReleaseUrl") === -1) fail("safeReleaseUrl missing from page");
+  if (src.indexOf("function latestReleaseUrlFromRepo") === -1) fail("latestReleaseUrlFromRepo missing from page");
   if (src.indexOf("function safeGameUrl") === -1) fail("safeGameUrl missing from page");
   if (src.indexOf("function openWorkLink") === -1) fail("openWorkLink missing from page");
   if (src.indexOf("function handleWorkClick") === -1) fail("handleWorkClick missing from page");
@@ -79,14 +81,17 @@ function run() {
   const safePullsUrl = eval(
     "(function (cleanPublicUrl) { return " + extractFn(src, "safePullsUrl") + "; })"
   )(cleanPublicUrl);
+  const safeReleaseUrl = eval(
+    "(function (cleanPublicUrl) { return " + extractFn(src, "safeReleaseUrl") + "; })"
+  )(cleanPublicUrl);
   const safeGameUrl = eval(
     "(function (cleanPublicUrl) { return " + extractFn(src, "safeGameUrl") + "; })"
   )(cleanPublicUrl);
   const workHref = eval(
-    "(function (safeAgentUrl, safePrUrl, safeActionsUrl, safePullsUrl, safeRepoUrl, safeGameUrl) { return " +
+    "(function (safeAgentUrl, safePrUrl, safeActionsUrl, safePullsUrl, safeReleaseUrl, safeRepoUrl, safeGameUrl) { return " +
       extractFn(src, "workHref") +
       "; })"
-  )(safeAgentUrl, safePrUrl, safeActionsUrl, safePullsUrl, safeRepoUrl, safeGameUrl);
+  )(safeAgentUrl, safePrUrl, safeActionsUrl, safePullsUrl, safeReleaseUrl, safeRepoUrl, safeGameUrl);
 
   const good = "https://cursor.com/agents/bc-8e16f06d-f73f-482c-987f-e13f2d3b9fb1";
   if (safeAgentUrl(good) !== good) fail("good agent url dropped");
@@ -111,6 +116,17 @@ function run() {
   if (workHref("https://github.com/rupret007/story-corner-shelf/pulls") !== "https://github.com/rupret007/story-corner-shelf/pulls") {
     fail("workHref must keep allowlisted pulls list");
   }
+  if (safeReleaseUrl("https://github.com/rupret007/webjam/releases/latest") !== "https://github.com/rupret007/webjam/releases/latest") {
+    fail("safe Latest url");
+  }
+  if (safeReleaseUrl("https://github.com/rupret007/webjam/releases/tag/v0.26.0") !== "https://github.com/rupret007/webjam/releases/tag/v0.26.0") {
+    fail("safe release tag url");
+  }
+  if (workHref("https://github.com/rupret007/webjam/releases/latest") !== "https://github.com/rupret007/webjam/releases/latest") {
+    fail("workHref must keep allowlisted Latest");
+  }
+  if (workHref("https://evil.example/rupret007/webjam/releases/latest")) fail("workHref must drop foreign Latest");
+  if (workHref("https://github.com/rupret007/webjam/releases/tag/../v1")) fail("workHref must drop path-like release tags");
   if (workHref("https://github.com/0xc0re/barker/pull/41") !== "https://github.com/0xc0re/barker/pull/41") {
     fail("workHref must keep canonical Barker PR");
   }

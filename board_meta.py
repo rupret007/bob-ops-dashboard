@@ -121,6 +121,15 @@ ACTIONS_URL_RE = re.compile(
 )
 REPO_URL_RE = re.compile(rf"^https://github\.com/{GITHUB_REPO_PATH}$", re.I)
 PULLS_URL_RE = re.compile(rf"^https://github\.com/{GITHUB_REPO_PATH}/pulls$", re.I)
+SAFE_RELEASE_TAG = r"[A-Za-z0-9][A-Za-z0-9._-]{0,63}"
+RELEASE_TAG_RE = re.compile(rf"^{SAFE_RELEASE_TAG}$")
+RELEASE_LATEST_URL_RE = re.compile(
+    rf"^https://github\.com/{GITHUB_REPO_PATH}/releases/latest$", re.I
+)
+RELEASE_TAG_URL_RE = re.compile(
+    rf"^https://github\.com/{GITHUB_REPO_PATH}/releases/tag/{SAFE_RELEASE_TAG}$", re.I
+)
+LATEST_VS_SOURCE_SIGNAL = "Latest != source"
 TURDANOID_HUB_URL = "https://rupret007.github.io/Turdanoid/hub.html"
 CLOUD_AGENT_LIMIT = 3
 
@@ -175,6 +184,39 @@ def safe_pulls_url(url: Any) -> str:
     """Only a rupret007 repo /pulls index. Never invent a repo name."""
     s = _clean_public_url(url)
     return s if PULLS_URL_RE.match(s) else ""
+
+
+def safe_release_tag(tag: Any) -> str:
+    """Allowlisted GitHub release tag. Empty when the name could be a path."""
+    s = str(tag or "").strip()
+    if not RELEASE_TAG_RE.fullmatch(s) or ".." in s or "/" in s:
+        return ""
+    return s
+
+
+def safe_release_url(url: Any) -> str:
+    """Only an allowlisted Latest pointer or tag URL. Never invent a repo."""
+    s = _clean_public_url(url)
+    if RELEASE_LATEST_URL_RE.match(s) or RELEASE_TAG_URL_RE.match(s):
+        return s
+    return ""
+
+
+def latest_release_url_from_repo(url: Any) -> str:
+    """Derive /releases/latest from an allowlisted repo home. Empty if unknown."""
+    repo = safe_repo_url(url)
+    return (repo + "/releases/latest") if repo else ""
+
+
+def release_matches_tip(project: Any) -> bool | None:
+    """True when Latest SHA is this tip, False when proven different, None if unknown."""
+    if not isinstance(project, dict):
+        return None
+    tip = str(project.get("tip_sha") or "").strip()
+    rel = str(project.get("release_sha") or "").strip()
+    if not tip or not rel:
+        return None
+    return sha_matches_tip({"head_sha": rel}, tip)
 
 
 def safe_game_url(url: Any) -> str:
@@ -591,6 +633,11 @@ def signal_href(project: Any) -> str:
         if n > 1:
             return pulls
         return hrefs.get("pr") or pulls
+    rel = str(project.get("release") or "").strip()
+    if text == LATEST_VS_SOURCE_SIGNAL or (rel and text == rel):
+        return latest_release_url_from_repo(hrefs.get("repo") or "") or safe_release_url(
+            project.get("release_url")
+        )
     return ""
 
 
@@ -825,7 +872,7 @@ def status_from_fetch(
 
 
 def compact_signal(project: Any) -> str | None:
-    """One scan signal. Live CI, then review work, beat a release tag.
+    """One scan signal. Live CI, then review work, beat Latest vs source.
 
     Private / high-level lanes publish no CI or review signal. A hosted
     conclusion on those rows is not a public diagnosis.
@@ -853,6 +900,8 @@ def compact_signal(project: Any) -> str | None:
         return str(count) + (" open PR" if count == 1 else " open PRs")
     rel = str(project.get("release") or "").strip()
     if rel:
+        if release_matches_tip(project) is False:
+            return LATEST_VS_SOURCE_SIGNAL
         return rel
     if concl and concl not in CI_OK_CONCLUSIONS:
         return concl
@@ -1116,6 +1165,7 @@ def board_content_fingerprint(data: Any) -> str:
             p.get("open_pr_url"),
             p.get("open_pr_stack"),
             p.get("release"),
+            p.get("release_sha"),
             p.get("tip_sha"),
             p.get("agent_url"),
             p.get("live_game_url"),
@@ -1275,7 +1325,7 @@ def first_class_sections() -> list[dict[str, Any]]:
                 ),
                 _card(
                     "Soft-paint poll",
-                    "Client fetches status.json every 30s (pauses when the tab is hidden). Immediate poll on pageshow / visible. Fetch aborts after 8s. Hide / iOS-return abort is not a failed poll. A stale cached status.json cannot rewind the board. Repaints when board content changes -- not on every 15m Actions timestamp. Tip CI is the current SHA; Pages / skipped helpers / this board's refresh publisher cannot hide a fail. A skipped or cancelled helper cannot beat a success or become Open CI. Lanes prefer the open PR; CI fail/running taps the Actions run when a run URL is known. A complete same-repo stack shows safe base-to-tip PR order and taps the pulls list; ambiguous chains fall back to the honest open-PR count.",
+                    "Client fetches status.json every 30s (pauses when the tab is hidden). Immediate poll on pageshow / visible. Fetch aborts after 8s. Hide / iOS-return abort is not a failed poll. A stale cached status.json cannot rewind the board. Repaints when board content changes -- not on every 15m Actions timestamp. Tip CI is the current SHA; Pages / skipped helpers / this board's refresh publisher cannot hide a fail. A skipped or cancelled helper cannot beat a success or become Open CI. Lanes prefer the open PR; CI fail/running taps the Actions run when a run URL is known. A complete same-repo stack shows safe base-to-tip PR order and taps the pulls list; ambiguous chains fall back to the honest open-PR count. Vault, StoryBoard, Show Night, and WebJam work together as one music stack. WebJam Latest is the published test candidate and is not unpublished source; a proven Latest != source signal taps /releases/latest -- not dead text.",
                     chip="Feature",
                 ),
                 _card(

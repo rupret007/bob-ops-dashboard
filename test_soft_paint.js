@@ -128,6 +128,21 @@ function run() {
   if (boardFingerprint(gameA) === boardFingerprint(gameB)) {
     fail("fingerprint must change when the game hub link appears");
   }
+  const latestA = {
+    sections: [{
+      id: "live-shipping",
+      projects: [{ name: "WebJam", release: "v0.26.0", release_sha: "4b52080", tip_sha: "4b52080" }],
+    }],
+  };
+  const latestB = {
+    sections: [{
+      id: "live-shipping",
+      projects: [{ name: "WebJam", release: "v0.26.0", release_sha: "4b52080", tip_sha: "27530d8" }],
+    }],
+  };
+  if (boardFingerprint(latestA) === boardFingerprint(latestB)) {
+    fail("fingerprint must change when Latest SHA diverges from source");
+  }
 
   const parseCheckedAt = eval("(" + extractFn(src, "parseCheckedAt") + ")");
   const cleanPublicUrl = eval("(" + extractFn(src, "cleanPublicUrl") + ")");
@@ -192,7 +207,10 @@ function run() {
     fail("fresh probe must keep honest states");
   }
 
-  const compactSignal = eval("(" + extractFn(src, "compactSignal") + ")");
+  const releaseMatchesTip = eval("(" + extractFn(src, "releaseMatchesTip") + ")");
+  const compactSignal = eval(
+    "(function (releaseMatchesTip) { return " + extractFn(src, "compactSignal") + "; })"
+  )(releaseMatchesTip);
   if (compactSignal({ release: "v0.26.0", ci: { conclusion: "failure" }, open_prs: 1 }) !== "CI fail") {
     fail("CI fail must beat release + open PR");
   }
@@ -226,6 +244,28 @@ function run() {
   if (compactSignal({ release: "v0.26.0", ci: { conclusion: "success" }, open_prs: 0 }) !== "v0.26.0") {
     fail("green release still shows the tag");
   }
+  if (
+    compactSignal({
+      release: "v0.26.0",
+      release_sha: "4b52080",
+      tip_sha: "27530d8",
+      ci: { conclusion: "success" },
+      open_prs: 0,
+    }) !== "Latest != source"
+  ) {
+    fail("proven Latest vs source must not paint the tag as current");
+  }
+  if (
+    compactSignal({
+      release: "v0.26.0",
+      release_sha: "4b52080",
+      tip_sha: "4b52080",
+      ci: { conclusion: "success" },
+      open_prs: 0,
+    }) !== "v0.26.0"
+  ) {
+    fail("matching Latest SHA may still show the tag");
+  }
   const stack = [
     { number: 10, url: "https://github.com/rupret007/repo/pull/10" },
     { number: 11, url: "https://github.com/rupret007/repo/pull/11" },
@@ -245,11 +285,17 @@ function run() {
     fail("canonical Barker stack must pass the exact external-repo allowlist");
   }
 
+  const safeReleaseUrl = eval(
+    "(function (cleanPublicUrl) { return " + extractFn(src, "safeReleaseUrl") + "; })"
+  )(cleanPublicUrl);
+  const latestReleaseUrlFromRepo = eval(
+    "(function (safeRepoUrl) { return " + extractFn(src, "latestReleaseUrlFromRepo") + "; })"
+  )(safeRepoUrl);
   const signalHref = eval(
-    "(function (compactSignal, laneHrefs, pullsUrlFromRepo) { return " +
+    "(function (compactSignal, laneHrefs, pullsUrlFromRepo, latestReleaseUrlFromRepo, safeReleaseUrl) { return " +
       extractFn(src, "signalHref") +
       "; })"
-  )(compactSignal, laneHrefs, pullsUrlFromRepo);
+  )(compactSignal, laneHrefs, pullsUrlFromRepo, latestReleaseUrlFromRepo, safeReleaseUrl);
   if (
     signalHref({
       url: "https://github.com/rupret007/StoryBoard",
@@ -304,7 +350,31 @@ function run() {
     fail("CI pending must still tap the run");
   }
   if (signalHref({ release: "v0.26.0", ci: { conclusion: "success" }, open_prs: 0 })) {
-    fail("release tag must stay dead text");
+    fail("release tag without a repo must stay dead text");
+  }
+  if (
+    signalHref({
+      url: "https://github.com/rupret007/webjam",
+      release: "v0.26.0",
+      release_sha: "4b52080",
+      tip_sha: "27530d8",
+      open_prs: 0,
+      ci: { conclusion: "success" },
+    }) !== "https://github.com/rupret007/webjam/releases/latest"
+  ) {
+    fail("Latest != source must tap /releases/latest");
+  }
+  if (
+    signalHref({
+      url: "https://github.com/rupret007/webjam",
+      release: "v0.26.0",
+      release_sha: "4b52080",
+      tip_sha: "4b52080",
+      open_prs: 0,
+      ci: { conclusion: "success" },
+    }) !== "https://github.com/rupret007/webjam/releases/latest"
+  ) {
+    fail("matching Latest tag must still tap /releases/latest");
   }
   if (
     signalHref({
