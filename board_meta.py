@@ -77,7 +77,9 @@ CI_OK_CONCLUSIONS = frozenset({"", "success", "skipped", "cancelled"})
 # Skipped / cancelled helpers are "OK" for lane color, but they are not the
 # tip test run. Success must beat them, and they must not become Open CI.
 CI_SKIP_CONCLUSIONS = frozenset({"skipped", "cancelled"})
-# Pages / docs deploys are not test CI. They must not hide a tip fail.
+# Pages / docs deploys and this board's scheduled refresh publisher are not
+# test CI. They must not hide a tip fail, become Open CI, or paint Red /
+# CI running / CI pending on the public dashboard lane.
 CI_NOISE_MARKERS = (
     "pages-build-deployment",
     "pages build and deployment",
@@ -85,8 +87,11 @@ CI_NOISE_MARKERS = (
     "github pages",
     "deploy-pages",
     "deploy pages",
+    "refresh bob ops dashboard",
 )
-CI_NOISE_FILENAMES = frozenset({"pages.yml", "pages.yaml"})
+CI_NOISE_FILENAMES = frozenset(
+    {"pages.yml", "pages.yaml", "refresh-dashboard.yml"}
+)
 DECISION_VERBS = frozenset({"APPROVE", "HOLD", "DENY"})
 DECISION_ISSUE_NEW = "https://github.com/rupret007/bob-ops-dashboard/issues/new"
 PENDING_ID_RE = re.compile(r"^[a-zA-Z0-9._-]+$")
@@ -640,7 +645,7 @@ def ci_conclusion(repo: Any) -> str:
 
 
 def is_ci_noise(run: Any) -> bool:
-    """True for Pages / docs deploy runs that are not test CI."""
+    """True for Pages / docs deploy / this board's refresh publisher runs."""
     if not isinstance(run, dict):
         return True
     name = str(run.get("name") or "").strip().lower()
@@ -726,10 +731,11 @@ def _worst_normalized(runs: list[dict[str, Any]], branch: str) -> dict[str, Any]
 def pick_tip_ci(runs: Any, branch: Any, tip_sha: Any = None) -> dict[str, Any] | None:
     """Real test CI on the current tip SHA.
 
-    Pages / docs deploys are noise. A skipped bump-version helper must not
-    hide a failing ``CI`` workflow on the same SHA. When the repo has test
-    CI but none yet for this tip, return ``pending`` so a release tag cannot
-    claim the new commit is green.
+    Pages / docs deploys and this board's scheduled refresh publisher are
+    noise. A skipped bump-version helper must not hide a failing ``CI``
+    workflow on the same SHA. When the repo has test CI but none yet for
+    this tip, return ``pending`` so a release tag cannot claim the new
+    commit is green.
     """
     want = str(branch or "")
     if not want:
@@ -1269,7 +1275,7 @@ def first_class_sections() -> list[dict[str, Any]]:
                 ),
                 _card(
                     "Soft-paint poll",
-                    "Client fetches status.json every 30s (pauses when the tab is hidden). Immediate poll on pageshow / visible. Fetch aborts after 8s. Hide / iOS-return abort is not a failed poll. A stale cached status.json cannot rewind the board. Repaints when board content changes -- not on every 15m Actions timestamp. Tip CI is the current SHA; Pages / skipped helpers cannot hide a fail. A skipped or cancelled helper cannot beat a success or become Open CI. Lanes prefer the open PR; CI fail/running taps the Actions run when a run URL is known. A complete same-repo stack shows safe base-to-tip PR order and taps the pulls list; ambiguous chains fall back to the honest open-PR count.",
+                    "Client fetches status.json every 30s (pauses when the tab is hidden). Immediate poll on pageshow / visible. Fetch aborts after 8s. Hide / iOS-return abort is not a failed poll. A stale cached status.json cannot rewind the board. Repaints when board content changes -- not on every 15m Actions timestamp. Tip CI is the current SHA; Pages / skipped helpers / this board's refresh publisher cannot hide a fail. A skipped or cancelled helper cannot beat a success or become Open CI. Lanes prefer the open PR; CI fail/running taps the Actions run when a run URL is known. A complete same-repo stack shows safe base-to-tip PR order and taps the pulls list; ambiguous chains fall back to the honest open-PR count.",
                     chip="Feature",
                 ),
                 _card(
