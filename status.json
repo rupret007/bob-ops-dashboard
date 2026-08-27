@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-08-27T11:05:43.415009-05:00",
-  "generated_at_display": "Thu Aug 27, 2026 \u00b7 11:05 AM CDT",
+  "generated_at": "2026-08-27T11:18:42.702686-05:00",
+  "generated_at_display": "Thu Aug 27, 2026 \u00b7 11:18 AM CDT",
   "timezone": "America/Chicago",
   "owner": "rupret007",
   "dashboard": "bob-ops-dashboard",
@@ -358,8 +358,8 @@
           "status": "yellow",
           "chip": "Yellow",
           "default_branch": "main",
-          "tip_sha": "cf5b4c4",
-          "tip_date": "2026-08-27T15:49:25Z",
+          "tip_sha": "1dd4c9b",
+          "tip_date": "2026-08-27T16:05:45Z",
           "open_prs": 2,
           "open_pr_url": "https://github.com/rupret007/bob-ops-dashboard/pull/21",
           "open_pr_number": 21,
@@ -371,9 +371,9 @@
             "name": "QA claim smoke",
             "conclusion": "success",
             "branch": "main",
-            "sha": "cf5b4c4",
-            "created": "2026-08-27T15:49:28Z",
-            "html_url": "https://github.com/rupret007/bob-ops-dashboard/actions/runs/33089933101"
+            "sha": "1dd4c9b",
+            "created": "2026-08-27T16:05:50Z",
+            "html_url": "https://github.com/rupret007/bob-ops-dashboard/actions/runs/33091432004"
           },
           "release": null,
           "release_sha": null,
@@ -730,7 +730,7 @@
   ],
   "inaccessible": [],
   "publish_notes": "Public board -- no secrets or customer paths. Private repositories stay high-level; AI Music Vault stays private-content-boundary only.",
-  "refresh_started_ms": 1787846689208,
+  "refresh_started_ms": 1787847469146,
   "agents_source": "file:stale->unknown",
   "agents": [
     {
