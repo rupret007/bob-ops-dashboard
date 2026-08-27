@@ -207,6 +207,8 @@ grep -q 'decisionHref' "$REFRESH" || fail "refresh.sh missing decisionHref"
 grep -q 'pick_tip_ci' "$REFRESH" || fail "refresh.sh missing pick_tip_ci"
 grep -q 'actions/runs?per_page=20&branch=' "$REFRESH" || fail "refresh.sh must fetch default-branch CI only"
 grep -q 'is_ci_noise' "$ROOT/board_meta.py" || fail "board_meta.py missing is_ci_noise"
+grep -q 'refresh-dashboard.yml' "$ROOT/board_meta.py" || fail "refresh publisher must be CI noise by filename"
+grep -q 'refresh bob ops dashboard' "$ROOT/board_meta.py" || fail "refresh publisher must be CI noise by name"
 grep -q 'CI pending' "$REFRESH" || fail "refresh.sh missing CI pending signal"
 grep -q 'AbortController' "$REFRESH" || fail "refresh.sh missing AbortController"
 grep -q 'pollIsNewer' "$REFRESH" || fail "refresh.sh missing pollIsNewer"
@@ -543,6 +545,8 @@ if "not a public live-repo, CI, or PR tap row" not in coverage:
     raise SystemExit("README must say Bob the Bot is not a public live-repo tap row")
 if "private GitHub lanes stay **high-level only**" not in coverage:
     raise SystemExit("README must say private GitHub lanes are not public tap rows")
+if "scheduled refresh publisher cannot hide a failing test workflow" not in text:
+    raise SystemExit("README must say the scheduled refresh publisher is not tip CI")
 refresh_text = refresh.read_text()
 high_level_source_pins = (
     'project("AI-Music-Vault", high_level_only=True,',
@@ -574,7 +578,7 @@ if "high_level=bool(r.get(\"private\") or high_level_only)" not in refresh_text:
 if "if (p.private) return \"\";" not in refresh_text:
     raise SystemExit("refresh.sh JS compactSignal must hide private-lane CI diagnosis")
 sys.path.insert(0, str(refresh.parent))
-from board_meta import compact_signal, status_from_fetch
+from board_meta import compact_signal, is_ci_noise, pick_tip_ci, status_from_fetch
 # Empty-runner / 0-step hosted red is not a product fail on a public high-level row.
 empty_runner = {
     "accessible": True,
@@ -591,6 +595,38 @@ for concl in ("failure", "startup_failure", "timed_out", "action_required"):
         raise SystemExit("private/high-level lanes must not paint hosted CI as red: " + concl)
     if compact_signal(hosted) == "CI fail":
         raise SystemExit("private/high-level lanes must not publish a CI fail signal: " + concl)
+# Live leftover after #24: the scheduled refresh publisher is not tip CI.
+refresh_running = {
+    "head_branch": "main",
+    "status": "in_progress",
+    "name": "Refresh Bob Ops Dashboard",
+    "path": ".github/workflows/refresh-dashboard.yml",
+    "head_sha": "9c38307aaaa",
+    "html_url": "https://github.com/rupret007/bob-ops-dashboard/actions/runs/33028162056",
+}
+refresh_fail = {**refresh_running, "status": "completed", "conclusion": "failure"}
+qa_ok = {
+    "head_branch": "main",
+    "status": "completed",
+    "conclusion": "success",
+    "name": "QA claim smoke",
+    "path": ".github/workflows/qa-claim-smoke.yml",
+    "head_sha": "9c38307aaaa",
+    "html_url": "https://github.com/rupret007/bob-ops-dashboard/actions/runs/33027541068",
+}
+if not is_ci_noise(refresh_running) or not is_ci_noise(refresh_fail):
+    raise SystemExit("scheduled refresh publisher must be CI noise")
+if is_ci_noise(qa_ok):
+    raise SystemExit("QA claim smoke must stay real tip CI")
+picked = pick_tip_ci([refresh_fail, refresh_running, qa_ok], "main", "9c38307")
+if not picked or picked.get("name") != "QA claim smoke" or picked.get("conclusion") != "success":
+    raise SystemExit("refresh publisher must not beat QA claim smoke")
+if compact_signal({"ci": picked, "open_prs": 2}) != "2 open PRs":
+    raise SystemExit("refresh publisher must not hide the open-PR signal")
+if status_from_fetch({"accessible": True, "open_prs": 2, "ci": picked}) == "red":
+    raise SystemExit("refresh publisher must not paint the dashboard lane Red")
+if pick_tip_ci([refresh_running], "main", "9c38307") is not None:
+    raise SystemExit("refresh-only tip must not invent CI running or pending")
 for md in [readme, *sorted(docs.rglob("*.md"))]:
     for match in re.finditer(
         r"GitHub-backed rows use live repository, default-branch CI, and open-PR state for [^.]+",

@@ -154,7 +154,7 @@ class BoardMetaTests(unittest.TestCase):
         self.assertIn("Never invent Running", blob)
         self.assertIn("Actions cadence is ~15m", blob)
         self.assertIn("real GitHub links", blob)
-        self.assertIn("Pages / skipped helpers cannot hide a fail", blob)
+        self.assertIn("Pages / skipped helpers / this board's refresh publisher cannot hide a fail", blob)
         self.assertIn("cannot beat a success or become Open CI", blob)
         self.assertIn("not a failed poll", blob)
         self.assertIn("cannot rewind", blob)
@@ -676,6 +676,78 @@ class BoardMetaTests(unittest.TestCase):
             }
         ]
         self.assertIsNone(pick_tip_ci(runs, "main", "abc1234"))
+
+    def test_refresh_publisher_cannot_become_tip_ci(self):
+        # Live bob-ops-dashboard 1bff551 / 9c38307: the scheduled refresh
+        # painted CI running (self in-progress) and would paint Red if it
+        # failed, even when QA claim smoke succeeded on the same SHA.
+        refresh_running = {
+            "head_branch": "main",
+            "status": "in_progress",
+            "conclusion": None,
+            "name": "Refresh Bob Ops Dashboard",
+            "path": ".github/workflows/refresh-dashboard.yml",
+            "head_sha": "9c38307aaaa",
+            "html_url": "https://github.com/rupret007/bob-ops-dashboard/actions/runs/33028162056",
+            "created_at": "2026-08-27T00:50:26Z",
+        }
+        refresh_fail = {
+            **refresh_running,
+            "status": "completed",
+            "conclusion": "failure",
+        }
+        pages = {
+            "head_branch": "main",
+            "status": "completed",
+            "conclusion": "success",
+            "name": "pages build and deployment",
+            "path": "dynamic/pages/pages-build-deployment",
+            "head_sha": "9c38307aaaa",
+        }
+        qa = {
+            "head_branch": "main",
+            "status": "completed",
+            "conclusion": "success",
+            "name": "QA claim smoke",
+            "path": ".github/workflows/qa-claim-smoke.yml",
+            "head_sha": "9c38307aaaa",
+            "html_url": "https://github.com/rupret007/bob-ops-dashboard/actions/runs/33027541068",
+            "created_at": "2026-08-27T00:38:54Z",
+        }
+        self.assertTrue(is_ci_noise(refresh_running))
+        self.assertTrue(is_ci_noise(refresh_fail))
+        self.assertTrue(is_ci_noise(pages))
+        self.assertFalse(is_ci_noise(qa))
+
+        running = pick_tip_ci([refresh_running, pages, qa], "main", "9c38307")
+        self.assertIsNotNone(running)
+        assert running is not None
+        self.assertEqual(running["name"], "QA claim smoke")
+        self.assertEqual(running["conclusion"], "success")
+        self.assertNotEqual(compact_signal({"ci": running, "open_prs": 2}), "CI running")
+        self.assertEqual(compact_signal({"ci": running, "open_prs": 2}), "2 open PRs")
+        self.assertEqual(
+            status_from_fetch({"accessible": True, "open_prs": 2, "ci": running}),
+            "yellow",
+        )
+
+        failed = pick_tip_ci([refresh_fail, pages, qa], "main", "9c38307")
+        self.assertIsNotNone(failed)
+        assert failed is not None
+        self.assertEqual(failed["name"], "QA claim smoke")
+        self.assertEqual(failed["conclusion"], "success")
+        self.assertNotEqual(compact_signal({"ci": failed, "open_prs": 2}), "CI fail")
+        self.assertNotEqual(
+            status_from_fetch({"accessible": True, "open_prs": 2, "ci": failed}),
+            "red",
+        )
+
+        publisher_only = pick_tip_ci([refresh_running, pages], "main", "9c38307")
+        self.assertIsNone(publisher_only)
+        self.assertEqual(
+            compact_signal({"ci": publisher_only, "open_prs": 2}),
+            "2 open PRs",
+        )
 
     def test_decision_href_is_safe_and_stable(self):
         from urllib.parse import parse_qs, urlparse
