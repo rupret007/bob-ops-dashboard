@@ -416,6 +416,32 @@ class BoardMetaTests(unittest.TestCase):
             compact_signal({"private": True, "ci": {"conclusion": "pending"}})
         )
         self.assertEqual(compact_signal({"ci": {"conclusion": "failure"}}), "CI fail")
+        # Empty-runner / 0-step hosted red is not a product fail on a high-level row.
+        empty_runner = {
+            "accessible": True,
+            "private": True,
+            "open_prs": 0,
+            "ci": {"conclusion": "failure", "run_started_at": None},
+        }
+        self.assertNotEqual(status_from_fetch(empty_runner, high_level=True), "red")
+        self.assertEqual(status_from_fetch(empty_runner, high_level=True), "yellow")
+        self.assertIsNone(compact_signal(empty_runner))
+        for concl in ("startup_failure", "timed_out", "action_required"):
+            hosted = {
+                "accessible": True,
+                "private": True,
+                "ci": {"conclusion": concl},
+            }
+            self.assertNotEqual(
+                status_from_fetch(hosted, high_level=True),
+                "red",
+                concl,
+            )
+            self.assertIsNone(compact_signal(hosted))
+            self.assertEqual(
+                compact_signal({"ci": {"conclusion": concl}}),
+                "CI fail",
+            )
 
     def test_pick_tip_ci_does_not_skip_in_progress(self):
         runs = [
