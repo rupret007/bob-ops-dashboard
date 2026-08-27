@@ -196,6 +196,24 @@ function run() {
   if (compactSignal({ release: "v0.26.0", ci: { conclusion: "failure" }, open_prs: 1 }) !== "CI fail") {
     fail("CI fail must beat release + open PR");
   }
+  const privateHostedRed = { private: true, ci: { conclusion: "failure" } };
+  if (compactSignal(privateHostedRed) !== "") {
+    fail("private/high-level lanes must not publish CI fail");
+  }
+  for (const name of ["TACTrack", "CSS Conductor", "AI Music Vault", "AdoptIQ", "Bob the Bot"]) {
+    const signal = compactSignal({
+      name,
+      private: true,
+      status: "yellow",
+      ci: { conclusion: "failure", run_started_at: null },
+    });
+    if (signal === "CI fail" || signal === "Red") {
+      fail(name + " must not paint empty-runner hosted red as CI fail");
+    }
+    if (signal !== "") {
+      fail(name + " high-level lane must publish no CI diagnosis signal");
+    }
+  }
   if (compactSignal({ release: "v0.26.0", ci: { conclusion: "in_progress" } }) !== "CI running") {
     fail("in-progress tip CI must say CI running");
   }

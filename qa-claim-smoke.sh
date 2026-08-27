@@ -417,8 +417,12 @@ private_sensitive = (
     "product_sha", "open_prs", "open_pr_url", "open_pr_number",
     "open_pr_draft", "pr_listing_complete", "agent_url", "live_game_url", "release",
 )
+HIGH_LEVEL_PUBLIC_NAMES = {
+    "TACTrack", "CSS Conductor", "AI Music Vault", "AdoptIQ", "Bob the Bot",
+}
 for p in projects:
-    if not p.get("private"):
+    name = str(p.get("name") or "")
+    if not (p.get("private") or name in HIGH_LEVEL_PUBLIC_NAMES):
         continue
     leaked = [key for key in private_sensitive if p.get(key) not in (None, "", [], {})]
     if p.get("open_pr_stack") not in (None, []):
@@ -429,25 +433,30 @@ for p in projects:
     if leaked:
         raise SystemExit(
             "private lane leaked public metadata (" + ", ".join(leaked) + "): "
-            + str(p.get("name"))
+            + name
         )
-    if p.get("status") == "red":
+    if p.get("status") == "red" or p.get("chip") == "Red":
         raise SystemExit(
-            "private lane must not diagnose hosted CI as red: " + str(p.get("name"))
+            "private/high-level lane must not diagnose hosted CI as red: " + name
         )
 html = Path(sys.argv[2]).read_text()
 for p in projects:
-    if not p.get("private"):
-        continue
     name = str(p.get("name") or "")
+    if not (p.get("private") or name in HIGH_LEVEL_PUBLIC_NAMES):
+        continue
     article = re.search(
         rf'<article class="lane[^"]*"><h3>{re.escape(name)}</h3>.*?</article>',
         html,
     )
     if not article:
+        if name in HIGH_LEVEL_PUBLIC_NAMES:
+            raise SystemExit("high-level lane missing from live board: " + name)
         continue
-    if any(sig in article.group(0) for sig in ("CI fail", "CI pending", "CI running")):
-        raise SystemExit("private lane published a CI diagnosis signal: " + name)
+    painted = article.group(0)
+    if any(sig in painted for sig in ("CI fail", "CI pending", "CI running")):
+        raise SystemExit("private/high-level lane published a CI diagnosis signal: " + name)
+    if ">Red<" in painted:
+        raise SystemExit("private/high-level lane painted a Red chip: " + name)
 agents = st.get("agents") if isinstance(st, dict) else None
 if isinstance(agents, list):
     for a in agents:
@@ -534,9 +543,20 @@ if "not a public live-repo, CI, or PR tap row" not in coverage:
     raise SystemExit("README must say Bob the Bot is not a public live-repo tap row")
 if "private GitHub lanes stay **high-level only**" not in coverage:
     raise SystemExit("README must say private GitHub lanes are not public tap rows")
-if 'project("Bob-the-Bot", status="yellow", high_level_only=True,' not in refresh.read_text():
-    raise SystemExit("Bob the Bot must stay high_level_only in refresh.sh")
 refresh_text = refresh.read_text()
+high_level_source_pins = (
+    'project("AI-Music-Vault", high_level_only=True,',
+    'project("CSS_Conductor", high_level_only=True,',
+    'project("AdoptIQ", status="yellow", high_level_only=True,',
+    'project("TACTrack", status="yellow", high_level_only=True,',
+    'project("Bob-the-Bot", status="yellow", high_level_only=True,',
+)
+missing_pins = [pin for pin in high_level_source_pins if pin not in refresh_text]
+if missing_pins:
+    raise SystemExit(
+        "named private lanes must stay high_level_only in refresh.sh: "
+        + "; ".join(missing_pins)
+    )
 if "Live CI and review state only" in refresh_text:
     raise SystemExit("StoryOps-AI note still claims live CI / review state")
 if "CI / open PRs from live fetch" in refresh_text:
@@ -555,15 +575,22 @@ if "if (p.private) return \"\";" not in refresh_text:
     raise SystemExit("refresh.sh JS compactSignal must hide private-lane CI diagnosis")
 sys.path.insert(0, str(refresh.parent))
 from board_meta import compact_signal, status_from_fetch
-private_fail = {
+# Empty-runner / 0-step hosted red is not a product fail on a public high-level row.
+empty_runner = {
     "accessible": True,
     "private": True,
-    "ci": {"conclusion": "failure"},
+    "ci": {"conclusion": "failure", "run_started_at": None},
 }
-if status_from_fetch(private_fail, high_level=True) == "red":
-    raise SystemExit("private/high-level lanes must not paint hosted CI as red")
-if compact_signal({"private": True, "ci": {"conclusion": "failure"}}) == "CI fail":
-    raise SystemExit("private/high-level lanes must not publish a CI fail signal")
+if status_from_fetch(empty_runner, high_level=True) == "red":
+    raise SystemExit("empty-runner hosted red must not become a public Red row")
+if compact_signal(empty_runner) == "CI fail":
+    raise SystemExit("empty-runner hosted red must not publish a CI fail signal")
+for concl in ("failure", "startup_failure", "timed_out", "action_required"):
+    hosted = {"accessible": True, "private": True, "ci": {"conclusion": concl}}
+    if status_from_fetch(hosted, high_level=True) == "red":
+        raise SystemExit("private/high-level lanes must not paint hosted CI as red: " + concl)
+    if compact_signal(hosted) == "CI fail":
+        raise SystemExit("private/high-level lanes must not publish a CI fail signal: " + concl)
 for md in [readme, *sorted(docs.rglob("*.md"))]:
     for match in re.finditer(
         r"GitHub-backed rows use live repository, default-branch CI, and open-PR state for [^.]+",
@@ -732,7 +759,8 @@ if args[:1] == ["api"] and len(args) >= 2:
             "head_branch": "super-secret-branch",
             "head_sha": "deadbeefdeadbeefdeadbeefdeadbeefdeadbeef",
             "status": "completed",
-            "conclusion": "success",
+            "conclusion": "failure",
+            "run_started_at": None,
             "html_url": "https://github.com/rupret007/AI-Music-Vault/actions/runs/88",
             "updated_at": "2026-08-25T00:00:00Z",
         }]}
@@ -779,7 +807,8 @@ if args[:1] == ["api"] and len(args) >= 2:
             "head_branch": "bob-private-main",
             "head_sha": "b0bb0bb0bb0bb0bb0bb0bb0bb0bb0bb0bb0bb0bb",
             "status": "completed",
-            "conclusion": "success",
+            "conclusion": "failure",
+            "run_started_at": None,
             "html_url": "https://github.com/rupret007/Bob-the-Bot/actions/runs/92",
             "updated_at": "2026-08-26T00:00:00Z",
         }]}
@@ -811,10 +840,75 @@ if args[:1] == ["api"] and len(args) >= 2:
             "head_sha": "c55c55c55c55c55c55c55c55c55c55c55c55c55c",
             "status": "completed",
             "conclusion": "failure",
+            "run_started_at": None,
             "html_url": "https://github.com/rupret007/CSS_Conductor/actions/runs/93",
             "updated_at": "2026-08-26T00:00:00Z",
         }]}
     elif path == "repos/rupret007/CSS_Conductor/releases?per_page=1":
+        value = []
+    elif path == "repos/rupret007/AdoptIQ":
+        value = {
+            "name": "AdoptIQ",
+            "full_name": "rupret007/AdoptIQ",
+            "private": True,
+            "html_url": "https://github.com/rupret007/AdoptIQ",
+            "default_branch": "adopt-private-main",
+        }
+    elif path == "repos/rupret007/AdoptIQ/commits/adopt-private-main":
+        value = {
+            "sha": "ad07ad07ad07ad07ad07ad07ad07ad07ad07ad07",
+            "commit": {
+                "message": "adopt-private-commit-subject",
+                "committer": {"date": "2026-08-26T00:00:00Z"},
+            },
+        }
+    elif path == "repos/rupret007/AdoptIQ/pulls?state=open&per_page=100&page=1":
+        value = []
+    elif path == "repos/rupret007/AdoptIQ/actions/runs?per_page=20&branch=adopt-private-main":
+        value = {"workflow_runs": [{
+            "name": "AdoptIQ private validation",
+            "path": ".github/workflows/adopt-private.yml",
+            "head_branch": "adopt-private-main",
+            "head_sha": "ad07ad07ad07ad07ad07ad07ad07ad07ad07ad07",
+            "status": "completed",
+            "conclusion": "failure",
+            "run_started_at": None,
+            "html_url": "https://github.com/rupret007/AdoptIQ/actions/runs/94",
+            "updated_at": "2026-08-26T00:00:00Z",
+        }]}
+    elif path == "repos/rupret007/AdoptIQ/releases?per_page=1":
+        value = []
+    elif path == "repos/rupret007/TACTrack":
+        value = {
+            "name": "TACTrack",
+            "full_name": "rupret007/TACTrack",
+            "private": True,
+            "html_url": "https://github.com/rupret007/TACTrack",
+            "default_branch": "tac-private-main",
+        }
+    elif path == "repos/rupret007/TACTrack/commits/tac-private-main":
+        value = {
+            "sha": "7ac77ac77ac77ac77ac77ac77ac77ac77ac77ac7",
+            "commit": {
+                "message": "tac-private-commit-subject",
+                "committer": {"date": "2026-08-26T00:00:00Z"},
+            },
+        }
+    elif path == "repos/rupret007/TACTrack/pulls?state=open&per_page=100&page=1":
+        value = []
+    elif path == "repos/rupret007/TACTrack/actions/runs?per_page=20&branch=tac-private-main":
+        value = {"workflow_runs": [{
+            "name": "TACTrack private validation",
+            "path": ".github/workflows/tac-private.yml",
+            "head_branch": "tac-private-main",
+            "head_sha": "7ac77ac77ac77ac77ac77ac77ac77ac77ac77ac7",
+            "status": "completed",
+            "conclusion": "failure",
+            "run_started_at": None,
+            "html_url": "https://github.com/rupret007/TACTrack/actions/runs/95",
+            "updated_at": "2026-08-26T00:00:00Z",
+        }]}
+    elif path == "repos/rupret007/TACTrack/releases?per_page=1":
         value = []
     elif path == "repos/rupret007/bob-ops-dashboard/pulls?state=open&per_page=20":
         value = []
@@ -849,37 +943,44 @@ projects = [
     for p in (section.get("projects") or [])
     if isinstance(p, dict)
 ]
-private = next((p for p in projects if p.get("name") == "AI Music Vault"), None)
-if not private or not private.get("private") or not private.get("accessible"):
-    raise SystemExit("fixture did not exercise an accessible private lane")
 allowed = {"name", "private", "status", "chip", "notes", "accessible", "ci"}
-extra = sorted(set(private) - allowed)
-if extra:
-    raise SystemExit("private row contains non-allowlisted keys: " + ", ".join(extra))
-ci = private.get("ci") if isinstance(private.get("ci"), dict) else {}
-if set(ci) - {"conclusion"} or ci.get("conclusion") != "success":
-    raise SystemExit("private CI must expose conclusion only")
+html = index_path.read_text()
+# After #23 these named lanes stay high-level. Empty-runner hosted red
+# (conclusion=failure, run never started) is not a public product fail.
+high_level_named = (
+    "AI Music Vault",
+    "Bob the Bot",
+    "CSS Conductor",
+    "AdoptIQ",
+    "TACTrack",
+)
+for name in high_level_named:
+    row = next((p for p in projects if p.get("name") == name), None)
+    if not row or not row.get("private") or not row.get("accessible"):
+        raise SystemExit("fixture did not exercise an accessible high-level " + name + " lane")
+    extra = sorted(set(row) - allowed)
+    if extra:
+        raise SystemExit(name + " row contains non-allowlisted keys: " + ", ".join(extra))
+    if row.get("status") == "red" or row.get("chip") == "Red":
+        raise SystemExit("accessible " + name + " must not diagnose hosted CI as red")
+    ci = row.get("ci") if isinstance(row.get("ci"), dict) else {}
+    if set(ci) - {"conclusion"} or ci.get("conclusion") != "failure":
+        raise SystemExit(name + " CI must expose the hosted 0-step failure conclusion only")
+    article = re.search(
+        rf'<article class="lane[^"]*"><h3>{re.escape(name)}</h3>.*?</article>',
+        html,
+    )
+    if not article:
+        raise SystemExit("generated board missing high-level lane: " + name)
+    painted = article.group(0)
+    if any(sig in painted for sig in ("CI fail", "CI pending", "CI running")):
+        raise SystemExit("accessible " + name + " published a CI diagnosis signal")
+    if ">Red<" in painted:
+        raise SystemExit("accessible " + name + " painted a Red chip")
 bob = next((p for p in projects if p.get("name") == "Bob the Bot"), None)
-if not bob or not bob.get("private") or not bob.get("accessible"):
-    raise SystemExit("fixture did not exercise the accessible private Bob application lane")
-if set(bob) - allowed:
-    raise SystemExit("Bob application row contains non-allowlisted keys")
 if bob.get("status") != "yellow" or bob.get("chip") != "Yellow":
     raise SystemExit("Bob application must remain an active private bootstrap")
-bob_ci = bob.get("ci") if isinstance(bob.get("ci"), dict) else {}
-if set(bob_ci) - {"conclusion"} or bob_ci.get("conclusion") != "success":
-    raise SystemExit("Bob application CI must expose conclusion only")
-css = next((p for p in projects if p.get("name") == "CSS Conductor"), None)
-if not css or not css.get("private") or not css.get("accessible"):
-    raise SystemExit("fixture did not exercise an accessible CSS Conductor hosted failure")
-if set(css) - allowed:
-    raise SystemExit("CSS Conductor row contains non-allowlisted keys")
-if css.get("status") == "red" or css.get("chip") == "Red":
-    raise SystemExit("accessible CSS Conductor must not diagnose hosted CI as red")
-css_ci = css.get("ci") if isinstance(css.get("ci"), dict) else {}
-if set(css_ci) - {"conclusion"} or css_ci.get("conclusion") != "failure":
-    raise SystemExit("CSS Conductor CI must expose the hosted conclusion only")
-public_blob = status_path.read_text() + "\n" + index_path.read_text()
+public_blob = status_path.read_text() + "\n" + html
 for secret in (
     "super-secret-branch", "private-feature-branch", "deadbeefdeadbeef",
     "private-pr-title", "private-release-v9", "AI-Music-Vault/pull/77",
@@ -888,14 +989,11 @@ for secret in (
     "bob-private-pr-title", "bob-private-release", "Bob-the-Bot/pull/91",
     "Bob-the-Bot/actions/runs/92", "bc-99999999-9999-9999-9999-999999999999",
     "css-private-main", "c55c55c55c55", "CSS_Conductor/actions/runs/93",
+    "adopt-private-main", "ad07ad07ad07", "AdoptIQ/actions/runs/94",
+    "tac-private-main", "7ac77ac77ac7", "TACTrack/actions/runs/95",
 ):
     if secret in public_blob:
         raise SystemExit("private fixture leaked: " + secret)
-if re.search(
-    r'<article class="lane[^"]*"><h3>CSS Conductor</h3>.*?(CI fail|CI pending|CI running)',
-    index_path.read_text(),
-):
-    raise SystemExit("accessible CSS Conductor published a CI diagnosis signal")
 print("accessible private fixture stayed high-level")
 PY
   pass "accessible private repository metadata stays allowlisted"
