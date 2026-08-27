@@ -1343,6 +1343,25 @@ for sid in ("live-shipping", "apps-utilities", "cisco", "parked"):
 nav = html.split('id="type-tabs"', 1)[-1].split("</nav>", 1)[0] if 'id="type-tabs"' in html else ""
 if 'aria-selected="true"' in nav:
     raise SystemExit("first paint must not open a type tab")
+if "is-unknown-mac" not in html:
+    raise SystemExit("unknown Mac probes must collapse on the Actions box")
+if "Agents unknown" not in html:
+    raise SystemExit("first screen must say Agents unknown, not invent Running")
+if html.count('data-probe="mac"') < 3:
+    raise SystemExit("unknown compact must keep Codex/Cursor/Claude pills in the DOM")
+pre_how = html.split('<details class="how-board">', 1)[0]
+if "Live CI via" in pre_how:
+    raise SystemExit("fetched-repo line leaked onto the first phone screen")
+if 'id="fetched-line"' not in html:
+    raise SystemExit("fetched-repo line must stay inside How this board works")
+if "#panel-status:empty" not in html:
+    raise SystemExit("empty panel-status must collapse")
+if "body.tab-home section.block.foot" not in html:
+    raise SystemExit("home screen must hide Abilities / How-this-board chrome")
+if "body.tab-home .agent-links" not in html:
+    raise SystemExit("home screen must keep cloud work links compact")
+if 'class="tab-home"' not in html:
+    raise SystemExit("first paint must start as the home tab screen")
 pending = st.get("pending") if isinstance(st, dict) else None
 if isinstance(pending, list) and pending:
     if "pending-item" not in html:

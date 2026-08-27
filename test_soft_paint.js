@@ -525,6 +525,25 @@ function run() {
     fail("first paint must hide Decisions until that tab is opened");
   }
 
+  if (src.indexOf("function compactUnknownMacProbes") === -1) fail("compactUnknownMacProbes missing");
+  const compactUnknownMacProbes = eval("(" + extractFn(src, "compactUnknownMacProbes") + ")");
+  if (!compactUnknownMacProbes([
+    { id: "codex", state: "unknown" },
+    { id: "cursor", state: "unknown" },
+    { id: "claude", state: "unknown" },
+  ])) fail("all-unknown Mac probes must compact");
+  if (!compactUnknownMacProbes(stale)) fail("stale age-gated probes must compact");
+  if (compactUnknownMacProbes(fresh)) fail("fresh known probes must keep three pills");
+  if (html.indexOf("Agents unknown") === -1) fail("first paint must say Agents unknown when the box has no Mac probe");
+  if (html.indexOf("is-unknown-mac") === -1) fail("first paint must collapse unknown Mac pills");
+  if (html.indexOf("#panel-status:empty") === -1) fail("empty panel-status must not reserve first-screen space");
+  if (html.indexOf("body.tab-home section.block.foot") === -1) fail("home screen must hide footer chrome");
+  if (html.indexOf("body.tab-home .agent-links") === -1) fail("home screen must not stack Open agent buttons");
+  if (html.indexOf('class="tab-home"') === -1) fail("first paint must start on the home tab screen");
+  const preHow = html.split('<details class="how-board">')[0] || "";
+  if (preHow.indexOf("Live CI via") !== -1) fail("fetched-repo line must not lead the first phone screen");
+  if (html.indexOf('id="fetched-line"') === -1) fail("fetched-repo line must remain inside How this board works");
+
   console.log("soft-paint / agent age-gate smoke ok");
 }
 

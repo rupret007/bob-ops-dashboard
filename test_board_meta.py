@@ -17,6 +17,7 @@ from board_meta import (
     attention_rank,
     board_content_fingerprint,
     compact_signal,
+    compact_unknown_mac_probes,
     decision_href,
     detect_linear_pr_stack,
     drop_leftover_verify,
@@ -60,6 +61,7 @@ from board_meta import (
     tab_label,
     type_tab_ids_for,
     type_tabs_html,
+    unknown_mac_probes_html,
     visible_chip,
 )
 
@@ -166,6 +168,7 @@ class BoardMetaTests(unittest.TestCase):
         self.assertIn("not on every 15m", blob)
         self.assertIn("pageshow", blob)
         self.assertIn("Never invent Running", blob)
+        self.assertIn("Agents unknown", blob)
         self.assertIn("Actions cadence is ~15m", blob)
         self.assertIn("real GitHub links", blob)
         self.assertIn("Pages / skipped helpers / this board's refresh publisher cannot hide a fail", blob)
@@ -313,6 +316,41 @@ class BoardMetaTests(unittest.TestCase):
         self.assertIn("1 needs a yes", glance)
         self.assertIn('data-tab="controls"', glance)
         self.assertNotIn("<", glance_status([{"id": "x"}], sections)["text"])
+
+    def test_unknown_mac_probes_collapse_to_one_honest_line(self):
+        unknown = [
+            {"id": "codex", "state": "unknown", "detail": "No Mac probe in this clone"},
+            {"id": "cursor", "state": "unknown", "detail": "No Mac probe in this clone"},
+            {"id": "claude", "state": "unknown", "detail": "No Mac probe in this clone"},
+        ]
+        self.assertTrue(compact_unknown_mac_probes(unknown))
+        self.assertTrue(compact_unknown_mac_probes([]))
+        self.assertTrue(compact_unknown_mac_probes(None))
+        stale_running = [
+            {"id": "codex", "state": "unknown", "detail": "PID 1 · probe stale (>45m)"},
+            {"id": "cursor", "state": "unknown"},
+            {"id": "claude", "state": "unknown"},
+        ]
+        self.assertTrue(compact_unknown_mac_probes(stale_running))
+        html = unknown_mac_probes_html(unknown)
+        self.assertIn("Agents unknown", html)
+        self.assertNotIn("Running", html)
+        self.assertIn("No Mac probe in this clone", html)
+        live = [
+            {"id": "codex", "state": "running", "detail": "PID 2"},
+            {"id": "cursor", "state": "unknown"},
+            {"id": "claude", "state": "unknown"},
+        ]
+        self.assertFalse(compact_unknown_mac_probes(live))
+        self.assertFalse(
+            compact_unknown_mac_probes(
+                [{"id": "cursor", "state": "idle", "detail": "Cursor.app"}]
+            )
+        )
+        cloud_only = [
+            {"id": "bc-11111111-1111-1111-1111-111111111111", "state": "unknown"}
+        ]
+        self.assertTrue(compact_unknown_mac_probes(cloud_only))
 
     def test_compact_signal_skips_sha_and_zero_prs(self):
         self.assertEqual(compact_signal({"release": "v0.26.0", "tip_sha": "abc1234", "open_prs": 0}), "v0.26.0")
