@@ -10,6 +10,8 @@ from board_meta import (
     CONTROL_ACTIONS,
     FIRST_CLASS_IDS,
     LATEST_VS_SOURCE_SIGNAL,
+    TYPE_TAB_IDS,
+    TYPE_TAB_LABELS,
     age_gate_agents,
     agent_url_from_fields,
     attention_rank,
@@ -21,7 +23,10 @@ from board_meta import (
     extract_agent_url,
     extract_cloud_agents_from_prs,
     first_class_sections,
+    glance_html,
+    glance_status,
     is_ci_noise,
+    is_type_tab,
     is_quiet_lane,
     lane_hrefs,
     latest_release_url_from_repo,
@@ -51,6 +56,10 @@ from board_meta import (
     sort_pending,
     split_pending,
     status_from_fetch,
+    tab_id,
+    tab_label,
+    type_tab_ids_for,
+    type_tabs_html,
     visible_chip,
 )
 
@@ -176,6 +185,10 @@ class BoardMetaTests(unittest.TestCase):
         self.assertIn("/releases/latest", blob)
         names = [p["name"] for s in first_class_sections() for p in s["projects"]]
         self.assertIn("Music stack", names)
+        self.assertIn("Type tabs", names)
+        self.assertIn("Each GitHub type is its own tab", blob)
+        type_tabs = next(p for s in first_class_sections() if s["id"] == "features" for p in s["projects"] if p["name"] == "Type tabs")
+        self.assertLessEqual(len(type_tabs["notes"]), 88)
 
     def test_security_features_from_pr1_survive_without_unlock(self):
         blob = str(first_class_sections())
@@ -202,6 +215,104 @@ class BoardMetaTests(unittest.TestCase):
         self.assertEqual(presentation("parked"), "secondary")
         self.assertEqual(presentation("abilities"), "footer")
         self.assertEqual(presentation("features"), "footer")
+
+    def test_type_tabs_use_existing_section_ids_only(self):
+        self.assertEqual(
+            TYPE_TAB_IDS,
+            (
+                "controls",
+                "live-shipping",
+                "apps-utilities",
+                "cisco",
+                "messaging",
+                "private-media",
+                "parked",
+            ),
+        )
+        self.assertEqual(TYPE_TAB_LABELS["live-shipping"], "Live")
+        self.assertEqual(TYPE_TAB_LABELS["apps-utilities"], "Apps")
+        self.assertEqual(TYPE_TAB_LABELS["cisco"], "Cisco")
+        self.assertEqual(TYPE_TAB_LABELS["parked"], "Parked")
+        self.assertEqual(tab_id("live-shipping"), "live-shipping")
+        self.assertEqual(tab_id("music"), "")
+        self.assertEqual(tab_id("javascript:alert(1)"), "")
+        self.assertEqual(tab_id("abilities"), "")
+        self.assertEqual(tab_label("messaging"), "Bob")
+        self.assertFalse(is_type_tab("features"))
+        self.assertTrue(is_type_tab("cisco"))
+
+    def test_glance_status_is_one_short_line(self):
+        sections = [
+            {
+                "id": "live-shipping",
+                "projects": [
+                    {"name": "WebJam", "status": "yellow"},
+                    {"name": "Show Night", "status": "green"},
+                ],
+            },
+            {"id": "cisco", "projects": [{"name": "AdoptIQ", "status": "red"}]},
+        ]
+        pending = [{"id": "adoptiq-live-cisco", "title": "AdoptIQ", "risk": "high"}]
+        g = glance_status(pending, sections)
+        self.assertEqual(g["text"], "1 needs a yes")
+        self.assertEqual(g["tab"], "controls")
+        g4 = glance_status(pending * 4, sections)
+        self.assertEqual(g4["text"], "4 need a yes")
+        quiet_live = glance_status([], sections)
+        self.assertEqual(quiet_live["text"], "Cisco is red")
+        self.assertEqual(quiet_live["tab"], "cisco")
+        yellow_only = glance_status(
+            [],
+            [{"id": "live-shipping", "projects": [{"name": "WebJam", "status": "yellow"}]}],
+        )
+        self.assertEqual(yellow_only["text"], "Live needs a look")
+        self.assertEqual(yellow_only["tab"], "live-shipping")
+        jeff = glance_status(
+            [],
+            [{"id": "apps-utilities", "projects": [{"name": "Door", "status": "jeff-gate"}]}],
+        )
+        self.assertEqual(jeff["text"], "Apps is waiting on Jeff")
+        self.assertEqual(glance_status([], []), {"text": "Quiet", "tab": ""})
+
+    def test_type_tabs_html_skips_empty_decisions_and_invented_ids(self):
+        sections = [
+            {"id": "live-shipping", "title": "Live shipping"},
+            {"id": "apps-utilities", "title": "Apps & utilities"},
+            {"id": "cisco", "title": "Cisco work"},
+            {"id": "messaging", "title": "Messaging / Bob infra"},
+            {"id": "private-media", "title": "Private media"},
+            {"id": "parked", "title": "Parked"},
+            {"id": "abilities", "title": "Abilities"},
+        ]
+        self.assertEqual(
+            type_tab_ids_for(sections, []),
+            [
+                "live-shipping",
+                "apps-utilities",
+                "cisco",
+                "messaging",
+                "private-media",
+                "parked",
+            ],
+        )
+        self.assertEqual(
+            type_tab_ids_for(sections, [{"id": "x"}])[0],
+            "controls",
+        )
+        html = type_tabs_html(sections, [{"id": "x"}])
+        self.assertIn('id="type-tabs"', html)
+        self.assertIn('data-tab="live-shipping"', html)
+        self.assertIn(">Live<", html)
+        self.assertIn(">Apps<", html)
+        self.assertIn(">Cisco<", html)
+        self.assertIn(">Bob<", html)
+        self.assertNotIn("music", html)
+        self.assertNotIn("data-tab=\"abilities\"", html)
+        self.assertNotIn('aria-selected="true"', html)
+        glance = glance_html([{"id": "x"}], sections)
+        self.assertIn("1 needs a yes", glance)
+        self.assertIn('data-tab="controls"', glance)
+        self.assertNotIn("<", glance_status([{"id": "x"}], sections)["text"])
 
     def test_compact_signal_skips_sha_and_zero_prs(self):
         self.assertEqual(compact_signal({"release": "v0.26.0", "tip_sha": "abc1234", "open_prs": 0}), "v0.26.0")

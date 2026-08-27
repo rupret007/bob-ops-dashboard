@@ -173,7 +173,9 @@ from board_meta import (
     decision_href,
     drop_leftover_verify,
     extract_cloud_agents_from_prs,
+    glance_html,
     is_quiet_lane,
+    is_type_tab,
     lane_hrefs,
     merge_cloud_agents,
     signal_href,
@@ -181,6 +183,7 @@ from board_meta import (
     presentation,
     prune_closed_parked_prs,
     resolve_agents,
+    type_tabs_html,
     latest_release_url_from_repo,
     safe_actions_url,
     safe_agent_url,
@@ -837,11 +840,11 @@ for sec in status["sections"]:
     if sid_raw == "controls":
         control_projects = list(sec.get("projects") or [])
         items = status.get("pending") or []
-        hidden_sec = "" if items else " hidden"
         heading = f'<h2>{h(sec.get("title") or "Decisions")}</h2>'
         body = pending_shell(items)
         sections_html.append(
-            f'<section id="{h(sid_raw)}" class="block pending"{hidden_sec}>'
+            f'<section id="{h(sid_raw)}" class="block pending" data-tab-panel="{h(sid_raw)}" '
+            f'hidden role="tabpanel" aria-labelledby="tab-{h(sid_raw)}">'
             f'{heading}{body}</section>'
         )
         continue
@@ -874,8 +877,14 @@ for sec in status["sections"]:
     sort_attn = kind == "primary"
     body = lanes_html(projects, sort_attention=sort_attn)
     cls = "primary" if kind == "primary" else "secondary"
+    panel = ""
+    if is_type_tab(sid_raw):
+        panel = (
+            f' data-tab-panel="{h(sid_raw)}" hidden role="tabpanel" '
+            f'aria-labelledby="tab-{h(sid_raw)}"'
+        )
     sections_html.append(
-        f'<section id="{h(sid_raw)}" class="block {cls}">{heading}{body}</section>'
+        f'<section id="{h(sid_raw)}" class="block {cls}"{panel}>{heading}{body}</section>'
     )
 
 
@@ -902,6 +911,24 @@ html = f'''<!DOCTYPE html>
   header.pulse h1 {{ margin:0; font-size:1.05rem; font-weight:700; letter-spacing:-.01em; }}
   header.pulse h1 .mark {{ color:var(--orange); }}
   .pulse-row {{ display:flex; flex-direction:column; gap:.55rem; margin-top:.7rem; }}
+  .board-glance {{
+    display:flex; align-items:center; margin:0 0 .7rem; padding:0; border:0;
+    background:transparent; color:var(--text); font:inherit; font-size:1.05rem;
+    font-weight:650; letter-spacing:-.01em; min-height:44px; text-align:left;
+    width:100%; cursor:pointer; touch-action:manipulation;
+  }}
+  .board-glance:not([data-tab]) {{ cursor:default; }}
+  .type-tabs {{
+    display:flex; gap:.4rem; overflow-x:auto; -webkit-overflow-scrolling:touch;
+    margin:0 0 1rem; padding:.1rem 0 .35rem; scrollbar-width:none;
+  }}
+  .type-tabs::-webkit-scrollbar {{ display:none; }}
+  .type-tabs button {{
+    flex:0 0 auto; min-height:44px; padding:.4rem .85rem; border:1px solid var(--border);
+    border-radius:999px; background:transparent; color:var(--muted);
+    font-size:.8rem; font-weight:600; cursor:pointer; touch-action:manipulation;
+  }}
+  .type-tabs button[aria-selected="true"] {{ border-color:var(--orange); color:var(--orange); }}
   .chip {{ display:inline-flex; align-items:center; color:var(--c);
     background:transparent; border:0; padding:0; font-size:.68rem; font-weight:700;
     text-transform:uppercase; letter-spacing:.04em; white-space:nowrap; }}
@@ -1026,6 +1053,7 @@ html = f'''<!DOCTYPE html>
     }}
     .lane.is-quiet .notes {{ display:-webkit-box; }}
     section.pending h2, section.primary h2 {{ font-size:1.85rem; }}
+    .type-tabs {{ flex-wrap:wrap; overflow:visible; }}
   }}
 </style>
 </head>
@@ -1041,6 +1069,7 @@ html = f'''<!DOCTYPE html>
   </header>
   <div id="silence-banner" role="alert" aria-live="assertive"></div>
   <div id="board">
+  {glance_html(status.get("pending"), status.get("sections"))}{type_tabs_html(status.get("sections"), status.get("pending"))}
   {''.join(sections_html)}
   </div>
   <footer>
@@ -1533,6 +1562,121 @@ html = f'''<!DOCTYPE html>
     if (id === "abilities" || id === "features") return "footer";
     return "secondary";
   }}
+  var TYPE_TAB_IDS = ["controls", "live-shipping", "apps-utilities", "cisco", "messaging", "private-media", "parked"];
+  var TYPE_TAB_LABELS = {{
+    "controls": "Decisions",
+    "live-shipping": "Live",
+    "apps-utilities": "Apps",
+    "cisco": "Cisco",
+    "messaging": "Bob",
+    "private-media": "Media",
+    "parked": "Parked"
+  }};
+  var currentTypeTab = "";
+  function tabId(raw) {{
+    var s = String(raw || "");
+    return TYPE_TAB_LABELS.hasOwnProperty(s) ? s : "";
+  }}
+  function tabLabel(id) {{
+    var sid = tabId(id);
+    return sid ? TYPE_TAB_LABELS[sid] : "";
+  }}
+  function typeTabIdsFor(sections, pending) {{
+    var present = {{}};
+    (sections || []).forEach(function (sec) {{
+      if (sec && sec.id) present[String(sec.id)] = 1;
+    }});
+    var out = [];
+    TYPE_TAB_IDS.forEach(function (sid) {{
+      if (sid === "controls") {{
+        var n = 0;
+        (pending || []).forEach(function (it) {{ if (it && typeof it === "object") n += 1; }});
+        if (n) out.push(sid);
+        return;
+      }}
+      if (present[sid]) out.push(sid);
+    }});
+    return out;
+  }}
+  function glanceStatus(pending, sections) {{
+    var n = 0;
+    (pending || []).forEach(function (it) {{ if (it && typeof it === "object") n += 1; }});
+    if (n) {{
+      return {{ text: n === 1 ? "1 needs a yes" : String(n) + " need a yes", tab: "controls" }};
+    }}
+    var worstRank = 99;
+    var worstId = "";
+    (sections || []).forEach(function (sec) {{
+      var sid = tabId(sec && sec.id);
+      if (!sid || sid === "controls") return;
+      (sec.projects || []).forEach(function (p) {{
+        var r = attentionRank(p);
+        if (r < worstRank) {{ worstRank = r; worstId = sid; }}
+      }});
+    }});
+    if (worstRank <= 2 && worstId) {{
+      var label = tabLabel(worstId);
+      if (worstRank === 0) return {{ text: label + " is red", tab: worstId }};
+      if (worstRank === 1) return {{ text: label + " is waiting on Jeff", tab: worstId }};
+      return {{ text: label + " needs a look", tab: worstId }};
+    }}
+    return {{ text: "Quiet", tab: "" }};
+  }}
+  function glanceHtml(pending, sections) {{
+    var g = glanceStatus(pending, sections);
+    var extra = g.tab ? ' data-tab="' + esc(g.tab) + '"' : "";
+    return '<button type="button" class="board-glance" id="board-glance"' + extra + ">" +
+      esc(g.text || "Quiet") + "</button>";
+  }}
+  function typeTabsHtml(sections, pending, selected) {{
+    var want = tabId(selected);
+    var buttons = "";
+    typeTabIdsFor(sections, pending).forEach(function (sid) {{
+      buttons += '<button type="button" role="tab" id="tab-' + esc(sid) + '" data-tab="' + esc(sid) +
+        '" aria-controls="' + esc(sid) + '" aria-selected="' + (sid === want ? "true" : "false") + '">' +
+        esc(tabLabel(sid)) + "</button>";
+    }});
+    return '<nav class="type-tabs" id="type-tabs" role="tablist" aria-label="Project type">' +
+      buttons + "</nav>";
+  }}
+  function applyTypeTab(id) {{
+    var want = tabId(id);
+    currentTypeTab = want;
+    var tabs = document.querySelectorAll("#type-tabs [data-tab]");
+    Array.prototype.forEach.call(tabs, function (btn) {{
+      btn.setAttribute("aria-selected", tabId(btn.getAttribute("data-tab")) === want ? "true" : "false");
+    }});
+    var panels = document.querySelectorAll("#board [data-tab-panel]");
+    Array.prototype.forEach.call(panels, function (panel) {{
+      var pid = tabId(panel.getAttribute("data-tab-panel"));
+      if (!pid) return;
+      if (pid === want) panel.removeAttribute("hidden");
+      else panel.setAttribute("hidden", "");
+    }});
+    try {{
+      if (want) history.replaceState(null, "", "#" + want);
+      else if ((location.hash || "").length > 1) history.replaceState(null, "", location.pathname + location.search);
+    }} catch (e) {{}}
+  }}
+  function tabFromHash() {{
+    return tabId(String(location.hash || "").replace(/^#/, ""));
+  }}
+  function isTypeTab(id) {{
+    return !!tabId(id);
+  }}
+  document.addEventListener("click", function (ev) {{
+    var btn = ev.target.closest("[data-tab]");
+    if (!btn) return;
+    if (btn.getAttribute("data-dec")) return;
+    var id = tabId(btn.getAttribute("data-tab"));
+    if (!id) return;
+    ev.preventDefault();
+    var fromGlance = btn.id === "board-glance" || (btn.classList && btn.classList.contains("board-glance"));
+    applyTypeTab(fromGlance ? id : (currentTypeTab === id ? "" : id));
+  }});
+  window.addEventListener("hashchange", function () {{
+    applyTypeTab(tabFromHash());
+  }});
   function pendingShell(items) {{
     var rank = {{ high: 0, medium: 1, low: 2 }};
     var rows = (items || []).filter(function (it) {{
@@ -1767,7 +1911,8 @@ html = f'''<!DOCTYPE html>
     return {{
       how: isOpen("details.how-board"),
       ab: isOpen("details.abilities-foot"),
-      more: isOpen("details.pending-more")
+      more: isOpen("details.pending-more"),
+      tab: currentTypeTab || tabFromHash()
     }};
   }}
   function restoreOpen(s) {{
@@ -1779,6 +1924,7 @@ html = f'''<!DOCTYPE html>
     setOpen("details.how-board", s.how);
     setOpen("details.abilities-foot", s.ab);
     setOpen("details.pending-more", s.more);
+    applyTypeTab(s.tab || "");
   }}
   function paintAgents(agents, cloud) {{
     var host = document.getElementById("active-agents");
@@ -1829,15 +1975,14 @@ html = f'''<!DOCTYPE html>
     lastCloud = sanitizeCloudAgents((data && data.cloud_agents) || lastCloud);
     paintAgents(data.agents || [], lastCloud);
     var controlProjects = [];
-    var html = "";
+    var html = glanceHtml(data.pending, data.sections) + typeTabsHtml(data.sections, data.pending, "");
     data.sections.forEach(function (sec) {{
       var kind = sectionKind(sec.id);
       if (kind === "pulse") return;
       if (sec.id === "controls") {{
         controlProjects = sec.projects || [];
         var items = data.pending || [];
-        var hide = items.length ? "" : " hidden";
-        html += '<section id="controls" class="block pending"' + hide + ">" +
+        html += '<section id="controls" class="block pending" data-tab-panel="controls" hidden role="tabpanel" aria-labelledby="tab-controls">' +
           "<h2>" + esc(sec.title || "Decisions") + "</h2>" + pendingShell(items) + "</section>";
         return;
       }}
@@ -1857,7 +2002,10 @@ html = f'''<!DOCTYPE html>
         return;
       }}
       var cls = kind === "primary" ? "primary" : "secondary";
-      html += '<section id="' + esc(sec.id || "") + '" class="block ' + cls + '">' +
+      var panel = isTypeTab(sec.id)
+        ? ' data-tab-panel="' + esc(sec.id) + '" hidden role="tabpanel" aria-labelledby="tab-' + esc(sec.id) + '"'
+        : "";
+      html += '<section id="' + esc(sec.id || "") + '" class="block ' + cls + '"' + panel + ">" +
         "<h2>" + esc(sec.title || "") + "</h2>" +
         lanesHtml(sec.projects || [], kind === "primary") + "</section>";
     }});
@@ -2057,6 +2205,7 @@ html = f'''<!DOCTYPE html>
   }});
 
   paint();
+  applyTypeTab(tabFromHash());
   // Pause polls when tab hidden; resume on visible / bfcache pageshow.
   if (document.visibilityState !== "hidden") startPolling();
   else setTimeout(function () {{ if (document.visibilityState !== "hidden") startPolling(); }}, 5000);
