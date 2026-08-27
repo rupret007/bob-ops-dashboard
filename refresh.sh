@@ -53,6 +53,7 @@ from board_meta import (
     pick_open_pr,
     pick_tip_ci,
     safe_pr_url,
+    safe_release_tag,
 )
 full = f"{owner}/{repo}"
 
@@ -106,7 +107,17 @@ runs = api(f"repos/{full}/actions/runs?per_page=20&branch={branch}", {}) or {}
 ci = pick_tip_ci(runs.get("workflow_runs") or [], branch, sha)
 
 rels = api(f"repos/{full}/releases?per_page=1", []) or []
-release = (rels[0].get("tag_name") if rels else None)
+release = None
+release_sha = None
+release_url = None
+if isinstance(rels, list) and rels and isinstance(rels[0], dict):
+    tag = safe_release_tag(rels[0].get("tag_name"))
+    if tag:
+        release = tag
+        release_url = rels[0].get("html_url")
+        tagged = api(f"repos/{full}/commits/{tag}", {}) or {}
+        if isinstance(tagged, dict):
+            release_sha = (tagged.get("sha") or "")[:7] or None
 
 print(json.dumps({
     "accessible": True,
@@ -127,6 +138,8 @@ print(json.dumps({
     "cloud_agents": clouds,
     "ci": ci,
     "release": release,
+    "release_sha": release_sha,
+    "release_url": release_url,
 }, indent=None))
 PY
 }
@@ -168,10 +181,12 @@ from board_meta import (
     presentation,
     prune_closed_parked_prs,
     resolve_agents,
+    latest_release_url_from_repo,
     safe_actions_url,
     safe_agent_url,
     safe_game_url,
     safe_pr_url,
+    safe_release_url,
     short_note,
     split_pending,
     status_from_fetch,
@@ -231,6 +246,12 @@ def project(
         "agent_url": r.get("agent_url"),
         "ci": r.get("ci"),
         "release": r.get("release"),
+        "release_sha": r.get("release_sha") if r.get("release") else None,
+        "release_url": (
+            (safe_release_url(r.get("release_url")) or latest_release_url_from_repo(r.get("html_url")))
+            if r.get("release")
+            else None
+        ),
         "notes": notes,
         "accessible": r.get("accessible", False),
     }
@@ -289,15 +310,15 @@ status = {
       "title": "Live shipping",
       "projects": [
         project("webjam", jeff_gate=True,
-                notes="Music Host/Join app. Software CI is live; exploratory feel and physical audio checks stay owner-only."),
+                notes="Making room. Latest is the published test candidate; source can be ahead."),
         project("StoryLiner", notes="Story workflow app. Current review stack and default-branch CI come from the live refresh."),
-        project("StoryBoard", notes="Quiet green unless CI says otherwise."),
+        project("StoryBoard", notes="Band-business engine. Consumes Vault; not a second catalog."),
         project("Rad-Dad-Merch", notes="Merch lane; watch Release integrity."),
         project("RadDadSite",
                 notes="Tip green typical; deploy work comes only from live open PR data."),
-        project("rad-dad-show-night", notes="Show-night run sheet / flyer. No CI is OK."),
+        project("rad-dad-show-night", notes="Live run sheet. GitHub is source; live Latest is Sites. No CI is OK."),
         project("AI-Music-Vault", high_level_only=True,
-                notes="Private-content boundary hold. Keep private; do not publish catalog content."),
+                notes="Private catalog spine for StoryBoard / Show Night. Do not publish catalog content."),
         project("Turdanoid", status="yellow",
                 live_game_url="https://rupret007.github.io/Turdanoid/hub.html",
                 notes="Public game hub. Fun/replayability pass remains open; green CI is not completion."),
@@ -1377,9 +1398,24 @@ html = f'''<!DOCTYPE html>
     var s = cleanPublicUrl(u);
     return /^https:\\/\\/github\\.com\\/(?:rupret007\\/[A-Za-z0-9._-]+|0xc0re\\/barker)\\/pulls$/i.test(s) ? s : "";
   }}
+  function safeReleaseUrl(u) {{
+    var s = cleanPublicUrl(u);
+    return /^https:\\/\\/github\\.com\\/(?:rupret007\\/[A-Za-z0-9._-]+|0xc0re\\/barker)\\/releases\\/(?:latest|tag\\/[A-Za-z0-9][A-Za-z0-9._-]{{0,63}})$/i.test(s) ? s : "";
+  }}
   function pullsUrlFromRepo(u) {{
     var repo = safeRepoUrl(u);
     return repo ? repo + "/pulls" : "";
+  }}
+  function latestReleaseUrlFromRepo(u) {{
+    var repo = safeRepoUrl(u);
+    return repo ? repo + "/releases/latest" : "";
+  }}
+  function releaseMatchesTip(p) {{
+    if (!p) return null;
+    var tip = String(p.tip_sha || "").trim().toLowerCase();
+    var rel = String(p.release_sha || "").trim().toLowerCase();
+    if (!tip || !rel) return null;
+    return rel.indexOf(tip) === 0 || tip.indexOf(rel.slice(0, 7)) === 0;
   }}
   function laneHrefs(p) {{
     if (!p) return {{}};
@@ -1466,7 +1502,10 @@ html = f'''<!DOCTYPE html>
       return p.open_prs + (p.open_prs === 1 ? " open PR" : " open PRs");
     }}
     var rel = String(p.release || "").trim();
-    if (rel) return rel;
+    if (rel) {{
+      if (releaseMatchesTip(p) === false) return "Latest != source";
+      return rel;
+    }}
     if (concl && concl !== "success" && concl !== "skipped" && concl !== "cancelled") return concl;
     return "";
   }}
@@ -1706,7 +1745,7 @@ html = f'''<!DOCTYPE html>
     function projectKey(p) {{
       if (!p) return [];
       var ci = p.ci && typeof p.ci === "object" ? p.ci : {{}};
-      return [p.name, p.status, p.chip, p.notes, p.open_prs, p.open_pr_url || "", p.open_pr_stack || [], p.release, p.tip_sha, p.agent_url || "", p.live_game_url || "", ci.conclusion || "", ci.sha || "", ci.name || "", ci.html_url || ""];
+      return [p.name, p.status, p.chip, p.notes, p.open_prs, p.open_pr_url || "", p.open_pr_stack || [], p.release, p.release_sha || "", p.tip_sha, p.agent_url || "", p.live_game_url || "", ci.conclusion || "", ci.sha || "", ci.name || "", ci.html_url || ""];
     }}
     var sections = (data.sections || []).map(function (sec) {{
       if (!sec) return [];
@@ -1885,10 +1924,14 @@ html = f'''<!DOCTYPE html>
       if (n > 1) return pulls;
       return hrefs.pr || pulls;
     }}
+    var rel = String(p.release || "").trim();
+    if (String(signal) === "Latest != source" || (rel && String(signal) === rel)) {{
+      return latestReleaseUrlFromRepo(hrefs.repo || "") || safeReleaseUrl(p.release_url);
+    }}
     return "";
   }}
   function workHref(href) {{
-    return safeAgentUrl(href) || safePrUrl(href) || safeActionsUrl(href) || safePullsUrl(href) || safeRepoUrl(href) || safeGameUrl(href);
+    return safeAgentUrl(href) || safePrUrl(href) || safeActionsUrl(href) || safePullsUrl(href) || safeReleaseUrl(href) || safeRepoUrl(href) || safeGameUrl(href);
   }}
   function openWorkLink(href) {{
     var url = workHref(href);

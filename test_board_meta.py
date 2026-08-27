@@ -9,6 +9,7 @@ from datetime import datetime, timedelta, timezone
 from board_meta import (
     CONTROL_ACTIONS,
     FIRST_CLASS_IDS,
+    LATEST_VS_SOURCE_SIGNAL,
     age_gate_agents,
     agent_url_from_fields,
     attention_rank,
@@ -23,6 +24,7 @@ from board_meta import (
     is_ci_noise,
     is_quiet_lane,
     lane_hrefs,
+    latest_release_url_from_repo,
     merge_cloud_agents,
     merge_first_class,
     parse_agents_blob,
@@ -39,7 +41,10 @@ from board_meta import (
     safe_game_url,
     safe_pr_url,
     safe_pulls_url,
+    safe_release_tag,
+    safe_release_url,
     safe_repo_url,
+    release_matches_tip,
     signal_href,
     sha_matches_tip,
     short_note,
@@ -166,6 +171,11 @@ class BoardMetaTests(unittest.TestCase):
         self.assertIn("Open repo", blob)
         self.assertIn("Open CI", blob)
         self.assertIn("Play game", blob)
+        self.assertIn("Vault, StoryBoard, Show Night, and WebJam work together", blob)
+        self.assertIn("Latest != source", blob)
+        self.assertIn("/releases/latest", blob)
+        names = [p["name"] for s in first_class_sections() for p in s["projects"]]
+        self.assertIn("Music stack", names)
 
     def test_security_features_from_pr1_survive_without_unlock(self):
         blob = str(first_class_sections())
@@ -195,6 +205,60 @@ class BoardMetaTests(unittest.TestCase):
 
     def test_compact_signal_skips_sha_and_zero_prs(self):
         self.assertEqual(compact_signal({"release": "v0.26.0", "tip_sha": "abc1234", "open_prs": 0}), "v0.26.0")
+        self.assertEqual(
+            compact_signal(
+                {
+                    "release": "v0.26.0",
+                    "release_sha": "4b52080",
+                    "tip_sha": "27530d8",
+                    "open_prs": 0,
+                }
+            ),
+            LATEST_VS_SOURCE_SIGNAL,
+        )
+        self.assertEqual(
+            compact_signal(
+                {
+                    "release": "v0.26.0",
+                    "release_sha": "4b52080",
+                    "tip_sha": "4b52080",
+                    "open_prs": 0,
+                }
+            ),
+            "v0.26.0",
+        )
+        self.assertEqual(
+            compact_signal(
+                {
+                    "release": "v0.26.0",
+                    "release_sha": "4b52080",
+                    "tip_sha": "27530d8",
+                    "open_prs": 1,
+                }
+            ),
+            "1 open PR",
+        )
+        self.assertEqual(
+            compact_signal(
+                {
+                    "release": "v0.26.0",
+                    "release_sha": "4b52080",
+                    "tip_sha": "27530d8",
+                    "ci": {"conclusion": "failure"},
+                }
+            ),
+            "CI fail",
+        )
+        self.assertIsNone(
+            compact_signal(
+                {
+                    "private": True,
+                    "release": "v9.9.9",
+                    "release_sha": "deadbee",
+                    "tip_sha": "abc1234",
+                }
+            )
+        )
         self.assertEqual(compact_signal({"open_prs": 1, "tip_sha": "abc1234"}), "1 open PR")
         self.assertEqual(compact_signal({"open_prs": 4}), "4 open PRs")
         self.assertEqual(
@@ -289,6 +353,26 @@ class BoardMetaTests(unittest.TestCase):
             signal_href({"release": "v0.26.0", "ci": {"conclusion": "success"}, "open_prs": 0}),
             "",
         )
+        diverged = {
+            "url": "https://github.com/rupret007/webjam",
+            "release": "v0.26.0",
+            "release_sha": "4b52080",
+            "tip_sha": "27530d8",
+            "open_prs": 0,
+            "ci": {"conclusion": "success"},
+        }
+        self.assertEqual(compact_signal(diverged), LATEST_VS_SOURCE_SIGNAL)
+        self.assertEqual(signal_href(diverged), "https://github.com/rupret007/webjam/releases/latest")
+        matched = {
+            "url": "https://github.com/rupret007/webjam",
+            "release": "v0.26.0",
+            "release_sha": "4b5208098981943df8ddaf1fac31aa36c15146bb",
+            "tip_sha": "4b52080",
+            "open_prs": 0,
+            "ci": {"conclusion": "success"},
+        }
+        self.assertEqual(compact_signal(matched), "v0.26.0")
+        self.assertEqual(signal_href(matched), "https://github.com/rupret007/webjam/releases/latest")
         self.assertEqual(signal_href(None), "")
         self.assertEqual(
             safe_pulls_url("https://github.com/rupret007/webjam/pulls"),
@@ -302,6 +386,38 @@ class BoardMetaTests(unittest.TestCase):
             "https://github.com/rupret007/webjam/pulls",
         )
         self.assertEqual(pulls_url_from_repo("https://evil.example/webjam"), "")
+        self.assertEqual(safe_release_tag("v0.26.0"), "v0.26.0")
+        self.assertEqual(safe_release_tag("../etc/passwd"), "")
+        self.assertEqual(safe_release_tag("v1/../../x"), "")
+        self.assertEqual(
+            safe_release_url("https://github.com/rupret007/webjam/releases/latest"),
+            "https://github.com/rupret007/webjam/releases/latest",
+        )
+        self.assertEqual(
+            safe_release_url("https://github.com/rupret007/webjam/releases/tag/v0.26.0"),
+            "https://github.com/rupret007/webjam/releases/tag/v0.26.0",
+        )
+        self.assertEqual(safe_release_url("https://evil.example/rupret007/webjam/releases/latest"), "")
+        self.assertEqual(safe_release_url("https://github.com/rupret007/webjam/releases/tag/../v1"), "")
+        self.assertEqual(
+            latest_release_url_from_repo("https://github.com/rupret007/webjam"),
+            "https://github.com/rupret007/webjam/releases/latest",
+        )
+        self.assertEqual(latest_release_url_from_repo("https://evil.example/webjam"), "")
+        self.assertIs(
+            release_matches_tip({"tip_sha": "27530d8", "release_sha": "4b52080"}),
+            False,
+        )
+        self.assertIs(
+            release_matches_tip(
+                {
+                    "tip_sha": "4b52080",
+                    "release_sha": "4b5208098981943df8ddaf1fac31aa36c15146bb",
+                }
+            ),
+            True,
+        )
+        self.assertIsNone(release_matches_tip({"tip_sha": "27530d8", "release": "v0.26.0"}))
 
     def test_quiet_lane_and_attention(self):
         self.assertTrue(is_quiet_lane({"status": "green"}))
@@ -910,6 +1026,39 @@ class BoardMetaTests(unittest.TestCase):
             }
         ]
         self.assertNotEqual(board_content_fingerprint(a), board_content_fingerprint(d))
+        latest_a = {
+            "sections": [
+                {
+                    "id": "live-shipping",
+                    "projects": [
+                        {
+                            "name": "WebJam",
+                            "release": "v0.26.0",
+                            "release_sha": "4b52080",
+                            "tip_sha": "4b52080",
+                        }
+                    ],
+                }
+            ]
+        }
+        latest_b = {
+            "sections": [
+                {
+                    "id": "live-shipping",
+                    "projects": [
+                        {
+                            "name": "WebJam",
+                            "release": "v0.26.0",
+                            "release_sha": "4b52080",
+                            "tip_sha": "27530d8",
+                        }
+                    ],
+                }
+            ]
+        }
+        self.assertNotEqual(
+            board_content_fingerprint(latest_a), board_content_fingerprint(latest_b)
+        )
         e = dict(d)
         e["cloud_agents"] = [
             {
