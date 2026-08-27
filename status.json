@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-08-26T19:04:11.365831-05:00",
-  "generated_at_display": "Wed Aug 26, 2026 \u00b7 7:04 PM CDT",
+  "generated_at": "2026-08-26T19:17:23.991406-05:00",
+  "generated_at_display": "Wed Aug 26, 2026 \u00b7 7:17 PM CDT",
   "timezone": "America/Chicago",
   "owner": "rupret007",
   "dashboard": "bob-ops-dashboard",
@@ -51,9 +51,9 @@
           "default_branch": "master",
           "tip_sha": "7982223",
           "tip_date": "2026-08-26T22:02:51Z",
-          "open_prs": 1,
-          "open_pr_url": "https://github.com/rupret007/webjam/pull/37",
-          "open_pr_number": 37,
+          "open_prs": 2,
+          "open_pr_url": "https://github.com/rupret007/webjam/pull/41",
+          "open_pr_number": 41,
           "open_pr_draft": true,
           "open_pr_stack": [],
           "pr_listing_complete": true,
@@ -404,8 +404,8 @@
           "status": "yellow",
           "chip": "Yellow",
           "default_branch": "main",
-          "tip_sha": "a1bc808",
-          "tip_date": "2026-08-26T23:51:39Z",
+          "tip_sha": "6c79b37",
+          "tip_date": "2026-08-27T00:04:18Z",
           "open_prs": 2,
           "open_pr_url": "https://github.com/rupret007/bob-ops-dashboard/pull/21",
           "open_pr_number": 21,
@@ -417,9 +417,9 @@
             "name": "Refresh Bob Ops Dashboard",
             "conclusion": "in_progress",
             "branch": "main",
-            "sha": "a1bc808",
-            "created": "2026-08-27T00:03:45Z",
-            "html_url": "https://github.com/rupret007/bob-ops-dashboard/actions/runs/33025529483"
+            "sha": "6c79b37",
+            "created": "2026-08-27T00:16:48Z",
+            "html_url": "https://github.com/rupret007/bob-ops-dashboard/actions/runs/33026306301"
           },
           "release": null,
           "notes": "Source-only feature PRs; the scheduled refresh owns generated index.html and status.json.",
@@ -795,7 +795,7 @@
     "Sliding-Glass-Door-PETG-Screw"
   ],
   "publish_notes": "Public board -- no secrets or customer paths. Private repositories stay high-level; AI Music Vault stays private-content-boundary only.",
-  "refresh_started_ms": 1787789030895,
+  "refresh_started_ms": 1787789817098,
   "agents_source": "file:stale->unknown",
   "agents": [
     {
