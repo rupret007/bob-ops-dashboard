@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-08-27T16:39:03.818736-05:00",
-  "generated_at_display": "Thu Aug 27, 2026 \u00b7 4:39 PM CDT",
+  "generated_at": "2026-08-27T16:54:07.730154-05:00",
+  "generated_at_display": "Thu Aug 27, 2026 \u00b7 4:54 PM CDT",
   "timezone": "America/Chicago",
   "owner": "rupret007",
   "dashboard": "bob-ops-dashboard",
@@ -177,8 +177,8 @@
           "status": "green",
           "chip": "Green",
           "default_branch": "main",
-          "tip_sha": "0d4d651",
-          "tip_date": "2026-08-27T21:22:16Z",
+          "tip_sha": "9ea73fd",
+          "tip_date": "2026-08-27T21:42:26Z",
           "open_prs": 0,
           "open_pr_url": null,
           "open_pr_number": null,
@@ -190,9 +190,9 @@
             "name": "Test, Package, and Deploy Site",
             "conclusion": "success",
             "branch": "main",
-            "sha": "0d4d651",
-            "created": "2026-08-27T21:22:19Z",
-            "html_url": "https://github.com/rupret007/RadDadSite/actions/runs/33117832037"
+            "sha": "9ea73fd",
+            "created": "2026-08-27T21:42:28Z",
+            "html_url": "https://github.com/rupret007/RadDadSite/actions/runs/33119376355"
           },
           "release": null,
           "release_sha": null,
@@ -358,8 +358,8 @@
           "status": "yellow",
           "chip": "Yellow",
           "default_branch": "main",
-          "tip_sha": "5a33f67",
-          "tip_date": "2026-08-27T21:23:17Z",
+          "tip_sha": "f31a2dc",
+          "tip_date": "2026-08-27T21:39:06Z",
           "open_prs": 2,
           "open_pr_url": "https://github.com/rupret007/bob-ops-dashboard/pull/21",
           "open_pr_number": 21,
@@ -369,11 +369,11 @@
           "agent_url": null,
           "ci": {
             "name": "QA claim smoke",
-            "conclusion": "pending",
+            "conclusion": "success",
             "branch": "main",
-            "sha": "5a33f67",
-            "created": null,
-            "html_url": null
+            "sha": "f31a2dc",
+            "created": "2026-08-27T21:39:09Z",
+            "html_url": "https://github.com/rupret007/bob-ops-dashboard/actions/runs/33119127493"
           },
           "release": null,
           "release_sha": null,
@@ -730,7 +730,7 @@
   ],
   "inaccessible": [],
   "publish_notes": "Public board -- no secrets or customer paths. Private repositories stay high-level; AI Music Vault stays private-content-boundary only.",
-  "refresh_started_ms": 1787866691872,
+  "refresh_started_ms": 1787867595129,
   "agents_source": "file:stale->unknown",
   "agents": [
     {
