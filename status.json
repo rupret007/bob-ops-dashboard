@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-08-26T22:49:02.224873-05:00",
-  "generated_at_display": "Wed Aug 26, 2026 \u00b7 10:49 PM CDT",
+  "generated_at": "2026-08-27T00:26:08.032723-05:00",
+  "generated_at_display": "Thu Aug 27, 2026 \u00b7 12:26 AM CDT",
   "timezone": "America/Chicago",
   "owner": "rupret007",
   "dashboard": "bob-ops-dashboard",
@@ -51,13 +51,13 @@
           "default_branch": "master",
           "tip_sha": "27530d8",
           "tip_date": "2026-08-27T03:00:29Z",
-          "open_prs": 1,
-          "open_pr_url": "https://github.com/rupret007/webjam/pull/37",
-          "open_pr_number": 37,
+          "open_prs": 2,
+          "open_pr_url": "https://github.com/rupret007/webjam/pull/47",
+          "open_pr_number": 47,
           "open_pr_draft": true,
           "open_pr_stack": [],
           "pr_listing_complete": true,
-          "agent_url": null,
+          "agent_url": "https://cursor.com/agents/bc-48233059-c14e-4168-ae78-15566aa55495",
           "ci": {
             "name": "Publish Verified WebJam Release",
             "conclusion": "failure",
@@ -67,7 +67,9 @@
             "html_url": "https://github.com/rupret007/webjam/actions/runs/33036413984"
           },
           "release": "v0.27.0",
-          "notes": "Music Host/Join app. Software CI is live; exploratory feel and physical audio checks stay owner-only.",
+          "release_sha": "27530d8",
+          "release_url": "https://github.com/rupret007/webjam/releases/tag/v0.27.0",
+          "notes": "Making room. Latest is the published test candidate; source can be ahead.",
           "accessible": true
         },
         {
@@ -76,18 +78,18 @@
           "url": "https://github.com/rupret007/StoryLiner",
           "repo_url": "https://github.com/rupret007/StoryLiner",
           "private": false,
-          "status": "green",
-          "chip": "Green",
+          "status": "yellow",
+          "chip": "Yellow",
           "default_branch": "main",
           "tip_sha": "e9b90ea",
           "tip_date": "2026-08-27T03:24:28Z",
-          "open_prs": 0,
-          "open_pr_url": null,
-          "open_pr_number": null,
-          "open_pr_draft": false,
+          "open_prs": 1,
+          "open_pr_url": "https://github.com/rupret007/StoryLiner/pull/25",
+          "open_pr_number": 25,
+          "open_pr_draft": true,
           "open_pr_stack": [],
           "pr_listing_complete": true,
-          "agent_url": null,
+          "agent_url": "https://cursor.com/agents/bc-f6d2e966-14cc-49af-a6f5-e35b601d85fe",
           "ci": {
             "name": "CI",
             "conclusion": "success",
@@ -97,6 +99,8 @@
             "html_url": "https://github.com/rupret007/StoryLiner/actions/runs/33036270937"
           },
           "release": null,
+          "release_sha": null,
+          "release_url": null,
           "notes": "Story workflow app. Current review stack and default-branch CI come from the live refresh.",
           "accessible": true
         },
@@ -127,7 +131,9 @@
             "html_url": "https://github.com/rupret007/StoryBoard/actions/runs/33036674844"
           },
           "release": null,
-          "notes": "Quiet green unless CI says otherwise.",
+          "release_sha": null,
+          "release_url": null,
+          "notes": "Band-business engine. Consumes Vault; not a second catalog.",
           "accessible": true
         },
         {
@@ -139,24 +145,26 @@
           "status": "yellow",
           "chip": "Yellow",
           "default_branch": "main",
-          "tip_sha": "b949c7c",
-          "tip_date": "2026-08-21T12:44:28Z",
+          "tip_sha": "84e0007",
+          "tip_date": "2026-08-27T04:01:45Z",
           "open_prs": 2,
-          "open_pr_url": "https://github.com/rupret007/Rad-Dad-Merch/pull/3",
-          "open_pr_number": 3,
+          "open_pr_url": "https://github.com/rupret007/Rad-Dad-Merch/pull/4",
+          "open_pr_number": 4,
           "open_pr_draft": true,
           "open_pr_stack": [],
           "pr_listing_complete": true,
-          "agent_url": null,
+          "agent_url": "https://cursor.com/agents/bc-506e7d70-aa42-4402-8978-53f33cbd97c1",
           "ci": {
             "name": "Release integrity",
             "conclusion": "success",
             "branch": "main",
-            "sha": "b949c7c",
-            "created": "2026-08-21T12:44:32Z",
-            "html_url": "https://github.com/rupret007/Rad-Dad-Merch/actions/runs/32483333775"
+            "sha": "84e0007",
+            "created": "2026-08-27T04:01:48Z",
+            "html_url": "https://github.com/rupret007/Rad-Dad-Merch/actions/runs/33038140986"
           },
           "release": null,
+          "release_sha": null,
+          "release_url": null,
           "notes": "Merch lane; watch Release integrity.",
           "accessible": true
         },
@@ -187,6 +195,8 @@
             "html_url": "https://github.com/rupret007/RadDadSite/actions/runs/33037232883"
           },
           "release": null,
+          "release_sha": null,
+          "release_url": null,
           "notes": "Tip green typical; deploy work comes only from live open PR data.",
           "accessible": true
         },
@@ -210,7 +220,9 @@
           "agent_url": null,
           "ci": null,
           "release": null,
-          "notes": "Show-night run sheet / flyer. No CI is OK.",
+          "release_sha": null,
+          "release_url": null,
+          "notes": "Live run sheet. GitHub is source; live Latest is Sites. No CI is OK.",
           "accessible": true
         },
         {
@@ -218,7 +230,7 @@
           "private": true,
           "status": "yellow",
           "chip": "Yellow",
-          "notes": "Private-content boundary hold. Keep private; do not publish catalog content.",
+          "notes": "Private catalog spine for StoryBoard / Show Night. Do not publish catalog content.",
           "accessible": true,
           "ci": {
             "conclusion": "failure"
@@ -233,24 +245,26 @@
           "status": "yellow",
           "chip": "Yellow",
           "default_branch": "main",
-          "tip_sha": "a0ef856",
-          "tip_date": "2026-08-23T01:02:17Z",
+          "tip_sha": "887f028",
+          "tip_date": "2026-08-27T04:01:32Z",
           "open_prs": 2,
-          "open_pr_url": "https://github.com/rupret007/Turdanoid/pull/9",
-          "open_pr_number": 9,
+          "open_pr_url": "https://github.com/rupret007/Turdanoid/pull/10",
+          "open_pr_number": 10,
           "open_pr_draft": true,
           "open_pr_stack": [],
           "pr_listing_complete": true,
-          "agent_url": null,
+          "agent_url": "https://cursor.com/agents/bc-680be01b-8b06-4e77-af69-7a446766baf7",
           "ci": {
             "name": "CI",
             "conclusion": "success",
             "branch": "main",
-            "sha": "a0ef856",
-            "created": "2026-08-23T01:02:20Z",
-            "html_url": "https://github.com/rupret007/Turdanoid/actions/runs/32609377612"
+            "sha": "887f028",
+            "created": "2026-08-27T04:01:36Z",
+            "html_url": "https://github.com/rupret007/Turdanoid/actions/runs/33038130698"
           },
           "release": null,
+          "release_sha": null,
+          "release_url": null,
           "notes": "Public game hub. Fun/replayability pass remains open; green CI is not completion.",
           "accessible": true,
           "live_game_url": "https://rupret007.github.io/Turdanoid/hub.html"
@@ -330,6 +344,8 @@
             "html_url": "https://github.com/rupret007/Cursor-OpenClaw-Integration/actions/runs/32970542650"
           },
           "release": null,
+          "release_sha": null,
+          "release_url": null,
           "notes": "Integration utility. Never restart gateways or alter credentials automatically.",
           "accessible": true
         },
@@ -342,24 +358,26 @@
           "status": "yellow",
           "chip": "Yellow",
           "default_branch": "main",
-          "tip_sha": "9ec847e",
-          "tip_date": "2026-08-27T03:33:48Z",
+          "tip_sha": "29630ec",
+          "tip_date": "2026-08-27T03:57:07Z",
           "open_prs": 3,
-          "open_pr_url": "https://github.com/rupret007/bob-ops-dashboard/pull/26",
-          "open_pr_number": 26,
+          "open_pr_url": "https://github.com/rupret007/bob-ops-dashboard/pull/27",
+          "open_pr_number": 27,
           "open_pr_draft": true,
           "open_pr_stack": [],
           "pr_listing_complete": true,
-          "agent_url": "https://cursor.com/agents/bc-fba02e30-2e96-45b6-b03b-f5824659408a",
+          "agent_url": "https://cursor.com/agents/bc-f4a7a2e9-8f88-42ce-bfcb-060cf3f63e4b",
           "ci": {
             "name": "QA claim smoke",
             "conclusion": "success",
             "branch": "main",
-            "sha": "9ec847e",
-            "created": "2026-08-27T03:33:52Z",
-            "html_url": "https://github.com/rupret007/bob-ops-dashboard/actions/runs/33036744651"
+            "sha": "29630ec",
+            "created": "2026-08-27T03:57:10Z",
+            "html_url": "https://github.com/rupret007/bob-ops-dashboard/actions/runs/33037903519"
           },
           "release": null,
+          "release_sha": null,
+          "release_url": null,
           "notes": "Source-only feature PRs; the scheduled refresh owns generated index.html and status.json.",
           "accessible": true
         },
@@ -401,6 +419,8 @@
             "html_url": "https://github.com/rupret007/story-corner-shelf/actions/runs/32804448258"
           },
           "release": null,
+          "release_sha": null,
+          "release_url": null,
           "notes": "Story Shelf utility. Software and documentation work only; physical installation stays owner-only.",
           "accessible": true
         },
@@ -519,6 +539,8 @@
             "html_url": "https://github.com/rupret007/Andrea_NanoBot/actions/runs/33036598900"
           },
           "release": null,
+          "release_sha": null,
+          "release_url": null,
           "notes": "BB AppleScript send preferred. Private API OFF. Approval-fenced sends only.",
           "accessible": true
         },
@@ -634,10 +656,16 @@
           "notes": "Possession of the public URL is enough. GitHub login rupret007 is the real authority."
         },
         {
+          "name": "Music stack",
+          "status": "green",
+          "chip": "Feature",
+          "notes": "Vault, StoryBoard, Show Night, and WebJam work together. Latest != source."
+        },
+        {
           "name": "Soft-paint poll",
           "status": "green",
           "chip": "Feature",
-          "notes": "Client fetches status.json every 30s (pauses when the tab is hidden). Immediate poll on pageshow / visible. Fetch aborts after 8s. Hide / iOS-return abort is not a failed poll. A stale cached status.json cannot rewind the board. Repaints when board content changes -- not on every 15m Actions timestamp. Tip CI is the current SHA; Pages / skipped helpers / this board's refresh publisher cannot hide a fail. A skipped or cancelled helper cannot beat a success or become Open CI. Lanes prefer the open PR; CI fail/running taps the Actions run when a run URL is known. A complete same-repo stack shows safe base-to-tip PR order and taps the pulls list; ambiguous chains fall back to the honest open-PR count."
+          "notes": "Client fetches status.json every 30s (pauses when the tab is hidden). Immediate poll on pageshow / visible. Fetch aborts after 8s. Hide / iOS-return abort is not a failed poll. A stale cached status.json cannot rewind the board. Repaints when board content changes -- not on every 15m Actions timestamp. Tip CI is the current SHA; Pages / skipped helpers / this board's refresh publisher cannot hide a fail. A skipped or cancelled helper cannot beat a success or become Open CI. Lanes prefer the open PR; CI fail/running taps the Actions run when a run URL is known. A complete same-repo stack shows safe base-to-tip PR order and taps the pulls list; ambiguous chains fall back to the honest open-PR count. Vault, StoryBoard, Show Night, and WebJam work together as one music stack. WebJam Latest is the published test candidate and is not unpublished source; a proven Latest != source signal taps /releases/latest -- not dead text."
         },
         {
           "name": "Agents strip",
@@ -696,7 +724,7 @@
   ],
   "inaccessible": [],
   "publish_notes": "Public board -- no secrets or customer paths. Private repositories stay high-level; AI Music Vault stays private-content-boundary only.",
-  "refresh_started_ms": 1787802491607,
+  "refresh_started_ms": 1787808315644,
   "agents_source": "file:stale->unknown",
   "agents": [
     {
@@ -723,12 +751,30 @@
   ],
   "cloud_agents": [
     {
-      "id": "bc-fba02e30-2e96-45b6-b03b-f5824659408a",
-      "name": "PR #26",
+      "id": "bc-f4a7a2e9-8f88-42ce-bfcb-060cf3f63e4b",
+      "name": "PR #27",
       "state": "unknown",
-      "detail": "fix: show music-stack Latest vs source, not a dead tag",
-      "url": "https://cursor.com/agents/bc-fba02e30-2e96-45b6-b03b-f5824659408a",
-      "pr_url": "https://github.com/rupret007/bob-ops-dashboard/pull/26",
+      "detail": "fix: tab each existing type so the first screen is not a wall",
+      "url": "https://cursor.com/agents/bc-f4a7a2e9-8f88-42ce-bfcb-060cf3f63e4b",
+      "pr_url": "https://github.com/rupret007/bob-ops-dashboard/pull/27",
+      "checked_at": null
+    },
+    {
+      "id": "bc-48233059-c14e-4168-ae78-15566aa55495",
+      "name": "PR #47",
+      "state": "unknown",
+      "detail": "Feel pass wrap: Art equals Music, Shared Track next step",
+      "url": "https://cursor.com/agents/bc-48233059-c14e-4168-ae78-15566aa55495",
+      "pr_url": "https://github.com/rupret007/webjam/pull/47",
+      "checked_at": null
+    },
+    {
+      "id": "bc-f6d2e966-14cc-49af-a6f5-e35b601d85fe",
+      "name": "PR #25",
+      "state": "unknown",
+      "detail": "Jeff: leftover Scheduled Posts empty after last Unschedule",
+      "url": "https://cursor.com/agents/bc-f6d2e966-14cc-49af-a6f5-e35b601d85fe",
+      "pr_url": "https://github.com/rupret007/StoryLiner/pull/25",
       "checked_at": null
     }
   ],
