@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-08-27T11:51:59.394364-05:00",
-  "generated_at_display": "Thu Aug 27, 2026 \u00b7 11:51 AM CDT",
+  "generated_at": "2026-08-27T12:04:02.172455-05:00",
+  "generated_at_display": "Thu Aug 27, 2026 \u00b7 12:04 PM CDT",
   "timezone": "America/Chicago",
   "owner": "rupret007",
   "dashboard": "bob-ops-dashboard",
@@ -358,8 +358,8 @@
           "status": "yellow",
           "chip": "Yellow",
           "default_branch": "main",
-          "tip_sha": "eb2341a",
-          "tip_date": "2026-08-27T16:37:38Z",
+          "tip_sha": "f153140",
+          "tip_date": "2026-08-27T16:52:01Z",
           "open_prs": 2,
           "open_pr_url": "https://github.com/rupret007/bob-ops-dashboard/pull/21",
           "open_pr_number": 21,
@@ -369,11 +369,11 @@
           "agent_url": null,
           "ci": {
             "name": "QA claim smoke",
-            "conclusion": "pending",
+            "conclusion": "success",
             "branch": "main",
-            "sha": "eb2341a",
-            "created": null,
-            "html_url": null
+            "sha": "f153140",
+            "created": "2026-08-27T16:52:06Z",
+            "html_url": "https://github.com/rupret007/bob-ops-dashboard/actions/runs/33095437947"
           },
           "release": null,
           "release_sha": null,
@@ -730,7 +730,7 @@
   ],
   "inaccessible": [],
   "publish_notes": "Public board -- no secrets or customer paths. Private repositories stay high-level; AI Music Vault stays private-content-boundary only.",
-  "refresh_started_ms": 1787849462247,
+  "refresh_started_ms": 1787850184966,
   "agents_source": "file:stale->unknown",
   "agents": [
     {
