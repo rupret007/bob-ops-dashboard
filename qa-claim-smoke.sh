@@ -241,7 +241,7 @@ grep -q 'prune_closed_parked_prs' "$REFRESH" || fail "refresh.sh missing parked-
 if grep -q 'RadDadSite #6' "$REFRESH"; then
   fail "refresh.sh still presents closed RadDadSite #6 as current work"
 fi
-grep -q 'Private catalog spine for StoryBoard / Show Night. Keep private; do not publish catalog content.' "$REFRESH" || fail "refresh.sh missing private catalog spine hold"
+grep -q 'Private catalog spine for StoryBoard / Show Night. Do not publish catalog content.' "$REFRESH" || fail "refresh.sh missing private catalog spine hold"
 grep -q 'Making room. Latest is the published test candidate; source can be ahead.' "$REFRESH" || fail "refresh.sh missing WebJam Latest vs source note"
 grep -q 'Band-business engine. Consumes Vault; not a second catalog.' "$REFRESH" || fail "refresh.sh missing StoryBoard engine note"
 grep -q 'Live run sheet. GitHub is source; live Latest is Sites.' "$REFRESH" || fail "refresh.sh missing Show Night Latest vs source note"
@@ -562,6 +562,18 @@ if "Vault, StoryBoard, Show Night, and WebJam work together as one music stack" 
 if "Latest != source" not in text:
     raise SystemExit("README must say Latest != source is a tap")
 refresh_text = refresh.read_text()
+phone_stack_notes = (
+    "Making room. Latest is the published test candidate; source can be ahead.",
+    "Band-business engine. Consumes Vault; not a second catalog.",
+    "Live run sheet. GitHub is source; live Latest is Sites. No CI is OK.",
+    "Private catalog spine for StoryBoard / Show Night. Do not publish catalog content.",
+)
+long_notes = [note for note in phone_stack_notes if len(note) > 88]
+if long_notes:
+    raise SystemExit("music-stack notes exceed the 88-char phone clip: " + "; ".join(long_notes))
+missing_stack_notes = [note for note in phone_stack_notes if note not in refresh_text]
+if missing_stack_notes:
+    raise SystemExit("refresh.sh missing music-stack notes: " + "; ".join(missing_stack_notes))
 high_level_source_pins = (
     'project("AI-Music-Vault", high_level_only=True,',
     'project("CSS_Conductor", high_level_only=True,',
@@ -1197,7 +1209,7 @@ if "RadDadSite #6" in html or "RadDadSite #6" in str(st):
     raise SystemExit("closed RadDadSite #6 leaked into generated current work")
 if "Private docs/index" in html or "Private docs/index" in str(st):
     raise SystemExit("generated board leaked private catalog path detail")
-boundary = "Private catalog spine for StoryBoard / Show Night. Keep private; do not publish catalog content."
+boundary = "Private catalog spine for StoryBoard / Show Night. Do not publish catalog content."
 if boundary not in html or boundary not in str(st):
     raise SystemExit("generated board missing private catalog spine hold")
 if "Making room. Latest is the published test candidate; source can be ahead." not in str(st):

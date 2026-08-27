@@ -310,7 +310,7 @@ status = {
       "title": "Live shipping",
       "projects": [
         project("webjam", jeff_gate=True,
-                notes="Making room. Latest is the published test candidate; source can be ahead. Feel checks stay owner-only."),
+                notes="Making room. Latest is the published test candidate; source can be ahead."),
         project("StoryLiner", notes="Story workflow app. Current review stack and default-branch CI come from the live refresh."),
         project("StoryBoard", notes="Band-business engine. Consumes Vault; not a second catalog."),
         project("Rad-Dad-Merch", notes="Merch lane; watch Release integrity."),
@@ -318,7 +318,7 @@ status = {
                 notes="Tip green typical; deploy work comes only from live open PR data."),
         project("rad-dad-show-night", notes="Live run sheet. GitHub is source; live Latest is Sites. No CI is OK."),
         project("AI-Music-Vault", high_level_only=True,
-                notes="Private catalog spine for StoryBoard / Show Night. Keep private; do not publish catalog content."),
+                notes="Private catalog spine for StoryBoard / Show Night. Do not publish catalog content."),
         project("Turdanoid", status="yellow",
                 live_game_url="https://rupret007.github.io/Turdanoid/hub.html",
                 notes="Public game hub. Fun/replayability pass remains open; green CI is not completion."),
