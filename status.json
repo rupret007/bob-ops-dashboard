@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-08-26T20:34:11.139998-05:00",
-  "generated_at_display": "Wed Aug 26, 2026 \u00b7 8:34 PM CDT",
+  "generated_at": "2026-08-26T20:50:04.427774-05:00",
+  "generated_at_display": "Wed Aug 26, 2026 \u00b7 8:50 PM CDT",
   "timezone": "America/Chicago",
   "owner": "rupret007",
   "dashboard": "bob-ops-dashboard",
@@ -46,8 +46,8 @@
           "url": "https://github.com/rupret007/webjam",
           "repo_url": "https://github.com/rupret007/webjam",
           "private": false,
-          "status": "yellow",
-          "chip": "Yellow",
+          "status": "jeff-gate",
+          "chip": "Jeff-gate",
           "default_branch": "master",
           "tip_sha": "210d796",
           "tip_date": "2026-08-27T00:56:40Z",
@@ -60,7 +60,7 @@
           "agent_url": null,
           "ci": {
             "name": "WebJam CI",
-            "conclusion": "in_progress",
+            "conclusion": "success",
             "branch": "master",
             "sha": "210d796",
             "created": "2026-08-27T00:56:43Z",
@@ -76,25 +76,25 @@
           "url": "https://github.com/rupret007/StoryLiner",
           "repo_url": "https://github.com/rupret007/StoryLiner",
           "private": false,
-          "status": "yellow",
-          "chip": "Yellow",
+          "status": "green",
+          "chip": "Green",
           "default_branch": "main",
-          "tip_sha": "d758bc8",
-          "tip_date": "2026-08-27T01:25:31Z",
-          "open_prs": 1,
-          "open_pr_url": "https://github.com/rupret007/StoryLiner/pull/22",
-          "open_pr_number": 22,
-          "open_pr_draft": true,
+          "tip_sha": "1b08008",
+          "tip_date": "2026-08-27T01:37:49Z",
+          "open_prs": 0,
+          "open_pr_url": null,
+          "open_pr_number": null,
+          "open_pr_draft": false,
           "open_pr_stack": [],
           "pr_listing_complete": true,
-          "agent_url": "https://cursor.com/agents/bc-20675a17-738f-4c33-9af5-0ae5248b0f0f",
+          "agent_url": null,
           "ci": {
             "name": "CI",
             "conclusion": "success",
             "branch": "main",
-            "sha": "d758bc8",
-            "created": "2026-08-27T01:25:34Z",
-            "html_url": "https://github.com/rupret007/StoryLiner/actions/runs/33030051507"
+            "sha": "1b08008",
+            "created": "2026-08-27T01:37:52Z",
+            "html_url": "https://github.com/rupret007/StoryLiner/actions/runs/33030706527"
           },
           "release": null,
           "notes": "Story workflow app. Current review stack and default-branch CI come from the live refresh.",
@@ -342,8 +342,8 @@
           "status": "yellow",
           "chip": "Yellow",
           "default_branch": "main",
-          "tip_sha": "56ce8ec",
-          "tip_date": "2026-08-27T01:16:27Z",
+          "tip_sha": "92238d9",
+          "tip_date": "2026-08-27T01:34:13Z",
           "open_prs": 2,
           "open_pr_url": "https://github.com/rupret007/bob-ops-dashboard/pull/21",
           "open_pr_number": 21,
@@ -355,9 +355,9 @@
             "name": "QA claim smoke",
             "conclusion": "success",
             "branch": "main",
-            "sha": "56ce8ec",
-            "created": "2026-08-27T01:16:31Z",
-            "html_url": "https://github.com/rupret007/bob-ops-dashboard/actions/runs/33029576279"
+            "sha": "92238d9",
+            "created": "2026-08-27T01:34:17Z",
+            "html_url": "https://github.com/rupret007/bob-ops-dashboard/actions/runs/33030515625"
           },
           "release": null,
           "notes": "Source-only feature PRs; the scheduled refresh owns generated index.html and status.json.",
@@ -696,7 +696,7 @@
   ],
   "inaccessible": [],
   "publish_notes": "Public board -- no secrets or customer paths. Private repositories stay high-level; AI Music Vault stays private-content-boundary only.",
-  "refresh_started_ms": 1787794403564,
+  "refresh_started_ms": 1787795354128,
   "agents_source": "file:stale->unknown",
   "agents": [
     {
@@ -721,17 +721,7 @@
       "checked_at": null
     }
   ],
-  "cloud_agents": [
-    {
-      "id": "bc-20675a17-738f-4c33-9af5-0ae5248b0f0f",
-      "name": "PR #22",
-      "state": "unknown",
-      "detail": "Jeff: leftover Copy toast names Needs Review",
-      "url": "https://cursor.com/agents/bc-20675a17-738f-4c33-9af5-0ae5248b0f0f",
-      "pr_url": "https://github.com/rupret007/StoryLiner/pull/22",
-      "checked_at": null
-    }
-  ],
+  "cloud_agents": [],
   "pending": [
     {
       "id": "webjam-exploratory",
