@@ -585,10 +585,17 @@ for iss in issues:
 
 standing = [
     {
-        "id": "webjam-exploratory",
-        "title": "WebJam tip exploratory click-through",
+        "id": "che-live-pull",
+        "title": "Che live pull",
         "kind": "jeff-gate",
-        "detail": "You walk the installed tip; Bob keeps the checklist ready.",
+        "detail": "GitHub Friends look is ahead of live raddadband.com until Che pulls.",
+        "risk": "low",
+    },
+    {
+        "id": "logic-keys-wavs",
+        "title": "Logic keys and WAVs",
+        "kind": "jeff-gate",
+        "detail": "Mac field-fill only. Do not invent catalog keys.",
         "risk": "low",
     },
     {
@@ -596,27 +603,6 @@ standing = [
         "title": "AdoptIQ live Cisco readiness",
         "kind": "owner-live-gate",
         "detail": "Offline candidate only. Keep ready_for_live_cisco=false until an explicit owner decision.",
-        "risk": "high",
-    },
-    {
-        "id": "ballbeacon-signing",
-        "title": "Ball Beacon device signing",
-        "kind": "owner-device-gate",
-        "detail": "Software can be green; Xcode device, account, and signing steps stay owner-only.",
-        "risk": "high",
-    },
-    {
-        "id": "sliding-door-physical",
-        "title": "Sliding door print and fit",
-        "kind": "owner-physical-gate",
-        "detail": "Printing, installation, and fit validation require the owner at the hardware.",
-        "risk": "high",
-    },
-    {
-        "id": private_media_decision_id,
-        "title": "Private media upload or publish",
-        "kind": "owner-upload-gate",
-        "detail": "Private content stays high-level; upload and publishing require an explicit owner decision.",
         "risk": "high",
     },
 ]
@@ -1621,10 +1607,20 @@ html = f'''<!DOCTYPE html>
     return out;
   }}
   function glanceStatus(pending, sections) {{
-    var n = 0;
-    (pending || []).forEach(function (it) {{ if (it && typeof it === "object") n += 1; }});
+    var rank = {{ high: 0, medium: 1, low: 2 }};
+    var rows = [];
+    (pending || []).forEach(function (it) {{ if (it && typeof it === "object") rows.push(it); }});
+    rows.sort(function (a, b) {{
+      var ra = rank.hasOwnProperty(String(a.risk || "").toLowerCase()) ? rank[String(a.risk).toLowerCase()] : 5;
+      var rb = rank.hasOwnProperty(String(b.risk || "").toLowerCase()) ? rank[String(b.risk).toLowerCase()] : 5;
+      return ra - rb;
+    }});
+    var n = rows.length;
     if (n) {{
-      return {{ text: n === 1 ? "1 needs a yes" : String(n) + " need a yes", tab: "controls" }};
+      var title = rows[0] && rows[0].title != null ? String(rows[0].title).replace(/^\s+|\s+$/g, "") : "";
+      if (title.length > 28) title = title.slice(0, 28).replace(/\s+$/g, "");
+      if (!title) title = "Pending";
+      return {{ text: n === 1 ? title : title + " + " + String(n - 1) + " more", tab: "controls" }};
     }}
     var worstRank = 99;
     var worstId = "";

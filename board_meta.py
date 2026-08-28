@@ -759,15 +759,24 @@ def type_tab_ids_for(sections: Any, pending: Any) -> list[str]:
     return out
 
 
+def glance_pending_title(item: Any) -> str:
+    """Trimmed pending title for the first-screen glance. Cap ~28 chars."""
+    if not isinstance(item, dict):
+        return ""
+    title = str(item.get("title") or "").strip()
+    if len(title) > 28:
+        title = title[:28].rstrip()
+    return title
+
+
 def glance_status(pending: Any, sections: Any) -> dict[str, str]:
-    """One short first-screen line. Not a project dump."""
-    rows = [it for it in (pending or []) if isinstance(it, dict)]
+    """One short first-screen line. Names the gate, not a yes-count."""
+    rows = sort_pending(pending)
     if rows:
+        title = glance_pending_title(rows[0]) or "Pending"
         n = len(rows)
-        return {
-            "text": "1 needs a yes" if n == 1 else str(n) + " need a yes",
-            "tab": "controls",
-        }
+        text = title if n == 1 else title + " + " + str(n - 1) + " more"
+        return {"text": text, "tab": "controls"}
     worst_rank = 99
     worst_id = ""
     for sec in sections or []:
