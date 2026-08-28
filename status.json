@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-08-27T21:52:38.741237-05:00",
-  "generated_at_display": "Thu Aug 27, 2026 \u00b7 9:52 PM CDT",
+  "generated_at": "2026-08-27T22:07:51.443335-05:00",
+  "generated_at_display": "Thu Aug 27, 2026 \u00b7 10:07 PM CDT",
   "timezone": "America/Chicago",
   "owner": "rupret007",
   "dashboard": "bob-ops-dashboard",
@@ -174,18 +174,18 @@
           "url": "https://github.com/rupret007/RadDadSite",
           "repo_url": "https://github.com/rupret007/RadDadSite",
           "private": false,
-          "status": "green",
-          "chip": "Green",
+          "status": "yellow",
+          "chip": "Yellow",
           "default_branch": "main",
           "tip_sha": "9ea73fd",
           "tip_date": "2026-08-27T21:42:26Z",
-          "open_prs": 0,
-          "open_pr_url": null,
-          "open_pr_number": null,
-          "open_pr_draft": false,
+          "open_prs": 1,
+          "open_pr_url": "https://github.com/rupret007/RadDadSite/pull/18",
+          "open_pr_number": 18,
+          "open_pr_draft": true,
           "open_pr_stack": [],
           "pr_listing_complete": true,
-          "agent_url": null,
+          "agent_url": "https://cursor.com/agents/bc-cc7ed581-89e9-43bc-a755-9fb51503b94c",
           "ci": {
             "name": "Test, Package, and Deploy Site",
             "conclusion": "success",
@@ -358,8 +358,8 @@
           "status": "yellow",
           "chip": "Yellow",
           "default_branch": "main",
-          "tip_sha": "9ae8311",
-          "tip_date": "2026-08-28T02:32:30Z",
+          "tip_sha": "4ca0f3a",
+          "tip_date": "2026-08-28T02:52:40Z",
           "open_prs": 2,
           "open_pr_url": "https://github.com/rupret007/bob-ops-dashboard/pull/21",
           "open_pr_number": 21,
@@ -371,9 +371,9 @@
             "name": "QA claim smoke",
             "conclusion": "success",
             "branch": "main",
-            "sha": "9ae8311",
-            "created": "2026-08-28T02:32:33Z",
-            "html_url": "https://github.com/rupret007/bob-ops-dashboard/actions/runs/33136221778"
+            "sha": "4ca0f3a",
+            "created": "2026-08-28T02:52:44Z",
+            "html_url": "https://github.com/rupret007/bob-ops-dashboard/actions/runs/33137229800"
           },
           "release": null,
           "release_sha": null,
@@ -730,7 +730,7 @@
   ],
   "inaccessible": [],
   "publish_notes": "Public board -- no secrets or customer paths. Private repositories stay high-level; AI Music Vault stays private-content-boundary only.",
-  "refresh_started_ms": 1787885506828,
+  "refresh_started_ms": 1787886418387,
   "agents_source": "file:stale->unknown",
   "agents": [
     {
@@ -763,6 +763,15 @@
       "detail": "Rebuild Pocket Stage kit on Mac desktop CI",
       "url": "https://cursor.com/agents/bc-48233059-c14e-4168-ae78-15566aa55495",
       "pr_url": "https://github.com/rupret007/webjam/pull/49",
+      "checked_at": null
+    },
+    {
+      "id": "bc-cc7ed581-89e9-43bc-a755-9fb51503b94c",
+      "name": "PR #18",
+      "state": "unknown",
+      "detail": "Make the restored Friends next action clearer",
+      "url": "https://cursor.com/agents/bc-cc7ed581-89e9-43bc-a755-9fb51503b94c",
+      "pr_url": "https://github.com/rupret007/RadDadSite/pull/18",
       "checked_at": null
     }
   ],
