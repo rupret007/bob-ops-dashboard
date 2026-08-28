@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import unittest
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 
 from board_meta import (
     CONTROL_ACTIONS,
@@ -1012,6 +1013,62 @@ class BoardMetaTests(unittest.TestCase):
         self.assertEqual(
             compact_signal({"ci": publisher_only, "open_prs": 2}),
             "2 open PRs",
+        )
+
+    def test_leftover_honesty_isolation_is_real_tip_ci(self):
+        # Live Show Night 3c9c021: leftover-honesty.yml runs npm ci +
+        # test:isolation. That is product tip CI, not an empty runner or
+        # this board's refresh publisher.
+        leftover = {
+            "head_branch": "main",
+            "status": "completed",
+            "conclusion": "success",
+            "name": "leftover-honesty",
+            "path": ".github/workflows/leftover-honesty.yml",
+            "head_sha": "3c9c0216c8c592234c114a11317efa1e9812c8e6",
+            "html_url": "https://github.com/rupret007/rad-dad-show-night/actions/runs/33142362633",
+            "created_at": "2026-08-28T04:37:48Z",
+        }
+        pages = {
+            "head_branch": "main",
+            "status": "completed",
+            "conclusion": "success",
+            "name": "pages build and deployment",
+            "path": "dynamic/pages/pages-build-deployment",
+            "head_sha": "3c9c0216c8c592234c114a11317efa1e9812c8e6",
+        }
+        self.assertFalse(is_ci_noise(leftover))
+        self.assertTrue(is_ci_noise(pages))
+        picked = pick_tip_ci([pages, leftover], "main", "3c9c021")
+        self.assertIsNotNone(picked)
+        assert picked is not None
+        self.assertEqual(picked["name"], "leftover-honesty")
+        self.assertEqual(picked["conclusion"], "success")
+        project = {
+            "name": "Show Night",
+            "accessible": True,
+            "url": "https://github.com/rupret007/rad-dad-show-night",
+            "open_prs": 0,
+            "ci": picked,
+        }
+        self.assertEqual(status_from_fetch(project), "green")
+        self.assertIsNone(compact_signal(project))
+        hrefs = lane_hrefs(project)
+        self.assertEqual(
+            hrefs["ci"],
+            "https://github.com/rupret007/rad-dad-show-night/actions/runs/33142362633",
+        )
+        refresh = Path(__file__).with_name("refresh.sh").read_text()
+        self.assertIn(
+            "Live run sheet. GitHub is source; live Latest is Sites. Green CI is not Latest.",
+            refresh,
+        )
+        self.assertNotIn("No CI is OK", refresh)
+        self.assertLessEqual(
+            len(
+                "Live run sheet. GitHub is source; live Latest is Sites. Green CI is not Latest."
+            ),
+            88,
         )
 
     def test_decision_href_is_safe_and_stable(self):

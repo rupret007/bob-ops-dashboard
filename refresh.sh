@@ -322,7 +322,7 @@ status = {
         project("Rad-Dad-Merch", notes="Merch lane; watch Release integrity."),
         project("RadDadSite",
                 notes="Tip green typical; deploy work comes only from live open PR data."),
-        project("rad-dad-show-night", notes="Live run sheet. GitHub is source; live Latest is Sites. No CI is OK."),
+        project("rad-dad-show-night", notes="Live run sheet. GitHub is source; live Latest is Sites. Green CI is not Latest."),
         project("AI-Music-Vault", high_level_only=True,
                 notes="Private catalog spine for StoryBoard / Show Night. Do not publish catalog content."),
         project("Turdanoid", status="yellow",

@@ -576,7 +576,7 @@ refresh_text = refresh.read_text()
 phone_stack_notes = (
     "Making room. Latest is the published test candidate; source can be ahead.",
     "Band-business engine. Consumes Vault; not a second catalog.",
-    "Live run sheet. GitHub is source; live Latest is Sites. No CI is OK.",
+    "Live run sheet. GitHub is source; live Latest is Sites. Green CI is not Latest.",
     "Private catalog spine for StoryBoard / Show Night. Do not publish catalog content.",
 )
 long_notes = [note for note in phone_stack_notes if len(note) > 88]
@@ -606,6 +606,8 @@ if "High-level only; no customer data on this board." not in refresh_text:
     raise SystemExit("StoryOps-AI must stay a high-level private utility note")
 if "No live-repo, CI, or PR taps on this board." not in refresh_text:
     raise SystemExit("TACTrack must stay a high-level private note with no tap claim")
+if "No CI is OK" in refresh_text:
+    raise SystemExit("Show Night note still claims no CI after leftover-honesty became real tip CI")
 if "hosted billing blocks CI" in refresh_text or "billing blocks CI" in refresh_text:
     raise SystemExit("CSS Conductor note must not diagnose hosted CI as a billing block")
 if "High-level only; hosted-job cause stays unconfirmed." not in refresh_text:
@@ -655,6 +657,28 @@ if not is_ci_noise(refresh_running) or not is_ci_noise(refresh_fail):
     raise SystemExit("scheduled refresh publisher must be CI noise")
 if is_ci_noise(qa_ok):
     raise SystemExit("QA claim smoke must stay real tip CI")
+# Live leftover after #28: Show Night leftover-honesty.yml runs npm ci +
+# test:isolation. That is product tip CI, not an empty runner.
+show_night_leftover = {
+    "head_branch": "main",
+    "status": "completed",
+    "conclusion": "success",
+    "name": "leftover-honesty",
+    "path": ".github/workflows/leftover-honesty.yml",
+    "head_sha": "3c9c0216c8c592234c114a11317efa1e9812c8e6",
+    "html_url": "https://github.com/rupret007/rad-dad-show-night/actions/runs/33142362633",
+}
+if is_ci_noise(show_night_leftover):
+    raise SystemExit("Show Night leftover-honesty isolation CI must stay real tip CI")
+show_night_picked = pick_tip_ci([show_night_leftover], "main", "3c9c021")
+if (
+    not show_night_picked
+    or show_night_picked.get("name") != "leftover-honesty"
+    or show_night_picked.get("conclusion") != "success"
+):
+    raise SystemExit("Show Night leftover-honesty must become Open CI, not empty-runner noise")
+if status_from_fetch({"accessible": True, "open_prs": 0, "ci": show_night_picked}) != "green":
+    raise SystemExit("Show Night leftover-honesty success must stay Green, not hosted-red")
 picked = pick_tip_ci([refresh_fail, refresh_running, qa_ok], "main", "9c38307")
 if not picked or picked.get("name") != "QA claim smoke" or picked.get("conclusion") != "success":
     raise SystemExit("refresh publisher must not beat QA claim smoke")
