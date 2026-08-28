@@ -499,8 +499,16 @@ function run() {
       "function tabLabel(id) { return TYPE_TAB_LABELS[tabId(id)] || ''; } " +
       "return " + extractFn(src, "glanceStatus") + "; })"
   )(tabId, attentionRank);
-  const g = glanceStatus([{ id: "x" }], [{ id: "live-shipping", projects: [{ status: "yellow" }] }]);
-  if (g.text !== "1 needs a yes" || g.tab !== "controls") fail("pending glance must beat live yellow");
+  const g = glanceStatus([{ id: "x", title: "AdoptIQ" }], [{ id: "live-shipping", projects: [{ status: "yellow" }] }]);
+  if (g.text !== "AdoptIQ" || g.tab !== "controls") fail("pending glance must name the gate");
+  const g3 = glanceStatus([
+    { id: "che-live-pull", title: "Che live pull", risk: "low" },
+    { id: "logic-keys-wavs", title: "Logic keys and WAVs", risk: "low" },
+    { id: "adoptiq-live-cisco", title: "AdoptIQ live Cisco readiness", risk: "high" },
+  ], []);
+  if (g3.text !== "AdoptIQ live Cisco readiness + 2 more" || g3.tab !== "controls") {
+    fail("three-gate glance must name the high-risk title: " + g3.text);
+  }
   const live = glanceStatus([], [{ id: "live-shipping", projects: [{ status: "yellow" }] }]);
   if (live.text !== "Live needs a look" || live.tab !== "live-shipping") {
     fail("live yellow must be one short glance");

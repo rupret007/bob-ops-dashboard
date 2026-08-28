@@ -258,10 +258,10 @@ class BoardMetaTests(unittest.TestCase):
         ]
         pending = [{"id": "adoptiq-live-cisco", "title": "AdoptIQ", "risk": "high"}]
         g = glance_status(pending, sections)
-        self.assertEqual(g["text"], "1 needs a yes")
+        self.assertEqual(g["text"], "AdoptIQ")
         self.assertEqual(g["tab"], "controls")
         g4 = glance_status(pending * 4, sections)
-        self.assertEqual(g4["text"], "4 need a yes")
+        self.assertEqual(g4["text"], "AdoptIQ + 3 more")
         quiet_live = glance_status([], sections)
         self.assertEqual(quiet_live["text"], "Cisco is red")
         self.assertEqual(quiet_live["tab"], "cisco")
@@ -277,6 +277,49 @@ class BoardMetaTests(unittest.TestCase):
         )
         self.assertEqual(jeff["text"], "Apps is waiting on Jeff")
         self.assertEqual(glance_status([], []), {"text": "Quiet", "tab": ""})
+
+    def test_refresh_standing_is_current_jeff_gates(self):
+        blob = Path(__file__).with_name("refresh.sh").read_text()
+        start = blob.find("\nstanding = [")
+        end = blob.find("\npending_out =", start)
+        self.assertGreater(start, 0)
+        self.assertGreater(end, start)
+        standing = blob[start:end]
+        for want in ("che-live-pull", "logic-keys-wavs", "adoptiq-live-cisco"):
+            self.assertIn('"id": "' + want + '"', standing)
+        for drop in (
+            "webjam-exploratory",
+            "ballbeacon-signing",
+            "sliding-door-physical",
+            "private-media-upload",
+        ):
+            self.assertNotIn(drop, standing)
+
+    def test_glance_status_names_the_three_standing_gates(self):
+        pending = [
+            {
+                "id": "che-live-pull",
+                "title": "Che live pull",
+                "kind": "jeff-gate",
+                "risk": "low",
+            },
+            {
+                "id": "logic-keys-wavs",
+                "title": "Logic keys and WAVs",
+                "kind": "jeff-gate",
+                "risk": "low",
+            },
+            {
+                "id": "adoptiq-live-cisco",
+                "title": "AdoptIQ live Cisco readiness",
+                "kind": "owner-live-gate",
+                "risk": "high",
+            },
+        ]
+        g = glance_status(pending, [])
+        # sort_pending puts high-risk first; AdoptIQ title is 28 chars so it fits.
+        self.assertEqual(g["text"], "AdoptIQ live Cisco readiness + 2 more")
+        self.assertEqual(g["tab"], "controls")
 
     def test_type_tabs_html_skips_empty_decisions_and_invented_ids(self):
         sections = [
@@ -314,7 +357,7 @@ class BoardMetaTests(unittest.TestCase):
         self.assertNotIn("data-tab=\"abilities\"", html)
         self.assertNotIn('aria-selected="true"', html)
         glance = glance_html([{"id": "x"}], sections)
-        self.assertIn("1 needs a yes", glance)
+        self.assertIn("Pending", glance)
         self.assertIn('data-tab="controls"', glance)
         self.assertNotIn("<", glance_status([{"id": "x"}], sections)["text"])
 
