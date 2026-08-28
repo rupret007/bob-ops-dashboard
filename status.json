@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-08-28T16:44:08.048724-05:00",
-  "generated_at_display": "Fri Aug 28, 2026 \u00b7 4:44 PM CDT",
+  "generated_at": "2026-08-28T17:02:35.110656-05:00",
+  "generated_at_display": "Fri Aug 28, 2026 \u00b7 5:02 PM CDT",
   "timezone": "America/Chicago",
   "owner": "rupret007",
   "dashboard": "bob-ops-dashboard",
@@ -174,11 +174,11 @@
           "url": "https://github.com/rupret007/RadDadSite",
           "repo_url": "https://github.com/rupret007/RadDadSite",
           "private": false,
-          "status": "green",
-          "chip": "Green",
+          "status": "yellow",
+          "chip": "Yellow",
           "default_branch": "main",
-          "tip_sha": "a01c223",
-          "tip_date": "2026-08-28T03:30:46Z",
+          "tip_sha": "e862457",
+          "tip_date": "2026-08-28T22:00:23Z",
           "open_prs": 0,
           "open_pr_url": null,
           "open_pr_number": null,
@@ -188,11 +188,11 @@
           "agent_url": null,
           "ci": {
             "name": "Test, Package, and Deploy Site",
-            "conclusion": "success",
+            "conclusion": "in_progress",
             "branch": "main",
-            "sha": "a01c223",
-            "created": "2026-08-28T03:30:49Z",
-            "html_url": "https://github.com/rupret007/RadDadSite/actions/runs/33139108751"
+            "sha": "e862457",
+            "created": "2026-08-28T22:00:26Z",
+            "html_url": "https://github.com/rupret007/RadDadSite/actions/runs/33214998969"
           },
           "release": null,
           "release_sha": null,
@@ -365,22 +365,22 @@
           "status": "yellow",
           "chip": "Yellow",
           "default_branch": "main",
-          "tip_sha": "f1ea3ac",
-          "tip_date": "2026-08-28T21:28:05Z",
-          "open_prs": 3,
-          "open_pr_url": "https://github.com/rupret007/bob-ops-dashboard/pull/30",
-          "open_pr_number": 30,
+          "tip_sha": "e760b77",
+          "tip_date": "2026-08-28T21:45:43Z",
+          "open_prs": 2,
+          "open_pr_url": "https://github.com/rupret007/bob-ops-dashboard/pull/21",
+          "open_pr_number": 21,
           "open_pr_draft": true,
           "open_pr_stack": [],
           "pr_listing_complete": true,
           "agent_url": null,
           "ci": {
             "name": "QA claim smoke",
-            "conclusion": "pending",
+            "conclusion": "success",
             "branch": "main",
-            "sha": "f1ea3ac",
-            "created": null,
-            "html_url": null
+            "sha": "e760b77",
+            "created": "2026-08-28T21:45:46Z",
+            "html_url": "https://github.com/rupret007/bob-ops-dashboard/actions/runs/33213953219"
           },
           "release": null,
           "release_sha": null,
@@ -737,7 +737,7 @@
   ],
   "inaccessible": [],
   "publish_notes": "Public board -- no secrets or customer paths. Private repositories stay high-level; AI Music Vault stays private-content-boundary only.",
-  "refresh_started_ms": 1787953375537,
+  "refresh_started_ms": 1787954481943,
   "agents_source": "file:stale->unknown",
   "agents": [
     {
@@ -775,10 +775,17 @@
   ],
   "pending": [
     {
-      "id": "webjam-exploratory",
-      "title": "WebJam tip exploratory click-through",
+      "id": "che-live-pull",
+      "title": "Che live pull",
       "kind": "jeff-gate",
-      "detail": "You walk the installed tip; Bob keeps the checklist ready.",
+      "detail": "GitHub Friends look is ahead of live raddadband.com until Che pulls.",
+      "risk": "low"
+    },
+    {
+      "id": "logic-keys-wavs",
+      "title": "Logic keys and WAVs",
+      "kind": "jeff-gate",
+      "detail": "Mac field-fill only. Do not invent catalog keys.",
       "risk": "low"
     },
     {
@@ -786,27 +793,6 @@
       "title": "AdoptIQ live Cisco readiness",
       "kind": "owner-live-gate",
       "detail": "Offline candidate only. Keep ready_for_live_cisco=false until an explicit owner decision.",
-      "risk": "high"
-    },
-    {
-      "id": "ballbeacon-signing",
-      "title": "Ball Beacon device signing",
-      "kind": "owner-device-gate",
-      "detail": "Software can be green; Xcode device, account, and signing steps stay owner-only.",
-      "risk": "high"
-    },
-    {
-      "id": "sliding-door-physical",
-      "title": "Sliding door print and fit",
-      "kind": "owner-physical-gate",
-      "detail": "Printing, installation, and fit validation require the owner at the hardware.",
-      "risk": "high"
-    },
-    {
-      "id": "private-media-upload",
-      "title": "Private media upload or publish",
-      "kind": "owner-upload-gate",
-      "detail": "Private content stays high-level; upload and publishing require an explicit owner decision.",
       "risk": "high"
     }
   ],
