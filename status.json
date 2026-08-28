@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-08-27T20:22:13.944489-05:00",
-  "generated_at_display": "Thu Aug 27, 2026 \u00b7 8:22 PM CDT",
+  "generated_at": "2026-08-27T20:43:35.659118-05:00",
+  "generated_at_display": "Thu Aug 27, 2026 \u00b7 8:43 PM CDT",
   "timezone": "America/Chicago",
   "owner": "rupret007",
   "dashboard": "bob-ops-dashboard",
@@ -46,8 +46,8 @@
           "url": "https://github.com/rupret007/webjam",
           "repo_url": "https://github.com/rupret007/webjam",
           "private": false,
-          "status": "red",
-          "chip": "Red",
+          "status": "yellow",
+          "chip": "Yellow",
           "default_branch": "master",
           "tip_sha": "676781d",
           "tip_date": "2026-08-27T23:00:44Z",
@@ -60,7 +60,7 @@
           "agent_url": "https://cursor.com/agents/bc-48233059-c14e-4168-ae78-15566aa55495",
           "ci": {
             "name": "WebJam CI",
-            "conclusion": "failure",
+            "conclusion": "in_progress",
             "branch": "master",
             "sha": "676781d",
             "created": "2026-08-27T23:00:48Z",
@@ -358,8 +358,8 @@
           "status": "yellow",
           "chip": "Yellow",
           "default_branch": "main",
-          "tip_sha": "2ecd3a4",
-          "tip_date": "2026-08-28T01:07:12Z",
+          "tip_sha": "fe27c70",
+          "tip_date": "2026-08-28T01:22:16Z",
           "open_prs": 2,
           "open_pr_url": "https://github.com/rupret007/bob-ops-dashboard/pull/21",
           "open_pr_number": 21,
@@ -371,9 +371,9 @@
             "name": "QA claim smoke",
             "conclusion": "success",
             "branch": "main",
-            "sha": "2ecd3a4",
-            "created": "2026-08-28T01:07:15Z",
-            "html_url": "https://github.com/rupret007/bob-ops-dashboard/actions/runs/33131868686"
+            "sha": "fe27c70",
+            "created": "2026-08-28T01:22:19Z",
+            "html_url": "https://github.com/rupret007/bob-ops-dashboard/actions/runs/33132651259"
           },
           "release": null,
           "release_sha": null,
@@ -730,7 +730,7 @@
   ],
   "inaccessible": [],
   "publish_notes": "Public board -- no secrets or customer paths. Private repositories stay high-level; AI Music Vault stays private-content-boundary only.",
-  "refresh_started_ms": 1787880081581,
+  "refresh_started_ms": 1787881362946,
   "agents_source": "file:stale->unknown",
   "agents": [
     {
