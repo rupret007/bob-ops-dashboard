@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-08-28T18:35:08.430402-05:00",
-  "generated_at_display": "Fri Aug 28, 2026 \u00b7 6:35 PM CDT",
+  "generated_at": "2026-08-28T18:57:15.252332-05:00",
+  "generated_at_display": "Fri Aug 28, 2026 \u00b7 6:57 PM CDT",
   "timezone": "America/Chicago",
   "owner": "rupret007",
   "dashboard": "bob-ops-dashboard",
@@ -405,8 +405,8 @@
           "status": "yellow",
           "chip": "Yellow",
           "default_branch": "main",
-          "tip_sha": "05458ce",
-          "tip_date": "2026-08-28T23:05:00Z",
+          "tip_sha": "9a532de",
+          "tip_date": "2026-08-28T23:35:15Z",
           "open_prs": 2,
           "open_pr_url": "https://github.com/rupret007/bob-ops-dashboard/pull/21",
           "open_pr_number": 21,
@@ -418,7 +418,7 @@
             "name": "QA claim smoke",
             "conclusion": "pending",
             "branch": "main",
-            "sha": "05458ce",
+            "sha": "9a532de",
             "created": null,
             "html_url": null
           },
@@ -788,7 +788,7 @@
     "Sliding-Glass-Door-PETG-Screw"
   ],
   "publish_notes": "Public board -- no secrets or customer paths. Private repositories stay high-level; AI Music Vault stays private-content-boundary only.",
-  "refresh_started_ms": 1787960083300,
+  "refresh_started_ms": 1787961416883,
   "agents_source": "file:stale->unknown",
   "agents": [
     {
