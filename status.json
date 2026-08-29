@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-08-28T22:26:01.983733-05:00",
-  "generated_at_display": "Fri Aug 28, 2026 \u00b7 10:26 PM CDT",
+  "generated_at": "2026-08-28T22:53:27.656453-05:00",
+  "generated_at_display": "Fri Aug 28, 2026 \u00b7 10:53 PM CDT",
   "timezone": "America/Chicago",
   "owner": "rupret007",
   "dashboard": "bob-ops-dashboard",
@@ -70,7 +70,15 @@
           "release_sha": "1fc25f8",
           "release_url": "https://github.com/rupret007/webjam/releases/tag/v0.27.1",
           "notes": "Making room. Latest is the published test candidate; source can be ahead.",
-          "accessible": true
+          "accessible": true,
+          "coord": {
+            "repo": "webjam",
+            "agent": "none",
+            "lease_state": "none",
+            "next": "stay draft; do not merge; do not retag; Latest stays unsigned 0.27.1",
+            "sha": "df69d20",
+            "pr": 55
+          }
         },
         {
           "name": "StoryLiner",
@@ -102,7 +110,13 @@
           "release_sha": null,
           "release_url": null,
           "notes": "Story workflow app. Current review stack and default-branch CI come from the live refresh.",
-          "accessible": true
+          "accessible": true,
+          "coord": {
+            "repo": "StoryLiner",
+            "agent": "none",
+            "lease_state": "none",
+            "next": "Fault Lines promo #27 held; never auto-post"
+          }
         },
         {
           "name": "StoryBoard",
@@ -134,7 +148,13 @@
           "release_sha": null,
           "release_url": null,
           "notes": "Band-business engine. Consumes Vault; not a second catalog.",
-          "accessible": true
+          "accessible": true,
+          "coord": {
+            "repo": "StoryBoard",
+            "agent": "none",
+            "lease_state": "none",
+            "next": "feel first-screen #21 held"
+          }
         },
         {
           "name": "Rad Dad Merch",
@@ -166,7 +186,13 @@
           "release_sha": null,
           "release_url": null,
           "notes": "Merch lane; watch Release integrity.",
-          "accessible": true
+          "accessible": true,
+          "coord": {
+            "repo": "Rad-Dad-Merch",
+            "agent": "none",
+            "lease_state": "none",
+            "next": "no release; #2 parked"
+          }
         },
         {
           "name": "RadDadSite",
@@ -198,7 +224,13 @@
           "release_sha": null,
           "release_url": null,
           "notes": "Tip green typical; deploy work comes only from live open PR data.",
-          "accessible": true
+          "accessible": true,
+          "coord": {
+            "repo": "RadDadSite",
+            "agent": "none",
+            "lease_state": "none",
+            "next": "Che live pull is the remaining live gate"
+          }
         },
         {
           "name": "Show Night",
@@ -230,7 +262,13 @@
           "release_sha": null,
           "release_url": null,
           "notes": "Live run sheet. GitHub is source; live Latest is Sites. Green CI is not Latest.",
-          "accessible": true
+          "accessible": true,
+          "coord": {
+            "repo": "rad-dad-show-night",
+            "agent": "none",
+            "lease_state": "none",
+            "next": "no auto-pitch; Travis books"
+          }
         },
         {
           "name": "AI Music Vault",
@@ -239,7 +277,13 @@
           "chip": "Yellow",
           "notes": "Private catalog spine for StoryBoard / Show Night. Do not publish catalog content.",
           "accessible": true,
-          "ci": {}
+          "ci": {},
+          "coord": {
+            "repo": "AI-Music-Vault",
+            "agent": "none",
+            "lease_state": "none",
+            "next": "Logic keys/WAVs stay Jeff-only"
+          }
         },
         {
           "name": "Turdanoid",
@@ -272,7 +316,13 @@
           "release_url": null,
           "notes": "Public game hub. Fun/replayability pass remains open; green CI is not completion.",
           "accessible": true,
-          "live_game_url": "https://rupret007.github.io/Turdanoid/hub.html"
+          "live_game_url": "https://rupret007.github.io/Turdanoid/hub.html",
+          "coord": {
+            "repo": "Turdanoid",
+            "agent": "none",
+            "lease_state": "none",
+            "next": "hub.html stays the front door"
+          }
         }
       ]
     },
@@ -287,7 +337,13 @@
           "chip": "Yellow",
           "notes": "Private workflow utility. High-level only; no customer data on this board.",
           "accessible": true,
-          "ci": {}
+          "ci": {},
+          "coord": {
+            "repo": "StoryOps-AI",
+            "agent": "none",
+            "lease_state": "none",
+            "next": "empty-runner hosted red is unexecuted"
+          }
         },
         {
           "name": "Ball Beacon",
@@ -296,7 +352,13 @@
           "chip": "Yellow",
           "notes": "Private iOS utility. Software validation only; device and signing steps stay owner-only.",
           "accessible": true,
-          "ci": {}
+          "ci": {},
+          "coord": {
+            "repo": "ballbeacon",
+            "agent": "none",
+            "lease_state": "none",
+            "next": "device/signing Jeff-only"
+          }
         },
         {
           "name": "CSS Conductor",
@@ -305,7 +367,13 @@
           "chip": "Yellow",
           "notes": "Private developer utility. High-level only; hosted-job cause stays unconfirmed.",
           "accessible": true,
-          "ci": {}
+          "ci": {},
+          "coord": {
+            "repo": "CSS_Conductor",
+            "agent": "none",
+            "lease_state": "none",
+            "next": "high-level only"
+          }
         },
         {
           "name": "Barker",
@@ -314,7 +382,13 @@
           "chip": "Yellow",
           "notes": "Private app. No live sends, production changes, or credential operations from this board.",
           "accessible": true,
-          "ci": {}
+          "ci": {},
+          "coord": {
+            "repo": "barker",
+            "agent": "none",
+            "lease_state": "none",
+            "next": "no live sends from the board"
+          }
         },
         {
           "name": "Cursor-OpenClaw Integration",
@@ -346,7 +420,13 @@
           "release_sha": null,
           "release_url": null,
           "notes": "Integration utility. Never restart gateways or alter credentials automatically.",
-          "accessible": true
+          "accessible": true,
+          "coord": {
+            "repo": "Cursor-OpenClaw-Integration",
+            "agent": "none",
+            "lease_state": "none",
+            "next": "no gateway restart"
+          }
         },
         {
           "name": "Bob Ops Dashboard",
@@ -354,24 +434,39 @@
           "url": "https://github.com/rupret007/bob-ops-dashboard",
           "repo_url": "https://github.com/rupret007/bob-ops-dashboard",
           "private": false,
-          "status": "green",
-          "chip": "Green",
+          "status": "yellow",
+          "chip": "Yellow",
           "default_branch": "main",
-          "tip_sha": "680d2dd",
-          "tip_date": "2026-08-29T03:12:32Z",
-          "open_prs": 0,
-          "open_pr_url": null,
-          "open_pr_number": null,
+          "tip_sha": "b54ac54",
+          "tip_date": "2026-08-29T03:26:05Z",
+          "open_prs": 1,
+          "open_pr_url": "https://github.com/rupret007/bob-ops-dashboard/pull/33",
+          "open_pr_number": 33,
           "open_pr_draft": false,
           "open_pr_stack": [],
           "pr_listing_complete": true,
           "agent_url": null,
-          "ci": null,
+          "ci": {
+            "name": "QA claim smoke",
+            "conclusion": "success",
+            "branch": "main",
+            "sha": "b54ac54",
+            "created": "2026-08-29T03:26:08Z",
+            "html_url": "https://github.com/rupret007/bob-ops-dashboard/actions/runs/33231385873"
+          },
           "release": null,
           "release_sha": null,
           "release_url": null,
           "notes": "Source-only feature PRs; the scheduled refresh owns generated index.html and status.json.",
-          "accessible": true
+          "accessible": true,
+          "coord": {
+            "repo": "bob-ops-dashboard",
+            "agent": "grok",
+            "lease_state": "active",
+            "next": "Karen leftover+security then leftover squash; next cron paints leases...",
+            "sha": "6fdbade",
+            "pr": 33
+          }
         },
         {
           "name": "Sliding Glass Door Screw",
@@ -380,7 +475,13 @@
           "chip": "Yellow",
           "notes": "Software/design artifact only. Printing, installation, and physical fit stay owner-only.",
           "accessible": true,
-          "ci": {}
+          "ci": {},
+          "coord": {
+            "repo": "Sliding-Glass-Door-PETG-Screw",
+            "agent": "none",
+            "lease_state": "none",
+            "next": "print/fit Jeff-only"
+          }
         },
         {
           "name": "Story Shelf",
@@ -412,7 +513,13 @@
           "release_sha": null,
           "release_url": null,
           "notes": "Story Shelf utility. Software and documentation work only; physical installation stays owner-only.",
-          "accessible": true
+          "accessible": true,
+          "coord": {
+            "repo": "story-corner-shelf",
+            "agent": "none",
+            "lease_state": "none",
+            "next": "honest no leftover after #5"
+          }
         },
         {
           "name": "StoryDesk",
@@ -477,6 +584,12 @@
           "accessible": true,
           "ci": {
             "conclusion": "pending"
+          },
+          "coord": {
+            "repo": "AdoptIQ",
+            "agent": "none",
+            "lease_state": "none",
+            "next": "offline corpus leftover after Codex is free; sim != live"
           }
         },
         {
@@ -486,7 +599,13 @@
           "chip": "Yellow",
           "notes": "Private. High-level only. No live-repo, CI, or PR taps on this board.",
           "accessible": true,
-          "ci": {}
+          "ci": {},
+          "coord": {
+            "repo": "TACTrack",
+            "agent": "none",
+            "lease_state": "none",
+            "next": "empty-runner hosted red is unexecuted"
+          }
         },
         {
           "name": "AdoptIQ notes",
@@ -530,7 +649,13 @@
           "release_sha": null,
           "release_url": null,
           "notes": "BB AppleScript send preferred. Private API OFF. Approval-fenced sends only.",
-          "accessible": true
+          "accessible": true,
+          "coord": {
+            "repo": "Andrea_NanoBot",
+            "agent": "none",
+            "lease_state": "none",
+            "next": "send fence unchanged after #28"
+          }
         },
         {
           "name": "Bob the Bot",
@@ -539,7 +664,13 @@
           "chip": "Yellow",
           "notes": "Bob application \u2014 private bootstrap. Reuses the Andrea messaging engine and guarded OpenClaw delegation; no live sends, restarts, credentials, or production actions.",
           "accessible": true,
-          "ci": {}
+          "ci": {},
+          "coord": {
+            "repo": "Bob-the-Bot",
+            "agent": "none",
+            "lease_state": "none",
+            "next": "this repo holds protocol plus coord issues"
+          }
         },
         {
           "name": "Telegram Bot the Bot",
@@ -718,7 +849,7 @@
   ],
   "inaccessible": [],
   "publish_notes": "Public board -- no secrets or customer paths. Private repositories stay high-level; AI Music Vault stays private-content-boundary only.",
-  "refresh_started_ms": 1787973890569,
+  "refresh_started_ms": 1787975537620,
   "agents_source": "file:stale->unknown",
   "agents": [
     {

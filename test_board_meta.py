@@ -67,6 +67,9 @@ from board_meta import (
     type_tabs_html,
     unknown_mac_probes_html,
     visible_chip,
+    parse_coord_issue,
+    public_coord,
+    coord_signal,
 )
 
 
@@ -1836,6 +1839,48 @@ class BoardMetaTests(unittest.TestCase):
         self.assertFalse(drop_leftover_verify(status))
         self.assertFalse(drop_leftover_verify(None))
         self.assertFalse(drop_leftover_verify("nope"))
+
+
+
+
+class CoordLeaseTests(unittest.TestCase):
+    def test_coord_issue_lease_and_public_sanitize(self):
+        now = datetime(2026, 8, 28, 22, 0, tzinfo=timezone.utc)
+        issue = {
+            "number": 4,
+            "title": "coord: rupret007/webjam",
+            "url": "https://github.com/rupret007/Bob-the-Bot/issues/4",
+            "body": "\n".join([
+                "- agent: Codex",
+                "- sha: df69d203c99afab1e9d2cbcfd389362944cd936a",
+                "- branch: leftover/docs",
+                "- pr: 55",
+                "- claimed_scope: leftover honesty after #54",
+                "- holds: #37 #49",
+                "- next_action: leftover #55 waiting Karen",
+                "- lease_until: 2026-08-29T03:00:00+00:00",
+            ]),
+        }
+        parsed = parse_coord_issue(issue, now=now)
+        self.assertIsNotNone(parsed)
+        assert parsed is not None
+        self.assertEqual(parsed["repo"], "webjam")
+        self.assertEqual(parsed["agent"], "codex")
+        self.assertEqual(parsed["lease_state"], "active")
+        public = public_coord(parsed)
+        self.assertEqual(public["pr"], 55)
+        self.assertEqual(public["sha"], "df69d20")
+        self.assertNotIn("sha", public_coord(parsed, private_lane=True))
+        self.assertEqual(coord_signal({"coord": public}), "Codex lease")
+        self.assertEqual(compact_signal({"coord": public, "open_prs": 3}), "Codex lease")
+        self.assertEqual(compact_signal({"ci": {"conclusion": "failure"}, "coord": public}), "CI fail")
+        self.assertIsNone(coord_signal({"private": True, "coord": public}))
+        self.assertEqual(signal_href({"coord": public}), "")
+        expired = parse_coord_issue(issue, now=datetime(2026, 8, 30, tzinfo=timezone.utc))
+        assert expired is not None
+        self.assertEqual(expired["lease_state"], "expired")
+        self.assertEqual(expired["agent"], "none")
+        self.assertIsNone(parse_coord_issue({"title": "random issue"}))
 
 
 if __name__ == "__main__":

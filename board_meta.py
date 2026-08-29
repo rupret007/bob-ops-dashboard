@@ -113,6 +113,13 @@ CI_NOISE_FILENAMES = frozenset(
 )
 DECISION_VERBS = frozenset({"APPROVE", "HOLD", "DENY"})
 DECISION_ISSUE_NEW = "https://github.com/rupret007/bob-ops-dashboard/issues/new"
+COORD_HOME = "rupret007/Bob-the-Bot"
+COORD_AGENTS = frozenset({"none", "codex", "grok", "claude"})
+COORD_TITLE_RE = re.compile(
+    r"^coord:\s*(?:(?P<owner>[A-Za-z0-9_.-]+)/)?(?P<repo>[A-Za-z0-9_.-]+)\s*$",
+    re.I,
+)
+COORD_FIELD_RE = re.compile(r"^-\s*([a-z_]+)\s*:\s*(.*)$", re.I)
 PENDING_ID_RE = re.compile(r"^[a-zA-Z0-9._-]+$")
 BC_ID_RE = re.compile(
     r"^bc-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
@@ -657,6 +664,8 @@ def signal_href(project: Any) -> str:
         return ""
     hrefs = lane_hrefs(project)
     text = str(signal)
+    if text.endswith(" lease"):
+        return ""
     if text.startswith("CI"):
         return hrefs.get("ci") or ""
     if text.startswith("Stack ") or text.endswith("-PR stack") or "open PR" in text:
@@ -1111,6 +1120,115 @@ def status_from_fetch(
     return "yellow"
 
 
+
+
+def _coord_now():
+    return datetime.now(ZoneInfo("America/Chicago"))
+
+
+def parse_coord_issue(issue: Any, *, now: datetime | None = None) -> dict[str, Any] | None:
+    """Parse one Bob-the-Bot coordination issue. Missing/invalid title is None."""
+    if not isinstance(issue, dict):
+        return None
+    title = str(issue.get("title") or "").strip()
+    match = COORD_TITLE_RE.match(title)
+    if not match:
+        return None
+    owner = (match.group("owner") or "rupret007").strip()
+    repo = (match.group("repo") or "").strip()
+    if not repo:
+        return None
+    fields: dict[str, str] = {}
+    for line in str(issue.get("body") or "").splitlines():
+        field = COORD_FIELD_RE.match(line.strip())
+        if not field:
+            continue
+        fields[field.group(1).strip().lower()] = field.group(2).strip()
+    agent = str(fields.get("agent") or "none").strip().lower()
+    if agent not in COORD_AGENTS:
+        agent = "none"
+    lease_until_raw = str(fields.get("lease_until") or "").strip()
+    lease_until = None
+    if lease_until_raw:
+        try:
+            lease_until = datetime.fromisoformat(lease_until_raw.replace("Z", "+00:00"))
+        except ValueError:
+            lease_until = None
+    clock = now or _coord_now()
+    if lease_until and lease_until.tzinfo is None:
+        lease_until = lease_until.replace(tzinfo=clock.tzinfo)
+    if agent == "none" or not lease_until:
+        lease_state = "none"
+    elif lease_until <= clock:
+        lease_state = "expired"
+    else:
+        lease_state = "active"
+    sha = str(fields.get("sha") or "").strip()
+    return {
+        "owner": owner,
+        "repo": repo,
+        "full_name": f"{owner}/{repo}",
+        "agent": agent if lease_state == "active" else "none",
+        "claimed_agent": agent,
+        "sha": sha,
+        "branch": str(fields.get("branch") or "").strip(),
+        "pr": str(fields.get("pr") or "").strip(),
+        "claimed_scope": str(fields.get("claimed_scope") or "").strip(),
+        "holds": str(fields.get("holds") or "").strip(),
+        "evidence": str(fields.get("evidence") or "").strip(),
+        "next_action": str(fields.get("next_action") or "").strip(),
+        "updated": str(fields.get("updated") or "").strip(),
+        "lease_until": lease_until.isoformat() if lease_until else "",
+        "lease_state": lease_state,
+        "issue": issue.get("number"),
+        "url": str(issue.get("url") or issue.get("html_url") or "").strip(),
+    }
+
+
+def public_coord(parsed: Any, *, private_lane: bool = False) -> dict[str, Any]:
+    """Public-safe coordination chip. Private lanes never publish SHA/PR/paths."""
+    if not isinstance(parsed, dict):
+        return {}
+    agent = str(parsed.get("agent") or "none").strip().lower()
+    if agent not in COORD_AGENTS:
+        agent = "none"
+    state = str(parsed.get("lease_state") or "none").strip().lower()
+    if state not in {"none", "active", "expired"}:
+        state = "none"
+    out: dict[str, Any] = {
+        "repo": str(parsed.get("repo") or "").strip(),
+        "agent": agent,
+        "lease_state": state,
+        "next": short_note(parsed.get("next_action"), 72),
+    }
+    if private_lane:
+        return out
+    sha = str(parsed.get("sha") or "").strip()
+    if sha:
+        out["sha"] = sha[:7]
+    pr = str(parsed.get("pr") or "").strip().lstrip("#")
+    if pr.isdigit():
+        out["pr"] = int(pr)
+    return out
+
+
+def coord_signal(project: Any) -> str | None:
+    """Active public-lane lease only. Never invent a worker on a quiet row."""
+    if not isinstance(project, dict) or project.get("private"):
+        return None
+    coord = project.get("coord")
+    if not isinstance(coord, dict):
+        return None
+    if str(coord.get("lease_state") or "") != "active":
+        return None
+    agent = str(coord.get("agent") or "").strip().lower()
+    names = {"codex": "Codex", "grok": "Grok", "claude": "Claude"}
+    label = names.get(agent)
+    if not label:
+        return None
+    return label + " lease"
+
+
 def compact_signal(project: Any) -> str | None:
     """One scan signal. Live CI, then review work, beat Latest vs source.
 
@@ -1128,6 +1246,9 @@ def compact_signal(project: Any) -> str | None:
         return "CI running"
     if concl in CI_PENDING_CONCLUSIONS:
         return "CI pending"
+    lease = coord_signal(project)
+    if lease:
+        return lease
     stack = _stack_signal(project)
     if stack:
         return stack
@@ -1413,6 +1534,12 @@ def board_content_fingerprint(data: Any) -> str:
             ci.get("sha") if ci else None,
             ci.get("name") if ci else None,
             ci.get("html_url") if ci else None,
+            (p.get("coord") or {}).get("agent")
+            if isinstance(p.get("coord"), dict)
+            else None,
+            (p.get("coord") or {}).get("lease_state")
+            if isinstance(p.get("coord"), dict)
+            else None,
         ]
 
     sections = []
