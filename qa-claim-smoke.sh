@@ -451,6 +451,13 @@ for p in projects:
         raise SystemExit(
             "private/high-level lane must not diagnose hosted CI as red: " + name
         )
+    if p.get("private"):
+        ci = p.get("ci") if isinstance(p.get("ci"), dict) else {}
+        concl = str(ci.get("conclusion") or "").strip().lower()
+        if concl in ("failure", "timed_out", "action_required", "startup_failure"):
+            raise SystemExit(
+                "private lane published hosted CI failure as public diagnosis: " + name
+            )
 html = Path(sys.argv[2]).read_text()
 for p in projects:
     name = str(p.get("name") or "")
@@ -616,8 +623,40 @@ if "high_level=bool(r.get(\"private\") or high_level_only)" not in refresh_text:
     raise SystemExit("refresh.sh must keep private/high-level lanes off hosted-CI diagnosis")
 if "if (p.private) return \"\";" not in refresh_text:
     raise SystemExit("refresh.sh JS compactSignal must hide private-lane CI diagnosis")
+if 'project("webjam", jeff_gate=True' in refresh_text:
+    raise SystemExit("WebJam leftover drafts must not hardcode jeff_gate")
+if 'project("Sliding-Glass-Door-PETG-Screw", jeff_gate=True' in refresh_text:
+    raise SystemExit("Sliding Glass Door must not be a jeff-gate; glance keeps the three standing gates")
+if "public_high_level_ci" not in refresh_text:
+    raise SystemExit("refresh.sh must sanitize private CI through public_high_level_ci")
 sys.path.insert(0, str(refresh.parent))
-from board_meta import compact_signal, is_ci_noise, pick_tip_ci, signal_href, status_from_fetch
+from board_meta import (
+    compact_signal,
+    extract_cloud_agents_from_prs,
+    is_ci_noise,
+    is_unexecuted_run,
+    pick_open_pr,
+    pick_tip_ci,
+    public_high_level_ci,
+    signal_href,
+    status_from_fetch,
+)
+leftover_draft = {
+    "number": 49,
+    "title": "Rebuild Pocket Stage kit on Mac desktop CI",
+    "html_url": "https://github.com/rupret007/webjam/pull/49",
+    "body": "Draft only. Do not merge from here. https://cursor.com/agents/bc-48233059-c14e-4168-ae78-15566aa55495",
+    "draft": True,
+    "state": "open",
+    "base": {"repo": {"full_name": "rupret007/webjam"}},
+    "head": {"repo": {"full_name": "rupret007/webjam"}},
+}
+if pick_open_pr([leftover_draft]) is not None:
+    raise SystemExit("parked leftover draft must not become the featured open PR")
+if extract_cloud_agents_from_prs([leftover_draft]):
+    raise SystemExit("parked leftover draft must not become a live cloud chip")
+if public_high_level_ci({"conclusion": "failure"}):
+    raise SystemExit("private/high-level CI must not publish hosted failure")
 # Empty-runner / 0-step hosted red is not a product fail on a public high-level row.
 empty_runner = {
     "accessible": True,
@@ -628,6 +667,22 @@ if status_from_fetch(empty_runner, high_level=True) == "red":
     raise SystemExit("empty-runner hosted red must not become a public Red row")
 if compact_signal(empty_runner) == "CI fail":
     raise SystemExit("empty-runner hosted red must not publish a CI fail signal")
+if public_high_level_ci(empty_runner["ci"]):
+    raise SystemExit("empty-runner hosted red must not stay in public high-level CI")
+empty_jobs = {
+    "head_branch": "main",
+    "status": "completed",
+    "conclusion": "failure",
+    "name": "CI",
+    "path": ".github/workflows/ci.yml",
+    "head_sha": "deadbeeaaaa",
+    "run_started_at": None,
+    "jobs": [],
+}
+if not is_unexecuted_run(empty_jobs):
+    raise SystemExit("empty-jobs hosted failure must count as unexecuted")
+if pick_tip_ci([empty_jobs], "main", "deadbee") is not None:
+    raise SystemExit("unexecuted hosted job must not become tip CI")
 for concl in ("failure", "startup_failure", "timed_out", "action_required"):
     hosted = {"accessible": True, "private": True, "ci": {"conclusion": concl}}
     if status_from_fetch(hosted, high_level=True) == "red":
@@ -1069,8 +1124,8 @@ projects = [
 ]
 allowed = {"name", "private", "status", "chip", "notes", "accessible", "ci"}
 html = index_path.read_text()
-# After #23 these named lanes stay high-level. Empty-runner hosted red
-# (conclusion=failure, run never started) is not a public product fail.
+# After leftover honesty, named lanes stay high-level. Empty-runner hosted
+# red is unexecuted, not a public product fail, and must not be published.
 high_level_named = (
     "AI Music Vault",
     "Bob the Bot",
@@ -1088,8 +1143,12 @@ for name in high_level_named:
     if row.get("status") == "red" or row.get("chip") == "Red":
         raise SystemExit("accessible " + name + " must not diagnose hosted CI as red")
     ci = row.get("ci") if isinstance(row.get("ci"), dict) else {}
-    if set(ci) - {"conclusion"} or ci.get("conclusion") != "failure":
-        raise SystemExit(name + " CI must expose the hosted 0-step failure conclusion only")
+    if set(ci) - {"conclusion"}:
+        raise SystemExit(name + " CI leaked extra metadata")
+    if ci.get("conclusion") in (
+        "failure", "timed_out", "action_required", "startup_failure"
+    ):
+        raise SystemExit(name + " must not publish hosted failure as public CI")
     article = re.search(
         rf'<article class="lane[^"]*"><h3>{re.escape(name)}</h3>.*?</article>',
         html,

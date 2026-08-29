@@ -28,8 +28,10 @@ from board_meta import (
     glance_html,
     glance_status,
     is_ci_noise,
+    is_draft_pr,
     is_type_tab,
     is_quiet_lane,
+    is_unexecuted_run,
     lane_hrefs,
     latest_release_url_from_repo,
     merge_cloud_agents,
@@ -41,6 +43,7 @@ from board_meta import (
     pick_tip_ci,
     presentation,
     prune_closed_parked_prs,
+    public_high_level_ci,
     pulls_url_from_repo,
     resolve_agents,
     safe_actions_url,
@@ -735,6 +738,30 @@ class BoardMetaTests(unittest.TestCase):
         self.assertNotEqual(status_from_fetch(empty_runner, high_level=True), "red")
         self.assertEqual(status_from_fetch(empty_runner, high_level=True), "yellow")
         self.assertIsNone(compact_signal(empty_runner))
+        self.assertEqual(public_high_level_ci({"conclusion": "failure"}), {})
+        self.assertEqual(public_high_level_ci({"conclusion": "startup_failure"}), {})
+        self.assertEqual(public_high_level_ci({"conclusion": "timed_out"}), {})
+        self.assertEqual(public_high_level_ci({"conclusion": "pending"}), {"conclusion": "pending"})
+        self.assertEqual(public_high_level_ci({}), {})
+        self.assertEqual(public_high_level_ci(None), {})
+        empty_jobs = {
+            "head_branch": "main",
+            "status": "completed",
+            "conclusion": "failure",
+            "name": "CI",
+            "path": ".github/workflows/ci.yml",
+            "head_sha": "deadbeeaaaa",
+            "run_started_at": None,
+            "jobs": [],
+        }
+        self.assertTrue(is_unexecuted_run(empty_jobs))
+        self.assertIsNone(pick_tip_ci([empty_jobs], "main", "deadbee"))
+        no_runner = {
+            **empty_jobs,
+            "jobs": [{"name": "test", "runner_name": None, "steps": []}],
+        }
+        self.assertTrue(is_unexecuted_run(no_runner))
+        self.assertIsNone(pick_tip_ci([no_runner], "main", "deadbee"))
         for concl in ("startup_failure", "timed_out", "action_required"):
             hosted = {
                 "accessible": True,
@@ -1453,6 +1480,83 @@ class BoardMetaTests(unittest.TestCase):
         self.assertFalse(picked["draft"])
         self.assertIsNone(pick_open_pr([{"html_url": "https://evil.example/pull/1"}]))
         self.assertIsNone(pick_open_pr(None))
+        leftover = {
+            "html_url": "https://github.com/rupret007/webjam/pull/49",
+            "number": 49,
+            "title": "Rebuild Pocket Stage kit on Mac desktop CI",
+            "draft": True,
+            "updated_at": "2026-08-27T07:09:29Z",
+        }
+        self.assertTrue(is_draft_pr(leftover))
+        self.assertIsNone(pick_open_pr([leftover]))
+        self.assertIsNone(
+            pick_open_pr(
+                [
+                    leftover,
+                    {
+                        "html_url": "https://github.com/rupret007/webjam/pull/37",
+                        "number": 37,
+                        "title": "Retry shared canvas delivery after peer control arrives",
+                        "draft": True,
+                        "updated_at": "2026-08-26T20:04:18Z",
+                    },
+                ]
+            )
+        )
+
+    def test_parked_leftover_drafts_are_not_active_cloud_agents(self):
+        leftover_bc = "bc-48233059-c14e-4168-ae78-15566aa55495"
+        leftover = {
+            "number": 49,
+            "title": "Rebuild Pocket Stage kit on Mac desktop CI",
+            "html_url": "https://github.com/rupret007/webjam/pull/49",
+            "body": (
+                "Draft only. Do not merge from here. "
+                "https://cursor.com/agents/" + leftover_bc
+            ),
+            "draft": True,
+            "state": "open",
+            "updated_at": "2026-08-27T07:09:29Z",
+            "base": {"repo": {"full_name": "rupret007/webjam"}},
+            "head": {"repo": {"full_name": "rupret007/webjam"}},
+        }
+        parked_37 = {
+            "number": 37,
+            "title": "Retry shared canvas delivery after peer control arrives",
+            "html_url": "https://github.com/rupret007/webjam/pull/37",
+            "body": "See https://cursor.com/agents/bc-11111111-1111-1111-1111-111111111111",
+            "draft": True,
+            "state": "open",
+            "base": {"repo": {"full_name": "rupret007/webjam"}},
+            "head": {"repo": {"full_name": "rupret007/webjam"}},
+        }
+        self.assertEqual(extract_cloud_agents_from_prs([leftover, parked_37]), [])
+        ready_bc = "bc-8e16f06d-f73f-482c-987f-e13f2d3b9fb1"
+        ready = {
+            "number": 54,
+            "title": "Polish WebJam UI",
+            "html_url": "https://github.com/rupret007/webjam/pull/54",
+            "body": "See https://cursor.com/agents/" + ready_bc,
+            "draft": False,
+            "state": "open",
+            "updated_at": "2026-08-28T23:33:01Z",
+            "base": {"repo": {"full_name": "rupret007/webjam"}},
+            "head": {"repo": {"full_name": "rupret007/webjam"}},
+        }
+        found = extract_cloud_agents_from_prs([leftover, ready])
+        self.assertEqual(len(found), 1)
+        self.assertEqual(found[0]["url"], "https://cursor.com/agents/" + ready_bc)
+        self.assertEqual(found[0]["name"], "PR #54")
+
+    def test_refresh_drops_leftover_jeff_gates(self):
+        blob = Path(__file__).with_name("refresh.sh").read_text()
+        self.assertNotIn('project("webjam", jeff_gate=True', blob)
+        self.assertNotIn(
+            'project("Sliding-Glass-Door-PETG-Screw", jeff_gate=True', blob
+        )
+        self.assertIn("public_high_level_ci", blob)
+        for want in ("che-live-pull", "logic-keys-wavs", "adoptiq-live-cisco"):
+            self.assertIn('"id": "' + want + '"', blob)
 
     def test_linear_pr_stack_requires_one_complete_same_repo_chain(self):
         repo = {"full_name": "rupret007/repo"}
