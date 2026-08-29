@@ -1122,7 +1122,7 @@ projects = [
     for p in (section.get("projects") or [])
     if isinstance(p, dict)
 ]
-allowed = {"name", "private", "status", "chip", "notes", "accessible", "ci"}
+allowed = {"name", "private", "status", "chip", "notes", "accessible", "ci", "coord"}
 html = index_path.read_text()
 # After leftover honesty, named lanes stay high-level. Empty-runner hosted
 # red is unexecuted, not a public product fail, and must not be published.
@@ -1140,6 +1140,15 @@ for name in high_level_named:
     extra = sorted(set(row) - allowed)
     if extra:
         raise SystemExit(name + " row contains non-allowlisted keys: " + ", ".join(extra))
+    coord = row.get("coord")
+    if coord:
+        if not isinstance(coord, dict):
+            raise SystemExit(name + " coord is not an object")
+        leaked = sorted(set(coord) - {"repo", "agent", "lease_state", "next"})
+        if leaked:
+            raise SystemExit(name + " coord leaked: " + ", ".join(leaked))
+        if any(k in coord for k in ("sha", "pr", "url", "issue", "branch", "evidence")):
+            raise SystemExit(name + " coord published private fields")
     if row.get("status") == "red" or row.get("chip") == "Red":
         raise SystemExit("accessible " + name + " must not diagnose hosted CI as red")
     ci = row.get("ci") if isinstance(row.get("ci"), dict) else {}
@@ -1174,6 +1183,7 @@ for secret in (
     "css-private-main", "c55c55c55c55", "CSS_Conductor/actions/runs/93",
     "adopt-private-main", "ad07ad07ad07", "AdoptIQ/actions/runs/94",
     "tac-private-main", "7ac77ac77ac7", "TACTrack/actions/runs/95",
+    "Bob-the-Bot/issues/",
 ):
     if secret in public_blob:
         raise SystemExit("private fixture leaked: " + secret)

@@ -298,6 +298,7 @@ def project(
         )
     if p.get("private") or high_level_only:
         raw_ci = p.get("ci") if isinstance(p.get("ci"), dict) else {}
+        keep_coord = p.get("coord") if isinstance(p.get("coord"), dict) else None
         # The board itself is public. A private lane may expose its product
         # name, high-level color/accessibility, and a non-fail CI conclusion
         # only. Hosted failure / empty-runner is unexecuted or undiagnosable,
@@ -311,8 +312,9 @@ def project(
             "notes": p.get("notes"),
             "accessible": bool(p.get("accessible")),
             "ci": public_high_level_ci(raw_ci),
-            "coord": p.get("coord") if isinstance(p.get("coord"), dict) else {},
         }
+        if keep_coord:
+            p["coord"] = keep_coord
     # Friendly display names
     rename = {
         "webjam": "WebJam",
