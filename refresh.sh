@@ -175,6 +175,8 @@ from board_meta import (
     compact_signal,
     compact_unknown_mac_probes,
     decision_href,
+    parse_coord_issue,
+    public_coord,
     drop_leftover_verify,
     extract_cloud_agents_from_prs,
     glance_html,
@@ -216,6 +218,24 @@ CHIP = {
     "green": "Green", "yellow": "Yellow", "red": "Red",
     "parked": "Parked", "jeff-gate": "Jeff-gate",
 }
+
+coord_by = {}
+try:
+    raw_coord = subprocess.check_output(
+        [
+            "gh", "issue", "list", "-R", "rupret007/Bob-the-Bot",
+            "--label", "coord", "--state", "open", "--limit", "50",
+            "--json", "number,title,body,url,updatedAt",
+        ],
+        text=True,
+        stderr=subprocess.DEVNULL,
+    )
+    for iss in json.loads(raw_coord or "[]"):
+        parsed = parse_coord_issue(iss, now=now)
+        if parsed:
+            coord_by[str(parsed.get("repo") or "").lower()] = parsed
+except Exception:
+    coord_by = {}
 
 def project(
     name,
@@ -270,6 +290,12 @@ def project(
         p["live_game_url"] = safe_game_url(live_game_url)
     if extra:
         p.update(extra)
+    parsed_coord = coord_by.get(str(name or "").lower())
+    if parsed_coord:
+        p["coord"] = public_coord(
+            parsed_coord,
+            private_lane=bool(p.get("private") or high_level_only),
+        )
     if p.get("private") or high_level_only:
         raw_ci = p.get("ci") if isinstance(p.get("ci"), dict) else {}
         # The board itself is public. A private lane may expose its product
@@ -285,6 +311,7 @@ def project(
             "notes": p.get("notes"),
             "accessible": bool(p.get("accessible")),
             "ci": public_high_level_ci(raw_ci),
+            "coord": p.get("coord") if isinstance(p.get("coord"), dict) else {},
         }
     # Friendly display names
     rename = {
