@@ -50,6 +50,7 @@ sys.path.insert(0, root)
 from board_meta import (
     detect_linear_pr_stack,
     extract_cloud_agents_from_prs,
+    is_draft_pr,
     pick_open_pr,
     pick_tip_ci,
     safe_pr_url,
@@ -97,8 +98,9 @@ open_pr_urls = [
     if isinstance(p, dict)
     if (url := safe_pr_url(p.get("html_url") or p.get("url")))
 ]
-open_pr = pick_open_pr(prs) if prs_complete else None
-open_pr_stack = detect_linear_pr_stack(prs, branch) if prs_complete else []
+ready_prs = [p for p in prs if isinstance(p, dict) and not is_draft_pr(p)]
+open_pr = pick_open_pr(ready_prs) if prs_complete else None
+open_pr_stack = detect_linear_pr_stack(ready_prs, branch) if prs_complete else []
 # A Cursor agent URL can grant access beyond high-level repository status.
 # Never materialize one from a private PR onto this public dashboard.
 clouds = [] if private or not prs_complete else extract_cloud_agents_from_prs(prs, limit=1)
@@ -129,7 +131,7 @@ print(json.dumps({
     "tip_sha": sha or None,
     "tip_date": date,
     "tip_msg": msg,
-    "open_prs": len(prs) if prs_complete else None,
+    "open_prs": len(ready_prs) if prs_complete else None,
     "pr_listing_complete": prs_complete,
     "open_pr_urls": open_pr_urls,
     "open_pr": open_pr,

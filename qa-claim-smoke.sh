@@ -1124,8 +1124,8 @@ projects = [
 ]
 allowed = {"name", "private", "status", "chip", "notes", "accessible", "ci"}
 html = index_path.read_text()
-# After #23 these named lanes stay high-level. Empty-runner hosted red
-# (conclusion=failure, run never started) is not a public product fail.
+# After leftover honesty, named lanes stay high-level. Empty-runner hosted
+# red is unexecuted, not a public product fail, and must not be published.
 high_level_named = (
     "AI Music Vault",
     "Bob the Bot",
@@ -1143,8 +1143,12 @@ for name in high_level_named:
     if row.get("status") == "red" or row.get("chip") == "Red":
         raise SystemExit("accessible " + name + " must not diagnose hosted CI as red")
     ci = row.get("ci") if isinstance(row.get("ci"), dict) else {}
-    if set(ci) - {"conclusion"} or ci.get("conclusion") != "failure":
-        raise SystemExit(name + " CI must expose the hosted 0-step failure conclusion only")
+    if set(ci) - {"conclusion"}:
+        raise SystemExit(name + " CI leaked extra metadata")
+    if ci.get("conclusion") in (
+        "failure", "timed_out", "action_required", "startup_failure"
+    ):
+        raise SystemExit(name + " must not publish hosted failure as public CI")
     article = re.search(
         rf'<article class="lane[^"]*"><h3>{re.escape(name)}</h3>.*?</article>',
         html,
