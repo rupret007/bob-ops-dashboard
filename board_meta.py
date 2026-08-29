@@ -310,16 +310,29 @@ def agent_url_from_fields(raw: Any) -> str:
     return ""
 
 
+def is_draft_pr(raw: Any) -> bool:
+    """True only when GitHub already marked the PR a draft. Missing field is not a draft."""
+    if not isinstance(raw, dict):
+        return False
+    if "draft" in raw:
+        return bool(raw.get("draft"))
+    if "isDraft" in raw:
+        return bool(raw.get("isDraft"))
+    return False
+
+
 def pick_open_pr(prs: Any) -> dict[str, Any] | None:
-    """Newest open PR. Prefer non-draft. Fail-closed when none is a safe URL."""
+    """Newest ready open PR. Draft / parked leftovers are never the featured PR."""
     parsed: list[dict[str, Any]] = []
     for p in prs or []:
         if not isinstance(p, dict):
             continue
+        if is_draft_pr(p):
+            continue
         url = safe_pr_url(p.get("html_url") or p.get("url"))
         if not url:
             continue
-        draft = bool(p.get("draft") if "draft" in p else p.get("isDraft"))
+        draft = False
         ts = str(
             p.get("updated_at")
             or p.get("updatedAt")
@@ -344,8 +357,9 @@ def pick_open_pr(prs: Any) -> dict[str, Any] | None:
     if not parsed:
         return None
     ready = [p for p in parsed if not p["draft"]]
-    pool = ready or parsed
-    pool = sorted(pool, key=lambda p: p.get("updated") or "", reverse=True)
+    if not ready:
+        return None
+    pool = sorted(ready, key=lambda p: p.get("updated") or "", reverse=True)
     top = dict(pool[0])
     top.pop("updated", None)
     return top
@@ -519,7 +533,7 @@ def merge_cloud_agents(*groups: Any, limit: int = CLOUD_AGENT_LIMIT) -> list[dic
 
 
 def extract_cloud_agents_from_prs(prs: Any, *, limit: int = CLOUD_AGENT_LIMIT) -> list[dict[str, Any]]:
-    """Cloud agents from open same-repository PRs. Newest first; no forks."""
+    """Cloud agents from ready open same-repository PRs. Drafts/parked leftovers never paint."""
     rows: list[dict[str, Any]] = []
     items = [p for p in (prs or []) if isinstance(p, dict)]
     items.sort(
@@ -528,6 +542,8 @@ def extract_cloud_agents_from_prs(prs: Any, *, limit: int = CLOUD_AGENT_LIMIT) -
     )
     for p in items:
         if str(p.get("state") or "").strip().lower() != "open":
+            continue
+        if is_draft_pr(p):
             continue
         pr_url = safe_pr_url(p.get("html_url") or p.get("url"))
         base = p.get("base") if isinstance(p.get("base"), dict) else {}
@@ -866,6 +882,45 @@ def ci_conclusion(repo: Any) -> str:
     return str(ci.get("conclusion") or "").strip().lower()
 
 
+def is_unexecuted_run(run: Any) -> bool:
+    """Hosted job with empty steps / no runner / never started is unexecuted.
+
+    Missing jobs/run_started_at fields are unknown, not unexecuted. The Actions
+    list payload usually omits jobs; only an explicit empty job list or a
+    present-but-empty start time can call a hosted failure unexecuted.
+    """
+    if not isinstance(run, dict):
+        return True
+    if "jobs" in run:
+        jobs = run.get("jobs")
+        if not isinstance(jobs, list) or not jobs:
+            return True
+        for job in jobs:
+            if not isinstance(job, dict):
+                continue
+            runner = job.get("runner_name") or job.get("runner_id")
+            steps = job.get("steps")
+            if runner or (isinstance(steps, list) and steps):
+                return False
+        return True
+    if "run_started_at" in run or "runStartedAt" in run:
+        started = run.get("run_started_at") or run.get("runStartedAt")
+        concl = str(run.get("conclusion") or "").strip().lower()
+        if concl in CI_FAIL_CONCLUSIONS and not started:
+            return True
+    return False
+
+
+def public_high_level_ci(ci: Any) -> dict[str, str]:
+    """Private / high-level lanes never publish a hosted failure as public CI."""
+    if not isinstance(ci, dict):
+        return {}
+    concl = str(ci.get("conclusion") or "").strip().lower()
+    if not concl or concl in CI_FAIL_CONCLUSIONS:
+        return {}
+    return {"conclusion": concl}
+
+
 def is_ci_noise(run: Any) -> bool:
     """True for Pages / docs deploy / this board's refresh publisher runs."""
     if not isinstance(run, dict):
@@ -969,7 +1024,11 @@ def pick_tip_ci(runs: Any, branch: Any, tip_sha: Any = None) -> dict[str, Any] |
         if str(run.get("head_branch") or "") != want:
             continue
         branch_runs.append(run)
-    real = [run for run in branch_runs if not is_ci_noise(run)]
+    real = [
+        run
+        for run in branch_runs
+        if not is_ci_noise(run) and not is_unexecuted_run(run)
+    ]
     if not real:
         return None
     tip = str(tip_sha or "").strip()

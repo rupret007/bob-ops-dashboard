@@ -176,6 +176,7 @@ from board_meta import (
     drop_leftover_verify,
     extract_cloud_agents_from_prs,
     glance_html,
+    public_high_level_ci,
     is_quiet_lane,
     is_type_tab,
     lane_hrefs,
@@ -269,12 +270,11 @@ def project(
         p.update(extra)
     if p.get("private") or high_level_only:
         raw_ci = p.get("ci") if isinstance(p.get("ci"), dict) else {}
-        conclusion = str(raw_ci.get("conclusion") or "").strip().lower()
         # The board itself is public. A private lane may expose its product
-        # name, high-level color/accessibility, and CI conclusion only. Build
-        # a new allowlisted object so future repository fields fail closed.
-        # Hosted conclusion never paints Red or a CI signal; the public board
-        # cannot confirm the hosted-job cause.
+        # name, high-level color/accessibility, and a non-fail CI conclusion
+        # only. Hosted failure / empty-runner is unexecuted or undiagnosable,
+        # never a public product-test fail. Build a new allowlisted object so
+        # future repository fields fail closed.
         p = {
             "name": p.get("name"),
             "private": True,
@@ -282,7 +282,7 @@ def project(
             "chip": p.get("chip"),
             "notes": p.get("notes"),
             "accessible": bool(p.get("accessible")),
-            "ci": {"conclusion": conclusion} if conclusion else {},
+            "ci": public_high_level_ci(raw_ci),
         }
     # Friendly display names
     rename = {
@@ -315,7 +315,7 @@ status = {
       "id": "live-shipping",
       "title": "Live shipping",
       "projects": [
-        project("webjam", jeff_gate=True,
+        project("webjam",
                 notes="Making room. Latest is the published test candidate; source can be ahead."),
         project("StoryLiner", notes="Story workflow app. Current review stack and default-branch CI come from the live refresh."),
         project("StoryBoard", notes="Band-business engine. Consumes Vault; not a second catalog."),
@@ -346,7 +346,7 @@ status = {
                 notes="Integration utility. Never restart gateways or alter credentials automatically."),
         project("bob-ops-dashboard",
                 notes="Source-only feature PRs; the scheduled refresh owns generated index.html and status.json."),
-        project("Sliding-Glass-Door-PETG-Screw", jeff_gate=True,
+        project("Sliding-Glass-Door-PETG-Screw",
                 notes="Software/design artifact only. Printing, installation, and physical fit stay owner-only."),
         project("story-corner-shelf",
                 notes="Story Shelf utility. Software and documentation work only; physical installation stays owner-only."),
@@ -459,6 +459,8 @@ repo_cloud = []
 for row in fetched:
     if isinstance(row, dict):
         repo_cloud.extend(row.get("cloud_agents") or [])
+# extract_cloud_agents_from_prs skips draft / parked leftover PRs, so a
+# leftover WebJam draft cannot become a live cloud chip or agent_url.
 trusted_cloud = merge_cloud_agents(
     extract_cloud_agents_from_prs(dash_prs),
     repo_cloud,

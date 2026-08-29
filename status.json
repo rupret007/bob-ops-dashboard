@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-08-28T19:47:22.215411-05:00",
-  "generated_at_display": "Fri Aug 28, 2026 \u00b7 7:47 PM CDT",
+  "generated_at": "2026-08-28T20:04:57.899663-05:00",
+  "generated_at_display": "Fri Aug 28, 2026 \u00b7 8:04 PM CDT",
   "timezone": "America/Chicago",
   "owner": "rupret007",
   "dashboard": "bob-ops-dashboard",
@@ -46,8 +46,8 @@
           "url": "https://github.com/rupret007/webjam",
           "repo_url": "https://github.com/rupret007/webjam",
           "private": false,
-          "status": "jeff-gate",
-          "chip": "Jeff-gate",
+          "status": "yellow",
+          "chip": "Yellow",
           "default_branch": "master",
           "tip_sha": "55f4388",
           "tip_date": "2026-08-28T23:33:01Z",
@@ -148,9 +148,9 @@
           "tip_sha": "6f2de30",
           "tip_date": "2026-08-27T22:15:43Z",
           "open_prs": 1,
-          "open_pr_url": "https://github.com/rupret007/Rad-Dad-Merch/pull/2",
-          "open_pr_number": 2,
-          "open_pr_draft": true,
+          "open_pr_url": null,
+          "open_pr_number": null,
+          "open_pr_draft": false,
           "open_pr_stack": [],
           "pr_listing_complete": true,
           "agent_url": null,
@@ -239,9 +239,7 @@
           "chip": "Yellow",
           "notes": "Private catalog spine for StoryBoard / Show Night. Do not publish catalog content.",
           "accessible": true,
-          "ci": {
-            "conclusion": "failure"
-          }
+          "ci": {}
         },
         {
           "name": "Turdanoid",
@@ -255,9 +253,9 @@
           "tip_sha": "a38c98c",
           "tip_date": "2026-08-27T23:00:39Z",
           "open_prs": 1,
-          "open_pr_url": "https://github.com/rupret007/Turdanoid/pull/8",
-          "open_pr_number": 8,
-          "open_pr_draft": true,
+          "open_pr_url": null,
+          "open_pr_number": null,
+          "open_pr_draft": false,
           "open_pr_stack": [],
           "pr_listing_complete": true,
           "agent_url": null,
@@ -289,9 +287,7 @@
           "chip": "Yellow",
           "notes": "Private workflow utility. High-level only; no customer data on this board.",
           "accessible": true,
-          "ci": {
-            "conclusion": "failure"
-          }
+          "ci": {}
         },
         {
           "name": "Ball Beacon",
@@ -309,9 +305,7 @@
           "chip": "Yellow",
           "notes": "Private developer utility. High-level only; hosted-job cause stays unconfirmed.",
           "accessible": true,
-          "ci": {
-            "conclusion": "failure"
-          }
+          "ci": {}
         },
         {
           "name": "Barker",
@@ -320,9 +314,7 @@
           "chip": "Yellow",
           "notes": "Private app. No live sends, production changes, or credential operations from this board.",
           "accessible": true,
-          "ci": {
-            "conclusion": "failure"
-          }
+          "ci": {}
         },
         {
           "name": "Cursor-OpenClaw Integration",
@@ -333,8 +325,8 @@
           "status": "green",
           "chip": "Green",
           "default_branch": "main",
-          "tip_sha": "5d7d0da",
-          "tip_date": "2026-08-26T12:48:08Z",
+          "tip_sha": null,
+          "tip_date": null,
           "open_prs": 0,
           "open_pr_url": null,
           "open_pr_number": null,
@@ -365,22 +357,22 @@
           "status": "yellow",
           "chip": "Yellow",
           "default_branch": "main",
-          "tip_sha": "eccf344",
-          "tip_date": "2026-08-29T00:31:34Z",
+          "tip_sha": "ede37e2",
+          "tip_date": "2026-08-29T00:47:25Z",
           "open_prs": 2,
-          "open_pr_url": "https://github.com/rupret007/bob-ops-dashboard/pull/21",
-          "open_pr_number": 21,
-          "open_pr_draft": true,
+          "open_pr_url": null,
+          "open_pr_number": null,
+          "open_pr_draft": false,
           "open_pr_stack": [],
           "pr_listing_complete": true,
           "agent_url": null,
           "ci": {
             "name": "QA claim smoke",
-            "conclusion": "pending",
+            "conclusion": "success",
             "branch": "main",
-            "sha": "eccf344",
-            "created": null,
-            "html_url": null
+            "sha": "ede37e2",
+            "created": "2026-08-29T00:47:29Z",
+            "html_url": "https://github.com/rupret007/bob-ops-dashboard/actions/runs/33224569566"
           },
           "release": null,
           "release_sha": null,
@@ -391,13 +383,11 @@
         {
           "name": "Sliding Glass Door Screw",
           "private": true,
-          "status": "jeff-gate",
-          "chip": "Jeff-gate",
+          "status": "yellow",
+          "chip": "Yellow",
           "notes": "Software/design artifact only. Printing, installation, and physical fit stay owner-only.",
           "accessible": true,
-          "ci": {
-            "conclusion": "failure"
-          }
+          "ci": {}
         },
         {
           "name": "Story Shelf",
@@ -503,9 +493,7 @@
           "chip": "Yellow",
           "notes": "Private. High-level only. No live-repo, CI, or PR taps on this board.",
           "accessible": true,
-          "ci": {
-            "conclusion": "failure"
-          }
+          "ci": {}
         },
         {
           "name": "AdoptIQ notes",
@@ -737,7 +725,7 @@
   ],
   "inaccessible": [],
   "publish_notes": "Public board -- no secrets or customer paths. Private repositories stay high-level; AI Music Vault stays private-content-boundary only.",
-  "refresh_started_ms": 1787964368414,
+  "refresh_started_ms": 1787965361103,
   "agents_source": "file:stale->unknown",
   "agents": [
     {
