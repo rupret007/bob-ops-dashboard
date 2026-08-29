@@ -1012,7 +1012,8 @@ def pick_tip_ci(runs: Any, branch: Any, tip_sha: Any = None) -> dict[str, Any] |
     noise. A skipped bump-version helper must not hide a failing ``CI``
     workflow on the same SHA. When the repo has test CI but none yet for
     this tip, return ``pending`` so a release tag cannot claim the new
-    commit is green.
+    commit is green. A tip that already ran only noise / unexecuted jobs
+    is publisher-only: missing CI, not invented pending.
     """
     want = str(branch or "")
     if not want:
@@ -1035,6 +1036,11 @@ def pick_tip_ci(runs: Any, branch: Any, tip_sha: Any = None) -> dict[str, Any] |
     if tip:
         scoped = [run for run in real if sha_matches_tip(run, tip)]
         if not scoped:
+            tip_runs = [run for run in branch_runs if sha_matches_tip(run, tip)]
+            if tip_runs:
+                # This tip already published Pages / refresh / empty-runner
+                # noise. That is unexecuted, not a queued product test.
+                return None
             return {
                 "name": real[0].get("name") or "CI",
                 "conclusion": "pending",

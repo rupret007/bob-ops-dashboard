@@ -1085,6 +1085,48 @@ class BoardMetaTests(unittest.TestCase):
             "2 open PRs",
         )
 
+    def test_refresh_only_tip_does_not_inherit_older_qa_as_pending(self):
+        # Live after #31: GITHUB_TOKEN refresh tips have Pages + refresh
+        # only. Older QA (356b652) still sits in the 20-run window. That
+        # must stay missing-CI, not invented "CI pending" with no Open CI.
+        refresh = {
+            "head_branch": "main",
+            "status": "completed",
+            "conclusion": "success",
+            "name": "Refresh Bob Ops Dashboard",
+            "path": ".github/workflows/refresh-dashboard.yml",
+            "head_sha": "098cf5cbbbb",
+        }
+        pages = {
+            "head_branch": "main",
+            "status": "completed",
+            "conclusion": "success",
+            "name": "pages build and deployment",
+            "path": "dynamic/pages/pages-build-deployment",
+            "head_sha": "098cf5cbbbb",
+        }
+        older_qa = {
+            "head_branch": "main",
+            "status": "completed",
+            "conclusion": "success",
+            "name": "QA claim smoke",
+            "path": ".github/workflows/qa-claim-smoke.yml",
+            "head_sha": "356b652aaaa",
+        }
+        picked = pick_tip_ci([refresh, pages, older_qa], "main", "098cf5c")
+        self.assertIsNone(picked)
+        self.assertIsNone(compact_signal({"ci": picked, "open_prs": 0}))
+        self.assertEqual(
+            status_from_fetch({"accessible": True, "open_prs": 0, "ci": picked}),
+            "green",
+        )
+        # New source tip with zero runs on this SHA still invents pending.
+        still_pending = pick_tip_ci([older_qa], "main", "098cf5c")
+        self.assertIsNotNone(still_pending)
+        assert still_pending is not None
+        self.assertEqual(still_pending["conclusion"], "pending")
+        self.assertIsNone(still_pending.get("html_url"))
+
     def test_leftover_honesty_isolation_is_real_tip_ci(self):
         # Live Show Night 3c9c021: leftover-honesty.yml runs npm ci +
         # test:isolation. That is product tip CI, not an empty runner or
