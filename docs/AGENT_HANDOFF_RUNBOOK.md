@@ -121,4 +121,4 @@ Do not edit an old snapshot to make history look current. Add a new dated handof
 
 ## 10. Live coordination leases
 
-Read the `coord: rupret007/<repo>` issue in private `Bob-the-Bot` before touching a repo. Protocol: `COORDINATION.md` on that repo. Post a delta-only comment after. GitHub is authoritative; this board only presents public-safe lease state.
+Read the `coord: rupret007/<repo>` issue in private `Bob-the-Bot` before touching a repo. Protocol: `COORDINATION.md` on that repo. Post a delta-only comment after. GitHub is authoritative; this board only presents public-safe lease state. An active public-lane lease paints as dead text Codex lease / Grok lease / Claude lease, never a private-issue href. CI still beats a lease.

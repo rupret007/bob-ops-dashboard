@@ -28,7 +28,7 @@ Bob the Bot is a distinct private application lane, not an alias for Andrea Nano
 
 ## Public agent continuity
 
-- [Batch A portfolio handoff — 2026-08-26](docs/handoffs/2026-08-26-batch-a.md) is the immutable completion snapshot for the latest portfolio round.
+- [Batch A portfolio handoff — 2026-08-26](docs/handoffs/2026-08-26-batch-a.md) is an immutable completion snapshot (2026-08-26). Later leftover rounds (#31–#33) landed after it; add a new dated handoff instead of rewriting Batch A.
 - [Bob application registration handoff — 2026-08-26](docs/handoffs/2026-08-26-bob-application-registration.md) records the private application boundary and remaining owner gates.
 - [Agent handoff runbook](docs/AGENT_HANDOFF_RUNBOOK.md) is the reusable checklist and template for Grok Bot, Codex, and future agents.
 
