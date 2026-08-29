@@ -67,6 +67,9 @@ from board_meta import (
     type_tabs_html,
     unknown_mac_probes_html,
     visible_chip,
+    parse_coord_issue,
+    public_coord,
+    coord_signal,
 )
 
 
@@ -1838,11 +1841,7 @@ class BoardMetaTests(unittest.TestCase):
         self.assertFalse(drop_leftover_verify("nope"))
 
 
-if __name__ == "__main__":
-    unittest.main(verbosity=2)
 
-# Coordination leases (appended)
-from board_meta import parse_coord_issue, public_coord, coord_signal, signal_href
 
 class CoordLeaseTests(unittest.TestCase):
     def test_coord_issue_lease_and_public_sanitize(self):
@@ -1882,3 +1881,7 @@ class CoordLeaseTests(unittest.TestCase):
         self.assertEqual(expired["lease_state"], "expired")
         self.assertEqual(expired["agent"], "none")
         self.assertIsNone(parse_coord_issue({"title": "random issue"}))
+
+
+if __name__ == "__main__":
+    unittest.main(verbosity=2)

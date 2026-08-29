@@ -1534,11 +1534,11 @@ def board_content_fingerprint(data: Any) -> str:
             ci.get("sha") if ci else None,
             ci.get("name") if ci else None,
             ci.get("html_url") if ci else None,
-            (project.get("coord") or {}).get("agent")
-            if isinstance(project.get("coord"), dict)
+            (p.get("coord") or {}).get("agent")
+            if isinstance(p.get("coord"), dict)
             else None,
-            (project.get("coord") or {}).get("lease_state")
-            if isinstance(project.get("coord"), dict)
+            (p.get("coord") or {}).get("lease_state")
+            if isinstance(p.get("coord"), dict)
             else None,
         ]
 
