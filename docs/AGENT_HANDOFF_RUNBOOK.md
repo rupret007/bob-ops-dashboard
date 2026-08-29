@@ -118,3 +118,7 @@ Status: immutable public handoff
 ```
 
 Do not edit an old snapshot to make history look current. Add a new dated handoff and explain what changed.
+
+## 10. Live coordination leases
+
+Read the `coord: rupret007/<repo>` issue in private `Bob-the-Bot` before touching a repo. Protocol: `COORDINATION.md` on that repo. Post a delta-only comment after. GitHub is authoritative; this board only presents public-safe lease state.
