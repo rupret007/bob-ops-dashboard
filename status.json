@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-08-30T02:29:44.852141-05:00",
-  "generated_at_display": "Sun Aug 30, 2026 \u00b7 2:29 AM CDT",
+  "generated_at": "2026-08-30T08:14:20.494562-05:00",
+  "generated_at_display": "Sun Aug 30, 2026 \u00b7 8:14 AM CDT",
   "timezone": "America/Chicago",
   "owner": "rupret007",
   "dashboard": "bob-ops-dashboard",
@@ -405,8 +405,8 @@
           "status": "green",
           "chip": "Green",
           "default_branch": "main",
-          "tip_sha": "28084d8",
-          "tip_date": "2026-08-30T01:42:51Z",
+          "tip_sha": "92a6656",
+          "tip_date": "2026-08-30T07:29:53Z",
           "open_prs": 0,
           "open_pr_url": null,
           "open_pr_number": null,
@@ -581,12 +581,12 @@
           "pr_listing_complete": true,
           "agent_url": null,
           "ci": {
-            "name": "CI",
+            "name": "AGI Layer CI",
             "conclusion": "success",
             "branch": "main",
             "sha": "d801b5a",
             "created": "2026-08-29T03:18:07Z",
-            "html_url": "https://github.com/rupret007/Andrea_NanoBot/actions/runs/33231044889"
+            "html_url": "https://github.com/rupret007/Andrea_NanoBot/actions/runs/33231044894"
           },
           "release": null,
           "release_sha": null,
@@ -781,7 +781,7 @@
     "Sliding-Glass-Door-PETG-Screw"
   ],
   "publish_notes": "Public board -- no secrets or customer paths. Private repositories stay high-level; AI Music Vault stays private-content-boundary only.",
-  "refresh_started_ms": 1788074953463,
+  "refresh_started_ms": 1788095637693,
   "agents_source": "file:stale->unknown",
   "agents": [
     {
