@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-08-30T12:35:11.241180-05:00",
-  "generated_at_display": "Sun Aug 30, 2026 \u00b7 12:35 PM CDT",
+  "generated_at": "2026-08-30T15:04:04.956370-05:00",
+  "generated_at_display": "Sun Aug 30, 2026 \u00b7 3:04 PM CDT",
   "timezone": "America/Chicago",
   "owner": "rupret007",
   "dashboard": "bob-ops-dashboard",
@@ -66,9 +66,9 @@
             "created": "2026-08-30T14:42:00Z",
             "html_url": "https://github.com/rupret007/webjam/actions/runs/33317581250"
           },
-          "release": "v0.27.1",
-          "release_sha": "1fc25f8",
-          "release_url": "https://github.com/rupret007/webjam/releases/tag/v0.27.1",
+          "release": "v0.27.2",
+          "release_sha": "9c6ca3d",
+          "release_url": "https://github.com/rupret007/webjam/releases/tag/v0.27.2",
           "notes": "Making room. Latest is the published test candidate; source can be ahead.",
           "accessible": true
         },
@@ -405,8 +405,8 @@
           "status": "green",
           "chip": "Green",
           "default_branch": "main",
-          "tip_sha": "f65c849",
-          "tip_date": "2026-08-30T13:14:28Z",
+          "tip_sha": "7c2ab51",
+          "tip_date": "2026-08-30T17:35:18Z",
           "open_prs": 0,
           "open_pr_url": null,
           "open_pr_number": null,
@@ -781,7 +781,7 @@
     "Sliding-Glass-Door-PETG-Screw"
   ],
   "publish_notes": "Public board -- no secrets or customer paths. Private repositories stay high-level; AI Music Vault stays private-content-boundary only.",
-  "refresh_started_ms": 1788111289122,
+  "refresh_started_ms": 1788120215373,
   "agents_source": "file:stale->unknown",
   "agents": [
     {
