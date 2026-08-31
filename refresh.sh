@@ -1528,6 +1528,17 @@ html = f'''<!DOCTYPE html>
     if (!label || SECTION_TYPE_CHIPS[label]) return "";
     return label;
   }}
+  function coordSignal(p) {{
+    if (!p || p.private) return "";
+    var coord = p.coord;
+    if (!coord || typeof coord !== "object") return "";
+    if (String(coord.lease_state || "").trim().toLowerCase() !== "active") return "";
+    var agent = String(coord.agent || "").trim().toLowerCase();
+    if (agent === "codex") return "Codex lease";
+    if (agent === "grok") return "Grok lease";
+    if (agent === "claude") return "Claude lease";
+    return "";
+  }}
   function compactSignal(p) {{
     if (!p) return "";
     if (p.private) return "";
@@ -1542,6 +1553,8 @@ html = f'''<!DOCTYPE html>
     if (concl === "queued" || concl === "pending" || concl === "requested") {{
       return "CI pending";
     }}
+    var lease = coordSignal(p);
+    if (lease) return lease;
     var stack = p.open_pr_stack;
     if (Array.isArray(stack) && stack.length >= 2 && p.open_prs === stack.length) {{
       var numbers = [];
@@ -1979,7 +1992,8 @@ html = f'''<!DOCTYPE html>
     function projectKey(p) {{
       if (!p) return [];
       var ci = p.ci && typeof p.ci === "object" ? p.ci : {{}};
-      return [p.name, p.status, p.chip, p.notes, p.open_prs, p.open_pr_url || "", p.open_pr_stack || [], p.release, p.release_sha || "", p.tip_sha, p.agent_url || "", p.live_game_url || "", ci.conclusion || "", ci.sha || "", ci.name || "", ci.html_url || ""];
+      var coord = p.coord && typeof p.coord === "object" ? p.coord : {{}};
+      return [p.name, p.status, p.chip, p.notes, p.open_prs, p.open_pr_url || "", p.open_pr_stack || [], p.release, p.release_sha || "", p.tip_sha, p.agent_url || "", p.live_game_url || "", ci.conclusion || "", ci.sha || "", ci.name || "", ci.html_url || "", coord.agent || "", coord.lease_state || ""];
     }}
     var sections = (data.sections || []).map(function (sec) {{
       if (!sec) return [];
