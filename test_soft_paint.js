@@ -59,6 +59,7 @@ function run() {
   if (src.indexOf("function safeAgentUrl") === -1) fail("safeAgentUrl missing");
   if (src.indexOf("function laneHrefs") === -1) fail("laneHrefs missing");
   if (src.indexOf("function signalHref") === -1) fail("signalHref missing");
+  if (src.indexOf("function coordSignal") === -1) fail("coordSignal missing");
   if (src.indexOf("function safePullsUrl") === -1) fail("safePullsUrl missing");
   if (src.indexOf("function safeGameUrl") === -1) fail("safeGameUrl missing");
   if (src.indexOf("data-open=\"work\"") === -1 && src.indexOf("data-open=\\\"work\\\"") === -1) {
@@ -143,6 +144,35 @@ function run() {
   if (boardFingerprint(latestA) === boardFingerprint(latestB)) {
     fail("fingerprint must change when Latest SHA diverges from source");
   }
+  const leaseA = {
+    sections: [{ id: "live-shipping", projects: [{ name: "WebJam", open_prs: 3 }] }],
+  };
+  const leaseB = {
+    sections: [{
+      id: "live-shipping",
+      projects: [{
+        name: "WebJam",
+        open_prs: 3,
+        coord: { agent: "codex", lease_state: "active" },
+      }],
+    }],
+  };
+  const leaseExpired = {
+    sections: [{
+      id: "live-shipping",
+      projects: [{
+        name: "WebJam",
+        open_prs: 3,
+        coord: { agent: "codex", lease_state: "expired" },
+      }],
+    }],
+  };
+  if (boardFingerprint(leaseA) === boardFingerprint(leaseB)) {
+    fail("fingerprint must change when an active coordination lease appears");
+  }
+  if (boardFingerprint(leaseB) === boardFingerprint(leaseExpired)) {
+    fail("fingerprint must change when a coordination lease expires");
+  }
 
   const parseCheckedAt = eval("(" + extractFn(src, "parseCheckedAt") + ")");
   const cleanPublicUrl = eval("(" + extractFn(src, "cleanPublicUrl") + ")");
@@ -208,9 +238,10 @@ function run() {
   }
 
   const releaseMatchesTip = eval("(" + extractFn(src, "releaseMatchesTip") + ")");
+  const coordSignal = eval("(" + extractFn(src, "coordSignal") + ")");
   const compactSignal = eval(
-    "(function (releaseMatchesTip) { return " + extractFn(src, "compactSignal") + "; })"
-  )(releaseMatchesTip);
+    "(function (releaseMatchesTip, coordSignal) { return " + extractFn(src, "compactSignal") + "; })"
+  )(releaseMatchesTip, coordSignal);
   if (compactSignal({ release: "v0.26.0", ci: { conclusion: "failure" }, open_prs: 1 }) !== "CI fail") {
     fail("CI fail must beat release + open PR");
   }
@@ -218,6 +249,38 @@ function run() {
   if (compactSignal(privateHostedRed) !== "") {
     fail("private/high-level lanes must not publish CI fail");
   }
+  const activeLease = {
+    open_prs: 3,
+    coord: { agent: "codex", lease_state: "active" },
+  };
+  if (coordSignal(activeLease) !== "Codex lease") fail("active Codex lease must paint");
+  if (compactSignal(activeLease) !== "Codex lease") {
+    fail("active lease must beat open PR count after CI");
+  }
+  if (compactSignal({
+    open_prs: 3,
+    coord: { agent: "grok", lease_state: "active" },
+  }) !== "Grok lease") fail("active Grok lease must paint");
+  if (compactSignal({
+    open_prs: 3,
+    coord: { agent: "claude", lease_state: "active" },
+  }) !== "Claude lease") fail("active Claude lease must paint");
+  if (compactSignal({
+    open_prs: 3,
+    coord: { agent: "codex", lease_state: "expired" },
+  }) !== "3 open PRs") fail("expired lease must fall through to review work");
+  if (coordSignal({
+    private: true,
+    coord: { agent: "codex", lease_state: "active" },
+  }) !== "") fail("private lease must stay off the public signal");
+  if (coordSignal({
+    coord: { agent: "unknown", lease_state: "active" },
+  }) !== "") fail("unknown lease agent must fail closed");
+  if (compactSignal({
+    open_prs: 3,
+    ci: { conclusion: "failure" },
+    coord: { agent: "codex", lease_state: "active" },
+  }) !== "CI fail") fail("CI fail must beat an active lease");
   for (const name of ["TACTrack", "CSS Conductor", "AI Music Vault", "AdoptIQ", "Bob the Bot"]) {
     const signal = compactSignal({
       name,
@@ -296,6 +359,14 @@ function run() {
       extractFn(src, "signalHref") +
       "; })"
   )(compactSignal, laneHrefs, pullsUrlFromRepo, latestReleaseUrlFromRepo, safeReleaseUrl);
+  if (signalHref({
+    url: "https://github.com/rupret007/webjam",
+    open_prs: 3,
+    open_pr_url: "https://github.com/rupret007/webjam/pull/61",
+    coord: { agent: "codex", lease_state: "active" },
+  }) !== "") {
+    fail("active coordination lease must stay dead text, not inherit a PR href");
+  }
   if (
     signalHref({
       url: "https://github.com/rupret007/StoryBoard",
