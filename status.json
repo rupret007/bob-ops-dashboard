@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-09-01T00:33:16.855631-05:00",
-  "generated_at_display": "Tue Sep 1, 2026 \u00b7 12:33 AM CDT",
+  "generated_at": "2026-09-01T05:29:26.946008-05:00",
+  "generated_at_display": "Tue Sep 1, 2026 \u00b7 5:29 AM CDT",
   "timezone": "America/Chicago",
   "owner": "rupret007",
   "dashboard": "bob-ops-dashboard",
@@ -405,8 +405,8 @@
           "status": "green",
           "chip": "Green",
           "default_branch": "main",
-          "tip_sha": "16927a0",
-          "tip_date": "2026-09-01T03:49:08Z",
+          "tip_sha": "b663f77",
+          "tip_date": "2026-09-01T05:33:24Z",
           "open_prs": 0,
           "open_pr_url": null,
           "open_pr_number": null,
@@ -414,14 +414,7 @@
           "open_pr_stack": [],
           "pr_listing_complete": true,
           "agent_url": null,
-          "ci": {
-            "name": "QA claim smoke",
-            "conclusion": "success",
-            "branch": "main",
-            "sha": "16927a0",
-            "created": "2026-09-01T03:49:12Z",
-            "html_url": "https://github.com/rupret007/bob-ops-dashboard/actions/runs/33467587340"
-          },
+          "ci": null,
           "release": null,
           "release_sha": null,
           "release_url": null,
@@ -788,7 +781,7 @@
     "Sliding-Glass-Door-PETG-Screw"
   ],
   "publish_notes": "Public board -- no secrets or customer paths. Private repositories stay high-level; AI Music Vault stays private-content-boundary only.",
-  "refresh_started_ms": 1788240771589,
+  "refresh_started_ms": 1788258538520,
   "agents_source": "file:stale->unknown",
   "agents": [
     {
