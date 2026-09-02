@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-09-01T19:33:18.131389-05:00",
-  "generated_at_display": "Tue Sep 1, 2026 \u00b7 7:33 PM CDT",
+  "generated_at": "2026-09-01T19:48:51.308272-05:00",
+  "generated_at_display": "Tue Sep 1, 2026 \u00b7 7:48 PM CDT",
   "timezone": "America/Chicago",
   "owner": "rupret007",
   "dashboard": "bob-ops-dashboard",
@@ -88,8 +88,8 @@
           "status": "green",
           "chip": "Green",
           "default_branch": "main",
-          "tip_sha": "c5e6db9",
-          "tip_date": "2026-08-27T22:17:19Z",
+          "tip_sha": "420cbfb",
+          "tip_date": "2026-09-02T00:34:06Z",
           "open_prs": 0,
           "open_pr_url": null,
           "open_pr_number": null,
@@ -101,9 +101,9 @@
             "name": "CI",
             "conclusion": "success",
             "branch": "main",
-            "sha": "c5e6db9",
-            "created": "2026-08-27T22:17:22Z",
-            "html_url": "https://github.com/rupret007/StoryLiner/actions/runs/33121890318"
+            "sha": "420cbfb",
+            "created": "2026-09-02T00:34:09Z",
+            "html_url": "https://github.com/rupret007/StoryLiner/actions/runs/33575865471"
           },
           "release": null,
           "release_sha": null,
@@ -114,8 +114,8 @@
             "repo": "StoryLiner",
             "agent": "none",
             "lease_state": "none",
-            "next": "Karen reviews draft #28; keep unmerged unless Jeff gives exact current...",
-            "sha": "d1b2ee0"
+            "next": "Codex leftover wave may continue other repos; stay off #27",
+            "sha": "420cbfb"
           }
         },
         {
@@ -442,8 +442,8 @@
           "status": "green",
           "chip": "Green",
           "default_branch": "main",
-          "tip_sha": "399b9a2",
-          "tip_date": "2026-09-02T00:04:16Z",
+          "tip_sha": "1963f9a",
+          "tip_date": "2026-09-02T00:33:22Z",
           "open_prs": 0,
           "open_pr_url": null,
           "open_pr_number": null,
@@ -455,9 +455,9 @@
             "name": "QA claim smoke",
             "conclusion": "success",
             "branch": "main",
-            "sha": "399b9a2",
-            "created": "2026-09-02T00:04:20Z",
-            "html_url": "https://github.com/rupret007/bob-ops-dashboard/actions/runs/33573766522"
+            "sha": "1963f9a",
+            "created": "2026-09-02T00:33:26Z",
+            "html_url": "https://github.com/rupret007/bob-ops-dashboard/actions/runs/33575813920"
           },
           "release": null,
           "release_sha": null,
@@ -854,7 +854,7 @@
   ],
   "inaccessible": [],
   "publish_notes": "Public board -- no secrets or customer paths. Private repositories stay high-level; AI Music Vault stays private-content-boundary only.",
-  "refresh_started_ms": 1788309125576,
+  "refresh_started_ms": 1788310055618,
   "agents_source": "file:stale->unknown",
   "agents": [
     {
