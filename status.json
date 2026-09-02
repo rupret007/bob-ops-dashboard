@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-09-01T22:20:30.123942-05:00",
-  "generated_at_display": "Tue Sep 1, 2026 \u00b7 10:20 PM CDT",
+  "generated_at": "2026-09-01T22:35:53.215409-05:00",
+  "generated_at_display": "Tue Sep 1, 2026 \u00b7 10:35 PM CDT",
   "timezone": "America/Chicago",
   "owner": "rupret007",
   "dashboard": "bob-ops-dashboard",
@@ -442,8 +442,8 @@
           "status": "green",
           "chip": "Green",
           "default_branch": "main",
-          "tip_sha": "ac6754d",
-          "tip_date": "2026-09-02T03:04:21Z",
+          "tip_sha": "3b8708a",
+          "tip_date": "2026-09-02T03:20:34Z",
           "open_prs": 0,
           "open_pr_url": null,
           "open_pr_number": null,
@@ -455,9 +455,9 @@
             "name": "QA claim smoke",
             "conclusion": "success",
             "branch": "main",
-            "sha": "ac6754d",
-            "created": "2026-09-02T03:04:24Z",
-            "html_url": "https://github.com/rupret007/bob-ops-dashboard/actions/runs/33585622599"
+            "sha": "3b8708a",
+            "created": "2026-09-02T03:20:38Z",
+            "html_url": "https://github.com/rupret007/bob-ops-dashboard/actions/runs/33586673162"
           },
           "release": null,
           "release_sha": null,
@@ -591,9 +591,9 @@
           },
           "coord": {
             "repo": "AdoptIQ",
-            "agent": "grok",
-            "lease_state": "active",
-            "next": "Cloud draft for Karen leftover+security, or honest no-PR"
+            "agent": "none",
+            "lease_state": "none",
+            "next": "live Cisco remains work-Mac / Jeff; Codex skip until lease clear (now..."
           }
         },
         {
@@ -854,7 +854,7 @@
   ],
   "inaccessible": [],
   "publish_notes": "Public board -- no secrets or customer paths. Private repositories stay high-level; AI Music Vault stays private-content-boundary only.",
-  "refresh_started_ms": 1788319151223,
+  "refresh_started_ms": 1788320078584,
   "agents_source": "file:stale->unknown",
   "agents": [
     {
