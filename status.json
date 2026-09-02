@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-09-01T19:04:11.698677-05:00",
-  "generated_at_display": "Tue Sep 1, 2026 \u00b7 7:04 PM CDT",
+  "generated_at": "2026-09-01T19:33:18.131389-05:00",
+  "generated_at_display": "Tue Sep 1, 2026 \u00b7 7:33 PM CDT",
   "timezone": "America/Chicago",
   "owner": "rupret007",
   "dashboard": "bob-ops-dashboard",
@@ -73,10 +73,10 @@
           "accessible": true,
           "coord": {
             "repo": "webjam",
-            "agent": "none",
-            "lease_state": "none",
-            "next": "Karen reviews exact head; Jeff retains attended merge decision; no...",
-            "sha": "33de2a8"
+            "agent": "codex",
+            "lease_state": "active",
+            "next": "fetch origin, create the named branch at exact base in the clean...",
+            "sha": "61e6341"
           }
         },
         {
@@ -113,9 +113,9 @@
           "coord": {
             "repo": "StoryLiner",
             "agent": "none",
-            "lease_state": "expired",
-            "next": "fetch remote, verify exact base, inspect merged/open PR and current...",
-            "sha": "c5e6db9"
+            "lease_state": "none",
+            "next": "Karen reviews draft #28; keep unmerged unless Jeff gives exact current...",
+            "sha": "d1b2ee0"
           }
         },
         {
@@ -442,8 +442,8 @@
           "status": "green",
           "chip": "Green",
           "default_branch": "main",
-          "tip_sha": "37014cd",
-          "tip_date": "2026-09-01T23:51:23Z",
+          "tip_sha": "399b9a2",
+          "tip_date": "2026-09-02T00:04:16Z",
           "open_prs": 0,
           "open_pr_url": null,
           "open_pr_number": null,
@@ -455,9 +455,9 @@
             "name": "QA claim smoke",
             "conclusion": "success",
             "branch": "main",
-            "sha": "37014cd",
-            "created": "2026-09-01T23:51:27Z",
-            "html_url": "https://github.com/rupret007/bob-ops-dashboard/actions/runs/33572849889"
+            "sha": "399b9a2",
+            "created": "2026-09-02T00:04:20Z",
+            "html_url": "https://github.com/rupret007/bob-ops-dashboard/actions/runs/33573766522"
           },
           "release": null,
           "release_sha": null,
@@ -591,9 +591,9 @@
           },
           "coord": {
             "repo": "AdoptIQ",
-            "agent": "none",
-            "lease_state": "none",
-            "next": "Karen review draft #10; live Cisco remains work-Mac / Jeff"
+            "agent": "grok",
+            "lease_state": "active",
+            "next": "Cloud draft for Karen leftover+security, or honest no-PR"
           }
         },
         {
@@ -854,7 +854,7 @@
   ],
   "inaccessible": [],
   "publish_notes": "Public board -- no secrets or customer paths. Private repositories stay high-level; AI Music Vault stays private-content-boundary only.",
-  "refresh_started_ms": 1788307374576,
+  "refresh_started_ms": 1788309125576,
   "agents_source": "file:stale->unknown",
   "agents": [
     {
