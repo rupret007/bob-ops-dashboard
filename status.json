@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-09-03T14:49:23.349484-05:00",
-  "generated_at_display": "Thu Sep 3, 2026 \u00b7 2:49 PM CDT",
+  "generated_at": "2026-09-03T15:03:18.202251-05:00",
+  "generated_at_display": "Thu Sep 3, 2026 \u00b7 3:03 PM CDT",
   "timezone": "America/Chicago",
   "owner": "rupret007",
   "dashboard": "bob-ops-dashboard",
@@ -73,10 +73,10 @@
           "accessible": true,
           "coord": {
             "repo": "webjam",
-            "agent": "none",
-            "lease_state": "none",
-            "next": "Codex MAY TAKE only new product scope from master while leaving...",
-            "sha": "4bc71b3"
+            "agent": "codex",
+            "lease_state": "active",
+            "next": "Karen leftover+security reviews exact #64 head 348a79e7; Codex keeps...",
+            "sha": "348a79e"
           }
         },
         {
@@ -274,10 +274,13 @@
           "accessible": true,
           "coord": {
             "repo": "rad-dad-show-night",
-            "agent": "codex",
-            "lease_state": "active",
-            "next": "create one clean isolated worktree from exact origin/main; read...",
-            "sha": "1c146b1"
+            "agent": "none",
+            "lease_state": "none",
+            "next": "Karen leftover+security reviews exact #13 head a7592184; keep draft...",
+            "sha": "a759218",
+            "pr": 13,
+            "pr_url": "https://github.com/rupret007/rad-dad-show-night/pull/13",
+            "pr_draft": true
           }
         },
         {
@@ -456,8 +459,8 @@
           "status": "green",
           "chip": "Green",
           "default_branch": "main",
-          "tip_sha": "d48af0e",
-          "tip_date": "2026-09-03T18:59:19Z",
+          "tip_sha": "efd8bdd",
+          "tip_date": "2026-09-03T19:49:28Z",
           "open_prs": 0,
           "open_pr_url": null,
           "open_pr_number": null,
@@ -465,7 +468,14 @@
           "open_pr_stack": [],
           "pr_listing_complete": true,
           "agent_url": null,
-          "ci": null,
+          "ci": {
+            "name": "QA claim smoke",
+            "conclusion": "success",
+            "branch": "main",
+            "sha": "efd8bdd",
+            "created": "2026-09-03T19:49:32Z",
+            "html_url": "https://github.com/rupret007/bob-ops-dashboard/actions/runs/33798684773"
+          },
           "release": null,
           "release_sha": null,
           "release_url": null,
@@ -476,7 +486,7 @@
             "agent": "none",
             "lease_state": "none",
             "next": "lane is FREE. Codex MAY TAKE it from current main. Source-only...",
-            "sha": "d48af0e"
+            "sha": "efd8bdd"
           }
         },
         {
@@ -865,7 +875,7 @@
   ],
   "inaccessible": [],
   "publish_notes": "Public board -- no secrets or customer paths. Private repositories stay high-level; AI Music Vault stays private-content-boundary only.",
-  "refresh_started_ms": 1788464885428,
+  "refresh_started_ms": 1788465721053,
   "agents_source": "file:stale->unknown",
   "agents": [
     {
