@@ -377,7 +377,7 @@ status = {
         project("rad-dad-show-night", notes="Live run sheet. GitHub is source; live Latest is Sites. Green CI is not Latest."),
         project("AI-Music-Vault", high_level_only=True,
                 notes="Private catalog spine for StoryBoard / Show Night. Do not publish catalog content."),
-        project("Turdanoid", status="yellow",
+        project("Turdanoid",
                 live_game_url="https://rupret007.github.io/Turdanoid/hub.html",
                 notes="Public game hub. Fun/replayability pass remains open; green CI is not completion."),
       ],
@@ -412,9 +412,9 @@ status = {
       "id": "cisco",
       "title": "Cisco work",
       "projects": [
-        project("AdoptIQ", status="yellow", high_level_only=True,
+        project("AdoptIQ", high_level_only=True,
                 notes="Private, draft, and offline-only; ready_for_live_cisco=false. No secrets or customer data on this page."),
-        project("TACTrack", status="yellow", high_level_only=True,
+        project("TACTrack", high_level_only=True,
                 notes="Private. High-level only. No live-repo, CI, or PR taps on this board."),
         {
           "name": "AdoptIQ notes", "status": "parked", "chip": "Parked",
@@ -428,7 +428,7 @@ status = {
       "projects": [
         project("Andrea_NanoBot",
                 notes="BB AppleScript send preferred. Private API OFF. Approval-fenced sends only."),
-        project("Bob-the-Bot", status="yellow", high_level_only=True,
+        project("Bob-the-Bot", high_level_only=True,
                 notes=(
                     "Bob application — private bootstrap. Reuses the Andrea messaging engine and "
                     "guarded OpenClaw delegation; no live sends, restarts, credentials, or production actions."

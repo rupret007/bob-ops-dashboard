@@ -299,6 +299,28 @@ class BoardMetaTests(unittest.TestCase):
         )
         self.assertEqual(leftover_media, {"text": "Quiet", "tab": ""})
         self.assertEqual(glance_status([], []), {"text": "Quiet", "tab": ""})
+        honest_live = glance_status(
+            [],
+            [
+                {
+                    "id": "live-shipping",
+                    "projects": [{"name": "Turdanoid", "status": "green"}],
+                },
+                {
+                    "id": "cisco",
+                    "projects": [{"name": "AdoptIQ", "status": "parked"}],
+                },
+                {
+                    "id": "messaging",
+                    "projects": [{"name": "Bob the Bot", "status": "parked"}],
+                },
+                {
+                    "id": "apps-utilities",
+                    "projects": [{"name": "Story Shelf", "status": "yellow"}],
+                },
+            ],
+        )
+        self.assertEqual(honest_live, {"text": "Apps needs a look", "tab": "apps-utilities"})
 
     def test_refresh_standing_is_current_jeff_gates(self):
         blob = Path(__file__).with_name("refresh.sh").read_text()
@@ -966,7 +988,7 @@ class BoardMetaTests(unittest.TestCase):
         self.assertEqual(picked["conclusion"], "failure")
         self.assertEqual(picked["name"], "CI")
 
-    def test_new_tip_without_matching_ci_is_pending_not_last_sha_green(self):
+    def test_new_tip_without_matching_ci_is_missing_not_invented_pending(self):
         runs = [
             {
                 "head_branch": "master",
@@ -978,20 +1000,42 @@ class BoardMetaTests(unittest.TestCase):
             }
         ]
         picked = pick_tip_ci(runs, "master", "a4e95cb")
-        self.assertIsNotNone(picked)
-        assert picked is not None
-        self.assertEqual(picked["conclusion"], "pending")
-        self.assertEqual(picked["sha"], "a4e95cb")
+        self.assertIsNone(picked)
+        # No comparable SHAs: the tag stays. Do not invent CI pending.
+        self.assertEqual(compact_signal({"release": "v0.26.0", "ci": picked}), "v0.26.0")
         self.assertEqual(
-            compact_signal({"release": "v0.26.0", "ci": picked}),
-            "CI pending",
+            compact_signal(
+                {
+                    "release": "v0.26.0",
+                    "release_sha": "4a24c8c",
+                    "tip_sha": "a4e95cb",
+                    "open_prs": 0,
+                    "ci": picked,
+                }
+            ),
+            "Latest != source",
         )
         self.assertEqual(
-            status_from_fetch(
-                {"accessible": True, "open_prs": 0, "ci": picked},
-                jeff_gate=True,
-            ),
-            "yellow",
+            status_from_fetch({"accessible": True, "open_prs": 0, "ci": picked}),
+            "green",
+        )
+        queued = {
+            "head_branch": "master",
+            "status": "queued",
+            "conclusion": "",
+            "name": "WebJam CI",
+            "path": ".github/workflows/ci.yml",
+            "head_sha": "a4e95cbnew",
+            "html_url": "https://github.com/rupret007/webjam/actions/runs/9",
+        }
+        live = pick_tip_ci([queued], "master", "a4e95cb")
+        self.assertIsNotNone(live)
+        assert live is not None
+        self.assertEqual(live["conclusion"], "queued")
+        self.assertEqual(live["html_url"], "https://github.com/rupret007/webjam/actions/runs/9")
+        self.assertEqual(
+            compact_signal({"release": "v0.26.0", "ci": live}),
+            "CI pending",
         )
         self.assertIsNone(pick_tip_ci([], "master", "a4e95cb"))
         self.assertTrue(sha_matches_tip(runs[0], "4a24c8c"))
@@ -1141,12 +1185,14 @@ class BoardMetaTests(unittest.TestCase):
             status_from_fetch({"accessible": True, "open_prs": 0, "ci": picked}),
             "green",
         )
-        # New source tip with zero runs on this SHA still invents pending.
-        still_pending = pick_tip_ci([older_qa], "main", "098cf5c")
-        self.assertIsNotNone(still_pending)
-        assert still_pending is not None
-        self.assertEqual(still_pending["conclusion"], "pending")
-        self.assertIsNone(still_pending.get("html_url"))
+        # Historical QA on another SHA is also missing CI, not invented pending.
+        still_missing = pick_tip_ci([older_qa], "main", "098cf5c")
+        self.assertIsNone(still_missing)
+        self.assertIsNone(compact_signal({"ci": still_missing, "open_prs": 0}))
+        self.assertEqual(
+            status_from_fetch({"accessible": True, "open_prs": 0, "ci": still_missing}),
+            "green",
+        )
 
     def test_leftover_honesty_isolation_is_real_tip_ci(self):
         # Live Show Night 3c9c021: leftover-honesty.yml runs npm ci +
@@ -1621,6 +1667,20 @@ class BoardMetaTests(unittest.TestCase):
         for want in ("che-live-pull", "logic-keys-wavs", "adoptiq-live-cisco"):
             self.assertIn('"id": "' + want + '"', blob)
 
+    def test_refresh_drops_standing_yellow_overrides(self):
+        blob = Path(__file__).with_name("refresh.sh").read_text()
+        for pin in (
+            'project("Turdanoid", status="yellow"',
+            'project("AdoptIQ", status="yellow"',
+            'project("TACTrack", status="yellow"',
+            'project("Bob-the-Bot", status="yellow"',
+        ):
+            self.assertNotIn(pin, blob)
+        self.assertIn('project("Turdanoid",', blob)
+        self.assertIn('project("AdoptIQ", high_level_only=True,', blob)
+        self.assertIn('project("TACTrack", high_level_only=True,', blob)
+        self.assertIn('project("Bob-the-Bot", high_level_only=True,', blob)
+
     def test_linear_pr_stack_requires_one_complete_same_repo_chain(self):
         repo = {"full_name": "rupret007/repo"}
 
@@ -1823,7 +1883,7 @@ class BoardMetaTests(unittest.TestCase):
         self.assertIsNotNone(picked)
         assert picked is not None
         self.assertEqual(picked["html_url"], "https://github.com/rupret007/Andrea_NanoBot/actions/runs/77")
-        pending = pick_tip_ci(
+        missing = pick_tip_ci(
             [
                 {
                     "head_branch": "master",
@@ -1838,10 +1898,7 @@ class BoardMetaTests(unittest.TestCase):
             "master",
             "a4e95cb",
         )
-        self.assertIsNotNone(pending)
-        assert pending is not None
-        self.assertEqual(pending["conclusion"], "pending")
-        self.assertIsNone(pending.get("html_url"))
+        self.assertIsNone(missing)
 
     def test_drop_leftover_verify_fail_closed(self):
         status = {
