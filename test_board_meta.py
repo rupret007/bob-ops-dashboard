@@ -11,6 +11,7 @@ from board_meta import (
     CONTROL_ACTIONS,
     FIRST_CLASS_IDS,
     LATEST_VS_SOURCE_SIGNAL,
+    REQUIRED_PUBLIC_REPOS,
     TYPE_TAB_IDS,
     TYPE_TAB_LABELS,
     age_gate_agents,
@@ -32,6 +33,7 @@ from board_meta import (
     is_type_tab,
     is_quiet_lane,
     is_unexecuted_run,
+    incomplete_public_collections,
     lane_hrefs,
     latest_release_url_from_repo,
     merge_cloud_agents,
@@ -78,6 +80,42 @@ from board_meta import (
 
 
 class BoardMetaTests(unittest.TestCase):
+    def test_required_public_collection_fails_closed(self):
+        complete = [
+            {
+                "full_name": spec,
+                "accessible": True,
+                "collection_complete": True,
+            }
+            for spec in REQUIRED_PUBLIC_REPOS
+        ]
+        self.assertEqual(incomplete_public_collections(complete), [])
+
+        missing = complete[1:]
+        self.assertEqual(
+            incomplete_public_collections(missing),
+            [REQUIRED_PUBLIC_REPOS[0]],
+        )
+
+        inaccessible = [dict(row) for row in complete]
+        inaccessible[2]["accessible"] = False
+        self.assertEqual(
+            incomplete_public_collections(inaccessible),
+            [REQUIRED_PUBLIC_REPOS[2]],
+        )
+
+        partial = [dict(row) for row in complete]
+        partial[-1]["collection_complete"] = False
+        self.assertEqual(
+            incomplete_public_collections(partial),
+            [REQUIRED_PUBLIC_REPOS[-1]],
+        )
+
+        self.assertEqual(
+            incomplete_public_collections(None),
+            list(REQUIRED_PUBLIC_REPOS),
+        )
+
     def test_three_first_class_ids_in_order(self):
         ids = [s["id"] for s in first_class_sections()]
         self.assertEqual(ids, list(FIRST_CLASS_IDS))

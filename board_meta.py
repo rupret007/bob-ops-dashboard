@@ -124,6 +124,22 @@ DECISION_VERBS = frozenset({"APPROVE", "HOLD", "DENY"})
 DECISION_ISSUE_NEW = "https://github.com/rupret007/bob-ops-dashboard/issues/new"
 COORD_HOME = "rupret007/Bob-the-Bot"
 COORD_AGENTS = frozenset({"none", "codex", "grok", "claude"})
+# These rows are intentionally public and drive the board's actionable links.
+# If any one cannot be collected completely, keep the last truthful snapshot
+# instead of repainting a transient API outage as a product-state change.
+REQUIRED_PUBLIC_REPOS = (
+    "rupret007/webjam",
+    "rupret007/StoryLiner",
+    "rupret007/StoryBoard",
+    "rupret007/Rad-Dad-Merch",
+    "rupret007/RadDadSite",
+    "rupret007/Turdanoid",
+    "rupret007/rad-dad-show-night",
+    "rupret007/Andrea_NanoBot",
+    "rupret007/story-corner-shelf",
+    "rupret007/bob-ops-dashboard",
+    "rupret007/Cursor-OpenClaw-Integration",
+)
 COORD_TITLE_RE = re.compile(
     r"^coord:\s*(?:(?P<owner>[A-Za-z0-9_.-]+)/)?(?P<repo>[A-Za-z0-9_.-]+)\s*$",
     re.I,
@@ -167,6 +183,35 @@ RELEASE_TAG_URL_RE = re.compile(
 LATEST_VS_SOURCE_SIGNAL = "Latest != source"
 TURDANOID_HUB_URL = "https://rupret007.github.io/Turdanoid/hub.html"
 CLOUD_AGENT_LIMIT = 3
+
+
+def incomplete_public_collections(
+    rows: Any,
+    required: Any = REQUIRED_PUBLIC_REPOS,
+) -> list[str]:
+    """Return required public repos whose live snapshot is not publishable."""
+    by_full_name: dict[str, dict[str, Any]] = {}
+    if isinstance(rows, list):
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+            full_name = str(row.get("full_name") or "").strip()
+            if full_name:
+                by_full_name[full_name.lower()] = row
+
+    missing: list[str] = []
+    for spec in required or ():
+        full_name = str(spec or "").strip()
+        if not full_name:
+            continue
+        row = by_full_name.get(full_name.lower())
+        if (
+            not row
+            or row.get("accessible") is not True
+            or row.get("collection_complete") is not True
+        ):
+            missing.append(full_name)
+    return missing
 
 
 def drop_leftover_verify(status: Any) -> bool:

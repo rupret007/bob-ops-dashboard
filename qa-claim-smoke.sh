@@ -208,10 +208,12 @@ grep -q 'boardFingerprint' "$REFRESH" || fail "refresh.sh missing boardFingerpri
 grep -q 'ageGateAgents' "$REFRESH" || fail "refresh.sh missing ageGateAgents"
 grep -q 'decisionHref' "$REFRESH" || fail "refresh.sh missing decisionHref"
 grep -q 'pick_tip_ci' "$REFRESH" || fail "refresh.sh missing pick_tip_ci"
+grep -q 'incomplete_public_collections' "$REFRESH" || fail "refresh.sh missing collection outage guard"
 grep -q 'actions/runs?per_page=20&branch=' "$REFRESH" || fail "refresh.sh must fetch default-branch CI only"
 grep -q 'is_ci_noise' "$ROOT/board_meta.py" || fail "board_meta.py missing is_ci_noise"
 grep -q 'refresh-dashboard.yml' "$ROOT/board_meta.py" || fail "refresh publisher must be CI noise by filename"
 grep -q 'refresh bob ops dashboard' "$ROOT/board_meta.py" || fail "refresh publisher must be CI noise by name"
+grep -q 'REQUIRED_PUBLIC_REPOS' "$ROOT/board_meta.py" || fail "board_meta.py missing required public collection policy"
 grep -q 'CI pending' "$REFRESH" || fail "refresh.sh missing CI pending signal"
 grep -q 'AbortController' "$REFRESH" || fail "refresh.sh missing AbortController"
 grep -q 'pollIsNewer' "$REFRESH" || fail "refresh.sh missing pollIsNewer"
@@ -272,6 +274,9 @@ pass "refresh.sh guards present (XSS/races + public board)"
 [[ -f "$ROOT/test_board_meta.py" ]] || fail "missing test_board_meta.py"
 python3 "$ROOT/test_board_meta.py" -v || fail "board_meta unit tests"
 pass "board_meta unit tests"
+[[ -f "$ROOT/test_refresh_outage_guard.py" ]] || fail "missing test_refresh_outage_guard.py"
+python3 "$ROOT/test_refresh_outage_guard.py" -v || fail "refresh outage guard integration test"
+pass "refresh outage guard preserves generated artifacts"
 [[ -f "$ROOT/test_open_decision.js" ]] || fail "missing test_open_decision.js"
 node "$ROOT/test_open_decision.js" "$INDEX" || fail "open-decision smoke"
 pass "open-decision smoke"
@@ -1121,7 +1126,33 @@ if args[:1] == ["api"] and len(args) >= 2:
     elif path == "repos/rupret007/bob-ops-dashboard/pulls?state=open&per_page=20":
         value = []
     else:
-        value = None
+        clean = path.split("?", 1)[0]
+        parts = clean.split("/")
+        if len(parts) == 3 and parts[0] == "repos":
+            owner, repo = parts[1], parts[2]
+            value = {
+                "name": repo,
+                "full_name": f"{owner}/{repo}",
+                "private": False,
+                "html_url": f"https://github.com/{owner}/{repo}",
+                "default_branch": "main",
+            }
+        elif len(parts) >= 4 and parts[0] == "repos" and parts[3] == "commits":
+            value = {
+                "sha": "0123456789abcdef0123456789abcdef01234567",
+                "commit": {
+                    "message": "public fixture tip",
+                    "committer": {"date": "2026-08-26T00:00:00Z"},
+                },
+            }
+        elif len(parts) >= 4 and parts[0] == "repos" and parts[3] == "pulls":
+            value = []
+        elif len(parts) >= 5 and parts[0] == "repos" and parts[3:5] == ["actions", "runs"]:
+            value = {"workflow_runs": []}
+        elif len(parts) >= 4 and parts[0] == "repos" and parts[3] == "releases":
+            value = []
+        else:
+            value = None
     print(json.dumps(value))
     raise SystemExit(0)
 if args[:2] == ["issue", "list"]:
@@ -1265,7 +1296,10 @@ Path(sys.argv[1]).write_text(json.dumps({
 }, indent=2) + "\n")
 print("seeded stale Running agents")
 PY
-  (cd "$E2E" && ./refresh.sh) || fail "refresh.sh e2e failed"
+  (
+    cd "$E2E"
+    PATH="$MOCK_BIN:$PATH" BOB_DASHBOARD_APPLY_DECISIONS=0 ./refresh.sh
+  ) || fail "refresh.sh e2e failed"
   python3 - "$E2E/status.json" "$E2E/index.html" <<'PY' || fail "refresh.sh did not strip verify / public board"
 import json, sys
 from pathlib import Path
