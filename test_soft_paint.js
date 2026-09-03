@@ -60,6 +60,8 @@ function run() {
   if (src.indexOf("function laneHrefs") === -1) fail("laneHrefs missing");
   if (src.indexOf("function signalHref") === -1) fail("signalHref missing");
   if (src.indexOf("function coordSignal") === -1) fail("coordSignal missing");
+  if (src.indexOf("function coordPrUrl") === -1) fail("coordPrUrl missing");
+  if (src.indexOf("function coordReviewSignal") === -1) fail("coordReviewSignal missing");
   if (src.indexOf("function safePullsUrl") === -1) fail("safePullsUrl missing");
   if (src.indexOf("function safeGameUrl") === -1) fail("safeGameUrl missing");
   if (src.indexOf("data-open=\"work\"") === -1 && src.indexOf("data-open=\\\"work\\\"") === -1) {
@@ -173,6 +175,35 @@ function run() {
   if (boardFingerprint(leaseB) === boardFingerprint(leaseExpired)) {
     fail("fingerprint must change when a coordination lease expires");
   }
+  const reviewA = {
+    sections: [{
+      id: "live-shipping",
+      projects: [{
+        name: "StoryBoard",
+        status: "yellow",
+        coord: { agent: "none", lease_state: "none" },
+      }],
+    }],
+  };
+  const reviewB = {
+    sections: [{
+      id: "live-shipping",
+      projects: [{
+        name: "StoryBoard",
+        status: "yellow",
+        coord: {
+          agent: "none",
+          lease_state: "none",
+          pr: 23,
+          pr_url: "https://github.com/rupret007/StoryBoard/pull/23",
+          pr_draft: true,
+        },
+      }],
+    }],
+  };
+  if (boardFingerprint(reviewA) === boardFingerprint(reviewB)) {
+    fail("fingerprint must change when a verified coordination draft appears");
+  }
 
   const parseCheckedAt = eval("(" + extractFn(src, "parseCheckedAt") + ")");
   const cleanPublicUrl = eval("(" + extractFn(src, "cleanPublicUrl") + ")");
@@ -192,11 +223,14 @@ function run() {
   const safeGameUrl = eval(
     "(function (cleanPublicUrl) { return " + extractFn(src, "safeGameUrl") + "; })"
   )(cleanPublicUrl);
+  const coordPrUrl = eval(
+    "(function (safeRepoUrl, safePrUrl) { return " + extractFn(src, "coordPrUrl") + "; })"
+  )(safeRepoUrl, safePrUrl);
   const laneHrefs = eval(
-    "(function (safeAgentUrl, safePrUrl, safeActionsUrl, safeRepoUrl, safeGameUrl) { return " +
+    "(function (safeAgentUrl, safePrUrl, safeActionsUrl, safeRepoUrl, safeGameUrl, coordPrUrl) { return " +
       extractFn(src, "laneHrefs") +
       "; })"
-  )(safeAgentUrl, safePrUrl, safeActionsUrl, safeRepoUrl, safeGameUrl);
+  )(safeAgentUrl, safePrUrl, safeActionsUrl, safeRepoUrl, safeGameUrl, coordPrUrl);
   const pullsUrlFromRepo = eval(
     "(function (safeRepoUrl) { return " + extractFn(src, "pullsUrlFromRepo") + "; })"
   )(safeRepoUrl);
@@ -239,9 +273,13 @@ function run() {
 
   const releaseMatchesTip = eval("(" + extractFn(src, "releaseMatchesTip") + ")");
   const coordSignal = eval("(" + extractFn(src, "coordSignal") + ")");
+  const coordReviewSignal = eval(
+    "(function (coordPrUrl) { return " + extractFn(src, "coordReviewSignal") + "; })"
+  )(coordPrUrl);
   const compactSignal = eval(
-    "(function (releaseMatchesTip, coordSignal) { return " + extractFn(src, "compactSignal") + "; })"
-  )(releaseMatchesTip, coordSignal);
+    "(function (releaseMatchesTip, coordSignal, coordReviewSignal) { return " +
+      extractFn(src, "compactSignal") + "; })"
+  )(releaseMatchesTip, coordSignal, coordReviewSignal);
   if (compactSignal({ release: "v0.26.0", ci: { conclusion: "failure" }, open_prs: 1 }) !== "CI fail") {
     fail("CI fail must beat release + open PR");
   }
@@ -281,6 +319,40 @@ function run() {
     ci: { conclusion: "failure" },
     coord: { agent: "codex", lease_state: "active" },
   }) !== "CI fail") fail("CI fail must beat an active lease");
+  const coordinatedDraft = {
+    repo_url: "https://github.com/rupret007/StoryBoard",
+    open_prs: 0,
+    coord: {
+      agent: "none",
+      lease_state: "none",
+      pr: 23,
+      pr_url: "https://github.com/rupret007/StoryBoard/pull/23",
+      pr_draft: true,
+    },
+  };
+  if (coordPrUrl(coordinatedDraft) !== coordinatedDraft.coord.pr_url) {
+    fail("same-repo coordination PR must validate");
+  }
+  if (coordReviewSignal(coordinatedDraft) !== "Draft #23") {
+    fail("verified coordination draft must become review work");
+  }
+  if (compactSignal(coordinatedDraft) !== "Draft #23") {
+    fail("verified coordination draft must beat release/empty ready count");
+  }
+  if (laneHrefs(coordinatedDraft).title !== coordinatedDraft.coord.pr_url) {
+    fail("verified coordination draft must be the lane tap fallback");
+  }
+  const wrongRepoDraft = Object.assign({}, coordinatedDraft, {
+    coord: Object.assign({}, coordinatedDraft.coord, {
+      pr_url: "https://github.com/rupret007/webjam/pull/23",
+    }),
+  });
+  if (coordPrUrl(wrongRepoDraft) || coordReviewSignal(wrongRepoDraft) || compactSignal(wrongRepoDraft)) {
+    fail("cross-repo coordination PR must fail closed");
+  }
+  if (coordPrUrl(Object.assign({}, coordinatedDraft, { private: true }))) {
+    fail("private coordination PR must stay off the public board");
+  }
   for (const name of ["TACTrack", "CSS Conductor", "AI Music Vault", "AdoptIQ", "Bob the Bot"]) {
     const signal = compactSignal({
       name,
@@ -355,10 +427,13 @@ function run() {
     "(function (safeRepoUrl) { return " + extractFn(src, "latestReleaseUrlFromRepo") + "; })"
   )(safeRepoUrl);
   const signalHref = eval(
-    "(function (compactSignal, laneHrefs, pullsUrlFromRepo, latestReleaseUrlFromRepo, safeReleaseUrl) { return " +
+    "(function (compactSignal, laneHrefs, pullsUrlFromRepo, latestReleaseUrlFromRepo, safeReleaseUrl, coordPrUrl) { return " +
       extractFn(src, "signalHref") +
       "; })"
-  )(compactSignal, laneHrefs, pullsUrlFromRepo, latestReleaseUrlFromRepo, safeReleaseUrl);
+  )(compactSignal, laneHrefs, pullsUrlFromRepo, latestReleaseUrlFromRepo, safeReleaseUrl, coordPrUrl);
+  if (signalHref(coordinatedDraft) !== coordinatedDraft.coord.pr_url) {
+    fail("verified coordination draft signal must tap the exact PR");
+  }
   if (signalHref({
     url: "https://github.com/rupret007/webjam",
     open_prs: 3,

@@ -627,7 +627,11 @@ def lane_hrefs(project: Any) -> dict[str, str]:
     if not repo:
         raw = project.get("url")
         repo = safe_repo_url(raw)
-    pr = safe_pr_url(project.get("open_pr_url")) or safe_pr_url(project.get("url"))
+    pr = (
+        safe_pr_url(project.get("open_pr_url"))
+        or coord_pr_url(project)
+        or safe_pr_url(project.get("url"))
+    )
     agent = safe_agent_url(project.get("agent_url")) or agent_url_from_fields(project)
     game = safe_game_url(project.get("live_game_url"))
     concl = str(ci.get("conclusion") or "").strip().lower()
@@ -668,6 +672,8 @@ def signal_href(project: Any) -> str:
         return ""
     if text.startswith("CI"):
         return hrefs.get("ci") or ""
+    if text.startswith("Draft #") or text.startswith("PR #"):
+        return coord_pr_url(project)
     if text.startswith("Stack ") or text.endswith("-PR stack") or "open PR" in text:
         try:
             n = int(project.get("open_prs") or 0)
@@ -1185,7 +1191,52 @@ def parse_coord_issue(issue: Any, *, now: datetime | None = None) -> dict[str, A
     }
 
 
-def public_coord(parsed: Any, *, private_lane: bool = False) -> dict[str, Any]:
+def _verified_coord_pr(parsed: Any, open_pr_refs: Any) -> dict[str, Any] | None:
+    """Return the exact open PR named by coordination, or None.
+
+    The private coordination issue is a claim, not proof that a PR is still
+    open. Match it against the complete live GitHub PR listing and the exact
+    repository before anything reaches the public board.
+    """
+    if not isinstance(parsed, dict):
+        return None
+    owner = str(parsed.get("owner") or "").strip()
+    repo = str(parsed.get("repo") or "").strip()
+    repo_url = safe_repo_url(f"https://github.com/{owner}/{repo}")
+    if not repo_url:
+        return None
+
+    raw = str(parsed.get("pr") or "").strip()
+    claimed_url = safe_pr_url(raw)
+    if claimed_url:
+        match = re.search(r"/pull/([1-9][0-9]*)$", claimed_url, re.I)
+        number = int(match.group(1)) if match else 0
+    else:
+        numeric = raw[1:] if raw.startswith("#") else raw
+        number = int(numeric) if numeric.isdigit() and int(numeric) > 0 else 0
+        claimed_url = f"{repo_url}/pull/{number}" if number else ""
+    expected_url = f"{repo_url}/pull/{number}" if number else ""
+    if not claimed_url or claimed_url.lower() != expected_url.lower():
+        return None
+
+    for ref in open_pr_refs or []:
+        if not isinstance(ref, dict):
+            continue
+        ref_url = safe_pr_url(ref.get("url") or ref.get("html_url"))
+        ref_number = ref.get("number")
+        if isinstance(ref_number, bool) or not isinstance(ref_number, int):
+            continue
+        if not isinstance(ref.get("draft"), bool):
+            continue
+        if ref_number != number or ref_url.lower() != expected_url.lower():
+            continue
+        return {"pr": number, "pr_url": ref_url, "pr_draft": ref["draft"]}
+    return None
+
+
+def public_coord(
+    parsed: Any, *, private_lane: bool = False, open_pr_refs: Any = None
+) -> dict[str, Any]:
     """Public-safe coordination chip. Private lanes never publish SHA/PR/paths."""
     if not isinstance(parsed, dict):
         return {}
@@ -1206,10 +1257,45 @@ def public_coord(parsed: Any, *, private_lane: bool = False) -> dict[str, Any]:
     sha = str(parsed.get("sha") or "").strip()
     if sha:
         out["sha"] = sha[:7]
-    pr = str(parsed.get("pr") or "").strip().lstrip("#")
-    if pr.isdigit():
-        out["pr"] = int(pr)
+    verified_pr = _verified_coord_pr(parsed, open_pr_refs)
+    if verified_pr:
+        out.update(verified_pr)
     return out
+
+
+def coord_pr_url(project: Any) -> str:
+    """Exact same-repo coordination PR URL, after public-field validation."""
+    if not isinstance(project, dict) or project.get("private"):
+        return ""
+    repo = safe_repo_url(project.get("repo_url") or project.get("html_url"))
+    if not repo:
+        repo = safe_repo_url(project.get("url"))
+    coord = project.get("coord") if isinstance(project.get("coord"), dict) else {}
+    number = coord.get("pr")
+    if isinstance(number, bool) or not isinstance(number, int) or number <= 0:
+        return ""
+    if not isinstance(coord.get("pr_draft"), bool):
+        return ""
+    url = safe_pr_url(coord.get("pr_url"))
+    expected = f"{repo}/pull/{number}" if repo else ""
+    return url if url and url.lower() == expected.lower() else ""
+
+
+def coord_review_signal(project: Any) -> str | None:
+    """Review signal for the one open PR proved by GitHub + coordination."""
+    if not coord_pr_url(project):
+        return None
+    coord = project.get("coord")
+    number = coord["pr"]
+    return ("Draft #" if coord.get("pr_draft") else "PR #") + str(number)
+
+
+def status_with_coord_review(status: Any, project: Any) -> str:
+    """A verified draft is review work; it may only promote green to yellow."""
+    value = str(status or "")
+    if value == "green" and coord_pr_url(project):
+        return "yellow"
+    return value
 
 
 def coord_signal(project: Any) -> str | None:
@@ -1249,6 +1335,9 @@ def compact_signal(project: Any) -> str | None:
     lease = coord_signal(project)
     if lease:
         return lease
+    review = coord_review_signal(project)
+    if review:
+        return review
     stack = _stack_signal(project)
     if stack:
         return stack
@@ -1538,6 +1627,15 @@ def board_content_fingerprint(data: Any) -> str:
             if isinstance(p.get("coord"), dict)
             else None,
             (p.get("coord") or {}).get("lease_state")
+            if isinstance(p.get("coord"), dict)
+            else None,
+            (p.get("coord") or {}).get("pr")
+            if isinstance(p.get("coord"), dict)
+            else None,
+            (p.get("coord") or {}).get("pr_url")
+            if isinstance(p.get("coord"), dict)
+            else None,
+            (p.get("coord") or {}).get("pr_draft")
             if isinstance(p.get("coord"), dict)
             else None,
         ]

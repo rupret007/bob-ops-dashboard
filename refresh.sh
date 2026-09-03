@@ -98,6 +98,22 @@ open_pr_urls = [
     if isinstance(p, dict)
     if (url := safe_pr_url(p.get("html_url") or p.get("url")))
 ]
+open_pr_refs = []
+if prs_complete:
+    for p in prs:
+        if not isinstance(p, dict):
+            continue
+        number = p.get("number")
+        url = safe_pr_url(p.get("html_url") or p.get("url"))
+        expected = f"https://github.com/{full}/pull/{number}"
+        if (
+            isinstance(number, int)
+            and not isinstance(number, bool)
+            and number > 0
+            and url
+            and url.lower() == expected.lower()
+        ):
+            open_pr_refs.append({"number": number, "url": url, "draft": is_draft_pr(p)})
 ready_prs = [p for p in prs if isinstance(p, dict) and not is_draft_pr(p)]
 open_pr = pick_open_pr(ready_prs) if prs_complete else None
 open_pr_stack = detect_linear_pr_stack(ready_prs, branch) if prs_complete else []
@@ -134,6 +150,7 @@ print(json.dumps({
     "open_prs": len(ready_prs) if prs_complete else None,
     "pr_listing_complete": prs_complete,
     "open_pr_urls": open_pr_urls,
+    "open_pr_refs": open_pr_refs,
     "open_pr": open_pr,
     "open_pr_stack": open_pr_stack,
     "agent_url": (clouds[0]["url"] if clouds else None),
@@ -177,6 +194,7 @@ from board_meta import (
     decision_href,
     parse_coord_issue,
     public_coord,
+    status_with_coord_review,
     drop_leftover_verify,
     extract_cloud_agents_from_prs,
     glance_html,
@@ -295,7 +313,10 @@ def project(
         p["coord"] = public_coord(
             parsed_coord,
             private_lane=bool(p.get("private") or high_level_only),
+            open_pr_refs=(r.get("open_pr_refs") if r.get("pr_listing_complete") else []),
         )
+        p["status"] = status_with_coord_review(p.get("status"), p)
+        p["chip"] = CHIP.get(p["status"], p["status"])
     if p.get("private") or high_level_only:
         raw_ci = p.get("ci") if isinstance(p.get("ci"), dict) else {}
         keep_coord = p.get("coord") if isinstance(p.get("coord"), dict) else None
@@ -1487,11 +1508,21 @@ html = f'''<!DOCTYPE html>
     if (!tip || !rel) return null;
     return rel.indexOf(tip) === 0 || tip.indexOf(rel.slice(0, 7)) === 0;
   }}
+  function coordPrUrl(p) {{
+    if (!p || p.private) return "";
+    var repo = safeRepoUrl(p.repo_url || p.html_url) || safeRepoUrl(p.url);
+    var coord = p.coord && typeof p.coord === "object" ? p.coord : {{}};
+    var number = coord.pr;
+    if (!repo || typeof number !== "number" || !isFinite(number) || number <= 0 || Math.floor(number) !== number) return "";
+    if (typeof coord.pr_draft !== "boolean") return "";
+    var url = safePrUrl(coord.pr_url);
+    return url && url.toLowerCase() === (repo + "/pull/" + number).toLowerCase() ? url : "";
+  }}
   function laneHrefs(p) {{
     if (!p) return {{}};
     var ci = p.ci && typeof p.ci === "object" ? p.ci : {{}};
     var repo = safeRepoUrl(p.repo_url || p.html_url) || safeRepoUrl(p.url);
-    var pr = safePrUrl(p.open_pr_url) || safePrUrl(p.url);
+    var pr = safePrUrl(p.open_pr_url) || coordPrUrl(p) || safePrUrl(p.url);
     var agent = safeAgentUrl(p.agent_url) || safeAgentUrl(p.url);
     var game = safeGameUrl(p.live_game_url);
     var concl = String(ci.conclusion || "").toLowerCase();
@@ -1539,6 +1570,11 @@ html = f'''<!DOCTYPE html>
     if (agent === "claude") return "Claude lease";
     return "";
   }}
+  function coordReviewSignal(p) {{
+    if (!coordPrUrl(p)) return "";
+    var coord = p.coord;
+    return (coord.pr_draft ? "Draft #" : "PR #") + coord.pr;
+  }}
   function compactSignal(p) {{
     if (!p) return "";
     if (p.private) return "";
@@ -1555,6 +1591,8 @@ html = f'''<!DOCTYPE html>
     }}
     var lease = coordSignal(p);
     if (lease) return lease;
+    var review = coordReviewSignal(p);
+    if (review) return review;
     var stack = p.open_pr_stack;
     if (Array.isArray(stack) && stack.length >= 2 && p.open_prs === stack.length) {{
       var numbers = [];
@@ -1993,7 +2031,7 @@ html = f'''<!DOCTYPE html>
       if (!p) return [];
       var ci = p.ci && typeof p.ci === "object" ? p.ci : {{}};
       var coord = p.coord && typeof p.coord === "object" ? p.coord : {{}};
-      return [p.name, p.status, p.chip, p.notes, p.open_prs, p.open_pr_url || "", p.open_pr_stack || [], p.release, p.release_sha || "", p.tip_sha, p.agent_url || "", p.live_game_url || "", ci.conclusion || "", ci.sha || "", ci.name || "", ci.html_url || "", coord.agent || "", coord.lease_state || ""];
+      return [p.name, p.status, p.chip, p.notes, p.open_prs, p.open_pr_url || "", p.open_pr_stack || [], p.release, p.release_sha || "", p.tip_sha, p.agent_url || "", p.live_game_url || "", ci.conclusion || "", ci.sha || "", ci.name || "", ci.html_url || "", coord.agent || "", coord.lease_state || "", coord.pr || "", coord.pr_url || "", typeof coord.pr_draft === "boolean" ? coord.pr_draft : ""];
     }}
     var sections = (data.sections || []).map(function (sec) {{
       if (!sec) return [];
@@ -2166,6 +2204,7 @@ html = f'''<!DOCTYPE html>
     if (!signal) return "";
     var hrefs = laneHrefs(p);
     if (String(signal).indexOf("CI") === 0) return hrefs.ci || "";
+    if (String(signal).indexOf("Draft #") === 0 || String(signal).indexOf("PR #") === 0) return coordPrUrl(p);
     if (String(signal).indexOf("Stack ") === 0 || String(signal).slice(-9) === "-PR stack" || String(signal).indexOf("open PR") !== -1) {{
       var n = (typeof p.open_prs === "number" && isFinite(p.open_prs)) ? p.open_prs : 0;
       var pulls = pullsUrlFromRepo(hrefs.repo || "");
