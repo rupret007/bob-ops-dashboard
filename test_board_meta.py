@@ -270,7 +270,8 @@ class BoardMetaTests(unittest.TestCase):
         self.assertEqual(g["text"], "AdoptIQ")
         self.assertEqual(g["tab"], "controls")
         g4 = glance_status(pending * 4, sections)
-        self.assertEqual(g4["text"], "AdoptIQ + 3 more")
+        self.assertEqual(g4["text"], "AdoptIQ")
+        self.assertNotIn("more", g4["text"])
         quiet_live = glance_status([], sections)
         self.assertEqual(quiet_live["text"], "Cisco is red")
         self.assertEqual(quiet_live["tab"], "cisco")
@@ -280,11 +281,23 @@ class BoardMetaTests(unittest.TestCase):
         )
         self.assertEqual(yellow_only["text"], "Live needs a look")
         self.assertEqual(yellow_only["tab"], "live-shipping")
-        jeff = glance_status(
+        leftover_jeff = glance_status(
             [],
             [{"id": "apps-utilities", "projects": [{"name": "Door", "status": "jeff-gate"}]}],
         )
-        self.assertEqual(jeff["text"], "Apps is waiting on Jeff")
+        self.assertEqual(leftover_jeff, {"text": "Quiet", "tab": ""})
+        leftover_media = glance_status(
+            [],
+            [{
+                "id": "private-media",
+                "projects": [{
+                    "name": "Private media",
+                    "status": "jeff-gate",
+                    "chip": "Owner-only",
+                }],
+            }],
+        )
+        self.assertEqual(leftover_media, {"text": "Quiet", "tab": ""})
         self.assertEqual(glance_status([], []), {"text": "Quiet", "tab": ""})
 
     def test_refresh_standing_is_current_jeff_gates(self):
@@ -327,8 +340,10 @@ class BoardMetaTests(unittest.TestCase):
         ]
         g = glance_status(pending, [])
         # sort_pending puts high-risk first; AdoptIQ title is 28 chars so it fits.
-        self.assertEqual(g["text"], "AdoptIQ live Cisco readiness + 2 more")
+        # First screen names that one next action -- never a leftover yes-count.
+        self.assertEqual(g["text"], "AdoptIQ live Cisco readiness")
         self.assertEqual(g["tab"], "controls")
+        self.assertNotIn("more", g["text"])
 
     def test_type_tabs_html_skips_empty_decisions_and_invented_ids(self):
         sections = [
@@ -1892,6 +1907,21 @@ class CoordLeaseTests(unittest.TestCase):
         assert expired is not None
         self.assertEqual(expired["lease_state"], "expired")
         self.assertEqual(expired["agent"], "none")
+        leftover = {
+            "repo_url": "https://github.com/rupret007/webjam",
+            "status": "green",
+            "coord": public_coord(expired, open_pr_refs=refs),
+        }
+        self.assertEqual(leftover["coord"]["pr"], 55)
+        self.assertTrue(leftover["coord"]["pr_draft"])
+        self.assertEqual(coord_pr_url(leftover), "")
+        self.assertIsNone(coord_review_signal(leftover))
+        self.assertIsNone(compact_signal(leftover))
+        self.assertEqual(status_with_coord_review("green", leftover), "green")
+        self.assertEqual(
+            glance_status([], [{"id": "live-shipping", "projects": [leftover]}]),
+            {"text": "Quiet", "tab": ""},
+        )
         self.assertIsNone(parse_coord_issue({"title": "random issue"}))
 
     def test_coord_pr_needs_same_repo_live_open_receipt(self):
@@ -1931,25 +1961,47 @@ class CoordLeaseTests(unittest.TestCase):
         )
 
         public = public_coord(parsed, open_pr_refs=[ref])
-        project = {
+        leftover = {
             "repo_url": "https://github.com/rupret007/StoryBoard",
             "status": "green",
             "coord": public,
+        }
+        self.assertEqual(public["pr"], 23)
+        self.assertTrue(public["pr_draft"])
+        self.assertEqual(coord_pr_url(leftover), "")
+        self.assertIsNone(coord_review_signal(leftover))
+        self.assertIsNone(compact_signal(leftover))
+        self.assertEqual(signal_href(leftover), "")
+        self.assertNotEqual(lane_hrefs(leftover).get("title"), ref["url"])
+        self.assertEqual(status_with_coord_review("green", leftover), "green")
+        self.assertEqual(status_with_coord_review("red", leftover), "red")
+        self.assertEqual(status_with_coord_review("jeff-gate", leftover), "jeff-gate")
+        self.assertEqual(
+            glance_status([], [{"id": "live-shipping", "projects": [leftover]}]),
+            {"text": "Quiet", "tab": ""},
+        )
+
+        ready_ref = dict(ref, draft=False)
+        ready_public = public_coord(parsed, open_pr_refs=[ready_ref])
+        project = {
+            "repo_url": "https://github.com/rupret007/StoryBoard",
+            "status": "green",
+            "coord": ready_public,
         }
         self.assertEqual(
             coord_pr_url(project),
             "https://github.com/rupret007/StoryBoard/pull/23",
         )
-        self.assertEqual(coord_review_signal(project), "Draft #23")
-        self.assertEqual(compact_signal(project), "Draft #23")
-        self.assertEqual(signal_href(project), ref["url"])
-        self.assertEqual(lane_hrefs(project)["title"], ref["url"])
+        self.assertEqual(coord_review_signal(project), "PR #23")
+        self.assertEqual(compact_signal(project), "PR #23")
+        self.assertEqual(signal_href(project), ready_ref["url"])
+        self.assertEqual(lane_hrefs(project)["title"], ready_ref["url"])
         self.assertEqual(status_with_coord_review("green", project), "yellow")
         self.assertEqual(status_with_coord_review("red", project), "red")
         self.assertEqual(status_with_coord_review("jeff-gate", project), "jeff-gate")
 
         active = dict(project)
-        active["coord"] = dict(public, agent="grok", lease_state="active")
+        active["coord"] = dict(ready_public, agent="grok", lease_state="active")
         self.assertEqual(compact_signal(active), "Grok lease")
         self.assertEqual(signal_href(active), "")
         failing = dict(project, ci={"conclusion": "failure"})
@@ -1959,7 +2011,7 @@ class CoordLeaseTests(unittest.TestCase):
         self.assertEqual(coord_pr_url(private), "")
         self.assertIsNone(coord_review_signal(private))
         self.assertEqual(status_with_coord_review("green", private), "green")
-        tampered = dict(project, coord=dict(public, pr_url="https://github.com/rupret007/webjam/pull/23"))
+        tampered = dict(project, coord=dict(ready_public, pr_url="https://github.com/rupret007/webjam/pull/23"))
         self.assertEqual(coord_pr_url(tampered), "")
         self.assertIsNone(coord_review_signal(tampered))
 

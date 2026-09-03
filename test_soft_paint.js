@@ -319,9 +319,10 @@ function run() {
     ci: { conclusion: "failure" },
     coord: { agent: "codex", lease_state: "active" },
   }) !== "CI fail") fail("CI fail must beat an active lease");
-  const coordinatedDraft = {
+  const leftoverDraft = {
     repo_url: "https://github.com/rupret007/StoryBoard",
     open_prs: 0,
+    status: "green",
     coord: {
       agent: "none",
       lease_state: "none",
@@ -330,27 +331,44 @@ function run() {
       pr_draft: true,
     },
   };
-  if (coordPrUrl(coordinatedDraft) !== coordinatedDraft.coord.pr_url) {
-    fail("same-repo coordination PR must validate");
+  if (coordPrUrl(leftoverDraft) || coordReviewSignal(leftoverDraft) || compactSignal(leftoverDraft)) {
+    fail("parked leftover draft must not become public review work");
   }
-  if (coordReviewSignal(coordinatedDraft) !== "Draft #23") {
-    fail("verified coordination draft must become review work");
+  if (laneHrefs(leftoverDraft).title === leftoverDraft.coord.pr_url) {
+    fail("parked leftover draft must not become the lane tap");
   }
-  if (compactSignal(coordinatedDraft) !== "Draft #23") {
-    fail("verified coordination draft must beat release/empty ready count");
+  const coordinatedReady = {
+    repo_url: "https://github.com/rupret007/StoryBoard",
+    open_prs: 0,
+    coord: {
+      agent: "none",
+      lease_state: "none",
+      pr: 23,
+      pr_url: "https://github.com/rupret007/StoryBoard/pull/23",
+      pr_draft: false,
+    },
+  };
+  if (coordPrUrl(coordinatedReady) !== coordinatedReady.coord.pr_url) {
+    fail("same-repo ready coordination PR must validate");
   }
-  if (laneHrefs(coordinatedDraft).title !== coordinatedDraft.coord.pr_url) {
-    fail("verified coordination draft must be the lane tap fallback");
+  if (coordReviewSignal(coordinatedReady) !== "PR #23") {
+    fail("verified ready coordination PR must become review work");
   }
-  const wrongRepoDraft = Object.assign({}, coordinatedDraft, {
-    coord: Object.assign({}, coordinatedDraft.coord, {
+  if (compactSignal(coordinatedReady) !== "PR #23") {
+    fail("verified ready coordination PR must beat release/empty ready count");
+  }
+  if (laneHrefs(coordinatedReady).title !== coordinatedReady.coord.pr_url) {
+    fail("verified ready coordination PR must be the lane tap fallback");
+  }
+  const wrongRepoDraft = Object.assign({}, leftoverDraft, {
+    coord: Object.assign({}, leftoverDraft.coord, {
       pr_url: "https://github.com/rupret007/webjam/pull/23",
     }),
   });
   if (coordPrUrl(wrongRepoDraft) || coordReviewSignal(wrongRepoDraft) || compactSignal(wrongRepoDraft)) {
     fail("cross-repo coordination PR must fail closed");
   }
-  if (coordPrUrl(Object.assign({}, coordinatedDraft, { private: true }))) {
+  if (coordPrUrl(Object.assign({}, coordinatedReady, { private: true }))) {
     fail("private coordination PR must stay off the public board");
   }
   for (const name of ["TACTrack", "CSS Conductor", "AI Music Vault", "AdoptIQ", "Bob the Bot"]) {
@@ -431,8 +449,11 @@ function run() {
       extractFn(src, "signalHref") +
       "; })"
   )(compactSignal, laneHrefs, pullsUrlFromRepo, latestReleaseUrlFromRepo, safeReleaseUrl, coordPrUrl);
-  if (signalHref(coordinatedDraft) !== coordinatedDraft.coord.pr_url) {
-    fail("verified coordination draft signal must tap the exact PR");
+  if (signalHref(leftoverDraft)) {
+    fail("parked leftover draft signal must stay dead text");
+  }
+  if (signalHref(coordinatedReady) !== coordinatedReady.coord.pr_url) {
+    fail("verified ready coordination PR signal must tap the exact PR");
   }
   if (signalHref({
     url: "https://github.com/rupret007/webjam",
@@ -652,8 +673,18 @@ function run() {
     { id: "logic-keys-wavs", title: "Logic keys and WAVs", risk: "low" },
     { id: "adoptiq-live-cisco", title: "AdoptIQ live Cisco readiness", risk: "high" },
   ], []);
-  if (g3.text !== "AdoptIQ live Cisco readiness + 2 more" || g3.tab !== "controls") {
-    fail("three-gate glance must name the high-risk title: " + g3.text);
+  if (g3.text !== "AdoptIQ live Cisco readiness" || g3.tab !== "controls") {
+    fail("three-gate glance must name the one next action: " + g3.text);
+  }
+  if (/\+\s*\d+\s*more/.test(g3.text)) {
+    fail("first-screen glance must not be a leftover yes-count");
+  }
+  const leftoverJeff = glanceStatus([], [{
+    id: "apps-utilities",
+    projects: [{ name: "Door", status: "jeff-gate" }],
+  }]);
+  if (leftoverJeff.text !== "Quiet" || leftoverJeff.tab !== "") {
+    fail("leftover lane Jeff-gate must not look like an active Jeff yes: " + leftoverJeff.text);
   }
   const live = glanceStatus([], [{ id: "live-shipping", projects: [{ status: "yellow" }] }]);
   if (live.text !== "Live needs a look" || live.tab !== "live-shipping") {
