@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-09-03T13:14:56.803898-05:00",
-  "generated_at_display": "Thu Sep 3, 2026 \u00b7 1:14 PM CDT",
+  "generated_at": "2026-09-03T13:34:01.780788-05:00",
+  "generated_at_display": "Thu Sep 3, 2026 \u00b7 1:34 PM CDT",
   "timezone": "America/Chicago",
   "owner": "rupret007",
   "dashboard": "bob-ops-dashboard",
@@ -112,10 +112,13 @@
           "accessible": true,
           "coord": {
             "repo": "StoryLiner",
-            "agent": "codex",
-            "lease_state": "active",
-            "next": "inspect AGENTS, README/docs, parked scope, history, CI, product...",
-            "sha": "6c1a026"
+            "agent": "none",
+            "lease_state": "none",
+            "next": "Karen product/security review of draft #33; dependency-major audit...",
+            "sha": "6c1a026",
+            "pr": 33,
+            "pr_url": "https://github.com/rupret007/StoryLiner/pull/33",
+            "pr_draft": true
           }
         },
         {
@@ -406,9 +409,9 @@
           "ci": {},
           "coord": {
             "repo": "barker",
-            "agent": "none",
-            "lease_state": "none",
-            "next": "Codex MAY TAKE a new isolated product lane from main; no live sends"
+            "agent": "codex",
+            "lease_state": "active",
+            "next": "use one new isolated clone; read AGENTS/README/docs/history/CI and run..."
           }
         },
         {
@@ -462,8 +465,8 @@
           "status": "green",
           "chip": "Green",
           "default_branch": "main",
-          "tip_sha": "19e96dd",
-          "tip_date": "2026-09-03T17:53:30Z",
+          "tip_sha": "c080eb9",
+          "tip_date": "2026-09-03T18:15:01Z",
           "open_prs": 0,
           "open_pr_url": null,
           "open_pr_number": null,
@@ -475,9 +478,9 @@
             "name": "QA claim smoke",
             "conclusion": "success",
             "branch": "main",
-            "sha": "19e96dd",
-            "created": "2026-09-03T17:53:34Z",
-            "html_url": "https://github.com/rupret007/bob-ops-dashboard/actions/runs/33787237924"
+            "sha": "c080eb9",
+            "created": "2026-09-03T18:15:06Z",
+            "html_url": "https://github.com/rupret007/bob-ops-dashboard/actions/runs/33789378153"
           },
           "release": null,
           "release_sha": null,
@@ -878,7 +881,7 @@
   ],
   "inaccessible": [],
   "publish_notes": "Public board -- no secrets or customer paths. Private repositories stay high-level; AI Music Vault stays private-content-boundary only.",
-  "refresh_started_ms": 1788459219231,
+  "refresh_started_ms": 1788460363204,
   "agents_source": "file:stale->unknown",
   "agents": [
     {
