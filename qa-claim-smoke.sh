@@ -595,7 +595,7 @@ if "Music stack" not in meta_text or stack_card not in meta_text:
     raise SystemExit("How-this-board must keep a phone-visible Music stack card")
 if len(stack_card) > 88:
     raise SystemExit("Music stack How-this-board card exceeds the 88-char phone clip")
-type_tabs_card = "Each GitHub type is its own tab. First screen is status plus tabs, not the wall."
+type_tabs_card = "Each GitHub type is its own tab. First screen is the next action, not Decisions chrome."
 if "Type tabs" not in meta_text or type_tabs_card not in meta_text:
     raise SystemExit("How-this-board must keep a phone-visible Type tabs card")
 if len(type_tabs_card) > 88:
@@ -1445,6 +1445,8 @@ if 'id="board-glance"' not in html:
     raise SystemExit("first-screen short status missing")
 glance_at = html.find('id="board-glance"')
 glance_tag = html[glance_at:html.find("</button>", glance_at) + 9] if glance_at >= 0 else ""
+if 'aria-label="Next action"' not in glance_tag:
+    raise SystemExit("first-screen glance must be the named next action")
 if re.search(r"\+\s*\d+\s*more", glance_tag):
     raise SystemExit("first-screen glance must be one next action, not a leftover yes-count")
 if "waiting on Jeff" in glance_tag:
@@ -1473,10 +1475,26 @@ for sid in ("live-shipping", "apps-utilities", "cisco", "parked"):
 nav = html.split('id="type-tabs"', 1)[-1].split("</nav>", 1)[0] if 'id="type-tabs"' in html else ""
 if 'aria-selected="true"' in nav:
     raise SystemExit("first paint must not open a type tab")
+if 'id="tab-controls"' in nav or ">Decisions<" in nav:
+    raise SystemExit("Decisions must not be a first-screen project-type tab")
 if "is-unknown-mac" not in html:
     raise SystemExit("unknown Mac probes must collapse on the Actions box")
 if "Agents unknown" not in html:
-    raise SystemExit("first screen must say Agents unknown, not invent Running")
+    raise SystemExit("unknown Mac probes must stay honest in the document, not invent Running")
+if "probe-agents-status.sh" in html.split("<script>", 1)[0]:
+    raise SystemExit("local probe helper name leaked onto the public page")
+if "fromGlance" in html:
+    raise SystemExit("glance must toggle like a type tab")
+if "body.tab-home footer" not in html:
+    raise SystemExit("home screen must hide the repo footer")
+if "body.tab-home .live-stamp .when" not in html:
+    raise SystemExit("home screen must hide the long timestamp")
+if "is-unknown-mac .agents-unknown" in html:
+    raise SystemExit("Agents unknown must not become first-screen chrome")
+if ".agents-strip.is-unknown-only" not in html:
+    raise SystemExit("unknown-only agent chrome must collapse")
+if "font-size:1.55rem" not in html:
+    raise SystemExit("next action must be the first-screen hero")
 if html.count('data-probe="mac"') < 3:
     raise SystemExit("unknown compact must keep Codex/Cursor/Claude pills in the DOM")
 pre_how = html.split('<details class="how-board">', 1)[0]

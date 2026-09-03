@@ -694,6 +694,31 @@ function run() {
   if (quiet.text !== "Quiet" || quiet.tab !== "") fail("all-green glance must stay Quiet");
   if (html.indexOf('id="type-tabs"') === -1) fail("type tab bar missing from first paint");
   if (html.indexOf('id="board-glance"') === -1) fail("short status missing from first paint");
+  if (html.indexOf('aria-label="Next action"') === -1) fail("glance must be the named next action");
+  const typeTabIdsFor = eval(
+    "(function () { var TYPE_TAB_IDS = ['controls','live-shipping','apps-utilities'," +
+      "'cisco','messaging','private-media','parked']; return " +
+      extractFn(src, "typeTabIdsFor") + "; })()"
+  );
+  const tabIds = typeTabIdsFor(
+    [{ id: "live-shipping" }, { id: "apps-utilities" }, { id: "cisco" }, { id: "parked" }],
+    [{ id: "x" }]
+  );
+  if (tabIds.indexOf("controls") !== -1) fail("Decisions must not be a project-type tab");
+  if (tabIds[0] !== "live-shipping") fail("first type tab must stay Live");
+  const nav = html.split('id="type-tabs"')[1].split("</nav>")[0] || "";
+  if (nav.indexOf("tab-controls") !== -1 || nav.indexOf(">Decisions<") !== -1) {
+    fail("first-screen tab bar must not include Decisions chrome");
+  }
+  if (src.indexOf("fromGlance") !== -1) fail("glance must toggle like a type tab, not a one-way door");
+  if (src.indexOf("function publicProbeDetail") === -1) fail("publicProbeDetail missing");
+  const publicProbeDetail = eval("(" + extractFn(src, "publicProbeDetail") + ")");
+  if (publicProbeDetail("/Users/owner/private/agents-status.json") !== "No live Mac probe") {
+    fail("public probe title must drop local paths");
+  }
+  if (publicProbeDetail("run probe-agents-status.sh") !== "No live Mac probe") {
+    fail("public probe title must drop local helper names");
+  }
   function tagFor(id) {
     var mark = 'id="' + id + '"';
     var at = html.indexOf("<section " + mark);
@@ -723,6 +748,11 @@ function run() {
   if (html.indexOf("is-unknown-mac") === -1) fail("first paint must collapse unknown Mac pills");
   if (html.indexOf("#panel-status:empty") === -1) fail("empty panel-status must not reserve first-screen space");
   if (html.indexOf("body.tab-home section.block.foot") === -1) fail("home screen must hide footer chrome");
+  if (html.indexOf("body.tab-home footer") === -1) fail("home screen must hide the repo footer");
+  if (html.indexOf("body.tab-home .live-stamp .when") === -1) fail("home screen must hide the long timestamp");
+  if (html.indexOf("is-unknown-mac .agents-unknown") !== -1) fail("Agents unknown must not become first-screen chrome");
+  if (html.indexOf(".agents-strip.is-unknown-only") === -1) fail("unknown-only agent chrome must collapse");
+  if (html.indexOf("font-size:1.55rem") === -1) fail("next action must be the first-screen hero");
   if (html.indexOf("body.tab-home .agent-links") === -1) fail("home screen must not stack Open agent buttons");
   if (html.indexOf('class="tab-home"') === -1) fail("first paint must start on the home tab screen");
   const preHow = html.split('<details class="how-board">')[0] || "";

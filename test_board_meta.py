@@ -43,6 +43,7 @@ from board_meta import (
     pick_tip_ci,
     presentation,
     prune_closed_parked_prs,
+    public_probe_detail,
     public_high_level_ci,
     pulls_url_from_repo,
     resolve_agents,
@@ -388,10 +389,7 @@ class BoardMetaTests(unittest.TestCase):
                 "parked",
             ],
         )
-        self.assertEqual(
-            type_tab_ids_for(sections, [{"id": "x"}])[0],
-            "controls",
-        )
+        self.assertNotIn("controls", type_tab_ids_for(sections, [{"id": "x"}]))
         html = type_tabs_html(sections, [{"id": "x"}])
         self.assertIn('id="type-tabs"', html)
         self.assertIn('data-tab="live-shipping"', html)
@@ -400,11 +398,15 @@ class BoardMetaTests(unittest.TestCase):
         self.assertIn(">Cisco<", html)
         self.assertIn(">Bob<", html)
         self.assertNotIn("music", html)
+        self.assertNotIn('id="tab-controls"', html)
+        self.assertNotIn(">Decisions<", html)
         self.assertNotIn("data-tab=\"abilities\"", html)
         self.assertNotIn('aria-selected="true"', html)
         glance = glance_html([{"id": "x"}], sections)
         self.assertIn("Pending", glance)
         self.assertIn('data-tab="controls"', glance)
+        self.assertIn('aria-label="Next action"', glance)
+        self.assertIn('aria-controls="controls"', glance)
         self.assertNotIn("<", glance_status([{"id": "x"}], sections)["text"])
 
     def test_unknown_mac_probes_collapse_to_one_honest_line(self):
@@ -426,6 +428,12 @@ class BoardMetaTests(unittest.TestCase):
         self.assertIn("Agents unknown", html)
         self.assertNotIn("Running", html)
         self.assertIn("No Mac probe in this clone", html)
+        self.assertNotIn("probe-agents-status.sh", unknown_mac_probes_html())
+        self.assertNotIn("/Users", unknown_mac_probes_html([
+            {"id": "codex", "state": "unknown", "detail": "/Users/owner/private/agents-status.json"},
+        ]))
+        self.assertEqual(public_probe_detail("/Users/owner/secret"), "No live Mac probe")
+        self.assertEqual(public_probe_detail("bearer token xyz"), "No live Mac probe")
         live = [
             {"id": "codex", "state": "running", "detail": "PID 2"},
             {"id": "cursor", "state": "unknown"},
@@ -1370,6 +1378,20 @@ class BoardMetaTests(unittest.TestCase):
         assert parsed is not None
         self.assertEqual([a["id"] for a in parsed], ["codex", "cursor", "claude"])
         self.assertEqual(parsed[0]["detail"], "detail redacted")
+        path_parsed = parse_agents_blob(
+            {
+                "agents": [
+                    {
+                        "id": "codex",
+                        "state": "unknown",
+                        "detail": "/Users/owner/private/agents-status.json",
+                    }
+                ]
+            }
+        )
+        self.assertIsNotNone(path_parsed)
+        assert path_parsed is not None
+        self.assertEqual(path_parsed[0]["detail"], "detail redacted")
         self.assertEqual(parsed[0]["state"], "idle")
         self.assertEqual(parsed[1]["state"], "unknown")
         self.assertIsNone(parse_agents_blob("not-json"))
