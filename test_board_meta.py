@@ -70,6 +70,9 @@ from board_meta import (
     parse_coord_issue,
     public_coord,
     coord_signal,
+    coord_pr_url,
+    coord_review_signal,
+    status_with_coord_review,
 )
 
 
@@ -1867,10 +1870,19 @@ class CoordLeaseTests(unittest.TestCase):
         self.assertEqual(parsed["repo"], "webjam")
         self.assertEqual(parsed["agent"], "codex")
         self.assertEqual(parsed["lease_state"], "active")
-        public = public_coord(parsed)
+        refs = [{
+            "number": 55,
+            "url": "https://github.com/rupret007/webjam/pull/55",
+            "draft": True,
+        }]
+        public = public_coord(parsed, open_pr_refs=refs)
         self.assertEqual(public["pr"], 55)
+        self.assertEqual(public["pr_url"], "https://github.com/rupret007/webjam/pull/55")
+        self.assertTrue(public["pr_draft"])
         self.assertEqual(public["sha"], "df69d20")
-        self.assertNotIn("sha", public_coord(parsed, private_lane=True))
+        private = public_coord(parsed, private_lane=True, open_pr_refs=refs)
+        self.assertNotIn("sha", private)
+        self.assertNotIn("pr", private)
         self.assertEqual(coord_signal({"coord": public}), "Codex lease")
         self.assertEqual(compact_signal({"coord": public, "open_prs": 3}), "Codex lease")
         self.assertEqual(compact_signal({"ci": {"conclusion": "failure"}, "coord": public}), "CI fail")
@@ -1881,6 +1893,75 @@ class CoordLeaseTests(unittest.TestCase):
         self.assertEqual(expired["lease_state"], "expired")
         self.assertEqual(expired["agent"], "none")
         self.assertIsNone(parse_coord_issue({"title": "random issue"}))
+
+    def test_coord_pr_needs_same_repo_live_open_receipt(self):
+        parsed = {
+            "owner": "rupret007",
+            "repo": "StoryBoard",
+            "agent": "none",
+            "lease_state": "none",
+            "sha": "abc1234",
+            "pr": "https://github.com/rupret007/StoryBoard/pull/23",
+        }
+        ref = {
+            "number": 23,
+            "url": "https://github.com/rupret007/StoryBoard/pull/23",
+            "draft": True,
+        }
+        self.assertNotIn("pr", public_coord(parsed))
+        self.assertNotIn("pr", public_coord(parsed, open_pr_refs=[]))
+        self.assertNotIn(
+            "pr",
+            public_coord(
+                parsed,
+                open_pr_refs=[dict(ref, url="https://github.com/rupret007/webjam/pull/23")],
+            ),
+        )
+        cross_repo_claim = dict(
+            parsed, pr="https://github.com/rupret007/webjam/pull/23"
+        )
+        self.assertNotIn("pr", public_coord(cross_repo_claim, open_pr_refs=[ref]))
+        self.assertNotIn(
+            "pr",
+            public_coord(parsed, open_pr_refs=[dict(ref, number=24)]),
+        )
+        self.assertNotIn(
+            "pr",
+            public_coord(parsed, open_pr_refs=[dict(ref, draft="true")]),
+        )
+
+        public = public_coord(parsed, open_pr_refs=[ref])
+        project = {
+            "repo_url": "https://github.com/rupret007/StoryBoard",
+            "status": "green",
+            "coord": public,
+        }
+        self.assertEqual(
+            coord_pr_url(project),
+            "https://github.com/rupret007/StoryBoard/pull/23",
+        )
+        self.assertEqual(coord_review_signal(project), "Draft #23")
+        self.assertEqual(compact_signal(project), "Draft #23")
+        self.assertEqual(signal_href(project), ref["url"])
+        self.assertEqual(lane_hrefs(project)["title"], ref["url"])
+        self.assertEqual(status_with_coord_review("green", project), "yellow")
+        self.assertEqual(status_with_coord_review("red", project), "red")
+        self.assertEqual(status_with_coord_review("jeff-gate", project), "jeff-gate")
+
+        active = dict(project)
+        active["coord"] = dict(public, agent="grok", lease_state="active")
+        self.assertEqual(compact_signal(active), "Grok lease")
+        self.assertEqual(signal_href(active), "")
+        failing = dict(project, ci={"conclusion": "failure"})
+        self.assertEqual(compact_signal(failing), "CI fail")
+
+        private = dict(project, private=True)
+        self.assertEqual(coord_pr_url(private), "")
+        self.assertIsNone(coord_review_signal(private))
+        self.assertEqual(status_with_coord_review("green", private), "green")
+        tampered = dict(project, coord=dict(public, pr_url="https://github.com/rupret007/webjam/pull/23"))
+        self.assertEqual(coord_pr_url(tampered), "")
+        self.assertIsNone(coord_review_signal(tampered))
 
 
 if __name__ == "__main__":
