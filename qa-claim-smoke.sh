@@ -319,12 +319,24 @@ turdanoid = [p for p in projects if p.get("name") == "Turdanoid"]
 if len(turdanoid) != 1:
     raise SystemExit("dashboard must expose exactly one Turdanoid lane")
 turdanoid = turdanoid[0]
-if turdanoid.get("status") not in {"yellow", "red"}:
-    raise SystemExit("Turdanoid gameplay-improvement lane must remain visibly open")
+if turdanoid.get("status") not in {"green", "yellow", "red", "parked"}:
+    raise SystemExit("Turdanoid must keep a live ops color")
 if turdanoid.get("live_game_url") != "https://rupret007.github.io/Turdanoid/hub.html":
     raise SystemExit("Turdanoid lane missing the allowlisted public game hub")
 if "remains open" not in str(turdanoid.get("notes") or "").lower():
     raise SystemExit("Turdanoid lane must not claim the gameplay pass is complete")
+ci = turdanoid.get("ci") if isinstance(turdanoid.get("ci"), dict) else {}
+try:
+    open_prs = int(turdanoid.get("open_prs") or 0)
+except (TypeError, ValueError):
+    open_prs = 0
+if (
+    turdanoid.get("accessible")
+    and str(ci.get("conclusion") or "").strip().lower() == "success"
+    and open_prs == 0
+    and turdanoid.get("status") != "green"
+):
+    raise SystemExit("Turdanoid green tip with no open PRs must not stay standing yellow")
 bob_rows = [
     (str(sec.get("id") or ""), p)
     for sec in (st.get("sections") or [])
@@ -335,8 +347,13 @@ bob_rows = [
 if len(bob_rows) != 1 or bob_rows[0][0] != "messaging":
     raise SystemExit("Bob the Bot must be one distinct messaging application lane")
 bob = bob_rows[0][1]
-if not bob.get("private") or bob.get("status") not in {"yellow", "red"}:
-    raise SystemExit("Bob the Bot must remain a private active-bootstrap lane")
+if not bob.get("private"):
+    raise SystemExit("Bob the Bot must remain a private high-level lane")
+if bob.get("accessible"):
+    if bob.get("status") not in {"yellow", "red"}:
+        raise SystemExit("accessible Bob bootstrap stays an active high-level lane")
+elif bob.get("status") != "parked":
+    raise SystemExit("inaccessible Bob must park, not fake yellow")
 expected_bob_note = (
     "Bob application — private bootstrap. Reuses the Andrea messaging engine and "
     "guarded OpenClaw delegation; no live sends, restarts, credentials, or production actions."
@@ -568,6 +585,10 @@ if "Vault, StoryBoard, Show Night, and WebJam work together as one music stack" 
     raise SystemExit("README must say the music stack works together")
 if "Latest != source" not in text:
     raise SystemExit("README must say Latest != source is a tap")
+if "standing notes and missing CI never invent yellow" not in text:
+    raise SystemExit("README must say standing notes never invent yellow or CI pending")
+if "not invented **CI pending**" not in text and "not invented CI pending" not in text:
+    raise SystemExit("README must say a new tip without a run is missing CI, not invented pending")
 meta_text = (refresh.parent / "board_meta.py").read_text()
 stack_card = "Vault, StoryBoard, Show Night, and WebJam work together. Latest != source."
 if "Music stack" not in meta_text or stack_card not in meta_text:
@@ -595,10 +616,18 @@ if missing_stack_notes:
 high_level_source_pins = (
     'project("AI-Music-Vault", high_level_only=True,',
     'project("CSS_Conductor", high_level_only=True,',
-    'project("AdoptIQ", status="yellow", high_level_only=True,',
-    'project("TACTrack", status="yellow", high_level_only=True,',
-    'project("Bob-the-Bot", status="yellow", high_level_only=True,',
+    'project("AdoptIQ", high_level_only=True,',
+    'project("TACTrack", high_level_only=True,',
+    'project("Bob-the-Bot", high_level_only=True,',
 )
+standing_yellow = (
+    'project("Turdanoid", status="yellow"',
+    'project("AdoptIQ", status="yellow"',
+    'project("TACTrack", status="yellow"',
+    'project("Bob-the-Bot", status="yellow"',
+)
+if any(pin in refresh_text for pin in standing_yellow):
+    raise SystemExit("standing notes must not hardcode yellow lane color")
 missing_pins = [pin for pin in high_level_source_pins if pin not in refresh_text]
 if missing_pins:
     raise SystemExit(

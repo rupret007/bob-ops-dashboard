@@ -1024,10 +1024,10 @@ def pick_tip_ci(runs: Any, branch: Any, tip_sha: Any = None) -> dict[str, Any] |
 
     Pages / docs deploys and this board's scheduled refresh publisher are
     noise. A skipped bump-version helper must not hide a failing ``CI``
-    workflow on the same SHA. When the repo has test CI but none yet for
-    this tip, return ``pending`` so a release tag cannot claim the new
-    commit is green. A tip that already ran only noise / unexecuted jobs
-    is publisher-only: missing CI, not invented pending.
+    workflow on the same SHA. A live queued / unstarted / in-progress run
+    on this tip still paints pending or running and keeps its Actions URL.
+    A tip with no matching product test -- including publisher-only noise
+    or historical CI on another SHA -- is missing CI, not invented pending.
     """
     want = str(branch or "")
     if not want:
@@ -1050,19 +1050,9 @@ def pick_tip_ci(runs: Any, branch: Any, tip_sha: Any = None) -> dict[str, Any] |
     if tip:
         scoped = [run for run in real if sha_matches_tip(run, tip)]
         if not scoped:
-            tip_runs = [run for run in branch_runs if sha_matches_tip(run, tip)]
-            if tip_runs:
-                # This tip already published Pages / refresh / empty-runner
-                # noise. That is unexecuted, not a queued product test.
-                return None
-            return {
-                "name": real[0].get("name") or "CI",
-                "conclusion": "pending",
-                "branch": want,
-                "sha": tip[:7],
-                "created": None,
-                "html_url": None,
-            }
+            # No product test on this tip. Do not invent CI pending from
+            # older SHA success or from Pages / refresh / empty-runner noise.
+            return None
         pool = _latest_per_workflow(scoped)
     else:
         newest = _run_sha7(real[0])
@@ -1080,11 +1070,10 @@ def status_from_fetch(
 ) -> str:
     """Lane status from live gh. Missing CI is OK (green). Inaccessible is parked.
 
-    Parked override still wins (ignored PRs stay parked). Live CI fail,
-    in-flight, or pending-for-this-tip beat jeff_gate so WebJam cannot hide
-    Red behind Jeff-gate + a release tag. Empty ``ci: {}`` stays green
-    (Show Night). Cisco high-level notes keep an explicit yellow override
-    when inaccessible.
+    Parked override still wins (ignored PRs stay parked). Live CI fail or
+    in-flight beat jeff_gate so WebJam cannot hide Red behind Jeff-gate +
+    a release tag. Empty ``ci: {}`` stays green (missing CI). Inaccessible
+    high-level Cisco / Bob rows park; they are not standing yellow.
 
     Private / high-level lanes never paint hosted CI as Red. The public board
     cannot inspect a private job, so a hosted conclusion cannot diagnose a
