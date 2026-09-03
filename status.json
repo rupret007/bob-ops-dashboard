@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-09-03T12:53:26.586629-05:00",
-  "generated_at_display": "Thu Sep 3, 2026 \u00b7 12:53 PM CDT",
+  "generated_at": "2026-09-03T13:14:56.803898-05:00",
+  "generated_at_display": "Thu Sep 3, 2026 \u00b7 1:14 PM CDT",
   "timezone": "America/Chicago",
   "owner": "rupret007",
   "dashboard": "bob-ops-dashboard",
@@ -112,9 +112,9 @@
           "accessible": true,
           "coord": {
             "repo": "StoryLiner",
-            "agent": "none",
-            "lease_state": "none",
-            "next": "Codex MAY TAKE a new isolated product lane from main while leaving...",
+            "agent": "codex",
+            "lease_state": "active",
+            "next": "inspect AGENTS, README/docs, parked scope, history, CI, product...",
             "sha": "6c1a026"
           }
         },
@@ -153,8 +153,8 @@
             "repo": "StoryBoard",
             "agent": "codex",
             "lease_state": "active",
-            "next": "wait for hosted verify SUCCESS on exact head 12f2615c, then Karen...",
-            "sha": "12f2615",
+            "next": "Karen leftover+security reviews exact #27 head e4636f53; stay draft...",
+            "sha": "e4636f5",
             "pr": 27,
             "pr_url": "https://github.com/rupret007/StoryBoard/pull/27",
             "pr_draft": true
@@ -334,9 +334,9 @@
           "live_game_url": "https://rupret007.github.io/Turdanoid/hub.html",
           "coord": {
             "repo": "Turdanoid",
-            "agent": "none",
-            "lease_state": "none",
-            "next": "Karen leftover+security reviews draft #18; Jeff owns any merge decision",
+            "agent": "codex",
+            "lease_state": "active",
+            "next": "Karen leftover+security reviews exact #18 head cdc0aaf0; Jeff owns any...",
             "sha": "cdc0aaf",
             "pr": 18,
             "pr_url": "https://github.com/rupret007/Turdanoid/pull/18",
@@ -444,10 +444,13 @@
           "accessible": true,
           "coord": {
             "repo": "Cursor-OpenClaw-Integration",
-            "agent": "codex",
-            "lease_state": "active",
-            "next": "inspect AGENTS, README/docs, history, CI, architecture, tests, and...",
-            "sha": "5d7d0da"
+            "agent": "none",
+            "lease_state": "none",
+            "next": "Karen leftover+security reviews draft #14; Jeff owns any...",
+            "sha": "7b0677e",
+            "pr": 14,
+            "pr_url": "https://github.com/rupret007/Cursor-OpenClaw-Integration/pull/14",
+            "pr_draft": true
           }
         },
         {
@@ -459,8 +462,8 @@
           "status": "green",
           "chip": "Green",
           "default_branch": "main",
-          "tip_sha": "bcaddb2",
-          "tip_date": "2026-09-03T17:47:05Z",
+          "tip_sha": "19e96dd",
+          "tip_date": "2026-09-03T17:53:30Z",
           "open_prs": 0,
           "open_pr_url": null,
           "open_pr_number": null,
@@ -468,7 +471,14 @@
           "open_pr_stack": [],
           "pr_listing_complete": true,
           "agent_url": null,
-          "ci": null,
+          "ci": {
+            "name": "QA claim smoke",
+            "conclusion": "success",
+            "branch": "main",
+            "sha": "19e96dd",
+            "created": "2026-09-03T17:53:34Z",
+            "html_url": "https://github.com/rupret007/bob-ops-dashboard/actions/runs/33787237924"
+          },
           "release": null,
           "release_sha": null,
           "release_url": null,
@@ -479,7 +489,7 @@
             "agent": "none",
             "lease_state": "none",
             "next": "lane is FREE. Codex MAY TAKE it from current main. Source-only...",
-            "sha": "d6ae9d8"
+            "sha": "19e96dd"
           }
         },
         {
@@ -613,7 +623,7 @@
           "notes": "Private. High-level only. No live-repo, CI, or PR taps on this board.",
           "accessible": true,
           "ci": {
-            "conclusion": "in_progress"
+            "conclusion": "success"
           },
           "coord": {
             "repo": "TACTrack",
@@ -868,7 +878,7 @@
   ],
   "inaccessible": [],
   "publish_notes": "Public board -- no secrets or customer paths. Private repositories stay high-level; AI Music Vault stays private-content-boundary only.",
-  "refresh_started_ms": 1788457930596,
+  "refresh_started_ms": 1788459219231,
   "agents_source": "file:stale->unknown",
   "agents": [
     {
