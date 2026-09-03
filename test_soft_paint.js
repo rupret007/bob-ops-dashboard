@@ -753,6 +753,7 @@ function run() {
   if (html.indexOf("is-unknown-mac .agents-unknown") !== -1) fail("Agents unknown must not become first-screen chrome");
   if (html.indexOf(".agents-strip.is-unknown-only") === -1) fail("unknown-only agent chrome must collapse");
   if (html.indexOf("font-size:1.55rem") === -1) fail("next action must be the first-screen hero");
+  if (html.indexOf("flex:1 1 0") === -1) fail("phone type tabs must share one row");
   if (html.indexOf("body.tab-home .agent-links") === -1) fail("home screen must not stack Open agent buttons");
   if (html.indexOf('class="tab-home"') === -1) fail("first paint must start on the home tab screen");
   const preHow = html.split('<details class="how-board">')[0] || "";

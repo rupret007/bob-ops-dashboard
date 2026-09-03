@@ -980,14 +980,14 @@ html = f'''<!DOCTYPE html>
   }}
   .board-glance:not([data-tab]) {{ cursor:default; }}
   .type-tabs {{
-    display:flex; gap:.4rem; overflow-x:auto; -webkit-overflow-scrolling:touch;
+    display:flex; gap:.28rem; overflow-x:auto; -webkit-overflow-scrolling:touch;
     margin:0 0 1rem; padding:.1rem 0 .35rem; scrollbar-width:none;
   }}
   .type-tabs::-webkit-scrollbar {{ display:none; }}
   .type-tabs button {{
-    flex:0 0 auto; min-height:44px; padding:.4rem .85rem; border:1px solid var(--border);
+    flex:1 1 0; min-width:0; min-height:44px; padding:.4rem .2rem; border:1px solid var(--border);
     border-radius:999px; background:transparent; color:var(--muted);
-    font-size:.8rem; font-weight:600; cursor:pointer; touch-action:manipulation;
+    font-size:.72rem; font-weight:600; cursor:pointer; touch-action:manipulation;
   }}
   .type-tabs button[aria-selected="true"] {{ border-color:var(--orange); color:var(--orange); }}
   .chip {{ display:inline-flex; align-items:center; color:var(--c);
@@ -1125,6 +1125,7 @@ html = f'''<!DOCTYPE html>
     .lane.is-quiet .notes {{ display:-webkit-box; }}
     section.pending h2, section.primary h2 {{ font-size:1.85rem; }}
     .type-tabs {{ flex-wrap:wrap; overflow:visible; }}
+    .type-tabs button {{ flex:0 0 auto; padding:.4rem .85rem; font-size:.8rem; }}
   }}
 </style>
 </head>

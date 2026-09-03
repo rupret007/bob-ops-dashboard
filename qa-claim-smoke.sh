@@ -1495,6 +1495,8 @@ if ".agents-strip.is-unknown-only" not in html:
     raise SystemExit("unknown-only agent chrome must collapse")
 if "font-size:1.55rem" not in html:
     raise SystemExit("next action must be the first-screen hero")
+if "flex:1 1 0" not in html:
+    raise SystemExit("phone type tabs must share one row so Parked is not clipped")
 if html.count('data-probe="mac"') < 3:
     raise SystemExit("unknown compact must keep Codex/Cursor/Claude pills in the DOM")
 pre_how = html.split('<details class="how-board">', 1)[0]
