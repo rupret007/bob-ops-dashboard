@@ -82,6 +82,15 @@ AGENT_SECRET_WORDS = (
     "api_key",
     "apikey",
 )
+# Public board must not publish local probe paths or helper names.
+AGENT_PATH_MARKERS = (
+    "/users/",
+    "/home/",
+    "file:",
+    "csone.cisco",
+    "/customers/",
+)
+PUBLIC_PROBE_DETAIL = "No live Mac probe"
 BOARD_TZ = "America/Chicago"
 # Live CI honesty. Jeff-gate / release chips must not hide a red or running tip.
 CI_FAIL_CONCLUSIONS = frozenset(
@@ -723,14 +732,14 @@ def compact_unknown_mac_probes(agents: Any) -> bool:
 
 
 def unknown_mac_probes_html(agents: Any = None) -> str:
-    """One honest first-screen line. Visible text is never Running."""
-    detail = "No Mac probe yet -- run probe-agents-status.sh"
+    """Honest unknown marker in the document. Visible text is never Running."""
+    detail = PUBLIC_PROBE_DETAIL
     for a in agents or []:
         if not isinstance(a, dict) or str(a.get("id") or "") not in AGENT_IDS:
             continue
         text = str(a.get("detail") or "").strip()
         if text:
-            detail = text
+            detail = public_probe_detail(text)
             break
     return (
         '<p class="agents-unknown" id="agents-unknown" title="'
@@ -772,8 +781,9 @@ def is_type_tab(section_id: Any) -> bool:
     return bool(tab_id(section_id))
 
 
-def type_tab_ids_for(sections: Any, pending: Any) -> list[str]:
-    """Tabs to paint. Decisions only when something needs a yes."""
+def type_tab_ids_for(sections: Any, pending: Any = None) -> list[str]:
+    """Project-type tabs only. The glance opens Decisions; it is not a type tab."""
+    del pending
     present = {
         str(sec.get("id") or "")
         for sec in (sections or [])
@@ -782,8 +792,6 @@ def type_tab_ids_for(sections: Any, pending: Any) -> list[str]:
     out: list[str] = []
     for sid in TYPE_TAB_IDS:
         if sid == "controls":
-            if any(isinstance(it, dict) for it in (pending or [])):
-                out.append(sid)
             continue
         if sid in present:
             out.append(sid)
@@ -831,14 +839,17 @@ def glance_status(pending: Any, sections: Any) -> dict[str, str]:
 
 
 def glance_html(pending: Any, sections: Any) -> str:
-    """First-screen status. Taps an existing type when there is somewhere to go."""
+    """First-screen next action. Taps an existing type when there is somewhere to go."""
     glance = glance_status(pending, sections)
     text = html_lib.escape(str(glance.get("text") or "Quiet"))
     sid = tab_id(glance.get("tab"))
     extra = ' data-tab="' + html_lib.escape(sid) + '"' if sid else ""
+    controls = ' aria-controls="' + html_lib.escape(sid) + '"' if sid else ""
     return (
         '<button type="button" class="board-glance" id="board-glance"'
+        + ' aria-label="Next action"'
         + extra
+        + controls
         + ">"
         + text
         + "</button>"
@@ -1446,6 +1457,19 @@ def _redact_agent_detail(detail: str) -> str:
     for bad in AGENT_SECRET_WORDS:
         if bad.lower() in low:
             return "detail redacted"
+    for marker in AGENT_PATH_MARKERS:
+        if marker in low:
+            return "detail redacted"
+    if "probe-agents-status.sh" in low:
+        return PUBLIC_PROBE_DETAIL
+    return text
+
+
+def public_probe_detail(detail: Any) -> str:
+    """Public unknown-probe title. Never a local path, helper name, or secret."""
+    text = _redact_agent_detail(str(detail or "").strip())
+    if not text or text == "detail redacted":
+        return PUBLIC_PROBE_DETAIL
     return text
 
 
@@ -1476,7 +1500,7 @@ def safe_agent(raw: Any, fallback_id: str) -> dict[str, Any]:
 
 def default_agents(
     state: str = "unknown",
-    detail: str = "No Mac probe yet -- run probe-agents-status.sh",
+    detail: str = PUBLIC_PROBE_DETAIL,
 ) -> list[dict[str, Any]]:
     return [safe_agent({"id": i, "name": AGENT_NAMES[i], "state": state, "detail": detail}, i) for i in AGENT_IDS]
 
@@ -1786,7 +1810,7 @@ def first_class_sections() -> list[dict[str, Any]]:
                 ),
                 _card(
                     "Type tabs",
-                    "Each GitHub type is its own tab. First screen is status plus tabs, not the wall.",
+                    "Each GitHub type is its own tab. First screen is the next action, not Decisions chrome.",
                     chip="Feature",
                 ),
                 _card(
@@ -1796,7 +1820,7 @@ def first_class_sections() -> list[dict[str, Any]]:
                 ),
                 _card(
                     "Agents strip",
-                    "Codex / Cursor / Claude from a Mac probe. Stale or untimestamped probes paint Unknown. Never invent Running. When the box has no live Mac probe, the three pills collapse to one Agents unknown line. Work links require the exact real cursor.com/agents/bc- UUID to be advertised by a currently open same-repository PR in an allowlisted public repository; probe-only and fork-PR links are dropped. Tap Open agent / Open PR (real target=_blank plus openBlank fallback). Token-like words redacted.",
+                    "Codex / Cursor / Claude from a Mac probe. Stale or untimestamped probes paint Unknown. Never invent Running. When the box has no live Mac probe, the three pills collapse and the Agents unknown line stays in the document -- not first-screen chrome. Work links require the exact real cursor.com/agents/bc- UUID to be advertised by a currently open same-repository PR in an allowlisted public repository; probe-only and fork-PR links are dropped. Tap Open agent / Open PR (real target=_blank plus openBlank fallback). Token-like words and local paths redacted.",
                     chip="Feature",
                 ),
                 _card(

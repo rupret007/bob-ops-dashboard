@@ -869,10 +869,15 @@ def agent_pill_html(a):
 
 def agents_strip_html(agents_list, cloud_list=None):
     compact = compact_unknown_mac_probes(agents_list)
-    cls = "agents-strip is-unknown-mac" if compact else "agents-strip"
+    cloud_rows = [a for a in (cloud_list or []) if isinstance(a, dict)]
+    cls = "agents-strip"
+    if compact:
+        cls += " is-unknown-mac"
+        if not cloud_rows:
+            cls += " is-unknown-only"
     pills = [unknown_mac_probes_html(agents_list)]
     pills.extend(agent_pill_html(a) for a in (agents_list or []))
-    pills.extend(agent_pill_html(a) for a in (cloud_list or []))
+    pills.extend(agent_pill_html(a) for a in cloud_rows)
     return (
         f'<div class="{cls}" id="agents-strip">'
         + "".join(pills)
@@ -899,7 +904,7 @@ for sec in status["sections"]:
         body = pending_shell(items)
         sections_html.append(
             f'<section id="{h(sid_raw)}" class="block pending" data-tab-panel="{h(sid_raw)}" '
-            f'hidden role="tabpanel" aria-labelledby="tab-{h(sid_raw)}">'
+            f'hidden role="tabpanel" aria-label="Decisions">'
             f'{heading}{body}</section>'
         )
         continue
@@ -963,26 +968,26 @@ html = f'''<!DOCTYPE html>
     font-size:16px; line-height:1.4; }}
   a {{ color:var(--link); text-decoration:none; }} a:hover {{ text-decoration:underline; }}
   .wrap {{ max-width:40rem; margin:0 auto; padding:calc(1rem + env(safe-area-inset-top, 0px)) 1rem calc(3.25rem + env(safe-area-inset-bottom, 0px)); }}
-  header.pulse {{ padding:0 0 1rem; margin:0 0 1.35rem; border:0; background:transparent; }}
-  header.pulse h1 {{ margin:0; font-size:1.05rem; font-weight:700; letter-spacing:-.01em; }}
+  header.pulse {{ padding:0 0 .55rem; margin:0 0 .85rem; border:0; background:transparent; }}
+  header.pulse h1 {{ margin:0; font-size:.92rem; font-weight:700; letter-spacing:-.01em; }}
   header.pulse h1 .mark {{ color:var(--orange); }}
-  .pulse-row {{ display:flex; flex-direction:column; gap:.55rem; margin-top:.7rem; }}
+  .pulse-row {{ display:flex; flex-direction:column; gap:.4rem; margin-top:.45rem; }}
   .board-glance {{
-    display:flex; align-items:center; margin:0 0 .7rem; padding:0; border:0;
-    background:transparent; color:var(--text); font:inherit; font-size:1.05rem;
-    font-weight:650; letter-spacing:-.01em; min-height:44px; text-align:left;
-    width:100%; cursor:pointer; touch-action:manipulation;
+    display:flex; align-items:center; margin:0 0 .55rem; padding:.1rem 0 .2rem; border:0;
+    background:transparent; color:#fff; font:inherit; font-size:1.55rem;
+    font-weight:800; letter-spacing:-.03em; line-height:1.15; min-height:52px;
+    text-align:left; width:100%; cursor:pointer; touch-action:manipulation;
   }}
   .board-glance:not([data-tab]) {{ cursor:default; }}
   .type-tabs {{
-    display:flex; gap:.4rem; overflow-x:auto; -webkit-overflow-scrolling:touch;
+    display:flex; gap:.28rem; overflow-x:auto; -webkit-overflow-scrolling:touch;
     margin:0 0 1rem; padding:.1rem 0 .35rem; scrollbar-width:none;
   }}
   .type-tabs::-webkit-scrollbar {{ display:none; }}
   .type-tabs button {{
-    flex:0 0 auto; min-height:44px; padding:.4rem .85rem; border:1px solid var(--border);
+    flex:1 1 0; min-width:0; min-height:44px; padding:.4rem .2rem; border:1px solid var(--border);
     border-radius:999px; background:transparent; color:var(--muted);
-    font-size:.8rem; font-weight:600; cursor:pointer; touch-action:manipulation;
+    font-size:.72rem; font-weight:600; cursor:pointer; touch-action:manipulation;
   }}
   .type-tabs button[aria-selected="true"] {{ border-color:var(--orange); color:var(--orange); }}
   .chip {{ display:inline-flex; align-items:center; color:var(--c);
@@ -1081,9 +1086,11 @@ html = f'''<!DOCTYPE html>
   #active-agents {{ margin:0; }}
   .agents-strip {{ display:flex; flex-wrap:wrap; gap:.55rem .85rem; align-items:flex-start; margin:0; padding:0; border:0; background:transparent; }}
   .agents-unknown {{ display:none; margin:0; color:var(--muted); font-size:.8rem; font-weight:600; }}
-  .agents-strip.is-unknown-mac .agents-unknown {{ display:block; }}
   .agents-strip.is-unknown-mac .agent-pill[data-probe="mac"] {{ display:none; }}
+  .agents-strip.is-unknown-only {{ display:none; }}
   body.tab-home section.block.foot {{ display:none; }}
+  body.tab-home footer {{ display:none; }}
+  body.tab-home .live-stamp .when {{ display:none; }}
   body.tab-home .agent-links {{ display:none; }}
   body.tab-home .agent-pill.has-links {{ flex-direction:row; flex-wrap:wrap; align-items:center; }}
   body.tab-home .agent-pill[data-probe="cloud"] .chip {{ display:none; }}
@@ -1118,6 +1125,7 @@ html = f'''<!DOCTYPE html>
     .lane.is-quiet .notes {{ display:-webkit-box; }}
     section.pending h2, section.primary h2 {{ font-size:1.85rem; }}
     .type-tabs {{ flex-wrap:wrap; overflow:visible; }}
+    .type-tabs button {{ flex:0 0 auto; padding:.4rem .85rem; font-size:.8rem; }}
   }}
 </style>
 </head>
@@ -1679,12 +1687,7 @@ html = f'''<!DOCTYPE html>
     }});
     var out = [];
     TYPE_TAB_IDS.forEach(function (sid) {{
-      if (sid === "controls") {{
-        var n = 0;
-        (pending || []).forEach(function (it) {{ if (it && typeof it === "object") n += 1; }});
-        if (n) out.push(sid);
-        return;
-      }}
+      if (sid === "controls") return;
       if (present[sid]) out.push(sid);
     }});
     return out;
@@ -1724,7 +1727,8 @@ html = f'''<!DOCTYPE html>
   function glanceHtml(pending, sections) {{
     var g = glanceStatus(pending, sections);
     var extra = g.tab ? ' data-tab="' + esc(g.tab) + '"' : "";
-    return '<button type="button" class="board-glance" id="board-glance"' + extra + ">" +
+    var controls = g.tab ? ' aria-controls="' + esc(g.tab) + '"' : "";
+    return '<button type="button" class="board-glance" id="board-glance" aria-label="Next action"' + extra + controls + ">" +
       esc(g.text || "Quiet") + "</button>";
   }}
   function typeTabsHtml(sections, pending, selected) {{
@@ -1773,8 +1777,7 @@ html = f'''<!DOCTYPE html>
     var id = tabId(btn.getAttribute("data-tab"));
     if (!id) return;
     ev.preventDefault();
-    var fromGlance = btn.id === "board-glance" || (btn.classList && btn.classList.contains("board-glance"));
-    applyTypeTab(fromGlance ? id : (currentTypeTab === id ? "" : id));
+    applyTypeTab(currentTypeTab === id ? "" : id);
   }});
   window.addEventListener("hashchange", function () {{
     applyTypeTab(tabFromHash());
@@ -1942,25 +1945,40 @@ html = f'''<!DOCTYPE html>
     }});
     return !known;
   }}
+  function publicProbeDetail(detail) {{
+    var text = String(detail || "").replace(/^\s+|\s+$/g, "").slice(0, 200);
+    var low = text.toLowerCase();
+    var bad = ["token", "secret", "bearer", "csone", "keeper", "password", "api_key", "apikey", "/users/", "/home/", "file:", "probe-agents-status.sh"];
+    var i;
+    for (i = 0; i < bad.length; i++) {{
+      if (low.indexOf(bad[i]) !== -1) return "No live Mac probe";
+    }}
+    return text || "No live Mac probe";
+  }}
   function unknownMacProbesHtml(agents) {{
-    var detail = "No Mac probe yet -- run probe-agents-status.sh";
+    var detail = "No live Mac probe";
     var i;
     for (i = 0; i < (agents || []).length; i++) {{
       var a = agents[i];
       if (!a) continue;
       var id = String(a.id || "");
       if (id !== "codex" && id !== "cursor" && id !== "claude") continue;
-      var text = String(a.detail || "").trim();
-      if (text) {{ detail = text; break; }}
+      var text = String(a.detail || "").replace(/^\s+|\s+$/g, "");
+      if (text) {{ detail = publicProbeDetail(text); break; }}
     }}
     return '<p class="agents-unknown" id="agents-unknown" title="' + esc(detail) + '">Agents unknown</p>';
   }}
   function agentsStripHtml(agents, cloud) {{
     var compact = compactUnknownMacProbes(agents);
-    var cls = "agents-strip" + (compact ? " is-unknown-mac" : "");
+    var cloudRows = (cloud || []).filter(function (a) {{ return !!a; }});
+    var cls = "agents-strip";
+    if (compact) {{
+      cls += " is-unknown-mac";
+      if (!cloudRows.length) cls += " is-unknown-only";
+    }}
     var pills = unknownMacProbesHtml(agents);
     (agents || []).forEach(function (a) {{ pills += agentPillHtml(a); }});
-    (cloud || []).forEach(function (a) {{ pills += agentPillHtml(a); }});
+    cloudRows.forEach(function (a) {{ pills += agentPillHtml(a); }});
     return '<div class="' + cls + '" id="agents-strip">' + pills + "</div>";
   }}
   function fetchedLineHtml(repos) {{
@@ -2121,7 +2139,7 @@ html = f'''<!DOCTYPE html>
       if (sec.id === "controls") {{
         controlProjects = sec.projects || [];
         var items = data.pending || [];
-        html += '<section id="controls" class="block pending" data-tab-panel="controls" hidden role="tabpanel" aria-labelledby="tab-controls">' +
+        html += '<section id="controls" class="block pending" data-tab-panel="controls" hidden role="tabpanel" aria-label="Decisions">' +
           "<h2>" + esc(sec.title || "Decisions") + "</h2>" + pendingShell(items) + "</section>";
         return;
       }}
