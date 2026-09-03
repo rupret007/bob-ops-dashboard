@@ -1414,6 +1414,14 @@ if 'id="type-tabs"' not in html:
     raise SystemExit("phone type tabs missing")
 if 'id="board-glance"' not in html:
     raise SystemExit("first-screen short status missing")
+glance_at = html.find('id="board-glance"')
+glance_tag = html[glance_at:html.find("</button>", glance_at) + 9] if glance_at >= 0 else ""
+if re.search(r"\+\s*\d+\s*more", glance_tag):
+    raise SystemExit("first-screen glance must be one next action, not a leftover yes-count")
+if "waiting on Jeff" in glance_tag:
+    raise SystemExit("leftover lane Jeff-gate must not steal the first-screen next action")
+if "Draft #" in html.split("<script>", 1)[0]:
+    raise SystemExit("parked leftover drafts must not paint as Draft # review work")
 if 'id="music"' in html or 'data-tab="music"' in html:
     raise SystemExit("do not invent a music section; Live already holds the music stack")
 allowed_tabs = {

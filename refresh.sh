@@ -1514,7 +1514,7 @@ html = f'''<!DOCTYPE html>
     var coord = p.coord && typeof p.coord === "object" ? p.coord : {{}};
     var number = coord.pr;
     if (!repo || typeof number !== "number" || !isFinite(number) || number <= 0 || Math.floor(number) !== number) return "";
-    if (typeof coord.pr_draft !== "boolean") return "";
+    if (typeof coord.pr_draft !== "boolean" || coord.pr_draft) return "";
     var url = safePrUrl(coord.pr_url);
     return url && url.toLowerCase() === (repo + "/pull/" + number).toLowerCase() ? url : "";
   }}
@@ -1572,8 +1572,7 @@ html = f'''<!DOCTYPE html>
   }}
   function coordReviewSignal(p) {{
     if (!coordPrUrl(p)) return "";
-    var coord = p.coord;
-    return (coord.pr_draft ? "Draft #" : "PR #") + coord.pr;
+    return "PR #" + p.coord.pr;
   }}
   function compactSignal(p) {{
     if (!p) return "";
@@ -1699,12 +1698,11 @@ html = f'''<!DOCTYPE html>
       var rb = rank.hasOwnProperty(String(b.risk || "").toLowerCase()) ? rank[String(b.risk).toLowerCase()] : 5;
       return ra - rb;
     }});
-    var n = rows.length;
-    if (n) {{
+    if (rows.length) {{
       var title = rows[0] && rows[0].title != null ? String(rows[0].title).replace(/^\s+|\s+$/g, "") : "";
       if (title.length > 28) title = title.slice(0, 28).replace(/\s+$/g, "");
       if (!title) title = "Pending";
-      return {{ text: n === 1 ? title : title + " + " + String(n - 1) + " more", tab: "controls" }};
+      return {{ text: title, tab: "controls" }};
     }}
     var worstRank = 99;
     var worstId = "";
@@ -1716,11 +1714,10 @@ html = f'''<!DOCTYPE html>
         if (r < worstRank) {{ worstRank = r; worstId = sid; }}
       }});
     }});
-    if (worstRank <= 2 && worstId) {{
+    if (worstId) {{
       var label = tabLabel(worstId);
       if (worstRank === 0) return {{ text: label + " is red", tab: worstId }};
-      if (worstRank === 1) return {{ text: label + " is waiting on Jeff", tab: worstId }};
-      return {{ text: label + " needs a look", tab: worstId }};
+      if (worstRank === 2) return {{ text: label + " needs a look", tab: worstId }};
     }}
     return {{ text: "Quiet", tab: "" }};
   }}

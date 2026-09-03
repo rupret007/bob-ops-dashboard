@@ -801,13 +801,11 @@ def glance_pending_title(item: Any) -> str:
 
 
 def glance_status(pending: Any, sections: Any) -> dict[str, str]:
-    """One short first-screen line. Names the gate, not a yes-count."""
+    """One first-screen next action. Never a yes-count or leftover Jeff-yes."""
     rows = sort_pending(pending)
     if rows:
         title = glance_pending_title(rows[0]) or "Pending"
-        n = len(rows)
-        text = title if n == 1 else title + " + " + str(n - 1) + " more"
-        return {"text": text, "tab": "controls"}
+        return {"text": title, "tab": "controls"}
     worst_rank = 99
     worst_id = ""
     for sec in sections or []:
@@ -821,13 +819,14 @@ def glance_status(pending: Any, sections: Any) -> dict[str, str]:
             if rank < worst_rank:
                 worst_rank = rank
                 worst_id = sid
-    if worst_rank <= 2 and worst_id:
+    # Jeff yes lives in the pending inbox. Leftover lane jeff-gate
+    # (owner-only / parked hardware) must not steal the first screen.
+    if worst_id:
         label = tab_label(worst_id)
         if worst_rank == 0:
             return {"text": label + " is red", "tab": worst_id}
-        if worst_rank == 1:
-            return {"text": label + " is waiting on Jeff", "tab": worst_id}
-        return {"text": label + " needs a look", "tab": worst_id}
+        if worst_rank == 2:
+            return {"text": label + " needs a look", "tab": worst_id}
     return {"text": "Quiet", "tab": ""}
 
 
@@ -1264,7 +1263,11 @@ def public_coord(
 
 
 def coord_pr_url(project: Any) -> str:
-    """Exact same-repo coordination PR URL, after public-field validation."""
+    """Exact same-repo ready coordination PR URL, after public-field validation.
+
+    Leftover drafts may still be stored on ``coord`` for the soft-paint
+    fingerprint. They never become a public tap or an active Jeff yes.
+    """
     if not isinstance(project, dict) or project.get("private"):
         return ""
     repo = safe_repo_url(project.get("repo_url") or project.get("html_url"))
@@ -1274,7 +1277,7 @@ def coord_pr_url(project: Any) -> str:
     number = coord.get("pr")
     if isinstance(number, bool) or not isinstance(number, int) or number <= 0:
         return ""
-    if not isinstance(coord.get("pr_draft"), bool):
+    if not isinstance(coord.get("pr_draft"), bool) or coord.get("pr_draft"):
         return ""
     url = safe_pr_url(coord.get("pr_url"))
     expected = f"{repo}/pull/{number}" if repo else ""
@@ -1282,16 +1285,14 @@ def coord_pr_url(project: Any) -> str:
 
 
 def coord_review_signal(project: Any) -> str | None:
-    """Review signal for the one open PR proved by GitHub + coordination."""
+    """Review signal for the one ready PR proved by GitHub + coordination."""
     if not coord_pr_url(project):
         return None
-    coord = project.get("coord")
-    number = coord["pr"]
-    return ("Draft #" if coord.get("pr_draft") else "PR #") + str(number)
+    return "PR #" + str(project["coord"]["pr"])
 
 
 def status_with_coord_review(status: Any, project: Any) -> str:
-    """A verified draft is review work; it may only promote green to yellow."""
+    """A verified ready PR is review work; leftover drafts never yellow a lane."""
     value = str(status or "")
     if value == "green" and coord_pr_url(project):
         return "yellow"
@@ -1319,7 +1320,8 @@ def compact_signal(project: Any) -> str | None:
     """One scan signal. Live CI, then review work, beat Latest vs source.
 
     Private / high-level lanes publish no CI or review signal. A hosted
-    conclusion on those rows is not a public diagnosis.
+    conclusion on those rows is not a public diagnosis. Leftover
+    coordination drafts are not review work.
     """
     if not isinstance(project, dict):
         return None
