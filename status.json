@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-09-03T11:25:49.401427-05:00",
-  "generated_at_display": "Thu Sep 3, 2026 \u00b7 11:25 AM CDT",
+  "generated_at": "2026-09-03T12:08:58.014107-05:00",
+  "generated_at_display": "Thu Sep 3, 2026 \u00b7 12:08 PM CDT",
   "timezone": "America/Chicago",
   "owner": "rupret007",
   "dashboard": "bob-ops-dashboard",
@@ -151,9 +151,9 @@
           "accessible": true,
           "coord": {
             "repo": "StoryBoard",
-            "agent": "none",
-            "lease_state": "none",
-            "next": "Codex MAY TAKE a new isolated product lane from main while leaving...",
+            "agent": "codex",
+            "lease_state": "active",
+            "next": "inspect current main, docs, tests, screens, recent product deltas, and...",
             "sha": "13d9ab2"
           }
         },
@@ -453,8 +453,8 @@
           "status": "green",
           "chip": "Green",
           "default_branch": "main",
-          "tip_sha": "9d8fbd8",
-          "tip_date": "2026-09-03T15:50:30Z",
+          "tip_sha": "d6ae9d8",
+          "tip_date": "2026-09-03T16:25:53Z",
           "open_prs": 0,
           "open_pr_url": null,
           "open_pr_number": null,
@@ -462,7 +462,14 @@
           "open_pr_stack": [],
           "pr_listing_complete": true,
           "agent_url": null,
-          "ci": null,
+          "ci": {
+            "name": "QA claim smoke",
+            "conclusion": "success",
+            "branch": "main",
+            "sha": "d6ae9d8",
+            "created": "2026-09-03T16:25:57Z",
+            "html_url": "https://github.com/rupret007/bob-ops-dashboard/actions/runs/33778578605"
+          },
           "release": null,
           "release_sha": null,
           "release_url": null,
@@ -473,7 +480,7 @@
             "agent": "none",
             "lease_state": "none",
             "next": "lane is FREE. Codex MAY TAKE it from current main. Source-only...",
-            "sha": "9d8fbd8"
+            "sha": "d6ae9d8"
           }
         },
         {
@@ -611,7 +618,7 @@
             "repo": "TACTrack",
             "agent": "codex",
             "lease_state": "active",
-            "next": "Codex starts/resumes Extra High from main 04e6cbeb in isolation and..."
+            "next": "Codex keeps draft #18 until hosted-green; Karen leftover+security..."
           }
         },
         {
@@ -860,7 +867,7 @@
   ],
   "inaccessible": [],
   "publish_notes": "Public board -- no secrets or customer paths. Private repositories stay high-level; AI Music Vault stays private-content-boundary only.",
-  "refresh_started_ms": 1788452672400,
+  "refresh_started_ms": 1788455266475,
   "agents_source": "file:stale->unknown",
   "agents": [
     {
