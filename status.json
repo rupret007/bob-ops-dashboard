@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-09-04T17:24:23.522978-05:00",
-  "generated_at_display": "Fri Sep 4, 2026 \u00b7 5:24 PM CDT",
+  "generated_at": "2026-09-04T17:51:14.744274-05:00",
+  "generated_at_display": "Fri Sep 4, 2026 \u00b7 5:51 PM CDT",
   "timezone": "America/Chicago",
   "owner": "rupret007",
   "dashboard": "bob-ops-dashboard",
@@ -410,8 +410,8 @@
           "status": "green",
           "chip": "Green",
           "default_branch": "main",
-          "tip_sha": "8c6e471",
-          "tip_date": "2026-09-04T18:46:28Z",
+          "tip_sha": "8540a9d",
+          "tip_date": "2026-09-04T22:37:55Z",
           "open_prs": 0,
           "open_pr_url": null,
           "open_pr_number": null,
@@ -423,9 +423,9 @@
             "name": "Pull request integration",
             "conclusion": "success",
             "branch": "main",
-            "sha": "8c6e471",
-            "created": "2026-09-04T18:46:31Z",
-            "html_url": "https://github.com/rupret007/Cursor-OpenClaw-Integration/actions/runs/33907687624"
+            "sha": "8540a9d",
+            "created": "2026-09-04T22:37:57Z",
+            "html_url": "https://github.com/rupret007/Cursor-OpenClaw-Integration/actions/runs/33926330588"
           },
           "release": null,
           "release_sha": null,
@@ -436,8 +436,8 @@
             "repo": "Cursor-OpenClaw-Integration",
             "agent": "none",
             "lease_state": "none",
-            "next": "Karen leftover+security review draft #20; lane FREE after review...",
-            "sha": "b408732"
+            "next": "FREE for next Extra High / Codex",
+            "sha": "8540a9d"
           }
         },
         {
@@ -449,8 +449,8 @@
           "status": "green",
           "chip": "Green",
           "default_branch": "main",
-          "tip_sha": "261b590",
-          "tip_date": "2026-09-04T21:59:17Z",
+          "tip_sha": "42b7cb3",
+          "tip_date": "2026-09-04T22:24:27Z",
           "open_prs": 0,
           "open_pr_url": null,
           "open_pr_number": null,
@@ -462,9 +462,9 @@
             "name": "QA claim smoke",
             "conclusion": "success",
             "branch": "main",
-            "sha": "261b590",
-            "created": "2026-09-04T21:59:21Z",
-            "html_url": "https://github.com/rupret007/bob-ops-dashboard/actions/runs/33923547968"
+            "sha": "42b7cb3",
+            "created": "2026-09-04T22:24:31Z",
+            "html_url": "https://github.com/rupret007/bob-ops-dashboard/actions/runs/33925378106"
           },
           "release": null,
           "release_sha": null,
@@ -614,7 +614,7 @@
             "repo": "TACTrack",
             "agent": "none",
             "lease_state": "none",
-            "next": "Karen reviews draft #23 product/UI plus leftover/security; Jeff owns..."
+            "next": "FREE for next Extra High / Codex"
           }
         },
         {
@@ -862,7 +862,7 @@
   ],
   "inaccessible": [],
   "publish_notes": "Public board -- no secrets or customer paths. Private repositories stay high-level; AI Music Vault stays private-content-boundary only.",
-  "refresh_started_ms": 1788560587350,
+  "refresh_started_ms": 1788562199249,
   "agents_source": "file:stale->unknown",
   "agents": [
     {
