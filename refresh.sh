@@ -1108,9 +1108,25 @@ html = f'''<!DOCTYPE html>
   #silence-banner {{
     display:none; margin-bottom:1rem; padding:.75rem .9rem;
     background:#2a0a0a; border:1px solid #dc2626; border-radius:8px;
-    color:#fecaca; font-size:.88rem; font-weight:600; line-height:1.35;
+    color:#fecaca; font-size:.88rem; line-height:1.35;
   }}
-  #silence-banner.show {{ display:block; }}
+  #silence-banner.show {{ display:flex; gap:.75rem; align-items:center; justify-content:space-between; }}
+  .silence-copy {{ display:grid; gap:.15rem; min-width:0; }}
+  #silence-title {{ font-weight:800; }}
+  #silence-detail {{ color:#fca5a5; }}
+  #retry-status {{
+    flex:0 0 auto; min-height:44px; padding:.5rem .75rem;
+    border:1px solid #f87171; border-radius:8px; background:#450a0a;
+    color:#fee2e2; font:inherit; font-weight:800; cursor:pointer;
+    touch-action:manipulation;
+  }}
+  #retry-status:hover {{ border-color:#fecaca; background:#601111; }}
+  #retry-status:disabled {{ cursor:wait; opacity:.7; }}
+  body.snapshot-unverified #board {{ opacity:.78; }}
+  @media (max-width:520px) {{
+    #silence-banner.show {{ align-items:stretch; flex-direction:column; }}
+    #retry-status {{ width:100%; }}
+  }}
   #board {{ min-height:2rem; }}
   #active-agents {{ margin:0; }}
   .agents-strip {{ display:flex; flex-wrap:wrap; gap:.55rem .85rem; align-items:flex-start; margin:0; padding:0; border:0; background:transparent; }}
@@ -1168,8 +1184,11 @@ html = f'''<!DOCTYPE html>
     </div>
     <div class="status hint" id="panel-status"></div>
   </header>
-  <div id="silence-banner" role="alert" aria-live="assertive"></div>
-  <div id="board">
+  <div id="silence-banner" role="alert" aria-live="assertive" hidden>
+    <span class="silence-copy"><strong id="silence-title"></strong><span id="silence-detail"></span></span>
+    <button id="retry-status" type="button">Retry now</button>
+  </div>
+  <div id="board" data-snapshot-trust="current">
   {glance_html(status.get("pending"), status.get("sections"))}{type_tabs_html(status.get("sections"), status.get("pending"))}
   {''.join(sections_html)}
   </div>
@@ -1455,6 +1474,9 @@ html = f'''<!DOCTYPE html>
   var EXPECTED_REFRESH_MS = 15 * 60 * 1000;
   var SILENCE_LIMIT_MS = Math.max(45 * 60 * 1000, 3 * EXPECTED_REFRESH_MS);
   var silenceEl = document.getElementById("silence-banner");
+  var silenceTitleEl = document.getElementById("silence-title");
+  var silenceDetailEl = document.getElementById("silence-detail");
+  var retryStatus = document.getElementById("retry-status");
   var boardEl = document.getElementById("board");
   var pollFailStreak = 0;
 
@@ -1893,18 +1915,42 @@ html = f'''<!DOCTYPE html>
     return '<div class="lanes">' + html + "</div>";
   }}
 
-  function showSilence(msg) {{
+  function snapshotTrustState(ageMs, failures, silenceLimitMs) {{
+    var age = Number(ageMs);
+    var failCount = Number(failures);
+    var limit = Number(silenceLimitMs);
+    if (isFinite(failCount) && failCount > 0) return "poll-failed";
+    if (isFinite(age) && isFinite(limit) && age > limit) return "refresh-overdue";
+    return "current";
+  }}
+
+  function setSnapshotTrust(state) {{
+    var unverified = state !== "current";
+    if (document.body) document.body.classList.toggle("snapshot-unverified", unverified);
+    if (boardEl) {{
+      boardEl.setAttribute("data-snapshot-trust", unverified ? "last-verified" : "current");
+      if (unverified) boardEl.setAttribute("aria-describedby", "silence-detail");
+      else boardEl.removeAttribute("aria-describedby");
+    }}
+    if (silenceEl) silenceEl.setAttribute("data-state", state);
+  }}
+
+  function showSilence(state, title, detail) {{
     if (!silenceEl) return;
-    silenceEl.textContent = msg;
+    if (silenceTitleEl) silenceTitleEl.textContent = title;
+    if (silenceDetailEl) silenceDetailEl.textContent = detail;
     silenceEl.classList.add("show");
     silenceEl.hidden = false;
+    setSnapshotTrust(state);
   }}
 
   function hideSilence() {{
     if (!silenceEl) return;
-    silenceEl.textContent = "";
+    if (silenceTitleEl) silenceTitleEl.textContent = "";
+    if (silenceDetailEl) silenceDetailEl.textContent = "";
     silenceEl.classList.remove("show");
     silenceEl.hidden = true;
+    setSnapshotTrust("current");
   }}
 
   function fmtSilenceAge(ms) {{
@@ -1915,16 +1961,27 @@ html = f'''<!DOCTYPE html>
 
   function updateSilence() {{
     var age = Date.now() - knownMs;
-    if (pollFailStreak >= 1) {{
-      showSilence("\\u26a0 status.json poll failing - board may be wrong. Retrying every 30s. Last successful poll data age: " + fmtSilenceAge(age) + ".");
+    var state = snapshotTrustState(age, pollFailStreak, SILENCE_LIMIT_MS);
+    var when = (displayEl && displayEl.textContent) || known || "unknown time";
+    if (state === "poll-failed") {{
+      freshness.textContent = "Last verified " + fmtSilenceAge(age) + " ago";
+      showSilence(
+        state,
+        "Live check unavailable",
+        "Showing the last verified snapshot from " + when + ". It may be outdated; retry now or open a project before acting."
+      );
       return;
     }}
-    if (age > SILENCE_LIMIT_MS) {{
-      var when = (displayEl && displayEl.textContent) || known || "unknown";
-      showSilence("\\u26a0 Refresh has been silent since " + when + " (" + fmtSilenceAge(age) + " ago) - statuses below are outdated; repos may be up or down regardless of what this page shows.");
+    if (state === "refresh-overdue") {{
+      freshness.textContent = "Last verified " + fmtSilenceAge(age) + " ago";
+      showSilence(
+        state,
+        "Dashboard refresh overdue",
+        "Showing the last verified snapshot from " + when + ". Project states may have changed; retry now before acting."
+      );
       return;
     }}
-    if (pollFailStreak === 0) hideSilence();
+    hideSilence();
   }}
 
   function agentStateChip(state) {{
@@ -2241,6 +2298,12 @@ html = f'''<!DOCTYPE html>
   var POLL_TIMEOUT_MS = 8000;
   var pollAbort = null;
   var pollTimeout = null;
+  function setRetryBusy(busy) {{
+    if (!retryStatus) return;
+    retryStatus.disabled = !!busy;
+    retryStatus.textContent = busy ? "Checking..." : "Retry now";
+    retryStatus.setAttribute("aria-busy", busy ? "true" : "false");
+  }}
   lastAgents = readDomAgents();
   lastCloud = readDomCloud();
   function signalHref(p) {{
@@ -2297,6 +2360,7 @@ html = f'''<!DOCTYPE html>
   document.addEventListener("click", handleWorkClick);
   function poll() {{
     var seq = ++pollSeq;
+    setRetryBusy(true);
     if (pollAbort) {{
       try {{ pollAbort.abort(); }} catch (e) {{}}
     }}
@@ -2350,8 +2414,17 @@ html = f'''<!DOCTYPE html>
         updateSilence();
       }})
       .then(function () {{
-        if (seq === pollSeq && pollTimeout) clearTimeout(pollTimeout);
+        if (seq === pollSeq) {{
+          if (pollTimeout) clearTimeout(pollTimeout);
+          setRetryBusy(false);
+        }}
       }});
+  }}
+
+  if (retryStatus) {{
+    retryStatus.addEventListener("click", function () {{
+      if (document.visibilityState !== "hidden") poll();
+    }});
   }}
 
   var pollTimer = null;
@@ -2377,6 +2450,7 @@ html = f'''<!DOCTYPE html>
       try {{ pollAbort.abort(); }} catch (e) {{}}
     }}
     if (pollTimeout) clearTimeout(pollTimeout);
+    setRetryBusy(false);
     stopPaintClock();
   }}
   document.addEventListener("visibilitychange", function () {{

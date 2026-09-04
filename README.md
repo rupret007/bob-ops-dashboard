@@ -47,7 +47,7 @@ Pending **Approve / Hold / Deny** opens a GitHub issue titled `BOB-APPROVE: <id>
 | Layer | Cadence | What it does |
 |-------|---------|--------------|
 | GitHub Actions | every **15 minutes** (+ manual `workflow_dispatch`) | runs `./refresh.sh`, commits `index.html` + `status.json` to `main` |
-| Browser client | every **30 seconds** (pauses when tab hidden) | fetches `./status.json`; hide / iOS-return abort is not a failed poll; stale cached JSON cannot rewind freshness or the board; soft-paints only when board content changes (not on every 15m timestamp); freshness says `Live` only inside the ~15m Actions window |
+| Browser client | every **30 seconds** (pauses when tab hidden) | fetches `./status.json`; hide / iOS-return abort is not a failed poll; stale cached JSON cannot rewind freshness or the board; soft-paints only when board content changes (not on every 15m timestamp); freshness says `Live` only inside the ~15m Actions window. A failed poll or >45m refresh silence changes the page to an explicit **last verified snapshot** state with one **Retry now** action. |
 | Manual | on demand | `./refresh.sh` or `./refresh.sh --push` from a box with `gh`; decision issues are read-only by default |
 
 Optional: a Bob / Grok routine can also call `./refresh.sh --push` on meaningful events (merge, release, CI red). That is additive -- Actions remains the baseline; do not block shipping on the routine.
@@ -79,3 +79,5 @@ Workflow uses default `GITHUB_TOKEN` (`permissions: contents: write`) plus `gh a
 ```
 
 QA from a source-only branch: `./qa-source-only.sh`. It rebuilds `index.html` and `status.json` in a disposable directory, runs the full fail-closed claim smoke, and proves the scheduler-owned files in the checkout were not touched. `./qa-claim-smoke.sh` is the lower-level command for an already generated page.
+
+The stale-state smoke covers the exact trust boundary: one failed live poll immediately labels the board historical, an overdue refresh does the same after the 45-minute silence window, and a successful current snapshot clears that warning. **Retry now** reuses the same bounded, no-store poll path; it does not dispatch Actions, refresh GitHub, or publish Pages.
