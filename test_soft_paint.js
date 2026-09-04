@@ -56,6 +56,7 @@ function run() {
   if (src.indexOf("function pollIsNewer") === -1) fail("pollIsNewer missing");
   if (src.indexOf("function pollFailureCounts") === -1) fail("pollFailureCounts missing");
   if (src.indexOf("function pollPaintDecision") === -1) fail("pollPaintDecision missing");
+  if (src.indexOf("function snapshotTrustState") === -1) fail("snapshotTrustState missing");
   if (src.indexOf("function safeAgentUrl") === -1) fail("safeAgentUrl missing");
   if (src.indexOf("function laneHrefs") === -1) fail("laneHrefs missing");
   if (src.indexOf("function signalHref") === -1) fail("signalHref missing");
@@ -592,6 +593,101 @@ function run() {
   }
   if (pollPaintDecision(older, same, "a", "b") !== "ignore") {
     fail("stale JSON must not rewrite lanes after first paint");
+  }
+
+  const snapshotTrustState = eval("(" + extractFn(src, "snapshotTrustState") + ")");
+  const silenceLimit = 45 * 60 * 1000;
+  if (snapshotTrustState(1, 0, silenceLimit) !== "current") {
+    fail("fresh successful snapshot must stay current");
+  }
+  if (snapshotTrustState(silenceLimit, 0, silenceLimit) !== "current") {
+    fail("silence boundary must not become overdue early");
+  }
+  if (snapshotTrustState(silenceLimit + 1, 0, silenceLimit) !== "refresh-overdue") {
+    fail("overdue refresh must label the snapshot historical");
+  }
+  if (snapshotTrustState(1, 1, silenceLimit) !== "poll-failed") {
+    fail("one failed live poll must fail closed immediately");
+  }
+  if (snapshotTrustState(silenceLimit + 1, 2, silenceLimit) !== "poll-failed") {
+    fail("live poll failure must explain the stronger immediate condition");
+  }
+  if (html.indexOf('id="retry-status"') === -1 || html.indexOf("Retry now") === -1) {
+    fail("stale snapshot banner must offer one manual retry");
+  }
+  if (html.indexOf('data-snapshot-trust="current"') === -1) {
+    fail("first paint must declare its snapshot trust state");
+  }
+  if (src.indexOf('retryStatus.addEventListener("click"') === -1) {
+    fail("Retry now must invoke the existing bounded poll path");
+  }
+
+  function fakeElement() {
+    const classes = new Set();
+    const attrs = {};
+    return {
+      hidden: true,
+      textContent: "",
+      disabled: false,
+      classList: {
+        add: (name) => classes.add(name),
+        remove: (name) => classes.delete(name),
+        toggle: (name, on) => on ? classes.add(name) : classes.delete(name),
+        contains: (name) => classes.has(name),
+      },
+      setAttribute: (name, value) => { attrs[name] = String(value); },
+      removeAttribute: (name) => { delete attrs[name]; },
+      getAttribute: (name) => attrs[name],
+    };
+  }
+  const fakeBody = fakeElement();
+  const fakeBoard = fakeElement();
+  const fakeSilence = fakeElement();
+  const fakeTitle = fakeElement();
+  const fakeDetail = fakeElement();
+  const setSnapshotTrust = eval(
+    "(function (document, boardEl, silenceEl) { return " + extractFn(src, "setSnapshotTrust") + "; })"
+  )({ body: fakeBody }, fakeBoard, fakeSilence);
+  const showSilence = eval(
+    "(function (silenceEl, silenceTitleEl, silenceDetailEl, setSnapshotTrust) { return " +
+      extractFn(src, "showSilence") + "; })"
+  )(fakeSilence, fakeTitle, fakeDetail, setSnapshotTrust);
+  const hideSilence = eval(
+    "(function (silenceEl, silenceTitleEl, silenceDetailEl, setSnapshotTrust) { return " +
+      extractFn(src, "hideSilence") + "; })"
+  )(fakeSilence, fakeTitle, fakeDetail, setSnapshotTrust);
+
+  showSilence("poll-failed", "Live check unavailable", "Showing the last verified snapshot.");
+  if (fakeSilence.hidden || !fakeSilence.classList.contains("show")) {
+    fail("failed poll must reveal the last-verified banner");
+  }
+  if (fakeSilence.getAttribute("data-state") !== "poll-failed") {
+    fail("banner must expose the precise stale reason");
+  }
+  if (fakeBoard.getAttribute("data-snapshot-trust") !== "last-verified") {
+    fail("failed poll must mark board contents as historical");
+  }
+  if (fakeBoard.getAttribute("aria-describedby") !== "silence-detail") {
+    fail("historical board must be described by the visible warning");
+  }
+  if (!fakeBody.classList.contains("snapshot-unverified")) {
+    fail("historical board must have a visual trust-state hook");
+  }
+  if (fakeTitle.textContent !== "Live check unavailable" || !fakeDetail.textContent.includes("last verified")) {
+    fail("historical mode must explain the user-visible condition");
+  }
+  hideSilence();
+  if (!fakeSilence.hidden || fakeSilence.classList.contains("show")) {
+    fail("successful current snapshot must clear the warning");
+  }
+  if (fakeBoard.getAttribute("data-snapshot-trust") !== "current") {
+    fail("successful current snapshot must restore current trust");
+  }
+  if (fakeBoard.getAttribute("aria-describedby") !== undefined) {
+    fail("current board must drop stale warning attribution");
+  }
+  if (fakeBody.classList.contains("snapshot-unverified")) {
+    fail("current board must clear stale styling");
   }
 
   const stopPolling = extractFn(src, "stopPolling");
