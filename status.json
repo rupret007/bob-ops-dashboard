@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-09-04T16:59:13.501157-05:00",
-  "generated_at_display": "Fri Sep 4, 2026 \u00b7 4:59 PM CDT",
+  "generated_at": "2026-09-04T17:24:23.522978-05:00",
+  "generated_at_display": "Fri Sep 4, 2026 \u00b7 5:24 PM CDT",
   "timezone": "America/Chicago",
   "owner": "rupret007",
   "dashboard": "bob-ops-dashboard",
@@ -232,9 +232,9 @@
           "accessible": true,
           "coord": {
             "repo": "RadDadSite",
-            "agent": "none",
-            "lease_state": "none",
-            "next": "FREE; Jeff owns any production Pages deploy",
+            "agent": "codex",
+            "lease_state": "active",
+            "next": "Codex Astra Ultra works isolated draft-only product slice",
             "sha": "75902b8"
           }
         },
@@ -436,8 +436,8 @@
             "repo": "Cursor-OpenClaw-Integration",
             "agent": "none",
             "lease_state": "none",
-            "next": "FREE for next Extra High / Codex",
-            "sha": "8c6e471"
+            "next": "Karen leftover+security review draft #20; lane FREE after review...",
+            "sha": "b408732"
           }
         },
         {
@@ -449,8 +449,8 @@
           "status": "green",
           "chip": "Green",
           "default_branch": "main",
-          "tip_sha": "a5cc462",
-          "tip_date": "2026-09-04T21:38:38Z",
+          "tip_sha": "261b590",
+          "tip_date": "2026-09-04T21:59:17Z",
           "open_prs": 0,
           "open_pr_url": null,
           "open_pr_number": null,
@@ -462,9 +462,9 @@
             "name": "QA claim smoke",
             "conclusion": "success",
             "branch": "main",
-            "sha": "a5cc462",
-            "created": "2026-09-04T21:38:42Z",
-            "html_url": "https://github.com/rupret007/bob-ops-dashboard/actions/runs/33922037053"
+            "sha": "261b590",
+            "created": "2026-09-04T21:59:21Z",
+            "html_url": "https://github.com/rupret007/bob-ops-dashboard/actions/runs/33923547968"
           },
           "release": null,
           "release_sha": null,
@@ -612,9 +612,9 @@
           "ci": {},
           "coord": {
             "repo": "TACTrack",
-            "agent": "codex",
-            "lease_state": "active",
-            "next": "Codex creates an isolated worktree, implements one real product slice..."
+            "agent": "none",
+            "lease_state": "none",
+            "next": "Karen reviews draft #23 product/UI plus leftover/security; Jeff owns..."
           }
         },
         {
@@ -862,7 +862,7 @@
   ],
   "inaccessible": [],
   "publish_notes": "Public board -- no secrets or customer paths. Private repositories stay high-level; AI Music Vault stays private-content-boundary only.",
-  "refresh_started_ms": 1788559077304,
+  "refresh_started_ms": 1788560587350,
   "agents_source": "file:stale->unknown",
   "agents": [
     {
