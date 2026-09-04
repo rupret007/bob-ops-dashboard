@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-09-04T13:42:36.686470-05:00",
-  "generated_at_display": "Fri Sep 4, 2026 \u00b7 1:42 PM CDT",
+  "generated_at": "2026-09-04T14:11:06.887916-05:00",
+  "generated_at_display": "Fri Sep 4, 2026 \u00b7 2:11 PM CDT",
   "timezone": "America/Chicago",
   "owner": "rupret007",
   "dashboard": "bob-ops-dashboard",
@@ -287,9 +287,9 @@
           "ci": {},
           "coord": {
             "repo": "AI-Music-Vault",
-            "agent": "grok",
-            "lease_state": "active",
-            "next": "Karen leftover+security; Bob leftover-squash only after PASS; then..."
+            "agent": "none",
+            "lease_state": "none",
+            "next": "FREE for next Extra High / Codex"
           }
         },
         {
@@ -381,9 +381,9 @@
           "ci": {},
           "coord": {
             "repo": "CSS_Conductor",
-            "agent": "grok",
-            "lease_state": "active",
-            "next": "Cloud opens draft for Karen; stay draft"
+            "agent": "none",
+            "lease_state": "none",
+            "next": "FREE for next Extra High / Codex"
           }
         },
         {
@@ -410,8 +410,8 @@
           "status": "green",
           "chip": "Green",
           "default_branch": "main",
-          "tip_sha": "7eb7b26",
-          "tip_date": "2026-09-04T05:09:25Z",
+          "tip_sha": "8c6e471",
+          "tip_date": "2026-09-04T18:46:28Z",
           "open_prs": 0,
           "open_pr_url": null,
           "open_pr_number": null,
@@ -423,9 +423,9 @@
             "name": "Pull request integration",
             "conclusion": "success",
             "branch": "main",
-            "sha": "7eb7b26",
-            "created": "2026-09-04T05:09:28Z",
-            "html_url": "https://github.com/rupret007/Cursor-OpenClaw-Integration/actions/runs/33839447549"
+            "sha": "8c6e471",
+            "created": "2026-09-04T18:46:31Z",
+            "html_url": "https://github.com/rupret007/Cursor-OpenClaw-Integration/actions/runs/33907687624"
           },
           "release": null,
           "release_sha": null,
@@ -434,10 +434,10 @@
           "accessible": true,
           "coord": {
             "repo": "Cursor-OpenClaw-Integration",
-            "agent": "grok",
-            "lease_state": "active",
-            "next": "Cloud opens draft for Karen; stay draft",
-            "sha": "7eb7b26"
+            "agent": "none",
+            "lease_state": "none",
+            "next": "FREE for next Extra High / Codex",
+            "sha": "8c6e471"
           }
         },
         {
@@ -449,8 +449,8 @@
           "status": "green",
           "chip": "Green",
           "default_branch": "main",
-          "tip_sha": "4cd6646",
-          "tip_date": "2026-09-04T18:25:48Z",
+          "tip_sha": "3aaacad",
+          "tip_date": "2026-09-04T18:42:41Z",
           "open_prs": 0,
           "open_pr_url": null,
           "open_pr_number": null,
@@ -458,7 +458,14 @@
           "open_pr_stack": [],
           "pr_listing_complete": true,
           "agent_url": null,
-          "ci": null,
+          "ci": {
+            "name": "QA claim smoke",
+            "conclusion": "success",
+            "branch": "main",
+            "sha": "3aaacad",
+            "created": "2026-09-04T18:42:44Z",
+            "html_url": "https://github.com/rupret007/bob-ops-dashboard/actions/runs/33907355658"
+          },
           "release": null,
           "release_sha": null,
           "release_url": null,
@@ -469,7 +476,7 @@
             "agent": "none",
             "lease_state": "none",
             "next": "FREE for next Extra High / Codex",
-            "sha": "e9741d6"
+            "sha": "3aaacad"
           }
         },
         {
@@ -607,7 +614,7 @@
             "repo": "TACTrack",
             "agent": "grok",
             "lease_state": "active",
-            "next": "Cloud opens draft for Karen; stay draft"
+            "next": "wait Cloud finish + green tip; then Karen leftover+security; Bob..."
           }
         },
         {
@@ -628,11 +635,11 @@
           "url": "https://github.com/rupret007/Andrea_NanoBot",
           "repo_url": "https://github.com/rupret007/Andrea_NanoBot",
           "private": false,
-          "status": "red",
-          "chip": "Red",
+          "status": "green",
+          "chip": "Green",
           "default_branch": "main",
-          "tip_sha": "403fcb8",
-          "tip_date": "2026-09-04T05:11:48Z",
+          "tip_sha": "12b66ed",
+          "tip_date": "2026-09-04T18:48:17Z",
           "open_prs": 0,
           "open_pr_url": null,
           "open_pr_number": null,
@@ -641,12 +648,12 @@
           "pr_listing_complete": true,
           "agent_url": null,
           "ci": {
-            "name": "CI",
-            "conclusion": "failure",
+            "name": "AGI Layer CI",
+            "conclusion": "success",
             "branch": "main",
-            "sha": "403fcb8",
-            "created": "2026-09-04T05:11:51Z",
-            "html_url": "https://github.com/rupret007/Andrea_NanoBot/actions/runs/33839595566"
+            "sha": "12b66ed",
+            "created": "2026-09-04T18:48:20Z",
+            "html_url": "https://github.com/rupret007/Andrea_NanoBot/actions/runs/33907845095"
           },
           "release": null,
           "release_sha": null,
@@ -655,10 +662,10 @@
           "accessible": true,
           "coord": {
             "repo": "Andrea_NanoBot",
-            "agent": "grok",
-            "lease_state": "active",
-            "next": "Cloud opens draft for Karen; stay draft",
-            "sha": "403fcb8"
+            "agent": "none",
+            "lease_state": "none",
+            "next": "FREE for next Extra High / Codex",
+            "sha": "12b66ed"
           }
         },
         {
@@ -855,7 +862,7 @@
   ],
   "inaccessible": [],
   "publish_notes": "Public board -- no secrets or customer paths. Private repositories stay high-level; AI Music Vault stays private-content-boundary only.",
-  "refresh_started_ms": 1788547276955,
+  "refresh_started_ms": 1788548990564,
   "agents_source": "file:stale->unknown",
   "agents": [
     {
