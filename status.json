@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-09-03T21:52:17.321705-05:00",
-  "generated_at_display": "Thu Sep 3, 2026 \u00b7 9:52 PM CDT",
+  "generated_at": "2026-09-03T22:10:43.166725-05:00",
+  "generated_at_display": "Thu Sep 3, 2026 \u00b7 10:10 PM CDT",
   "timezone": "America/Chicago",
   "owner": "rupret007",
   "dashboard": "bob-ops-dashboard",
@@ -436,10 +436,10 @@
           "accessible": true,
           "coord": {
             "repo": "Cursor-OpenClaw-Integration",
-            "agent": "codex",
-            "lease_state": "active",
-            "next": "isolated exact-main worktree, implement receipt plus focused/full...",
-            "sha": "58f63ca"
+            "agent": "none",
+            "lease_state": "none",
+            "next": "Karen leftover+security review of draft #18; owner separately resolves...",
+            "sha": "f9dff49"
           }
         },
         {
@@ -451,8 +451,8 @@
           "status": "green",
           "chip": "Green",
           "default_branch": "main",
-          "tip_sha": "06ceaa3",
-          "tip_date": "2026-09-04T02:38:10Z",
+          "tip_sha": "90c2f8a",
+          "tip_date": "2026-09-04T02:52:22Z",
           "open_prs": 0,
           "open_pr_url": null,
           "open_pr_number": null,
@@ -464,9 +464,9 @@
             "name": "QA claim smoke",
             "conclusion": "success",
             "branch": "main",
-            "sha": "06ceaa3",
-            "created": "2026-09-04T02:38:15Z",
-            "html_url": "https://github.com/rupret007/bob-ops-dashboard/actions/runs/33830263284"
+            "sha": "90c2f8a",
+            "created": "2026-09-04T02:52:25Z",
+            "html_url": "https://github.com/rupret007/bob-ops-dashboard/actions/runs/33831123616"
           },
           "release": null,
           "release_sha": null,
@@ -866,7 +866,7 @@
   ],
   "inaccessible": [],
   "publish_notes": "Public board -- no secrets or customer paths. Private repositories stay high-level; AI Music Vault stays private-content-boundary only.",
-  "refresh_started_ms": 1788490260204,
+  "refresh_started_ms": 1788491367954,
   "agents_source": "file:stale->unknown",
   "agents": [
     {
