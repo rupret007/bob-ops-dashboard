@@ -219,6 +219,7 @@ from board_meta import (
     status_with_coord_review,
     drop_leftover_verify,
     extract_cloud_agents_from_prs,
+    focus_key,
     glance_html,
     public_high_level_ci,
     is_quiet_lane,
@@ -765,8 +766,10 @@ def pending_item_html(it):
         risk = "low"
     kind = str(it.get("kind") or "ops")
     detail = short_note(it.get("detail") or "", 72)
+    focus = focus_key("decision", pid)
+    focus_attr = f' data-focus-key="{h(focus)}" tabindex="-1"' if focus else ""
     return (
-        f'<div class="pending-item" data-id="{h(pid)}" data-title="{h(title)}">'
+        f'<div class="pending-item" data-id="{h(pid)}" data-title="{h(title)}"{focus_attr}>'
         f'<div class="pending-head"><div class="ptitle">{h(title)}</div>'
         f'<span class="prisk {h(risk)}">{h(risk)}</span></div>'
         f'<div class="pdetail">{h(detail)}</div>'
@@ -852,8 +855,10 @@ def lane_html(p):
     if hrefs.get("game"):
         links.append(tap_link(hrefs["game"], "Play game"))
     links_html = ('<div class="lane-links">' + "".join(links) + "</div>") if links else ""
+    focus = focus_key("project", p.get("name"))
+    focus_attr = f' data-focus-key="{h(focus)}" tabindex="-1"' if focus else ""
     return (
-        f'<article class="lane{quiet}">'
+        f'<article class="lane{quiet}"{focus_attr}>'
         f'<h3>{title_html}</h3>'
         f'<div class="lane-end">{chip}{signal_html}</div>'
         f'{links_html}{notes_html}</article>'
@@ -1070,6 +1075,20 @@ html = f'''<!DOCTYPE html>
     border:0; border-bottom:1px solid var(--hair); border-radius:0;
     padding:.65rem 0; margin:0; background:transparent;
   }}
+  .lane:focus, .pending-item:focus {{ outline:2px solid var(--orange); outline-offset:3px; }}
+  .lane.is-glance-target, .pending-item.is-glance-target {{
+    background:linear-gradient(90deg, rgba(217,119,87,.16), rgba(217,119,87,0));
+    box-shadow:inset 3px 0 0 var(--orange);
+  }}
+  @media (prefers-reduced-motion:no-preference) {{
+    .lane.is-glance-target, .pending-item.is-glance-target {{
+      animation:glance-target 700ms ease-out 2;
+    }}
+  }}
+  @keyframes glance-target {{
+    0% {{ background-color:rgba(217,119,87,.24); }}
+    100% {{ background-color:transparent; }}
+  }}
   .pending-item:last-child {{ border-bottom:0; }}
   .pending-item .ptitle {{ font-weight:600; font-size:.95rem; margin:0; }}
   .pending-head {{ display:flex; align-items:baseline; justify-content:space-between; gap:.6rem; }}
@@ -1198,6 +1217,21 @@ html = f'''<!DOCTYPE html>
   </footer>
 </div>
 <script>
+function focusKey(kind, raw) {{
+  var prefix = String(kind || "").replace(/^\s+|\s+$/g, "").toLowerCase();
+  var value = String(raw || "").replace(/^\s+|\s+$/g, "");
+  var token = "";
+  if (prefix === "decision") {{
+    if (value.length > 64 || !/^[a-zA-Z0-9._-]+$/.test(value)) return "";
+    token = value.toLowerCase();
+  }} else if (prefix === "project") {{
+    token = value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 64).replace(/-+$/g, "");
+    if (!token) return "";
+  }} else {{
+    return "";
+  }}
+  return prefix + ":" + token;
+}}
 (function () {{
   // Public board: URL is enough. Real yes is a GitHub issue from rupret007.
   var statusEl = document.getElementById("panel-status");
@@ -1307,6 +1341,11 @@ html = f'''<!DOCTYPE html>
       div.className = "pending-item";
       div.setAttribute("data-id", String(it.id));
       div.setAttribute("data-title", String(it.title || it.id));
+      var focus = focusKey("decision", it.id);
+      if (focus) {{
+        div.setAttribute("data-focus-key", focus);
+        div.setAttribute("tabindex", "-1");
+      }}
       div.innerHTML =
         '<div class="pending-head"><div class="ptitle"></div><span class="prisk"></span></div>' +
         '<div class="pdetail"></div>' +
@@ -1746,7 +1785,9 @@ html = f'''<!DOCTYPE html>
   function glanceStatus(pending, sections) {{
     var rank = {{ high: 0, medium: 1, low: 2 }};
     var rows = [];
-    (pending || []).forEach(function (it) {{ if (it && typeof it === "object") rows.push(it); }});
+    (pending || []).forEach(function (it) {{
+      if (it && typeof it === "object" && focusKey("decision", it.id)) rows.push(it);
+    }});
     rows.sort(function (a, b) {{
       var ra = rank.hasOwnProperty(String(a.risk || "").toLowerCase()) ? rank[String(a.risk).toLowerCase()] : 5;
       var rb = rank.hasOwnProperty(String(b.risk || "").toLowerCase()) ? rank[String(b.risk).toLowerCase()] : 5;
@@ -1756,30 +1797,41 @@ html = f'''<!DOCTYPE html>
       var title = rows[0] && rows[0].title != null ? String(rows[0].title).replace(/^\s+|\s+$/g, "") : "";
       if (title.length > 28) title = title.slice(0, 28).replace(/\s+$/g, "");
       if (!title) title = "Pending";
-      return {{ text: title, tab: "controls" }};
+      return {{ text: title, tab: "controls", focus: focusKey("decision", rows[0].id) }};
     }}
     var worstRank = 99;
     var worstId = "";
+    var worstName = "";
+    var worstFocus = "";
     (sections || []).forEach(function (sec) {{
       var sid = tabId(sec && sec.id);
       if (!sid || sid === "controls") return;
       (sec.projects || []).forEach(function (p) {{
         var r = attentionRank(p);
-        if (r < worstRank) {{ worstRank = r; worstId = sid; }}
+        var target = focusKey("project", p && p.name);
+        if ((r !== 0 && r !== 2) || !target) return;
+        if (r < worstRank) {{
+          worstRank = r;
+          worstId = sid;
+          worstName = String(p.name || "").replace(/^\s+|\s+$/g, "");
+          if (worstName.length > 28) worstName = worstName.slice(0, 28).replace(/\s+$/g, "");
+          worstFocus = target;
+        }}
       }});
     }});
     if (worstId) {{
-      var label = tabLabel(worstId);
-      if (worstRank === 0) return {{ text: label + " is red", tab: worstId }};
-      if (worstRank === 2) return {{ text: label + " needs a look", tab: worstId }};
+      var label = worstName || tabLabel(worstId);
+      if (worstRank === 0) return {{ text: label + " is red", tab: worstId, focus: worstFocus }};
+      if (worstRank === 2) return {{ text: label + " needs a look", tab: worstId, focus: worstFocus }};
     }}
     return {{ text: "Quiet", tab: "" }};
   }}
   function glanceHtml(pending, sections) {{
     var g = glanceStatus(pending, sections);
     var extra = g.tab ? ' data-tab="' + esc(g.tab) + '"' : "";
+    var target = g.focus ? ' data-focus-target="' + esc(g.focus) + '"' : "";
     var controls = g.tab ? ' aria-controls="' + esc(g.tab) + '"' : "";
-    return '<button type="button" class="board-glance" id="board-glance" aria-label="Next action"' + extra + controls + ">" +
+    return '<button type="button" class="board-glance" id="board-glance" aria-label="Next action"' + extra + target + controls + ">" +
       esc(g.text || "Quiet") + "</button>";
   }}
   function typeTabsHtml(sections, pending, selected) {{
@@ -1815,6 +1867,58 @@ html = f'''<!DOCTYPE html>
       else if ((location.hash || "").length > 1) history.replaceState(null, "", location.pathname + location.search);
     }} catch (e) {{}}
   }}
+  var glanceTargetTimer = null;
+  function validFocusKey(raw) {{
+    var key = String(raw || "");
+    var split = key.indexOf(":");
+    if (split < 1) return false;
+    var kind = key.slice(0, split);
+    var value = key.slice(split + 1);
+    return focusKey(kind, value) === key;
+  }}
+  function findFocusTarget(panel, raw) {{
+    var key = String(raw || "");
+    if (!panel || !validFocusKey(key)) return null;
+    var targets = panel.querySelectorAll("[data-focus-key]");
+    var found = null;
+    for (var i = 0; i < targets.length; i += 1) {{
+      if (targets[i].getAttribute("data-focus-key") !== key) continue;
+      if (found) return null;
+      found = targets[i];
+    }}
+    return found;
+  }}
+  function revealGlanceTarget(id, raw) {{
+    var sid = tabId(id);
+    var panel = sid ? document.getElementById(sid) : null;
+    if (!panel || tabId(panel.getAttribute("data-tab-panel")) !== sid) return false;
+    var target = findFocusTarget(panel, raw);
+    if (!target) return false;
+
+    var ancestor = target.parentElement;
+    while (ancestor && ancestor !== panel) {{
+      if (String(ancestor.tagName || "").toLowerCase() === "details") ancestor.open = true;
+      ancestor = ancestor.parentElement;
+    }}
+
+    var previous = document.querySelectorAll(".is-glance-target");
+    Array.prototype.forEach.call(previous, function (row) {{
+      row.classList.remove("is-glance-target");
+    }});
+    if (glanceTargetTimer) clearTimeout(glanceTargetTimer);
+    target.classList.add("is-glance-target");
+    try {{ target.focus({{ preventScroll: true }}); }} catch (e) {{
+      try {{ target.focus(); }} catch (e2) {{}}
+    }}
+    var smooth = false;
+    try {{ smooth = !window.matchMedia("(prefers-reduced-motion: reduce)").matches; }} catch (e3) {{}}
+    try {{ target.scrollIntoView({{ behavior: smooth ? "smooth" : "auto", block: "center" }}); }} catch (e4) {{}}
+    glanceTargetTimer = setTimeout(function () {{
+      target.classList.remove("is-glance-target");
+      glanceTargetTimer = null;
+    }}, 2200);
+    return true;
+  }}
   function tabFromHash() {{
     return tabId(String(location.hash || "").replace(/^#/, ""));
   }}
@@ -1828,6 +1932,15 @@ html = f'''<!DOCTYPE html>
     var id = tabId(btn.getAttribute("data-tab"));
     if (!id) return;
     ev.preventDefault();
+    var fromGlance = btn.id === "board-glance";
+    if (fromGlance) {{
+      applyTypeTab(id);
+      var focus = btn.getAttribute("data-focus-target") || "";
+      var reveal = function () {{ revealGlanceTarget(id, focus); }};
+      if (window.requestAnimationFrame) window.requestAnimationFrame(reveal);
+      else setTimeout(reveal, 0);
+      return;
+    }}
     applyTypeTab(currentTypeTab === id ? "" : id);
   }});
   window.addEventListener("hashchange", function () {{
@@ -1855,7 +1968,9 @@ html = f'''<!DOCTYPE html>
         return '<a class="dec' + (extra ? " " + extra : "") + '" data-dec="' + esc(verb) +
           '" href="' + esc(href) + '" target="_blank" rel="noopener noreferrer">' + label + "</a>";
       }}
-      var row = '<div class="pending-item" data-id="' + esc(it.id) + '" data-title="' + esc(it.title || it.id) + '">' +
+      var focus = focusKey("decision", it.id);
+      var focusAttr = focus ? ' data-focus-key="' + esc(focus) + '" tabindex="-1"' : "";
+      var row = '<div class="pending-item" data-id="' + esc(it.id) + '" data-title="' + esc(it.title || it.id) + '"' + focusAttr + '>' +
         '<div class="pending-head"><div class="ptitle">' + esc(it.title || it.id) + "</div>" +
         '<span class="prisk ' + esc(risk) + '">' + esc(risk) + "</span></div>" +
         '<div class="pdetail">' + esc(shortNote(it.detail || "", 72)) + "</div>" +
@@ -1904,7 +2019,9 @@ html = f'''<!DOCTYPE html>
     if (hrefs.ci) links += tapLink(hrefs.ci, "Open CI");
     if (hrefs.game) links += tapLink(hrefs.game, "Play game");
     var linksHtml = links ? '<div class="lane-links">' + links + "</div>" : "";
-    return '<article class="lane' + quiet + '"><h3>' + titleHtml + '</h3><div class="lane-end">' +
+    var focus = focusKey("project", p.name);
+    var focusAttr = focus ? ' data-focus-key="' + esc(focus) + '" tabindex="-1"' : "";
+    return '<article class="lane' + quiet + '"' + focusAttr + '><h3>' + titleHtml + '</h3><div class="lane-end">' +
       chip + signalHtml + "</div>" + linksHtml + notesHtml + "</article>";
   }}
   function lanesHtml(projects, sortAttn) {{
@@ -2257,6 +2374,7 @@ html = f'''<!DOCTYPE html>
     boardEl.innerHTML = html;
     boardEl.setAttribute("data-fp", html);
     restoreOpen(open);
+    applyTypeTab(currentTypeTab);
     window.dispatchEvent(new CustomEvent("bob-ops-painted"));
   }}
 

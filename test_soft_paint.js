@@ -738,8 +738,11 @@ function run() {
   if (cancelled.ci) fail("cancelled helper must not become Open CI");
 
   if (src.indexOf("function tabId") === -1) fail("tabId missing");
+  if (src.indexOf("function focusKey") === -1) fail("focusKey missing");
   if (src.indexOf("function glanceStatus") === -1) fail("glanceStatus missing");
   if (src.indexOf("function applyTypeTab") === -1) fail("applyTypeTab missing");
+  if (src.indexOf("function findFocusTarget") === -1) fail("findFocusTarget missing");
+  if (src.indexOf("function revealGlanceTarget") === -1) fail("revealGlanceTarget missing");
   if (src.indexOf("data-tab-panel") === -1 && html.indexOf("data-tab-panel") === -1) {
     fail("type tab panels missing");
   }
@@ -753,23 +756,34 @@ function run() {
   if (tabId("music") !== "") fail("invented music tab must drop");
   if (tabId("abilities") !== "") fail("footer sections are not type tabs");
   if (tabId("javascript:alert(1)") !== "") fail("evil tab id must drop");
+  const focusKey = eval("(" + extractFn(src, "focusKey") + ")");
+  if (focusKey("project", "Story Shelf") !== "project:story-shelf") fail("project focus key mismatch");
+  if (focusKey("decision", "adoptiq-live_cisco.1") !== "decision:adoptiq-live_cisco.1") {
+    fail("decision focus key mismatch");
+  }
+  if (focusKey("decision", "../../escape") || focusKey("decision", "x".repeat(65))) {
+    fail("unsafe decision focus key must drop");
+  }
+  if (focusKey("project", "🔥") || focusKey("other", "WebJam")) fail("invalid focus key must drop");
   const attentionRank = eval("(" + extractFn(src, "attentionRank") + ")");
   const glanceStatus = eval(
-    "(function (tabId, attentionRank) { " +
+    "(function (tabId, attentionRank, focusKey) { " +
       "var TYPE_TAB_LABELS = { controls:'Decisions', 'live-shipping':'Live', " +
       "'apps-utilities':'Apps', cisco:'Cisco', messaging:'Bob', " +
       "'private-media':'Media', parked:'Parked' }; " +
       "function tabLabel(id) { return TYPE_TAB_LABELS[tabId(id)] || ''; } " +
       "return " + extractFn(src, "glanceStatus") + "; })"
-  )(tabId, attentionRank);
+  )(tabId, attentionRank, focusKey);
   const g = glanceStatus([{ id: "x", title: "AdoptIQ" }], [{ id: "live-shipping", projects: [{ status: "yellow" }] }]);
-  if (g.text !== "AdoptIQ" || g.tab !== "controls") fail("pending glance must name the gate");
+  if (g.text !== "AdoptIQ" || g.tab !== "controls" || g.focus !== "decision:x") {
+    fail("pending glance must name and target the gate");
+  }
   const g3 = glanceStatus([
     { id: "che-live-pull", title: "Che live pull", risk: "low" },
     { id: "logic-keys-wavs", title: "Logic keys and WAVs", risk: "low" },
     { id: "adoptiq-live-cisco", title: "AdoptIQ live Cisco readiness", risk: "high" },
   ], []);
-  if (g3.text !== "AdoptIQ live Cisco readiness" || g3.tab !== "controls") {
+  if (g3.text !== "AdoptIQ live Cisco readiness" || g3.tab !== "controls" || g3.focus !== "decision:adoptiq-live-cisco") {
     fail("three-gate glance must name the one next action: " + g3.text);
   }
   if (/\+\s*\d+\s*more/.test(g3.text)) {
@@ -782,9 +796,16 @@ function run() {
   if (leftoverJeff.text !== "Quiet" || leftoverJeff.tab !== "") {
     fail("leftover lane Jeff-gate must not look like an active Jeff yes: " + leftoverJeff.text);
   }
-  const live = glanceStatus([], [{ id: "live-shipping", projects: [{ status: "yellow" }] }]);
-  if (live.text !== "Live needs a look" || live.tab !== "live-shipping") {
+  const live = glanceStatus([], [{ id: "live-shipping", projects: [{ name: "WebJam", status: "yellow" }] }]);
+  if (live.text !== "WebJam needs a look" || live.tab !== "live-shipping" || live.focus !== "project:webjam") {
     fail("live yellow must be one short glance");
+  }
+  const mixed = glanceStatus([], [{
+    id: "apps-utilities",
+    projects: [{ name: "Door", status: "jeff-gate" }, { name: "TACTrack", status: "yellow" }],
+  }]);
+  if (mixed.text !== "TACTrack needs a look" || mixed.focus !== "project:tactrack") {
+    fail("owner-only row must not hide actionable work");
   }
   const quiet = glanceStatus([], [{ id: "live-shipping", projects: [{ status: "green" }] }]);
   if (quiet.text !== "Quiet" || quiet.tab !== "") fail("all-green glance must stay Quiet");
@@ -806,7 +827,29 @@ function run() {
   if (nav.indexOf("tab-controls") !== -1 || nav.indexOf(">Decisions<") !== -1) {
     fail("first-screen tab bar must not include Decisions chrome");
   }
-  if (src.indexOf("fromGlance") !== -1) fail("glance must toggle like a type tab, not a one-way door");
+  if (src.indexOf("fromGlance") === -1 || src.indexOf("revealGlanceTarget(id, focus)") === -1) {
+    fail("glance must reveal its exact target");
+  }
+  const validFocusKey = eval(
+    "(function (focusKey) { return " + extractFn(src, "validFocusKey") + "; })"
+  )(focusKey);
+  const findFocusTarget = eval(
+    "(function (validFocusKey) { return " + extractFn(src, "findFocusTarget") + "; })"
+  )(validFocusKey);
+  const wrong = { getAttribute: () => "project:other" };
+  const exact = { getAttribute: () => "project:webjam" };
+  const panel = { querySelectorAll: () => [wrong, exact] };
+  if (findFocusTarget(panel, "project:webjam") !== exact) fail("exact focus target not found");
+  if (findFocusTarget(panel, "project:missing") !== null) fail("missing target must not guess");
+  if (findFocusTarget(panel, "project:<script>") !== null) fail("unsafe target must fail closed");
+  const duplicate = { getAttribute: () => "project:webjam" };
+  const ambiguousPanel = { querySelectorAll: () => [exact, duplicate] };
+  if (findFocusTarget(ambiguousPanel, "project:webjam") !== null) {
+    fail("ambiguous target must not select a neighboring row");
+  }
+  const paintAt = src.indexOf("boardEl.innerHTML = html;");
+  const restoreTabAt = src.indexOf("applyTypeTab(currentTypeTab);", paintAt);
+  if (paintAt < 0 || restoreTabAt < paintAt) fail("soft paint must restore the selected tab");
   if (src.indexOf("function publicProbeDetail") === -1) fail("publicProbeDetail missing");
   const publicProbeDetail = eval("(" + extractFn(src, "publicProbeDetail") + ")");
   if (publicProbeDetail("/Users/owner/private/agents-status.json") !== "No live Mac probe") {

@@ -26,6 +26,7 @@ from board_meta import (
     extract_agent_url,
     extract_cloud_agents_from_prs,
     first_class_sections,
+    focus_key,
     glance_html,
     glance_status,
     is_ci_noise,
@@ -308,18 +309,21 @@ class BoardMetaTests(unittest.TestCase):
         g = glance_status(pending, sections)
         self.assertEqual(g["text"], "AdoptIQ")
         self.assertEqual(g["tab"], "controls")
+        self.assertEqual(g["focus"], "decision:adoptiq-live-cisco")
         g4 = glance_status(pending * 4, sections)
         self.assertEqual(g4["text"], "AdoptIQ")
         self.assertNotIn("more", g4["text"])
         quiet_live = glance_status([], sections)
-        self.assertEqual(quiet_live["text"], "Cisco is red")
+        self.assertEqual(quiet_live["text"], "AdoptIQ is red")
         self.assertEqual(quiet_live["tab"], "cisco")
+        self.assertEqual(quiet_live["focus"], "project:adoptiq")
         yellow_only = glance_status(
             [],
             [{"id": "live-shipping", "projects": [{"name": "WebJam", "status": "yellow"}]}],
         )
-        self.assertEqual(yellow_only["text"], "Live needs a look")
+        self.assertEqual(yellow_only["text"], "WebJam needs a look")
         self.assertEqual(yellow_only["tab"], "live-shipping")
+        self.assertEqual(yellow_only["focus"], "project:webjam")
         leftover_jeff = glance_status(
             [],
             [{"id": "apps-utilities", "projects": [{"name": "Door", "status": "jeff-gate"}]}],
@@ -359,7 +363,43 @@ class BoardMetaTests(unittest.TestCase):
                 },
             ],
         )
-        self.assertEqual(honest_live, {"text": "Apps needs a look", "tab": "apps-utilities"})
+        self.assertEqual(
+            honest_live,
+            {
+                "text": "Story Shelf needs a look",
+                "tab": "apps-utilities",
+                "focus": "project:story-shelf",
+            },
+        )
+
+        owner_hold_plus_work = glance_status(
+            [],
+            [{
+                "id": "apps-utilities",
+                "projects": [
+                    {"name": "Door", "status": "jeff-gate"},
+                    {"name": "TACTrack", "status": "yellow"},
+                ],
+            }],
+        )
+        self.assertEqual(owner_hold_plus_work["text"], "TACTrack needs a look")
+        self.assertEqual(owner_hold_plus_work["focus"], "project:tactrack")
+
+    def test_focus_keys_are_stable_and_fail_closed(self):
+        self.assertEqual(focus_key("project", "Andrea NanoBot"), "project:andrea-nanobot")
+        self.assertEqual(focus_key("decision", "adoptiq-live_cisco.1"), "decision:adoptiq-live_cisco.1")
+        self.assertEqual(focus_key("project", "<script>"), "project:script")
+        self.assertEqual(focus_key("project", "\U0001f525"), "")
+        self.assertEqual(focus_key("decision", "../../escape"), "")
+        self.assertEqual(focus_key("decision", "x" * 65), "")
+        self.assertEqual(focus_key("unknown", "WebJam"), "")
+
+        fallback = glance_status(
+            [{"id": "../../escape", "title": "Do not focus", "risk": "high"}],
+            [{"id": "live-shipping", "projects": [{"name": "WebJam", "status": "yellow"}]}],
+        )
+        self.assertEqual(fallback["text"], "WebJam needs a look")
+        self.assertEqual(fallback["focus"], "project:webjam")
 
     def test_refresh_standing_is_current_jeff_gates(self):
         blob = Path(__file__).with_name("refresh.sh").read_text()
@@ -404,6 +444,7 @@ class BoardMetaTests(unittest.TestCase):
         # First screen names that one next action -- never a leftover yes-count.
         self.assertEqual(g["text"], "AdoptIQ live Cisco readiness")
         self.assertEqual(g["tab"], "controls")
+        self.assertEqual(g["focus"], "decision:adoptiq-live-cisco")
         self.assertNotIn("more", g["text"])
 
     def test_type_tabs_html_skips_empty_decisions_and_invented_ids(self):
@@ -445,6 +486,7 @@ class BoardMetaTests(unittest.TestCase):
         self.assertIn('data-tab="controls"', glance)
         self.assertIn('aria-label="Next action"', glance)
         self.assertIn('aria-controls="controls"', glance)
+        self.assertIn('data-focus-target="decision:x"', glance)
         self.assertNotIn("<", glance_status([{"id": "x"}], sections)["text"])
 
     def test_unknown_mac_probes_collapse_to_one_honest_line(self):

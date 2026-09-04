@@ -55,6 +55,7 @@ Always inspect the failed job or annotation. A zero-step hosted failure proves o
 - Feature and documentation pull requests must not change `index.html` or `status.json`.
 - Run `./qa-source-only.sh`; it generates disposable artifacts and must leave the checkout clean.
 - Verify the generated browser starts with `data-snapshot-trust="current"`; the stale-state smoke must prove poll failure and >45-minute refresh silence switch it to a last-verified snapshot with one bounded **Retry now** action.
+- Verify the first-screen next action names one real decision or red/yellow project, opens its existing panel, and focuses the exact sanitized row. A malformed or absent target must never select a neighbor, and a soft paint must preserve the selected tab.
 - Let the scheduled workflow materialize generated files after source lands.
 - Do not manually dispatch, rerun, cancel, or change scheduler settings without explicit approval.
 - Wait for both the natural refresh and its Pages deployment before calling publication green.
