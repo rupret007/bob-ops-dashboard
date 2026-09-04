@@ -158,6 +158,12 @@ grep -q 'pollSeq' "$INDEX" || fail "pollSeq missing"
 grep -q 'decideBusy' "$INDEX" || fail "decideBusy missing"
 grep -q 'pendingSeq' "$INDEX" || fail "pendingSeq missing"
 grep -q 'function boardFingerprint' "$INDEX" || fail "boardFingerprint missing"
+grep -q 'function focusKey' "$INDEX" || fail "focusKey missing"
+grep -q 'function findFocusTarget' "$INDEX" || fail "findFocusTarget missing"
+grep -q 'function revealGlanceTarget' "$INDEX" || fail "revealGlanceTarget missing"
+grep -q 'data-focus-target=' "$INDEX" || fail "next action missing exact focus target"
+grep -q 'data-focus-key=' "$INDEX" || fail "project/decision rows missing focus keys"
+grep -q 'is-glance-target' "$INDEX" || fail "exact target confirmation style missing"
 grep -q 'function ageGateAgents' "$INDEX" || fail "ageGateAgents missing"
 grep -q 'data-checked-at' "$INDEX" || fail "agent data-checked-at missing"
 grep -q 'id="pending-box"' "$INDEX" || fail "pending-box missing"
@@ -205,6 +211,11 @@ grep -q 'resolve_agents' "$REFRESH" || fail "refresh.sh missing resolve_agents"
 grep -q 'status_from_fetch' "$REFRESH" || fail "refresh.sh missing status_from_fetch"
 grep -q 'pending-more' "$REFRESH" || fail "refresh.sh missing pending-more"
 grep -q 'boardFingerprint' "$REFRESH" || fail "refresh.sh missing boardFingerprint"
+grep -q 'function focusKey' "$REFRESH" || fail "refresh.sh missing focusKey"
+grep -q 'function findFocusTarget' "$REFRESH" || fail "refresh.sh missing findFocusTarget"
+grep -q 'function revealGlanceTarget' "$REFRESH" || fail "refresh.sh missing revealGlanceTarget"
+grep -q 'data-focus-target=' "$REFRESH" || fail "refresh.sh missing exact glance target"
+grep -q 'data-focus-key=' "$REFRESH" || fail "refresh.sh missing row focus keys"
 grep -q 'ageGateAgents' "$REFRESH" || fail "refresh.sh missing ageGateAgents"
 grep -q 'decisionHref' "$REFRESH" || fail "refresh.sh missing decisionHref"
 grep -q 'pick_tip_ci' "$REFRESH" || fail "refresh.sh missing pick_tip_ci"
@@ -486,7 +497,7 @@ for p in projects:
     if not (p.get("private") or name in HIGH_LEVEL_PUBLIC_NAMES):
         continue
     article = re.search(
-        rf'<article class="lane[^"]*"><h3>{re.escape(name)}</h3>.*?</article>',
+        rf'<article\b[^>]*\bclass="lane[^"]*"[^>]*><h3>{re.escape(name)}</h3>.*?</article>',
         html,
     )
     if not article:
@@ -1219,7 +1230,7 @@ for name in high_level_named:
     ):
         raise SystemExit(name + " must not publish hosted failure as public CI")
     article = re.search(
-        rf'<article class="lane[^"]*"><h3>{re.escape(name)}</h3>.*?</article>',
+        rf'<article\b[^>]*\bclass="lane[^"]*"[^>]*><h3>{re.escape(name)}</h3>.*?</article>',
         html,
     )
     if not article:
@@ -1481,6 +1492,8 @@ glance_at = html.find('id="board-glance"')
 glance_tag = html[glance_at:html.find("</button>", glance_at) + 9] if glance_at >= 0 else ""
 if 'aria-label="Next action"' not in glance_tag:
     raise SystemExit("first-screen glance must be the named next action")
+if 'data-focus-target="' not in glance_tag:
+    raise SystemExit("first-screen glance must name an exact safe target")
 if re.search(r"\+\s*\d+\s*more", glance_tag):
     raise SystemExit("first-screen glance must be one next action, not a leftover yes-count")
 if "waiting on Jeff" in glance_tag:
@@ -1517,8 +1530,12 @@ if "Agents unknown" not in html:
     raise SystemExit("unknown Mac probes must stay honest in the document, not invent Running")
 if "probe-agents-status.sh" in html.split("<script>", 1)[0]:
     raise SystemExit("local probe helper name leaked onto the public page")
-if "fromGlance" in html:
-    raise SystemExit("glance must toggle like a type tab")
+if "fromGlance" not in html or "revealGlanceTarget(id, focus)" not in html:
+    raise SystemExit("glance must reveal the exact named work")
+paint_at = html.find("boardEl.innerHTML = html;")
+restore_at = html.find("applyTypeTab(currentTypeTab);", paint_at)
+if paint_at < 0 or restore_at < paint_at:
+    raise SystemExit("soft paint must restore the selected type tab")
 if "body.tab-home footer" not in html:
     raise SystemExit("home screen must hide the repo footer")
 if "body.tab-home .live-stamp .when" not in html:

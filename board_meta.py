@@ -821,6 +821,27 @@ def tab_label(section_id: Any) -> str:
     return TYPE_TAB_LABELS.get(sid, "")
 
 
+def focus_key(kind: Any, raw: Any) -> str:
+    """Stable, public-safe key for one glance target. Empty means no targeting."""
+    prefix = str(kind or "").strip().lower()
+    value = str(raw or "").strip()
+    if prefix == "decision":
+        if len(value) > 64 or not PENDING_ID_RE.fullmatch(value):
+            return ""
+        token = value.lower()
+    elif prefix == "project":
+        token = (
+            re.sub(r"[^a-z0-9]+", "-", value.lower())
+            .strip("-")[:64]
+            .rstrip("-")
+        )
+        if not token:
+            return ""
+    else:
+        return ""
+    return prefix + ":" + token
+
+
 def is_type_tab(section_id: Any) -> bool:
     """True for the real project-type sections that get a phone tab."""
     return bool(tab_id(section_id))
@@ -854,13 +875,22 @@ def glance_pending_title(item: Any) -> str:
 
 
 def glance_status(pending: Any, sections: Any) -> dict[str, str]:
-    """One first-screen next action. Never a yes-count or leftover Jeff-yes."""
-    rows = sort_pending(pending)
+    """One exact first-screen action. Never a yes-count or leftover Jeff-yes."""
+    rows = [
+        item for item in sort_pending(pending)
+        if focus_key("decision", item.get("id"))
+    ]
     if rows:
         title = glance_pending_title(rows[0]) or "Pending"
-        return {"text": title, "tab": "controls"}
+        return {
+            "text": title,
+            "tab": "controls",
+            "focus": focus_key("decision", rows[0].get("id")),
+        }
     worst_rank = 99
     worst_id = ""
+    worst_name = ""
+    worst_focus = ""
     for sec in sections or []:
         if not isinstance(sec, dict):
             continue
@@ -869,31 +899,50 @@ def glance_status(pending: Any, sections: Any) -> dict[str, str]:
             continue
         for project in sec.get("projects") or []:
             rank = attention_rank(project)
+            target = focus_key(
+                "project",
+                project.get("name") if isinstance(project, dict) else "",
+            )
+            if rank not in (0, 2) or not target:
+                continue
             if rank < worst_rank:
                 worst_rank = rank
                 worst_id = sid
-    # Jeff yes lives in the pending inbox. Leftover lane jeff-gate
-    # (owner-only / parked hardware) must not steal the first screen.
+                worst_name = glance_pending_title({"title": project.get("name")})
+                worst_focus = target
+    # Jeff yes lives in the pending inbox. Leftover lane jeff-gate and quiet
+    # work are skipped before ranking so they cannot hide a real red/yellow row.
     if worst_id:
-        label = tab_label(worst_id)
+        label = worst_name or tab_label(worst_id)
         if worst_rank == 0:
-            return {"text": label + " is red", "tab": worst_id}
+            return {
+                "text": label + " is red",
+                "tab": worst_id,
+                "focus": worst_focus,
+            }
         if worst_rank == 2:
-            return {"text": label + " needs a look", "tab": worst_id}
+            return {
+                "text": label + " needs a look",
+                "tab": worst_id,
+                "focus": worst_focus,
+            }
     return {"text": "Quiet", "tab": ""}
 
 
 def glance_html(pending: Any, sections: Any) -> str:
-    """First-screen next action. Taps an existing type when there is somewhere to go."""
+    """First-screen action opens its existing type and exact safe target."""
     glance = glance_status(pending, sections)
     text = html_lib.escape(str(glance.get("text") or "Quiet"))
     sid = tab_id(glance.get("tab"))
+    focus = str(glance.get("focus") or "")
     extra = ' data-tab="' + html_lib.escape(sid) + '"' if sid else ""
+    target = ' data-focus-target="' + html_lib.escape(focus) + '"' if focus else ""
     controls = ' aria-controls="' + html_lib.escape(sid) + '"' if sid else ""
     return (
         '<button type="button" class="board-glance" id="board-glance"'
         + ' aria-label="Next action"'
         + extra
+        + target
         + controls
         + ">"
         + text
