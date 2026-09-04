@@ -54,6 +54,8 @@ Optional: a Bob / Grok routine can also call `./refresh.sh --push` on meaningful
 
 Refreshes read decision issues but do not comment on or close them. That remote mutation is guarded behind the explicit `BOB_DASHBOARD_APPLY_DECISIONS=1` operator opt-in, and the scheduled workflow does not enable it. Builds and QA must leave the flag unset.
 
+Before replacing the published snapshot, refresh requires a complete metadata, default-branch, open-PR, Actions, and release read for every public portfolio repository. A partial GitHub/API collection exits before writing `index.html` or `status.json`, so the last truthful board remains available instead of transiently repainting products as missing. Private high-level lanes may still be inaccessible to the Actions token and do not weaken this public-row integrity gate.
+
 ### Actions token limits
 
 Workflow uses default `GITHUB_TOKEN` (`permissions: contents: write`) plus `gh auth setup-git`. It can read **public** `rupret007/*` repos and push this dashboard. **Private** repos (e.g. AdoptIQ / TACTrack) may show as inaccessible from Actions -- that is OK; keep high-level notes in the board.

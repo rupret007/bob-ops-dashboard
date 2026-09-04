@@ -78,14 +78,22 @@ def api_all(path):
             return rows, True
     return [], False
 
-meta = api(f"repos/{full}")
-if not meta:
-    print(json.dumps({"name": repo, "accessible": False, "error": "inaccessible"}))
+meta = api(f"repos/{full}", None)
+if not isinstance(meta, dict):
+    print(json.dumps({
+        "name": repo,
+        "full_name": full,
+        "accessible": False,
+        "collection_complete": False,
+        "error": "metadata unavailable",
+    }))
     sys.exit(0)
 
 branch = meta.get("default_branch") or "main"
 private = bool(meta.get("private"))
-commit = api(f"repos/{full}/commits/{branch}", {}) or {}
+commit = api(f"repos/{full}/commits/{branch}", None)
+commit_complete = isinstance(commit, dict) and bool(commit.get("sha"))
+commit = commit if isinstance(commit, dict) else {}
 sha = (commit.get("sha") or "")[:7]
 c = (commit.get("commit") or {})
 date = ((c.get("committer") or {}).get("date")) or ((c.get("author") or {}).get("date"))
@@ -121,24 +129,37 @@ open_pr_stack = detect_linear_pr_stack(ready_prs, branch) if prs_complete else [
 # Never materialize one from a private PR onto this public dashboard.
 clouds = [] if private or not prs_complete else extract_cloud_agents_from_prs(prs, limit=1)
 # Default-branch only so PR runs cannot push tip CI out of the window.
-runs = api(f"repos/{full}/actions/runs?per_page=20&branch={branch}", {}) or {}
+runs = api(f"repos/{full}/actions/runs?per_page=20&branch={branch}", None)
+runs_complete = isinstance(runs, dict) and isinstance(runs.get("workflow_runs"), list)
+runs = runs if isinstance(runs, dict) else {}
 ci = pick_tip_ci(runs.get("workflow_runs") or [], branch, sha)
 
-rels = api(f"repos/{full}/releases?per_page=1", []) or []
+rels = api(f"repos/{full}/releases?per_page=1", None)
+releases_complete = isinstance(rels, list)
+rels = rels if isinstance(rels, list) else []
 release = None
 release_sha = None
 release_url = None
+tagged_complete = True
 if isinstance(rels, list) and rels and isinstance(rels[0], dict):
     tag = safe_release_tag(rels[0].get("tag_name"))
     if tag:
         release = tag
         release_url = rels[0].get("html_url")
-        tagged = api(f"repos/{full}/commits/{tag}", {}) or {}
+        tagged = api(f"repos/{full}/commits/{tag}", None)
+        tagged_complete = isinstance(tagged, dict) and bool(tagged.get("sha"))
         if isinstance(tagged, dict):
             release_sha = (tagged.get("sha") or "")[:7] or None
 
 print(json.dumps({
     "accessible": True,
+    "collection_complete": bool(
+        commit_complete
+        and prs_complete
+        and runs_complete
+        and releases_complete
+        and tagged_complete
+    ),
     "name": meta.get("name"),
     "full_name": full,
     "private": private,
@@ -192,6 +213,7 @@ from board_meta import (
     compact_signal,
     compact_unknown_mac_probes,
     decision_href,
+    incomplete_public_collections,
     parse_coord_issue,
     public_coord,
     status_with_coord_review,
@@ -224,6 +246,13 @@ from board_meta import (
 refresh_started_ms = int(os.environ.get("REFRESH_STARTED_MS") or 0) or int(time.time() * 1000)
 apply_decisions = os.environ.get("BOB_DASHBOARD_APPLY_DECISIONS") == "1"
 fetched = json.loads(Path(sys.argv[2]).read_text())
+incomplete_public = incomplete_public_collections(fetched)
+if incomplete_public:
+    names = ", ".join(incomplete_public)
+    raise SystemExit(
+        "Refusing to replace the last truthful dashboard: "
+        f"required public collection incomplete for {names}"
+    )
 by = {x.get("name") or x.get("full_name","").split("/")[-1]: x for x in fetched}
 now = datetime.now(ZoneInfo("America/Chicago"))
 updated_ct = now.strftime("%a %b %-d, %Y · %-I:%M %p %Z")
@@ -2407,6 +2436,7 @@ if [[ $PUSH -eq 1 ]]; then
   [[ -f "$ROOT/qa-claim-smoke.sh" ]] && cp "$ROOT/qa-claim-smoke.sh" "$WORK/"
   [[ -f "$ROOT/qa-source-only.sh" ]] && cp "$ROOT/qa-source-only.sh" "$WORK/"
   [[ -f "$ROOT/test_board_meta.py" ]] && cp "$ROOT/test_board_meta.py" "$WORK/"
+  [[ -f "$ROOT/test_refresh_outage_guard.py" ]] && cp "$ROOT/test_refresh_outage_guard.py" "$WORK/"
   [[ -f "$ROOT/test_open_decision.js" ]] && cp "$ROOT/test_open_decision.js" "$WORK/"
   [[ -f "$ROOT/test_open_links.js" ]] && cp "$ROOT/test_open_links.js" "$WORK/"
   [[ -f "$ROOT/test_soft_paint.js" ]] && cp "$ROOT/test_soft_paint.js" "$WORK/"
@@ -2428,6 +2458,7 @@ if [[ $PUSH -eq 1 ]]; then
   [[ -f qa-claim-smoke.sh ]] && git add qa-claim-smoke.sh
   [[ -f qa-source-only.sh ]] && git add qa-source-only.sh
   [[ -f test_board_meta.py ]] && git add test_board_meta.py
+  [[ -f test_refresh_outage_guard.py ]] && git add test_refresh_outage_guard.py
   [[ -f test_open_decision.js ]] && git add test_open_decision.js
   [[ -f test_open_links.js ]] && git add test_open_links.js
   [[ -f test_soft_paint.js ]] && git add test_soft_paint.js
