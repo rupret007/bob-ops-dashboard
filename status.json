@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-09-03T21:38:05.667260-05:00",
-  "generated_at_display": "Thu Sep 3, 2026 \u00b7 9:38 PM CDT",
+  "generated_at": "2026-09-03T21:52:17.321705-05:00",
+  "generated_at_display": "Thu Sep 3, 2026 \u00b7 9:52 PM CDT",
   "timezone": "America/Chicago",
   "owner": "rupret007",
   "dashboard": "bob-ops-dashboard",
@@ -436,9 +436,9 @@
           "accessible": true,
           "coord": {
             "repo": "Cursor-OpenClaw-Integration",
-            "agent": "none",
-            "lease_state": "none",
-            "next": "FREE for next Extra High / Codex",
+            "agent": "codex",
+            "lease_state": "active",
+            "next": "isolated exact-main worktree, implement receipt plus focused/full...",
             "sha": "58f63ca"
           }
         },
@@ -451,8 +451,8 @@
           "status": "green",
           "chip": "Green",
           "default_branch": "main",
-          "tip_sha": "36ff4d7",
-          "tip_date": "2026-09-04T02:23:48Z",
+          "tip_sha": "06ceaa3",
+          "tip_date": "2026-09-04T02:38:10Z",
           "open_prs": 0,
           "open_pr_url": null,
           "open_pr_number": null,
@@ -460,7 +460,14 @@
           "open_pr_stack": [],
           "pr_listing_complete": true,
           "agent_url": null,
-          "ci": null,
+          "ci": {
+            "name": "QA claim smoke",
+            "conclusion": "success",
+            "branch": "main",
+            "sha": "06ceaa3",
+            "created": "2026-09-04T02:38:15Z",
+            "html_url": "https://github.com/rupret007/bob-ops-dashboard/actions/runs/33830263284"
+          },
           "release": null,
           "release_sha": null,
           "release_url": null,
@@ -659,10 +666,10 @@
           "accessible": true,
           "coord": {
             "repo": "Andrea_NanoBot",
-            "agent": "codex",
-            "lease_state": "active",
-            "next": "create isolated clean worktree, implement one actionable...",
-            "sha": "c7769c7"
+            "agent": "none",
+            "lease_state": "none",
+            "next": "Karen review #34; inspect hosted exact-head matrices when complete",
+            "sha": "873b5c6"
           }
         },
         {
@@ -859,7 +866,7 @@
   ],
   "inaccessible": [],
   "publish_notes": "Public board -- no secrets or customer paths. Private repositories stay high-level; AI Music Vault stays private-content-boundary only.",
-  "refresh_started_ms": 1788489409206,
+  "refresh_started_ms": 1788490260204,
   "agents_source": "file:stale->unknown",
   "agents": [
     {
