@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-09-04T16:38:33.967346-05:00",
-  "generated_at_display": "Fri Sep 4, 2026 \u00b7 4:38 PM CDT",
+  "generated_at": "2026-09-04T16:59:13.501157-05:00",
+  "generated_at_display": "Fri Sep 4, 2026 \u00b7 4:59 PM CDT",
   "timezone": "America/Chicago",
   "owner": "rupret007",
   "dashboard": "bob-ops-dashboard",
@@ -124,8 +124,8 @@
           "url": "https://github.com/rupret007/StoryBoard",
           "repo_url": "https://github.com/rupret007/StoryBoard",
           "private": false,
-          "status": "yellow",
-          "chip": "Yellow",
+          "status": "green",
+          "chip": "Green",
           "default_branch": "main",
           "tip_sha": "b7befc0",
           "tip_date": "2026-09-04T21:35:03Z",
@@ -138,7 +138,7 @@
           "agent_url": null,
           "ci": {
             "name": "Quality",
-            "conclusion": "in_progress",
+            "conclusion": "success",
             "branch": "main",
             "sha": "b7befc0",
             "created": "2026-09-04T21:35:06Z",
@@ -449,8 +449,8 @@
           "status": "green",
           "chip": "Green",
           "default_branch": "main",
-          "tip_sha": "bd0b20f",
-          "tip_date": "2026-09-04T21:17:08Z",
+          "tip_sha": "a5cc462",
+          "tip_date": "2026-09-04T21:38:38Z",
           "open_prs": 0,
           "open_pr_url": null,
           "open_pr_number": null,
@@ -462,9 +462,9 @@
             "name": "QA claim smoke",
             "conclusion": "success",
             "branch": "main",
-            "sha": "bd0b20f",
-            "created": "2026-09-04T21:17:11Z",
-            "html_url": "https://github.com/rupret007/bob-ops-dashboard/actions/runs/33920381940"
+            "sha": "a5cc462",
+            "created": "2026-09-04T21:38:42Z",
+            "html_url": "https://github.com/rupret007/bob-ops-dashboard/actions/runs/33922037053"
           },
           "release": null,
           "release_sha": null,
@@ -476,7 +476,7 @@
             "agent": "none",
             "lease_state": "none",
             "next": "FREE for next Extra High / Codex",
-            "sha": "70d714a"
+            "sha": "a5cc462"
           }
         },
         {
@@ -862,7 +862,7 @@
   ],
   "inaccessible": [],
   "publish_notes": "Public board -- no secrets or customer paths. Private repositories stay high-level; AI Music Vault stays private-content-boundary only.",
-  "refresh_started_ms": 1788557840146,
+  "refresh_started_ms": 1788559077304,
   "agents_source": "file:stale->unknown",
   "agents": [
     {
