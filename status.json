@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-09-04T16:17:03.526316-05:00",
-  "generated_at_display": "Fri Sep 4, 2026 \u00b7 4:17 PM CDT",
+  "generated_at": "2026-09-04T16:38:33.967346-05:00",
+  "generated_at_display": "Fri Sep 4, 2026 \u00b7 4:38 PM CDT",
   "timezone": "America/Chicago",
   "owner": "rupret007",
   "dashboard": "bob-ops-dashboard",
@@ -85,8 +85,8 @@
           "url": "https://github.com/rupret007/StoryLiner",
           "repo_url": "https://github.com/rupret007/StoryLiner",
           "private": false,
-          "status": "yellow",
-          "chip": "Yellow",
+          "status": "green",
+          "chip": "Green",
           "default_branch": "main",
           "tip_sha": "460287c",
           "tip_date": "2026-09-04T21:13:41Z",
@@ -99,7 +99,7 @@
           "agent_url": null,
           "ci": {
             "name": "CI",
-            "conclusion": "in_progress",
+            "conclusion": "success",
             "branch": "main",
             "sha": "460287c",
             "created": "2026-09-04T21:13:44Z",
@@ -124,11 +124,11 @@
           "url": "https://github.com/rupret007/StoryBoard",
           "repo_url": "https://github.com/rupret007/StoryBoard",
           "private": false,
-          "status": "green",
-          "chip": "Green",
+          "status": "yellow",
+          "chip": "Yellow",
           "default_branch": "main",
-          "tip_sha": "b565fc3",
-          "tip_date": "2026-09-04T00:51:40Z",
+          "tip_sha": "b7befc0",
+          "tip_date": "2026-09-04T21:35:03Z",
           "open_prs": 0,
           "open_pr_url": null,
           "open_pr_number": null,
@@ -138,11 +138,11 @@
           "agent_url": null,
           "ci": {
             "name": "Quality",
-            "conclusion": "success",
+            "conclusion": "in_progress",
             "branch": "main",
-            "sha": "b565fc3",
-            "created": "2026-09-04T00:51:44Z",
-            "html_url": "https://github.com/rupret007/StoryBoard/actions/runs/33823487370"
+            "sha": "b7befc0",
+            "created": "2026-09-04T21:35:06Z",
+            "html_url": "https://github.com/rupret007/StoryBoard/actions/runs/33921767863"
           },
           "release": null,
           "release_sha": null,
@@ -151,10 +151,10 @@
           "accessible": true,
           "coord": {
             "repo": "StoryBoard",
-            "agent": "codex",
-            "lease_state": "active",
-            "next": "Codex implements and verifies one real-product draft for Karen, then...",
-            "sha": "b565fc3"
+            "agent": "none",
+            "lease_state": "none",
+            "next": "FREE for next Extra High / Codex",
+            "sha": "b7befc0"
           }
         },
         {
@@ -449,8 +449,8 @@
           "status": "green",
           "chip": "Green",
           "default_branch": "main",
-          "tip_sha": "9e4ce70",
-          "tip_date": "2026-09-04T20:57:24Z",
+          "tip_sha": "bd0b20f",
+          "tip_date": "2026-09-04T21:17:08Z",
           "open_prs": 0,
           "open_pr_url": null,
           "open_pr_number": null,
@@ -458,7 +458,14 @@
           "open_pr_stack": [],
           "pr_listing_complete": true,
           "agent_url": null,
-          "ci": null,
+          "ci": {
+            "name": "QA claim smoke",
+            "conclusion": "success",
+            "branch": "main",
+            "sha": "bd0b20f",
+            "created": "2026-09-04T21:17:11Z",
+            "html_url": "https://github.com/rupret007/bob-ops-dashboard/actions/runs/33920381940"
+          },
           "release": null,
           "release_sha": null,
           "release_url": null,
@@ -605,9 +612,9 @@
           "ci": {},
           "coord": {
             "repo": "TACTrack",
-            "agent": "none",
-            "lease_state": "none",
-            "next": "FREE for next Extra High / Codex"
+            "agent": "codex",
+            "lease_state": "active",
+            "next": "Codex creates an isolated worktree, implements one real product slice..."
           }
         },
         {
@@ -631,8 +638,8 @@
           "status": "green",
           "chip": "Green",
           "default_branch": "main",
-          "tip_sha": "12b66ed",
-          "tip_date": "2026-09-04T18:48:17Z",
+          "tip_sha": "9d40edd",
+          "tip_date": "2026-09-04T21:17:39Z",
           "open_prs": 0,
           "open_pr_url": null,
           "open_pr_number": null,
@@ -644,9 +651,9 @@
             "name": "AGI Layer CI",
             "conclusion": "success",
             "branch": "main",
-            "sha": "12b66ed",
-            "created": "2026-09-04T18:48:20Z",
-            "html_url": "https://github.com/rupret007/Andrea_NanoBot/actions/runs/33907845095"
+            "sha": "9d40edd",
+            "created": "2026-09-04T21:17:43Z",
+            "html_url": "https://github.com/rupret007/Andrea_NanoBot/actions/runs/33920421041"
           },
           "release": null,
           "release_sha": null,
@@ -657,8 +664,8 @@
             "repo": "Andrea_NanoBot",
             "agent": "none",
             "lease_state": "none",
-            "next": "Karen leftover+security on #36; Bob leftover-squash after PASS only",
-            "sha": "12b66ed"
+            "next": "FREE for next Extra High / Codex",
+            "sha": "9d40edd"
           }
         },
         {
@@ -855,7 +862,7 @@
   ],
   "inaccessible": [],
   "publish_notes": "Public board -- no secrets or customer paths. Private repositories stay high-level; AI Music Vault stays private-content-boundary only.",
-  "refresh_started_ms": 1788556546822,
+  "refresh_started_ms": 1788557840146,
   "agents_source": "file:stale->unknown",
   "agents": [
     {
