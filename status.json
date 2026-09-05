@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-09-04T19:23:02.021063-05:00",
-  "generated_at_display": "Fri Sep 4, 2026 \u00b7 7:23 PM CDT",
+  "generated_at": "2026-09-04T19:35:04.132621-05:00",
+  "generated_at_display": "Fri Sep 4, 2026 \u00b7 7:35 PM CDT",
   "timezone": "America/Chicago",
   "owner": "rupret007",
   "dashboard": "bob-ops-dashboard",
@@ -75,8 +75,11 @@
             "repo": "webjam",
             "agent": "codex",
             "lease_state": "active",
-            "next": "Codex Astra Ultra creates isolated exact-base branch, maps protocol...",
-            "sha": "771839f"
+            "next": "wait hosted-green on exact tip ee8e9ce5; then Bob \u2192 Karen...",
+            "sha": "771839f",
+            "pr": 66,
+            "pr_url": "https://github.com/rupret007/webjam/pull/66",
+            "pr_draft": true
           }
         },
         {
@@ -449,8 +452,8 @@
           "status": "green",
           "chip": "Green",
           "default_branch": "main",
-          "tip_sha": "23e14a2",
-          "tip_date": "2026-09-05T00:07:42Z",
+          "tip_sha": "1c4b8c4",
+          "tip_date": "2026-09-05T00:23:06Z",
           "open_prs": 0,
           "open_pr_url": null,
           "open_pr_number": null,
@@ -462,9 +465,9 @@
             "name": "QA claim smoke",
             "conclusion": "success",
             "branch": "main",
-            "sha": "23e14a2",
-            "created": "2026-09-05T00:07:46Z",
-            "html_url": "https://github.com/rupret007/bob-ops-dashboard/actions/runs/33931938819"
+            "sha": "1c4b8c4",
+            "created": "2026-09-05T00:23:10Z",
+            "html_url": "https://github.com/rupret007/bob-ops-dashboard/actions/runs/33932798305"
           },
           "release": null,
           "release_sha": null,
@@ -862,7 +865,7 @@
   ],
   "inaccessible": [],
   "publish_notes": "Public board -- no secrets or customer paths. Private repositories stay high-level; AI Music Vault stays private-content-boundary only.",
-  "refresh_started_ms": 1788567708573,
+  "refresh_started_ms": 1788568426217,
   "agents_source": "file:stale->unknown",
   "agents": [
     {
