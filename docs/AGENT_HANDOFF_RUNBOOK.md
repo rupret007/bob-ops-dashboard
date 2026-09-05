@@ -6,7 +6,7 @@ Use this runbook for every Bob/Grok portfolio round. It is a reusable process, n
 
 1. Read the active goal and the newest dated handoff completely.
 2. List every product as its own lane.
-3. Query each repository again for default branch, tip, open pull requests, draft state, base/head, mergeability, and checks.
+3. Query each currently authorized repository again for default branch, tip, open pull requests, draft state, base/head, mergeability, and checks. Current exclusions and another agent's live lease take precedence; never scan an excluded lane just to fill this checklist.
 4. Inspect local-only lanes without publishing paths or inventing remotes.
 5. Record the owner gate before choosing work.
 
@@ -53,9 +53,10 @@ Always inspect the failed job or annotation. A zero-step hosted failure proves o
 ## 6. Bob Ops source-only rule
 
 - Feature and documentation pull requests must not change `index.html` or `status.json`.
-- Run `./qa-source-only.sh`; it generates disposable artifacts and must leave the checkout clean.
+- Run `python3 qa-offline.py`; it generates marked synthetic artifacts, runs the full claim smoke without live repository/probe reads, and must leave scheduler-owned artifacts byte-stable. `./qa-source-only.sh` performs live portfolio reads and requires separate scope authorization.
 - Verify the generated browser starts with `data-snapshot-trust="current"`; the stale-state smoke must prove poll failure and >45-minute refresh silence switch it to a last-verified snapshot with one bounded **Retry now** action.
 - Verify the first-screen next action names one real decision or red/yellow project, opens its existing panel, and focuses the exact sanitized row. A malformed or absent target must never select a neighbor, and a soft paint must preserve the selected tab.
+- Verify full decision context is readable on phones. Opening a decision draft requires explicit review of a valid current snapshot; stale, failed, incomplete, changed, and removed decisions block it. The GitHub body receipt is informational: the unchanged issue consumer does not validate that receipt. Re-check the current work and owner approval before any operation, including when a composer was opened earlier.
 - Let the scheduled workflow materialize generated files after source lands.
 - Do not manually dispatch, rerun, cancel, or change scheduler settings without explicit approval.
 - Wait for both the natural refresh and its Pages deployment before calling publication green.

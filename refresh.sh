@@ -213,6 +213,7 @@ from board_meta import (
     compact_signal,
     compact_unknown_mac_probes,
     decision_href,
+    decision_review_item,
     incomplete_public_collections,
     parse_coord_issue,
     public_coord,
@@ -755,7 +756,8 @@ def pending_dec_link(verb, pid, title, extra_class=""):
     )
 
 def pending_item_html(it):
-    if not isinstance(it, dict):
+    it = decision_review_item(it)
+    if not it:
         return ""
     pid = str(it.get("id") or "")
     if not re.match(r"^[a-zA-Z0-9._-]+$", pid):
@@ -765,7 +767,7 @@ def pending_item_html(it):
     if risk not in ("high", "medium", "low"):
         risk = "low"
     kind = str(it.get("kind") or "ops")
-    detail = short_note(it.get("detail") or "", 72)
+    detail = it["detail"]
     focus = focus_key("decision", pid)
     focus_attr = f' data-focus-key="{h(focus)}" tabindex="-1"' if focus else ""
     return (
@@ -773,11 +775,9 @@ def pending_item_html(it):
         f'<div class="pending-head"><div class="ptitle">{h(title)}</div>'
         f'<span class="prisk {h(risk)}">{h(risk)}</span></div>'
         f'<div class="pdetail">{h(detail)}</div>'
-        f'<div class="prow">'
-        f'{pending_dec_link("APPROVE", pid, title)}'
-        f'{pending_dec_link("HOLD", pid, title, "warn")}'
-        f'{pending_dec_link("DENY", pid, title, "danger")}'
-        f'</div></div>'
+        f'<p class="decision-kind">Boundary: {h(kind)}</p>'
+        f'<button type="button" data-review-decision="{h(pid)}" disabled>Review choices</button>'
+        f'<div class="decision-review" aria-live="polite"></div></div>'
     )
 
 def pending_shell(items):
@@ -796,7 +796,8 @@ def pending_shell(items):
     hidden = "" if (attn_html or low_html) else " hidden"
     return (
         f'<div id="pending-box" class="pending-box"{hidden}>'
-        f'<p class="pending-help">Public board -- Approve opens a GitHub issue as <code>rupret007</code>.</p>'
+        f'<p class="pending-help">Review the full context first. Opening a GitHub draft is not submitting a decision. GitHub login as <code>rupret007</code> remains the authority.</p>'
+        '<noscript><p class="pending-help">Decision links require a current snapshot check and review. JavaScript is off; this board is read-only.</p></noscript>'
         f'<div id="pending-list">{"".join(attn_html)}{more}</div></div>'
     )
 
@@ -1092,7 +1093,14 @@ html = f'''<!DOCTYPE html>
   .pending-item:last-child {{ border-bottom:0; }}
   .pending-item .ptitle {{ font-weight:600; font-size:.95rem; margin:0; }}
   .pending-head {{ display:flex; align-items:baseline; justify-content:space-between; gap:.6rem; }}
-  .pending-item .pdetail {{ display:none; }}
+  .pending-item .pdetail {{ display:block; color:var(--muted); font-size:.85rem; margin:.35rem 0; white-space:pre-wrap; overflow-wrap:anywhere; }}
+  .pending-item .ptitle {{ overflow-wrap:anywhere; }}
+  .decision-kind {{ color:var(--muted); font-size:.75rem; margin:.35rem 0 .6rem; overflow-wrap:anywhere; }}
+  .decision-review {{ font-size:.8rem; line-height:1.45; overflow-wrap:anywhere; }}
+  .decision-review:not(:empty) {{ margin-top:.65rem; padding:.7rem; border:1px solid var(--orange); border-radius:8px; background:rgba(217,119,87,.06); }}
+  .decision-review p {{ margin:0 0 .5rem; }}
+  .pending-item .decision-review .prow {{ grid-template-columns:1fr; }}
+  .pending-item button:disabled {{ cursor:not-allowed; opacity:.65; }}
   .pending-item .prisk {{
     display:inline-block; font-size:.65rem; text-transform:uppercase; letter-spacing:.04em;
     color:var(--muted); padding:0; margin:0; flex:0 0 auto;
@@ -1182,10 +1190,7 @@ html = f'''<!DOCTYPE html>
   @media (min-width:720px) {{
     .wrap {{ padding:1.5rem 1.25rem 3.75rem; }}
     .lane .notes {{ -webkit-line-clamp:2; }}
-    .pending-item .pdetail {{
-      display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:2; overflow:hidden;
-      color:var(--muted); font-size:.78rem; margin:.15rem 0 0;
-    }}
+    .pending-item .decision-review .prow {{ grid-template-columns:1fr 1fr 1fr; }}
     .lane.is-quiet .notes {{ display:-webkit-box; }}
     section.pending h2, section.primary h2 {{ font-size:1.85rem; }}
     .type-tabs {{ flex-wrap:wrap; overflow:visible; }}
@@ -1216,7 +1221,98 @@ html = f'''<!DOCTYPE html>
     · <a href="./status.json">status.json</a></p>
   </footer>
 </div>
+<script type="application/json" id="initial-snapshot">{json.dumps(status, ensure_ascii=True).replace('<', chr(92) + 'u003c')}</script>
 <script>
+function decisionReviewText(value, limit, multiline) {{
+  if (typeof value !== "string" || value.length > limit) return false;
+  for (var i = 0; i < value.length; i++) {{
+    var code = value.charCodeAt(i);
+    if ((code < 32 && !(multiline && (code === 10 || code === 13 || code === 9))) || code === 127) return false;
+    if (code >= 0xd800 && code <= 0xdbff) {{
+      var next = value.charCodeAt(++i);
+      if (!(next >= 0xdc00 && next <= 0xdfff)) return false;
+    }} else if (code >= 0xdc00 && code <= 0xdfff) return false;
+  }}
+  return true;
+}}
+function decisionReviewItem(value) {{
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  if (!decisionReviewText(value.id, 64, false) || !/^[a-zA-Z0-9._-]+$/.test(value.id)) return null;
+  if (!decisionReviewText(value.title, 160, false) || !value.title.trim()) return null;
+  var detail = value.detail === undefined ? "" : value.detail;
+  var risk = value.risk;
+  var kind = value.kind === undefined ? "ops" : value.kind;
+  if (!decisionReviewText(detail, 2000, true) || ["high", "medium", "low"].indexOf(risk) < 0) return null;
+  if (!decisionReviewText(kind, 64, false) || !/^[ -~]+$/.test(kind) || !kind.trim()) return null;
+  return {{ id: value.id, title: value.title, detail: detail, risk: risk, kind: kind }};
+}}
+function decisionReviewIdentity(value) {{
+  var item = decisionReviewItem(value);
+  return item ? JSON.stringify([item.id, item.title, item.detail, item.risk, item.kind]) : "";
+}}
+function decisionTimestamp(value) {{
+  if (typeof value !== "string" || value.length > 64) return null;
+  var m = /^([0-9]{{4}})-([0-9]{{2}})-([0-9]{{2}})T([0-9]{{2}}):([0-9]{{2}}):([0-9]{{2}})(?:[.]([0-9]{{1,6}}))?(Z|([+-])([0-9]{{2}}):([0-9]{{2}}))$/.exec(value);
+  if (!m || m[0].length !== value.length) return null;
+  var year = +m[1], month = +m[2], day = +m[3], hour = +m[4], minute = +m[5], second = +m[6];
+  var leap = year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
+  var days = [31, leap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+  if (!year || month < 1 || month > 12 || day < 1 || day > days[month - 1] || hour > 23 || minute > 59 || second > 59 || +m[10] > 23 || +m[11] > 59) return null;
+  var date = new Date(0);
+  date.setUTCFullYear(year, month - 1, day);
+  date.setUTCHours(hour, minute, second, +((m[7] || "") + "000").slice(0, 3));
+  var offset = m[8] === "Z" ? 0 : (+m[10] * 60 + +m[11]) * 60000 * (m[9] === "+" ? 1 : -1);
+  return date.getTime() - offset;
+}}
+function decisionSnapshotTime(value) {{
+  var ms = decisionTimestamp(value);
+  return ms !== null && ms > 0 && ms <= Date.now() ? ms : 0;
+}}
+function reviewDecisionHref(verb, value, snapshot) {{
+  var item = decisionReviewItem(value);
+  if (["APPROVE", "HOLD", "DENY"].indexOf(verb) < 0 || !item || decisionTimestamp(snapshot) === null) return "";
+  var body = [
+    "Dashboard control decision", "", "id: " + item.id, "title: " + item.title,
+    "decision: " + verb.toLowerCase(), "from: public board", "risk: " + item.risk,
+    "kind: " + item.kind, "reviewed_snapshot: " + snapshot,
+    "reviewed_item: " + decisionReviewIdentity(item), "", "Reviewed public detail:", item.detail, "",
+    "Submit this issue while logged in as rupret007. That GitHub login is the real yes.",
+    "Bob: treat this as a one-shot inbox item. High-risk still needs the draft shown in chat before acting.",
+    "Snapshot receipt records what was reviewed; re-check current work before acting."
+  ].join(String.fromCharCode(10));
+  function encode(value) {{
+    return encodeURIComponent(value).replace(/%20/g, "+").replace(/[!'()*]/g, function (ch) {{ return "%" + ch.charCodeAt(0).toString(16).toUpperCase(); }});
+  }}
+  var url = "https://github.com/rupret007/bob-ops-dashboard/issues/new?title=" + encode("BOB-" + verb + ": " + item.id) + "&body=" + encode(body);
+  return url.length <= 8192 ? url : "";
+}}
+function validateAcceptedSnapshot(data) {{
+  if (!data || typeof data !== "object" || Array.isArray(data) || !decisionSnapshotTime(data.generated_at)) return false;
+  if (!Array.isArray(data.sections) || !data.sections.length || data.sections.length > 40 ||
+      !Array.isArray(data.pending) || data.pending.length > 100 || !Array.isArray(data.agents) ||
+      !Array.isArray(data.cloud_agents) || !Array.isArray(data.fetched_repos)) return false;
+  var sectionIds = Object.create(null);
+  var pendingIds = Object.create(null);
+  for (var i = 0; i < data.sections.length; i++) {{
+    var section = data.sections[i];
+    if (!section || typeof section !== "object" || typeof section.id !== "string" ||
+        !decisionReviewText(section.id, 64, false) || !/^[a-z0-9-]+$/.test(section.id) || sectionIds[section.id] || !Array.isArray(section.projects) || section.projects.length > 200) return false;
+    sectionIds[section.id] = true;
+    for (var j = 0; j < section.projects.length; j++) {{
+      var project = section.projects[j];
+      if (!project || typeof project !== "object" || Array.isArray(project) || !decisionReviewText(project.name, 160, false) || !project.name.trim()) return false;
+    }}
+  }}
+  if (!sectionIds.controls) return false;
+  for (var k = 0; k < data.pending.length; k++) {{
+    var item = decisionReviewItem(data.pending[k]);
+    if (!item || pendingIds[item.id.toLowerCase()]) return false;
+    pendingIds[item.id.toLowerCase()] = true;
+  }}
+  return data.agents.length <= 40 && data.cloud_agents.length <= 100 && data.fetched_repos.length <= 100 &&
+    data.agents.concat(data.cloud_agents).every(function (agent) {{ return agent && typeof agent === "object" && !Array.isArray(agent); }}) &&
+    data.fetched_repos.every(function (name) {{ return decisionReviewText(name, 160, false); }});
+}}
 function focusKey(kind, raw) {{
   var prefix = String(kind || "").replace(/^\s+|\s+$/g, "").toLowerCase();
   var value = String(raw || "").replace(/^\s+|\s+$/g, "");
@@ -1236,7 +1332,9 @@ function focusKey(kind, raw) {{
   // Public board: URL is enough. Real yes is a GitHub issue from rupret007.
   var statusEl = document.getElementById("panel-status");
   var decideBusy = {{}};
-  var pendingSeq = 0;
+  var acceptedSnapshot = null;
+  var reviewedDecision = null;
+  var decisionTrust = false;
 
   function pendingEls() {{
     return {{
@@ -1300,10 +1398,117 @@ function focusKey(kind, raw) {{
   }}
   window.openBlank = openBlank;
 
+  function currentDecision(id) {{
+    if (!acceptedSnapshot) return null;
+    for (var i = 0; i < acceptedSnapshot.items.length; i++) {{
+      if (acceptedSnapshot.items[i].id === id) return acceptedSnapshot.items[i];
+    }}
+    return null;
+  }}
+  function decisionIsCurrent() {{
+    if (!decisionTrust || !acceptedSnapshot) return false;
+    var ms = decisionSnapshotTime(acceptedSnapshot.at);
+    return !!ms && Date.now() - ms <= 45 * 60 * 1000;
+  }}
+  function reviewedHref(verb, id) {{
+    var item = currentDecision(id);
+    if (!decisionIsCurrent() || !item || !reviewedDecision || reviewedDecision.id !== id ||
+        reviewedDecision.identity !== decisionReviewIdentity(item)) return "";
+    return reviewDecisionHref(verb, item, acceptedSnapshot.at);
+  }}
+  function renderDecisionReviews() {{
+    var rows = document.querySelectorAll(".pending-item");
+    Array.prototype.forEach.call(rows, function (row) {{
+      var id = row.getAttribute("data-id");
+      var item = currentDecision(id);
+      var button = row.querySelector("[data-review-decision]");
+      var panel = row.querySelector(".decision-review");
+      if (!button || !panel) return;
+      var active = document.activeElement;
+      var focusedVerb = active && active.closest && active.closest(".pending-item") === row ? active.getAttribute("data-dec") : "";
+      var available = decisionIsCurrent() && !!item;
+      button.disabled = !available;
+      button.setAttribute("aria-expanded", reviewedDecision && reviewedDecision.id === id ? "true" : "false");
+      panel.textContent = "";
+      if (!available) {{
+        panel.textContent = "Read-only snapshot. Use Retry now above, then review the current decision before opening a GitHub draft.";
+        if (focusedVerb) {{ try {{ row.focus({{ preventScroll: true }}); }} catch (e) {{}} }}
+        return;
+      }}
+      if (!reviewedDecision || reviewedDecision.id !== id || reviewedDecision.identity !== decisionReviewIdentity(item)) return;
+      var note = document.createElement("p");
+      note.textContent = "Reviewed: " + item.title + ". Snapshot " + acceptedSnapshot.at + ". Opening a draft does not submit a decision.";
+      panel.appendChild(note);
+      var boundary = document.createElement("p");
+      boundary.textContent = "Submit on GitHub as rupret007. High-risk work still needs the exact draft shown in chat and a current owner recheck; this receipt is context, not execution permission.";
+      panel.appendChild(boundary);
+      var actions = document.createElement("div");
+      actions.className = "prow";
+      ["APPROVE", "HOLD", "DENY"].forEach(function (verb) {{
+        var href = reviewedHref(verb, id);
+        if (!href) return;
+        var link = document.createElement("a");
+        link.className = "dec" + (verb === "HOLD" ? " warn" : verb === "DENY" ? " danger" : "");
+        link.setAttribute("data-dec", verb);
+        link.setAttribute("href", href);
+        link.setAttribute("target", "_blank");
+        link.setAttribute("rel", "noopener noreferrer");
+        link.textContent = verb === "APPROVE" ? "Open approval draft" : verb === "HOLD" ? "Open hold draft" : "Open denial draft";
+        actions.appendChild(link);
+      }});
+      if (!actions.childNodes.length) {{
+        var tooLong = document.createElement("p");
+        tooLong.textContent = "This complete context is too long for a safe GitHub draft link. Nothing was shortened or submitted; review it with the owner in chat.";
+        panel.appendChild(tooLong);
+      }} else panel.appendChild(actions);
+      if (["APPROVE", "HOLD", "DENY"].indexOf(focusedVerb) >= 0) {{
+        var replacement = panel.querySelector('[data-dec="' + focusedVerb + '"]');
+        if (replacement) {{ try {{ replacement.focus({{ preventScroll: true }}); }} catch (e) {{}} }}
+      }}
+    }});
+  }}
+  function acceptDecisionSnapshot(data) {{
+    if (!validateAcceptedSnapshot(data) || (acceptedSnapshot && Date.parse(data.generated_at) < Date.parse(acceptedSnapshot.at))) {{
+      setDecisionTrust("invalid");
+      return false;
+    }}
+    var items = data.pending.map(decisionReviewItem);
+    var identity = JSON.stringify(items.map(decisionReviewIdentity).sort());
+    if (!acceptedSnapshot || acceptedSnapshot.identity !== identity) reviewedDecision = null;
+    acceptedSnapshot = {{ at: data.generated_at, items: items, identity: identity }};
+    return true;
+  }}
+  function setDecisionTrust(state) {{
+    var next = state === "current" && !!acceptedSnapshot && !!decisionSnapshotTime(acceptedSnapshot.at) &&
+      Date.now() - Date.parse(acceptedSnapshot.at) <= 45 * 60 * 1000;
+    if (decisionTrust === next) return;
+    decisionTrust = next;
+    if (!decisionTrust) reviewedDecision = null;
+    renderDecisionReviews();
+  }}
+  function reviewDecision(id) {{
+    var item = currentDecision(id);
+    if (!decisionIsCurrent() || !item) {{
+      setStatus("Current decision unavailable. Retry now, then review it again.", "warn");
+      renderDecisionReviews();
+      return false;
+    }}
+    reviewedDecision = {{ id: id, identity: decisionReviewIdentity(item) }};
+    renderDecisionReviews();
+    return true;
+  }}
+  window.bobDecisionReview = {{
+    accept: acceptDecisionSnapshot,
+    setTrust: setDecisionTrust,
+    review: reviewDecision,
+    reconcileRendering: renderDecisionReviews,
+    open: openDecisionIssue
+  }};
+
   function openDecisionIssue(verb, id, title) {{
-    var url = decisionHref(verb, id, title);
+    var url = reviewedHref(verb, id);
     if (!url) {{
-      setStatus("Bad pending id", "bad");
+      setStatus("Review the current full context before opening a GitHub draft. If unavailable, use Retry now.", "warn");
       return;
     }}
     var key = verb + ":" + String(id || "").trim();
@@ -1314,103 +1519,14 @@ function focusKey(kind, raw) {{
     setStatus(verb + " draft opened on GitHub. Submit the issue while logged in as rupret007.", "warn");
   }}
 
-  function renderPending(items) {{
-    var els = pendingEls();
-    if (!els.box || !els.list) return;
-    var rank = {{ high: 0, medium: 1, low: 2 }};
-    var rows = (items || []).filter(function (it) {{
-      return it && /^[a-zA-Z0-9._-]+$/.test(String(it.id || ""));
-    }}).slice().sort(function (a, b) {{
-      var ra = rank.hasOwnProperty(String(a.risk || "").toLowerCase()) ? rank[String(a.risk).toLowerCase()] : 5;
-      var rb = rank.hasOwnProperty(String(b.risk || "").toLowerCase()) ? rank[String(b.risk).toLowerCase()] : 5;
-      return ra - rb;
-    }});
-    els.list.innerHTML = "";
-    els.box.hidden = rows.length === 0;
-    var sec = document.getElementById("controls");
-    if (sec) sec.hidden = rows.length === 0;
-    if (!rows.length) return;
-    var attn = [];
-    var low = [];
-    rows.forEach(function (it) {{
-      if (String(it.risk || "").toLowerCase() === "low") low.push(it);
-      else attn.push(it);
-    }});
-    function pendingNode(it) {{
-      var div = document.createElement("div");
-      div.className = "pending-item";
-      div.setAttribute("data-id", String(it.id));
-      div.setAttribute("data-title", String(it.title || it.id));
-      var focus = focusKey("decision", it.id);
-      if (focus) {{
-        div.setAttribute("data-focus-key", focus);
-        div.setAttribute("tabindex", "-1");
-      }}
-      div.innerHTML =
-        '<div class="pending-head"><div class="ptitle"></div><span class="prisk"></span></div>' +
-        '<div class="pdetail"></div>' +
-        '<div class="prow"></div>';
-      var prow = div.querySelector(".prow");
-      function decLink(verb, extra) {{
-        var href = decisionHref(verb, it.id, it.title || it.id);
-        var a = document.createElement("a");
-        a.className = "dec" + (extra ? " " + extra : "");
-        a.setAttribute("data-dec", verb);
-        if (href) a.setAttribute("href", href);
-        a.setAttribute("target", "_blank");
-        a.setAttribute("rel", "noopener noreferrer");
-        a.textContent = verb === "APPROVE" ? "Approve" : verb === "HOLD" ? "Hold" : "Deny";
-        return a;
-      }}
-      prow.appendChild(decLink("APPROVE", ""));
-      prow.appendChild(decLink("HOLD", "warn"));
-      prow.appendChild(decLink("DENY", "danger"));
-      div.querySelector(".ptitle").textContent = it.title || it.id;
-      var detail = String(it.detail || "");
-      if (detail.length > 72) {{
-        var cut = detail.slice(0, 71);
-        var sp = cut.lastIndexOf(" ");
-        detail = (sp > 24 ? cut.slice(0, sp) : cut).replace(/[.,;:]$/, "") + "...";
-      }}
-      div.querySelector(".pdetail").textContent = detail;
-      var rk = div.querySelector(".prisk");
-      rk.textContent = it.risk || "low";
-      rk.classList.add(riskClass(it.risk));
-      return div;
-    }}
-    attn.forEach(function (it) {{ els.list.appendChild(pendingNode(it)); }});
-    if (low.length) {{
-      var more = document.createElement("details");
-      more.className = "pending-more";
-      var sum = document.createElement("summary");
-      sum.textContent = low.length + (low.length === 1 ? " lower-risk item" : " lower-risk items");
-      more.appendChild(sum);
-      low.forEach(function (it) {{ more.appendChild(pendingNode(it)); }});
-      els.list.appendChild(more);
-    }}
-  }}
-
-  function loadPending() {{
-    var list = document.getElementById("pending-list");
-    // First paint already has the inbox. Do not wipe/rebuild it (flash).
-    if (list && list.querySelector(".pending-item")) return;
-    var seq = ++pendingSeq;
-    fetch("./status.json?ts=" + Date.now(), {{ cache: "no-store" }})
-      .then(function (r) {{
-        if (!r.ok) throw new Error("status " + r.status);
-        return r.json();
-      }})
-      .then(function (data) {{
-        if (seq !== pendingSeq) return;
-        renderPending((data && data.pending) || []);
-      }})
-      .catch(function () {{
-        if (seq !== pendingSeq) return;
-        // Keep first-paint pending. Do not claim the inbox is empty.
-      }});
-  }}
 
   document.addEventListener("click", function (ev) {{
+    var reviewBtn = ev.target.closest("[data-review-decision]");
+    if (reviewBtn) {{
+      ev.preventDefault();
+      reviewDecision(reviewBtn.getAttribute("data-review-decision"));
+      return;
+    }}
     var decBtn = ev.target.closest("[data-dec]");
     if (!decBtn) return;
     var item = decBtn.closest(".pending-item");
@@ -1418,6 +1534,14 @@ function focusKey(kind, raw) {{
     var verb = decBtn.getAttribute("data-dec");
     var pid = item.getAttribute("data-id");
     var title = item.getAttribute("data-title");
+    var permittedHref = reviewedHref(verb, pid);
+    if (!permittedHref || decBtn.getAttribute("href") !== permittedHref) {{
+      ev.preventDefault();
+      reviewedDecision = null;
+      renderDecisionReviews();
+      setStatus("This decision needs a fresh review. Use Retry now if the snapshot is unavailable.", "warn");
+      return;
+    }}
     var key = verb + ":" + String(pid || "").trim();
     if (decideBusy[key]) {{
       ev.preventDefault();
@@ -1464,7 +1588,13 @@ function focusKey(kind, raw) {{
     handleJeffAction(act);
   }});
 
-  loadPending();
+  // One accepted-snapshot path: an independent pending fetch cannot resurrect
+  // an older or resolved decision after the main poll paints newer content.
+  try {{
+    var initialNode = document.getElementById("initial-snapshot");
+    var initialData = initialNode ? JSON.parse(initialNode.textContent) : null;
+    if (acceptDecisionSnapshot(initialData)) setDecisionTrust("current");
+  }} catch (e) {{ setDecisionTrust("invalid"); }}
 }})();
 
 (function () {{
@@ -1948,9 +2078,7 @@ function focusKey(kind, raw) {{
   }});
   function pendingShell(items) {{
     var rank = {{ high: 0, medium: 1, low: 2 }};
-    var rows = (items || []).filter(function (it) {{
-      return it && /^[a-zA-Z0-9._-]+$/.test(String(it.id || ""));
-    }}).slice().sort(function (a, b) {{
+    var rows = (items || []).map(decisionReviewItem).filter(function (it) {{ return !!it; }}).sort(function (a, b) {{
       var ra = rank.hasOwnProperty(String(a.risk || "").toLowerCase()) ? rank[String(a.risk).toLowerCase()] : 5;
       var rb = rank.hasOwnProperty(String(b.risk || "").toLowerCase()) ? rank[String(b.risk).toLowerCase()] : 5;
       return ra - rb;
@@ -1961,20 +2089,15 @@ function focusKey(kind, raw) {{
     rows.forEach(function (it) {{
       var rawRisk = String(it.risk || "").toLowerCase();
       var risk = (rawRisk === "high" || rawRisk === "medium") ? rawRisk : "low";
-      function decA(verb, extra) {{
-        var href = (window.decisionHref && window.decisionHref(verb, it.id, it.title || it.id)) || "";
-        if (!href) return "";
-        var label = verb === "APPROVE" ? "Approve" : verb === "HOLD" ? "Hold" : "Deny";
-        return '<a class="dec' + (extra ? " " + extra : "") + '" data-dec="' + esc(verb) +
-          '" href="' + esc(href) + '" target="_blank" rel="noopener noreferrer">' + label + "</a>";
-      }}
       var focus = focusKey("decision", it.id);
       var focusAttr = focus ? ' data-focus-key="' + esc(focus) + '" tabindex="-1"' : "";
       var row = '<div class="pending-item" data-id="' + esc(it.id) + '" data-title="' + esc(it.title || it.id) + '"' + focusAttr + '>' +
         '<div class="pending-head"><div class="ptitle">' + esc(it.title || it.id) + "</div>" +
         '<span class="prisk ' + esc(risk) + '">' + esc(risk) + "</span></div>" +
-        '<div class="pdetail">' + esc(shortNote(it.detail || "", 72)) + "</div>" +
-        '<div class="prow">' + decA("APPROVE", "") + decA("HOLD", "warn") + decA("DENY", "danger") + "</div></div>";
+        '<div class="pdetail">' + esc(it.detail || "") + "</div>" +
+        '<p class="decision-kind">Boundary: ' + esc(it.kind === undefined ? "ops" : it.kind) + "</p>" +
+        '<button type="button" data-review-decision="' + esc(it.id) + '" disabled>Review choices</button>' +
+        '<div class="decision-review" aria-live="polite"></div></div>';
       if (rawRisk === "low") {{ low += row; lowCount += 1; }}
       else attn += row;
     }});
@@ -1984,7 +2107,7 @@ function focusKey(kind, raw) {{
         "</summary>" + low + "</details>";
     }}
     return '<div id="pending-box" class="pending-box"' + (rows.length ? "" : " hidden") + ">" +
-      '<p class="pending-help">Public board -- Approve opens a GitHub issue as <code>rupret007</code>.</p>' +
+      '<p class="pending-help">Review the full context first. Opening a GitHub draft is not submitting a decision. GitHub login as <code>rupret007</code> remains the authority.</p>' +
       '<div id="pending-list">' + attn + low + "</div></div>";
   }}
   function toolsRow(projects) {{
@@ -2050,6 +2173,7 @@ function focusKey(kind, raw) {{
       else boardEl.removeAttribute("aria-describedby");
     }}
     if (silenceEl) silenceEl.setAttribute("data-state", state);
+    if (window.bobDecisionReview) window.bobDecisionReview.setTrust(state);
   }}
 
   function showSilence(state, title, detail) {{
@@ -2244,7 +2368,7 @@ function focusKey(kind, raw) {{
   function boardFingerprint(data) {{
     if (!data || typeof data !== "object") return "";
     function agentKey(a) {{ return a ? [a.id, a.state, a.detail, a.url || "", a.pr_url || ""] : []; }}
-    function pendingKey(it) {{ return it ? [it.id, it.title, it.risk, it.detail] : []; }}
+    function pendingKey(it) {{ return it ? [it.id, it.title, it.risk, it.detail, it.kind] : []; }}
     function projectKey(p) {{
       if (!p) return [];
       var ci = p.ci && typeof p.ci === "object" ? p.ci : {{}};
@@ -2268,11 +2392,15 @@ function focusKey(kind, raw) {{
       var el = document.querySelector(sel);
       return !!(el && el.open);
     }}
+    var active = document.activeElement;
+    var row = active && active.closest ? active.closest(".pending-item") : null;
+    var decisionFocus = row ? {{ id: row.getAttribute("data-id"), verb: active.getAttribute("data-dec") || "" }} : null;
     return {{
       how: isOpen("details.how-board"),
       ab: isOpen("details.abilities-foot"),
       more: isOpen("details.pending-more"),
-      tab: currentTypeTab || tabFromHash()
+      tab: currentTypeTab || tabFromHash(),
+      decisionFocus: decisionFocus
     }};
   }}
   function restoreOpen(s) {{
@@ -2285,6 +2413,17 @@ function focusKey(kind, raw) {{
     setOpen("details.abilities-foot", s.ab);
     setOpen("details.pending-more", s.more);
     applyTypeTab(s.tab || "");
+    if (s.decisionFocus) {{
+      var rows = document.querySelectorAll(".pending-item");
+      for (var i = 0; i < rows.length; i++) {{
+        if (rows[i].getAttribute("data-id") !== s.decisionFocus.id) continue;
+        var verb = s.decisionFocus.verb;
+        var next = ["APPROVE", "HOLD", "DENY"].indexOf(verb) >= 0 ? rows[i].querySelector('[data-dec="' + verb + '"]') : rows[i].querySelector("[data-review-decision]");
+        if (!next || next.disabled) next = rows[i];
+        try {{ next.focus({{ preventScroll: true }}); }} catch (e) {{}}
+        break;
+      }}
+    }}
   }}
   function paintAgents(agents, cloud) {{
     var host = document.getElementById("active-agents");
@@ -2373,6 +2512,7 @@ function focusKey(kind, raw) {{
     var open = snapshotOpen();
     boardEl.innerHTML = html;
     boardEl.setAttribute("data-fp", html);
+    if (window.bobDecisionReview) window.bobDecisionReview.reconcileRendering();
     restoreOpen(open);
     applyTypeTab(currentTypeTab);
     window.dispatchEvent(new CustomEvent("bob-ops-painted"));
@@ -2495,16 +2635,14 @@ function focusKey(kind, raw) {{
       }})
       .then(function (data) {{
         if (!pollFailureCounts(seq, pollSeq)) return;
+        if (!validateAcceptedSnapshot(data)) throw new Error("Snapshot incomplete or invalid");
         var fp = boardFingerprint(data);
         var decision = pollPaintDecision(data && data.generated_at, known, lastFp, fp);
         if (decision === "ignore") {{
-          // Stale CDN/cache body. Do not rewind freshness or rewrite lanes.
-          lastPollOk = Date.now();
-          pollFailStreak = 0;
-          paint();
-          updateSilence();
-          return;
+          // A stale response is not proof the retained decisions are current.
+          throw new Error("Snapshot older than the accepted board");
         }}
+        if (!window.bobDecisionReview || !window.bobDecisionReview.accept(data)) throw new Error("Decision snapshot unavailable");
         lastPollOk = Date.now();
         pollFailStreak = 0;
         if (dot) {{
@@ -2522,6 +2660,7 @@ function focusKey(kind, raw) {{
         lastFp = fp;
         paint();
         updateSilence();
+        window.bobDecisionReview.reconcileRendering();
       }})
       .catch(function () {{
         if (!pollFailureCounts(seq, pollSeq)) return;
@@ -2579,6 +2718,12 @@ function focusKey(kind, raw) {{
     if (document.visibilityState !== "hidden") startPolling();
   }});
 
+  try {{
+    var initialBody = document.getElementById("initial-snapshot");
+    var initialBoard = initialBody ? JSON.parse(initialBody.textContent) : null;
+    if (!validateAcceptedSnapshot(initialBoard)) throw new Error("Initial snapshot unavailable");
+    lastFp = boardFingerprint(initialBoard);
+  }} catch (e) {{ pollFailStreak = 1; }}
   paint();
   applyTypeTab(tabFromHash());
   // Pause polls when tab hidden; resume on visible / bfcache pageshow.
@@ -2632,6 +2777,11 @@ if [[ $PUSH -eq 1 ]]; then
   [[ -f "$ROOT/test_open_decision.js" ]] && cp "$ROOT/test_open_decision.js" "$WORK/"
   [[ -f "$ROOT/test_open_links.js" ]] && cp "$ROOT/test_open_links.js" "$WORK/"
   [[ -f "$ROOT/test_soft_paint.js" ]] && cp "$ROOT/test_soft_paint.js" "$WORK/"
+  [[ -f "$ROOT/qa-offline.py" ]] && cp "$ROOT/qa-offline.py" "$WORK/"
+  [[ -f "$ROOT/offline_qa_fixtures.py" ]] && cp "$ROOT/offline_qa_fixtures.py" "$WORK/"
+  [[ -f "$ROOT/test_offline_qa.py" ]] && cp "$ROOT/test_offline_qa.py" "$WORK/"
+  [[ -f "$ROOT/test_decision_review.py" ]] && cp "$ROOT/test_decision_review.py" "$WORK/"
+  [[ -f "$ROOT/test_decision_review.js" ]] && cp "$ROOT/test_decision_review.js" "$WORK/"
   [[ -f "$ROOT/.gitignore" ]] && cp "$ROOT/.gitignore" "$WORK/"
   # Do not commit agents-status.json by default (Mac-local probe snapshot); refresh merges it when present.
   if [[ -f "$ROOT/.github/workflows/refresh-dashboard.yml" ]]; then
@@ -2654,6 +2804,11 @@ if [[ $PUSH -eq 1 ]]; then
   [[ -f test_open_decision.js ]] && git add test_open_decision.js
   [[ -f test_open_links.js ]] && git add test_open_links.js
   [[ -f test_soft_paint.js ]] && git add test_soft_paint.js
+  [[ -f qa-offline.py ]] && git add qa-offline.py
+  [[ -f offline_qa_fixtures.py ]] && git add offline_qa_fixtures.py
+  [[ -f test_offline_qa.py ]] && git add test_offline_qa.py
+  [[ -f test_decision_review.py ]] && git add test_decision_review.py
+  [[ -f test_decision_review.js ]] && git add test_decision_review.js
   [[ -f .gitignore ]] && git add .gitignore
   [[ -f .github/workflows/refresh-dashboard.yml ]] && git add .github/workflows/refresh-dashboard.yml
   [[ -f .github/workflows/qa-claim-smoke.yml ]] && git add .github/workflows/qa-claim-smoke.yml
