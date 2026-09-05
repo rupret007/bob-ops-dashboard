@@ -33,6 +33,7 @@ from board_meta import (
     is_draft_pr,
     is_type_tab,
     is_quiet_lane,
+    is_owner_hold,
     is_unexecuted_run,
     incomplete_public_collections,
     leftover_type_ids_for,
@@ -42,6 +43,8 @@ from board_meta import (
     latest_release_url_from_repo,
     merge_cloud_agents,
     merge_first_class,
+    owner_hold_status,
+    owner_hold_link_html,
     parse_agents_blob,
     parse_cloud_agents,
     pending_risk_rank,
@@ -391,6 +394,121 @@ class BoardMetaTests(unittest.TestCase):
         )
         self.assertEqual(owner_hold_plus_work["text"], "TACTrack needs a look")
         self.assertEqual(owner_hold_plus_work["focus"], "project:tactrack")
+
+    def test_owner_hold_classification_uses_only_exact_explicit_kind(self):
+        for kind in ("jeff-gate", "owner-live-gate", " JEFF-GATE ", "\tOWNER-LIVE-GATE\n", "\ufeffjeff-gate\ufeff"):
+            with self.subTest(kind=kind):
+                self.assertTrue(is_owner_hold({"kind": kind}))
+        for item in (
+            None, "jeff-gate", {}, {"kind": None}, {"kind": 7},
+            {"kind": "owner-only"}, {"kind": "ops"}, {"kind": "jeff-gate-extra"},
+            {"kind": "not-owner-live-gate"}, {"kind": "\x85jeff-gate\x85"},
+            {"id": "owner-live-gate", "title": "Owner only", "private": True},
+        ):
+            with self.subTest(item=item):
+                self.assertFalse(is_owner_hold(item))
+
+    def test_standing_owner_hold_cannot_hide_real_red_or_yellow_work(self):
+        owner = {"id": "standing-hold", "title": "Standing owner hold", "kind": "owner-live-gate", "risk": "high"}
+        sections = [
+            {"id": "controls", "projects": []},
+            {"id": "apps-utilities", "projects": [
+                {"name": "Owner device", "status": "jeff-gate"},
+                {"name": "Review utility", "status": "yellow"},
+            ]},
+            {"id": "live-shipping", "projects": [
+                {"name": "Failing app", "status": "red"},
+                {"name": "Quiet app", "status": "green"},
+            ]},
+        ]
+        self.assertEqual(glance_status([owner], sections), {
+            "text": "Failing app is red", "tab": "live-shipping", "focus": "project:failing-app",
+        })
+        sections[2]["projects"][0]["status"] = "green"
+        self.assertEqual(glance_status([owner], sections), {
+            "text": "Review utility needs a look", "tab": "apps-utilities", "focus": "project:review-utility",
+        })
+        # Existing stable ordering among equal-rank lanes stays unchanged.
+        sections[1]["projects"].append({"name": "Second utility", "status": "yellow"})
+        self.assertEqual(glance_status([owner], sections)["focus"], "project:review-utility")
+
+    def test_real_or_unknown_kind_decisions_keep_existing_priority_and_risk_order(self):
+        owner = {"id": "standing-hold", "title": "Owner hold", "kind": "jeff-gate", "risk": "high"}
+        sections = [{"id": "live-shipping", "projects": [{"name": "Failing app", "status": "red"}]}]
+        for kind in ("ops", "review", "owner-only", "future-kind", None):
+            decision = {"id": "actual-decision", "title": "Current decision", "risk": "low"}
+            if kind is not None:
+                decision["kind"] = kind
+            with self.subTest(kind=kind):
+                self.assertEqual(glance_status([owner, decision], sections), {
+                    "text": "Current decision", "tab": "controls", "focus": "decision:actual-decision",
+                })
+        low = {"id": "low", "title": "Low decision", "risk": "low", "kind": "ops"}
+        high = {"id": "high", "title": "High decision", "risk": "high", "kind": "ops"}
+        self.assertEqual(glance_status([owner, low, high], sections)["focus"], "decision:high")
+
+    def test_owner_fallback_is_valid_highest_risk_and_does_not_invent_active_work(self):
+        low = {"id": "low-hold", "title": "Low owner hold", "risk": "low", "kind": "jeff-gate"}
+        high = {"id": "HIGH-HOLD", "title": "High owner hold", "risk": "high", "kind": " OWNER-LIVE-GATE "}
+        same_risk = {"id": "later-hold", "title": "Later owner hold", "risk": "high", "kind": "jeff-gate"}
+        source = [low, high, same_risk]
+        original = json.loads(json.dumps(source))
+        self.assertEqual(owner_hold_status(source), {**high, "detail": ""})
+        self.assertEqual(glance_status(source, [
+            {"id": "live-shipping", "projects": [{"name": "Quiet app", "status": "green"}]},
+            {"id": "parked", "projects": [{"name": "Leftover", "status": "parked"}]},
+        ]), {"text": "High owner hold", "tab": "controls", "focus": "decision:high-hold"})
+        self.assertEqual(source, original)
+        self.assertEqual(glance_status([], []), {"text": "Quiet", "tab": ""})
+
+    def test_malformed_owner_rows_do_not_create_a_false_fallback_or_parked_route(self):
+        valid = {"id": "owner", "title": "Owner hold", "risk": "high", "kind": "owner-live-gate"}
+        sections = [{"id": "controls", "projects": []}, {"id": "parked", "projects": []}]
+        for patch in (
+            {"id": ""}, {"id": None}, {"id": "../../escape"}, {"id": "owner\n"},
+            {"id": "x" * 65}, {"title": ""}, {"title": "x" * 161},
+            {"risk": "HIGH"}, {"risk": None}, {"detail": "x" * 2001},
+            {"kind": "\nowner-live-gate\n"},
+        ):
+            row = {**valid, **patch}
+            with self.subTest(patch=patch):
+                self.assertIsNone(owner_hold_status([row]))
+                self.assertEqual(owner_hold_link_html([row], sections), "")
+                self.assertEqual(glance_status([row], []), {"text": "Quiet", "tab": ""})
+        for pending in (None, [], {}, "invalid", 4, [None, "invalid", {}]):
+            with self.subTest(pending=pending):
+                self.assertIsNone(owner_hold_status(pending))
+                self.assertEqual(owner_hold_link_html(pending, sections), "")
+
+    def test_owner_parked_link_opens_only_the_existing_exact_panel_and_row(self):
+        item = {
+            "id": "Owner-Hold.1", "title": '<script>alert("not markup")</script>',
+            "detail": "A public detail & nothing else", "risk": "high", "kind": "jeff-gate",
+            "private_metadata": "PRIVATE_SOURCE_MUST_NOT_APPEAR",
+        }
+        sections = [{"id": "controls", "projects": []}, {"id": "parked", "projects": []}]
+        expected = (
+            '<p class="leftover-types">Standing owner holds are not active work. '
+            'Opening a hold does not approve or perform it.</p>'
+            '<button type="button" id="owner-holds-link" data-tab="controls" '
+            'data-focus-target="decision:owner-hold.1" aria-controls="controls">'
+            'Review owner holds</button>'
+        )
+        markup = owner_hold_link_html([item], sections)
+        self.assertEqual(markup, expected)
+        self.assertNotIn("<script>", markup)
+        self.assertNotIn("PRIVATE_SOURCE", markup)
+        self.assertNotIn("private_metadata", owner_hold_status([item]))
+        self.assertNotIn("data-dec=", markup)
+        self.assertNotIn("https://", markup)
+        self.assertNotIn("active agents", markup)
+        escaped_fallback = glance_html([item], sections)
+        self.assertIn("&lt;script&gt;", escaped_fallback)
+        self.assertNotIn("<script>", escaped_fallback)
+        for absent in (None, [], [{"id": "parked"}], [{"id": "controls-other"}], "controls"):
+            with self.subTest(sections=absent):
+                self.assertEqual(owner_hold_link_html([item], absent), "")
+        self.assertEqual(owner_hold_link_html([{**item, "kind": "ops"}], sections), "")
 
     def test_focus_keys_are_stable_and_fail_closed(self):
         self.assertEqual(focus_key("project", "Andrea NanoBot"), "project:andrea-nanobot")
