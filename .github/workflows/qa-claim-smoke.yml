@@ -28,21 +28,8 @@ jobs:
             echo "Feature PRs must not change scheduler-owned index.html or status.json." >&2
             exit 1
           fi
-      - name: Generate and validate disposable dashboard artifacts
-        env:
-          GH_TOKEN: ${{ github.token }}
-          OWNER: rupret007
+      - name: Generate and validate offline fixture artifacts
         run: |
           set -euo pipefail
-          scratch="$(mktemp -d)"
-          trap 'rm -rf "$scratch"' EXIT
-          cp README.md board_meta.py index.html refresh.sh status.json "$scratch/"
-          chmod +x "$scratch/refresh.sh" ./qa-claim-smoke.sh
-          (
-            cd "$scratch"
-            ./refresh.sh
-          )
-          REFRESH_SH="$scratch/refresh.sh" \
-            STATUS_JSON="$scratch/status.json" \
-            ./qa-claim-smoke.sh "$scratch/index.html"
+          python3 qa-offline.py
           test -z "$(git status --porcelain)"

@@ -645,9 +645,11 @@ function run() {
   const fakeSilence = fakeElement();
   const fakeTitle = fakeElement();
   const fakeDetail = fakeElement();
+  const decisionTrustUpdates = [];
+  const reviewWindow = { bobDecisionReview: { setTrust: state => decisionTrustUpdates.push(state) } };
   const setSnapshotTrust = eval(
-    "(function (document, boardEl, silenceEl) { return " + extractFn(src, "setSnapshotTrust") + "; })"
-  )({ body: fakeBody }, fakeBoard, fakeSilence);
+    "(function (document, boardEl, silenceEl, window) { return " + extractFn(src, "setSnapshotTrust") + "; })"
+  )({ body: fakeBody }, fakeBoard, fakeSilence, reviewWindow);
   const showSilence = eval(
     "(function (silenceEl, silenceTitleEl, silenceDetailEl, setSnapshotTrust) { return " +
       extractFn(src, "showSilence") + "; })"
@@ -658,6 +660,7 @@ function run() {
   )(fakeSilence, fakeTitle, fakeDetail, setSnapshotTrust);
 
   showSilence("poll-failed", "Live check unavailable", "Showing the last verified snapshot.");
+  if (decisionTrustUpdates.at(-1) !== "poll-failed") fail("failed poll must revoke decision review trust too");
   if (fakeSilence.hidden || !fakeSilence.classList.contains("show")) {
     fail("failed poll must reveal the last-verified banner");
   }
@@ -677,6 +680,7 @@ function run() {
     fail("historical mode must explain the user-visible condition");
   }
   hideSilence();
+  if (decisionTrustUpdates.at(-1) !== "current") fail("current snapshot must update decision review trust too");
   if (!fakeSilence.hidden || fakeSilence.classList.contains("show")) {
     fail("successful current snapshot must clear the warning");
   }

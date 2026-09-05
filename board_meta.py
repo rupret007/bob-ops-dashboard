@@ -1483,6 +1483,107 @@ def decision_href(verb: Any, pid: Any, title: Any = "") -> str:
     return DECISION_ISSUE_NEW + "?" + query
 
 
+def _review_text(value: Any, limit: int, *, nonblank: bool = False) -> bool:
+    """Match browser UTF-16 bounds; do not silently truncate a reviewed claim."""
+    if not isinstance(value, str):
+        return False
+    # ECMAScript trim's whitespace set, including BOM but excluding NEL.
+    if nonblank and re.fullmatch(r"[\u0009-\u000d\u0020\u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000\ufeff]*", value):
+        return False
+    if re.search(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]", value):
+        return False
+    try:
+        return len(value.encode("utf-16-le")) // 2 <= limit
+    except UnicodeError:
+        return False
+
+
+def decision_review_item(value: Any) -> dict[str, str] | None:
+    """Exact, bounded public decision context shared by first paint and JS.
+
+    Ignore unrelated fields instead of copying private metadata into an issue.
+    A malformed item is not repairable by coercion or partial truncation.
+    """
+    if not isinstance(value, dict):
+        return None
+    ident = value.get("id")
+    title = value.get("title")
+    detail = value.get("detail", "")
+    risk = value.get("risk")
+    kind = value.get("kind", "ops")
+    if not isinstance(ident, str) or not re.fullmatch(r"[A-Za-z0-9._-]{1,64}", ident):
+        return None
+    if not _review_text(title, 160, nonblank=True) or re.search(r"[\t\r\n]", title) or not _review_text(detail, 2000):
+        return None
+    if not isinstance(risk, str) or risk not in {"high", "medium", "low"}:
+        return None
+    if not isinstance(kind, str) or not re.fullmatch(r"[ -~]{1,64}", kind) or not kind.strip():
+        return None
+    return {"id": ident, "title": title, "detail": detail, "risk": risk, "kind": kind}
+
+
+def decision_review_identity(value: Any) -> str:
+    """Transparent content receipt, not a signature or execution permission."""
+    item = decision_review_item(value)
+    if item is None:
+        return ""
+    return json.dumps(
+        [item[key] for key in ("id", "title", "detail", "risk", "kind")],
+        ensure_ascii=False,
+        separators=(",", ":"),
+    )
+
+
+def _review_snapshot(value: Any) -> bool:
+    """Require a real, explicit-zone ISO date; controller checks freshness."""
+    if not isinstance(value, str) or len(value) > 64:
+        return False
+    if not re.fullmatch(
+        r"[0-9]{4}-[0-9]{2}-[0-9]{2}T(?:[01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9]"
+        r"(?:\.[0-9]{1,6})?(?:Z|[+-](?:[01][0-9]|2[0-3]):[0-5][0-9])",
+        value,
+    ):
+        return False
+    try:
+        return datetime.fromisoformat(value.replace("Z", "+00:00")).tzinfo is not None
+    except (ValueError, OverflowError):
+        return False
+
+
+def review_decision_href(verb: Any, value: Any, snapshot_at: Any) -> str:
+    """Compose a review receipt, never submit or authorize an operation.
+
+    The caller must separately verify the current snapshot and explicit review.
+    Legacy decision ingestion remains owner-controlled and must re-check work.
+    """
+    if not isinstance(verb, str) or verb not in DECISION_VERBS:
+        return ""
+    item = decision_review_item(value)
+    if item is None or not _review_snapshot(snapshot_at):
+        return ""
+    body = "\n".join([
+        "Dashboard control decision",
+        "",
+        "id: " + item["id"],
+        "title: " + item["title"],
+        "decision: " + verb.lower(),
+        "from: public board",
+        "risk: " + item["risk"],
+        "kind: " + item["kind"],
+        "reviewed_snapshot: " + snapshot_at,
+        "reviewed_item: " + decision_review_identity(item),
+        "",
+        "Reviewed public detail:",
+        item["detail"],
+        "",
+        "Submit this issue while logged in as rupret007. That GitHub login is the real yes.",
+        "Bob: treat this as a one-shot inbox item. High-risk still needs the draft shown in chat before acting.",
+        "Snapshot receipt records what was reviewed; re-check current work before acting.",
+    ])
+    result = DECISION_ISSUE_NEW + "?" + urlencode({"title": "BOB-" + verb + ": " + item["id"], "body": body})
+    return result if len(result) <= 8192 else ""
+
+
 def pending_risk_rank(item: Any) -> int:
     """Lower = needs Jeff sooner. Unknown risk sorts last."""
     if not isinstance(item, dict):
@@ -1709,7 +1810,7 @@ def board_content_fingerprint(data: Any) -> str:
     def pending_key(it: Any) -> list[Any]:
         if not isinstance(it, dict):
             return []
-        return [it.get("id"), it.get("title"), it.get("risk"), it.get("detail")]
+        return [it.get("id"), it.get("title"), it.get("risk"), it.get("detail"), it.get("kind")]
 
     def project_key(p: Any) -> list[Any]:
         if not isinstance(p, dict):

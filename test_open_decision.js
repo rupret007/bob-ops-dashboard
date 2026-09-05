@@ -75,8 +75,8 @@ function run() {
   if (paint.indexOf('class="pulse"') === -1) fail("pulse strip missing");
   if (paint.indexOf("abilities-foot") === -1) fail("abilities must be collapsed footer");
   if (paint.indexOf("Nothing pending") !== -1) fail("empty-pending chrome leaked");
-  if (paint.indexOf('data-dec="APPROVE"') === -1) fail("Approve control missing");
-  if (paint.indexOf("issues/new?") === -1) fail("first-paint decision links missing");
+  if (paint.indexOf('data-review-decision="') === -1) fail("explicit review control missing");
+  if (/data-dec="(?:APPROVE|HOLD|DENY)"/.test(paint)) fail("first-paint decision links bypass explicit review");
   if (paint.indexOf('rel="noopener noreferrer"') === -1) fail("decision links need noreferrer");
   if (src.indexOf("function decisionHref") === -1) fail("decisionHref missing");
   if (src.indexOf("function openBlank") === -1) fail("openBlank missing");
@@ -121,48 +121,20 @@ function run() {
     fail("JS decisionHref must match Python decision_href");
   }
 
-  let lastStatus = "";
-  function setStatus(msg) {
-    lastStatus = String(msg || "");
-  }
-  const decideBusy = {};
-  const opened = [];
-  const clicks = [];
-  const windowObj = {
-    open: function (url, target, feat) {
-      opened.push({ url: String(url), target: target, feat: feat });
-      return { name: "opened" };
-    },
-  };
-  const documentObj = {
-    body: {
-      appendChild: function () {},
-      removeChild: function () {},
-    },
-    createElement: function () {
-      return {
-        style: {},
-        href: "",
-        target: "",
-        rel: "",
-        click: function () {
-          clicks.push(this.href);
-        },
-        remove: function () {},
-      };
-    },
-  };
-  const openDecisionIssue = eval(
-    "(function (setStatus, decideBusy, window, document) {\n" +
-      extractFn(src, "decisionHref") +
-      ";\n" +
-      extractFn(src, "openBlank") +
-      ";\n" +
-      "return " +
-      extractFn(src, "openDecisionIssue") +
-      ";\n" +
-      "})"
-  )(setStatus, decideBusy, windowObj, documentObj);
+  // Exercise the actual generated controller and its new review prerequisite,
+  // not a replacement implementation of the permission check.
+  const { controller, snapshot } = require("./test_decision_review.js");
+  const pending = [
+    { id: "dashboard-refresh", title: "Force dashboard refresh + push", detail: "Fixture only; no refresh is dispatched.", risk: "high", kind: "ops" },
+    { id: "text-send", title: "Send a drafted text via Andrea", detail: "Fixture only; nothing is sent.", risk: "high", kind: "ops" },
+  ];
+  const ui = controller(snapshot(pending));
+  const opened = ui.opened;
+  const clicks = ui.native;
+  const openDecisionIssue = ui.api.open;
+  openDecisionIssue("APPROVE", "dashboard-refresh", pending[0].title);
+  if (opened.length) fail("unreviewed choice must not open");
+  ui.review("dashboard-refresh");
 
   openDecisionIssue("APPROVE", "dashboard-refresh", "Force dashboard refresh + push");
   if (opened.length !== 1) fail("expected one window.open");
@@ -170,11 +142,11 @@ function run() {
   if (u.indexOf("https://github.com/rupret007/bob-ops-dashboard/issues/new?") !== 0) {
     fail("wrong issue URL host/path: " + u);
   }
-  if (decodeURIComponent(u).indexOf("BOB-APPROVE: dashboard-refresh") === -1) {
+  if (qs(u).title !== "BOB-APPROVE: dashboard-refresh") {
     fail("missing BOB-APPROVE title");
   }
   if (u.toLowerCase().indexOf("verified") !== -1) fail("issue URL still says verified");
-  if (lastStatus.indexOf("rupret007") === -1) fail("status must name rupret007");
+  if (ui.status.textContent.indexOf("rupret007") === -1) fail("status must name rupret007");
   if (clicks.length !== 0) fail("fallback click must not run when window.open works");
 
   const before = opened.length;
@@ -182,10 +154,10 @@ function run() {
   if (opened.length !== before) fail("decideBusy must debounce double Approve");
 
   opened.length = 0;
-  lastStatus = "";
+  ui.review("text-send");
   openDecisionIssue("HOLD", "text-send", "Send a drafted text via Andrea");
   if (opened.length !== 1) fail("HOLD should open");
-  if (decodeURIComponent(opened[0].url).indexOf("BOB-HOLD: text-send") === -1) {
+  if (qs(opened[0].url).title !== "BOB-HOLD: text-send") {
     fail("missing BOB-HOLD title");
   }
 
@@ -197,15 +169,10 @@ function run() {
   openDecisionIssue("DELETE", "dashboard-refresh", "nope");
   if (opened.length !== 0) fail("unknown verb must not open");
 
-  Object.keys(decideBusy).forEach(function (k) {
-    delete decideBusy[k];
-  });
+  ui.flushTimers();
   opened.length = 0;
   clicks.length = 0;
-  windowObj.open = function (url, target, feat) {
-    opened.push({ url: String(url), target: target, feat: feat });
-    return null;
-  };
+  ui.blockPopup();
   openDecisionIssue("APPROVE", "text-send", "Send a drafted text via Andrea");
   if (opened.length !== 1) fail("blocked window.open still attempted");
   if (clicks.length !== 1) fail("iOS-blocked popup must fall back to <a>.click");
