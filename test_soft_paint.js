@@ -744,6 +744,9 @@ function run() {
   if (src.indexOf("function tabId") === -1) fail("tabId missing");
   if (src.indexOf("function focusKey") === -1) fail("focusKey missing");
   if (src.indexOf("function glanceStatus") === -1) fail("glanceStatus missing");
+  if (src.indexOf("function isOwnerHold") === -1) fail("isOwnerHold missing");
+  if (src.indexOf("function ownerHoldStatus") === -1) fail("ownerHoldStatus missing");
+  if (src.indexOf("function ownerHoldLinkHtml") === -1) fail("ownerHoldLinkHtml missing");
   if (src.indexOf("function applyTypeTab") === -1) fail("applyTypeTab missing");
   if (src.indexOf("function findFocusTarget") === -1) fail("findFocusTarget missing");
   if (src.indexOf("function revealGlanceTarget") === -1) fail("revealGlanceTarget missing");
@@ -770,14 +773,20 @@ function run() {
   }
   if (focusKey("project", "🔥") || focusKey("other", "WebJam")) fail("invalid focus key must drop");
   const attentionRank = eval("(" + extractFn(src, "attentionRank") + ")");
+  const decisionReviewText = eval("(" + extractFn(src, "decisionReviewText") + ")");
+  const decisionReviewItem = eval("(" + extractFn(src, "decisionReviewItem") + ")");
+  const isOwnerHold = eval("(" + extractFn(src, "isOwnerHold") + ")");
+  const ownerHoldStatus = eval("(" + extractFn(src, "ownerHoldStatus") + ")");
+  const esc = eval("(" + extractFn(src, "esc") + ")");
+  const ownerHoldLinkHtml = eval("(" + extractFn(src, "ownerHoldLinkHtml") + ")");
   const glanceStatus = eval(
-    "(function (tabId, attentionRank, focusKey) { " +
+    "(function (tabId, attentionRank, focusKey, isOwnerHold, ownerHoldStatus) { " +
       "var TYPE_TAB_LABELS = { controls:'Decisions', 'live-shipping':'Live', " +
       "'apps-utilities':'Apps', cisco:'Cisco', messaging:'Bob', " +
       "'private-media':'Media', parked:'Parked' }; " +
       "function tabLabel(id) { return TYPE_TAB_LABELS[tabId(id)] || ''; } " +
       "return " + extractFn(src, "glanceStatus") + "; })"
-  )(tabId, attentionRank, focusKey);
+  )(tabId, attentionRank, focusKey, isOwnerHold, ownerHoldStatus);
   const g = glanceStatus([{ id: "x", title: "AdoptIQ" }], [{ id: "live-shipping", projects: [{ status: "yellow" }] }]);
   if (g.text !== "AdoptIQ" || g.tab !== "controls" || g.focus !== "decision:x") {
     fail("pending glance must name and target the gate");
@@ -813,6 +822,52 @@ function run() {
   }
   const quiet = glanceStatus([], [{ id: "live-shipping", projects: [{ status: "green" }] }]);
   if (quiet.text !== "Quiet" || quiet.tab !== "") fail("all-green glance must stay Quiet");
+
+  const ownerHigh = { id: "fixture-owner", title: "Standing owner boundary", detail: "Fixture public detail.", risk: "high", kind: "owner-live-gate" };
+  const ownerLow = { id: "fixture-other-owner", title: "Another owner boundary", detail: "Other fixture detail.", risk: "low", kind: "jeff-gate" };
+  ["jeff-gate", "owner-live-gate", " JEFF-GATE ", "\tOwner-Live-Gate\r", "\ufeffjeff-gate\ufeff"].forEach(function (kind) {
+    if (!isOwnerHold({ kind: kind })) fail("exact normalized owner kind was not classified: " + JSON.stringify(kind));
+  });
+  ["", "owner-live-gate-followup", "owner", "review", "security", "live", "\u0085jeff-gate\u0085", null, 1].forEach(function (kind) {
+    if (isOwnerHold({ kind: kind })) fail("unknown kind must not be inferred to be an owner hold: " + JSON.stringify(kind));
+  });
+  if (isOwnerHold({ id: "owner-live-gate", title: "Owner hold" })) fail("owner classification must never use ID or title");
+  if (ownerHoldStatus([ownerLow, ownerHigh]).id !== ownerHigh.id) fail("owner route must select highest-risk canonical hold");
+  if (ownerHoldStatus([{ ...ownerHigh, risk: "HIGH" }]) !== null) fail("malformed owner cannot become fallback or backlog route");
+  if (ownerHoldStatus([{ ...ownerHigh, kind: "\towner-live-gate\n" }]) !== null) fail("raw kind normalization must not waive canonical decision validation");
+  if (ownerHoldStatus([{ ...ownerHigh, id: "unsafe/id" }]) !== null) fail("unsafe owner ID must not become a route");
+  if (ownerHoldStatus([{ ...ownerHigh, detail: "x".repeat(2001) }]) !== null) fail("oversized owner context must not become a route");
+  const fixtureRed = [{ id: "apps-utilities", projects: [{ name: "Fixture app", status: "red" }] }];
+  const fixtureYellow = [{ id: "apps-utilities", projects: [{ name: "Fixture app", status: "yellow" }] }];
+  if (glanceStatus([ownerHigh], fixtureRed).focus !== "project:fixture-app") fail("standing owner hold must not hide current red work");
+  if (glanceStatus([ownerHigh], fixtureYellow).text !== "Fixture app needs a look") fail("standing owner hold must not hide current yellow work");
+  if (glanceStatus([ownerLow, ownerHigh], []).focus !== "decision:fixture-owner") fail("owner hold must remain available as fallback when no active work exists");
+  ["review", "security", "unknown-kind", undefined].forEach(function (kind) {
+    const normal = { id: "fixture-action", title: "Ordinary pending action", risk: "low", kind: kind };
+    if (glanceStatus([ownerHigh, normal], fixtureRed).focus !== "decision:fixture-action") {
+      fail("non-owner/unknown pending must keep priority over both owner holds and red lanes");
+    }
+  });
+  if (glanceStatus([{ ...ownerHigh, risk: "HIGH" }], []).text !== "Quiet") fail("invalid owner fallback must fail closed to Quiet");
+  const controlsSection = [{ id: "controls", projects: [] }];
+  const holdLink = ownerHoldLinkHtml([ownerLow, ownerHigh], controlsSection);
+  if (!holdLink.includes('id="owner-holds-link"') || !holdLink.includes('data-tab="controls"')
+    || !holdLink.includes('data-focus-target="decision:fixture-owner"') || !holdLink.includes('aria-controls="controls"')
+    || !holdLink.includes("Review owner holds") || !holdLink.includes("Standing owner holds are not active work")) {
+    fail("Parked owner-hold entry must identify and explain its exact read-only destination");
+  }
+  if (holdLink.includes("data-dec=") || holdLink.includes("href=") || holdLink.includes(ownerHigh.detail) || holdLink.includes(ownerHigh.title)) {
+    fail("owner backlog entry must not be a decision composer or duplicate context panel");
+  }
+  if (ownerHoldLinkHtml([ownerHigh], []) || ownerHoldLinkHtml([ownerHigh], [{ id: "parked" }])
+    || ownerHoldLinkHtml([], controlsSection) || ownerHoldLinkHtml([{ ...ownerHigh, risk: "HIGH" }], controlsSection)) {
+    fail("owner entry needs a canonical hold and actual controls destination");
+  }
+  if (!src.includes('sec.id === "parked" ? ownerHoldLinkHtml(data.pending, data.sections)')
+    || !src.includes('var fromOwnerHolds = btn.id === "owner-holds-link";')
+    || !src.includes("if (fromGlance || fromOwnerHolds)")) {
+    fail("owner holds must stay inside Parked and reuse the exact reveal path, not a new tab or approval action");
+  }
   if (html.indexOf('id="type-tabs"') === -1) fail("type tab bar missing from first paint");
   if (html.indexOf('id="board-glance"') === -1) fail("short status missing from first paint");
   if (html.indexOf('aria-label="Next action"') === -1) fail("glance must be the named next action");

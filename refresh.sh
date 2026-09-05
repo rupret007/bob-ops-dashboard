@@ -229,6 +229,7 @@ from board_meta import (
     leftover_types_html,
     lane_hrefs,
     merge_cloud_agents,
+    owner_hold_link_html,
     signal_href,
     merge_first_class,
     presentation,
@@ -975,7 +976,10 @@ for sec in status["sections"]:
         continue
     heading = f'<h2>{h(sec.get("title") or "")}</h2>'
     sort_attn = kind == "primary"
-    leftover_home = leftover_types_html(status.get("sections")) if sid_raw == "parked" else ""
+    leftover_home = (
+        owner_hold_link_html(status.get("pending"), status.get("sections"))
+        + leftover_types_html(status.get("sections"))
+    ) if sid_raw == "parked" else ""
     leftover_note = leftover_type_note_html(sec)
     body = leftover_home + leftover_note + lanes_html(projects, sort_attention=sort_attn)
     cls = "primary" if kind == "primary" else "secondary"
@@ -1045,12 +1049,14 @@ html = f'''<!DOCTYPE html>
   .leftover-type-links {{
     display:flex; flex-wrap:wrap; gap:.35rem; margin:0 0 1rem;
   }}
-  .leftover-type-links button {{
+  .leftover-type-links button, #owner-holds-link {{
     background:transparent; color:var(--muted); border:1px solid var(--border);
     border-radius:999px; padding:.35rem .75rem; font-size:.78rem; font-weight:600;
     min-height:44px; cursor:pointer; touch-action:manipulation;
   }}
-  .leftover-type-links button:hover {{ border-color:var(--orange); color:var(--orange); }}
+  .leftover-type-links button:hover, #owner-holds-link:hover {{ border-color:var(--orange); color:var(--orange); }}
+  #owner-holds-link {{ width:100%; margin:0 0 1rem; }}
+  #owner-holds-link:focus-visible {{ outline:2px solid var(--orange); outline-offset:3px; }}
   .chip {{ display:inline-flex; align-items:center; color:var(--c);
     background:transparent; border:0; padding:0; font-size:.68rem; font-weight:700;
     text-transform:uppercase; letter-spacing:.04em; white-space:nowrap; }}
@@ -1998,11 +2004,35 @@ function focusKey(kind, raw) {{
     return '<p class="leftover-types">Leftover types. Not active agents or a Jeff yes.</p>' +
       '<div class="leftover-type-links">' + buttons + "</div>";
   }}
+  function isOwnerHold(item) {{
+    if (!item || typeof item !== "object" || typeof item.kind !== "string") return false;
+    var kind = item.kind.trim().toLowerCase();
+    return kind === "jeff-gate" || kind === "owner-live-gate";
+  }}
+  function ownerHoldStatus(pending) {{
+    var rank = {{ high: 0, medium: 1, low: 2 }};
+    var rows = (Array.isArray(pending) ? pending : []).map(decisionReviewItem).filter(function (item) {{
+      return item && isOwnerHold(item);
+    }});
+    rows.sort(function (a, b) {{ return rank[a.risk] - rank[b.risk]; }});
+    return rows.length ? rows[0] : null;
+  }}
+  function ownerHoldLinkHtml(pending, sections) {{
+    var hasControls = (Array.isArray(sections) ? sections : []).some(function (sec) {{
+      return sec && sec.id === "controls";
+    }});
+    var hold = hasControls ? ownerHoldStatus(pending) : null;
+    var target = hold ? focusKey("decision", hold.id) : "";
+    if (!target) return "";
+    return '<p class="leftover-types">Standing owner holds are not active work. Opening a hold does not approve or perform it.</p>' +
+      '<button type="button" id="owner-holds-link" data-tab="controls" data-focus-target="' + esc(target) +
+      '" aria-controls="controls">Review owner holds</button>';
+  }}
   function glanceStatus(pending, sections) {{
     var rank = {{ high: 0, medium: 1, low: 2 }};
     var rows = [];
     (pending || []).forEach(function (it) {{
-      if (it && typeof it === "object" && focusKey("decision", it.id)) rows.push(it);
+      if (it && typeof it === "object" && focusKey("decision", it.id) && !isOwnerHold(it)) rows.push(it);
     }});
     rows.sort(function (a, b) {{
       var ra = rank.hasOwnProperty(String(a.risk || "").toLowerCase()) ? rank[String(a.risk).toLowerCase()] : 5;
@@ -2039,6 +2069,12 @@ function focusKey(kind, raw) {{
       var label = worstName || tabLabel(worstId);
       if (worstRank === 0) return {{ text: label + " is red", tab: worstId, focus: worstFocus }};
       if (worstRank === 2) return {{ text: label + " needs a look", tab: worstId, focus: worstFocus }};
+    }}
+    var hold = ownerHoldStatus(pending);
+    if (hold) {{
+      var holdTitle = hold.title.trim();
+      if (holdTitle.length > 28) holdTitle = holdTitle.slice(0, 28).replace(/\s+$/g, "");
+      return {{ text: holdTitle || "Pending", tab: "controls", focus: focusKey("decision", hold.id) }};
     }}
     return {{ text: "Quiet", tab: "" }};
   }}
@@ -2157,7 +2193,8 @@ function focusKey(kind, raw) {{
     if (!id) return;
     ev.preventDefault();
     var fromGlance = btn.id === "board-glance";
-    if (fromGlance) {{
+    var fromOwnerHolds = btn.id === "owner-holds-link";
+    if (fromGlance || fromOwnerHolds) {{
       applyTypeTab(id);
       var focus = btn.getAttribute("data-focus-target") || "";
       var reveal = function () {{ revealGlanceTarget(id, focus); }};
@@ -2604,7 +2641,7 @@ function focusKey(kind, raw) {{
           ? ' data-tab-panel="' + esc(sec.id) + '" hidden role="tabpanel" aria-label="Leftover ' + esc(tabLabel(sec.id) || sec.title || sec.id) + '"'
           : ' data-tab-panel="' + esc(sec.id) + '" hidden role="tabpanel" aria-labelledby="tab-' + esc(sec.id) + '"';
       }}
-      var leftoverHome = sec.id === "parked" ? leftoverTypesHtml(data.sections) : "";
+      var leftoverHome = sec.id === "parked" ? ownerHoldLinkHtml(data.pending, data.sections) + leftoverTypesHtml(data.sections) : "";
       html += '<section id="' + esc(sec.id || "") + '" class="block ' + cls + '"' + panel + ">" +
         "<h2>" + esc(sec.title || "") + "</h2>" + leftoverHome + leftoverTypeNoteHtml(sec) +
         lanesHtml(sec.projects || [], kind === "primary") + "</section>";

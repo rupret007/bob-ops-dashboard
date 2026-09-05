@@ -981,11 +981,56 @@ def glance_pending_title(item: Any) -> str:
     return title
 
 
+def is_owner_hold(item: Any) -> bool:
+    """Only explicit standing-boundary kinds, never title/ID/private inference."""
+    if not isinstance(item, dict) or not isinstance(item.get("kind"), str):
+        return False
+    # Match ECMAScript trim so first paint and browser agree even for bad input.
+    trim_space = (
+        "\t\n\v\f\r \u00a0\u1680\u2000\u2001\u2002\u2003\u2004\u2005"
+        "\u2006\u2007\u2008\u2009\u200a\u2028\u2029\u202f\u205f\u3000\ufeff"
+    )
+    return item["kind"].strip(trim_space).lower() in {"jeff-gate", "owner-live-gate"}
+
+
+def owner_hold_status(pending: Any) -> dict[str, str] | None:
+    """Highest-risk renderable standing hold, with only canonical public fields."""
+    if not isinstance(pending, list):
+        return None
+    rows = []
+    for raw in pending:
+        item = decision_review_item(raw)
+        if item is not None and is_owner_hold(item):
+            rows.append(item)
+    ordered = sort_pending(rows)
+    return ordered[0] if ordered else None
+
+
+def owner_hold_link_html(pending: Any, sections: Any) -> str:
+    """Existing Parked-panel route to a real owner hold, never a decision action."""
+    if not isinstance(sections, list) or not any(
+        isinstance(section, dict) and section.get("id") == "controls"
+        for section in sections
+    ):
+        return ""
+    item = owner_hold_status(pending)
+    if item is None:
+        return ""
+    target = html_lib.escape(focus_key("decision", item["id"]))
+    return (
+        '<p class="leftover-types">Standing owner holds are not active work. '
+        "Opening a hold does not approve or perform it.</p>"
+        '<button type="button" id="owner-holds-link" data-tab="controls" '
+        'data-focus-target="' + target + '" aria-controls="controls">'
+        "Review owner holds</button>"
+    )
+
+
 def glance_status(pending: Any, sections: Any) -> dict[str, str]:
-    """One exact first-screen action. Never a yes-count or leftover Jeff-yes."""
+    """Decision, real red/yellow work, then standing owner hold. Never a yes-count."""
     rows = [
         item for item in sort_pending(pending)
-        if focus_key("decision", item.get("id"))
+        if focus_key("decision", item.get("id")) and not is_owner_hold(item)
     ]
     if rows:
         title = glance_pending_title(rows[0]) or "Pending"
@@ -1033,6 +1078,13 @@ def glance_status(pending: Any, sections: Any) -> dict[str, str]:
                 "tab": worst_id,
                 "focus": worst_focus,
             }
+    owner = owner_hold_status(pending)
+    if owner is not None:
+        return {
+            "text": glance_pending_title(owner) or "Pending",
+            "tab": "controls",
+            "focus": focus_key("decision", owner["id"]),
+        }
     return {"text": "Quiet", "tab": ""}
 
 

@@ -14,6 +14,8 @@ Public, mobile-friendly status board for projects Bob is working on (Jeff Story 
 - No secrets, tokens, CSOne customer paths, Keeper material, or private handoff text
 - AdoptIQ appears only as a high-level private/offline summary with `ready_for_live_cisco=false`
 
+Next-action priority is explicit: a non-standing pending decision first, then a real red/yellow project, then a standing owner hold when no such work remains. Only the existing `jeff-gate` and `owner-live-gate` decision kinds count as standing holds; titles and IDs do not decide authority. **Parked → Review owner holds** keeps the exact highest-risk valid hold reachable even while a project occupies the first screen. Opening that row does not review, approve, or execute it; the existing current-snapshot review guard still applies.
+
 ## Portfolio coverage
 
 The board follows every inherited product lane. GitHub-backed rows use live repository, default-branch CI, and open-PR state for WebJam, Turdanoid, Show Night, Story Shelf, StoryBoard, Andrea NanoBot, StoryLiner, Bob Ops Dashboard, RadDadSite, Rad Dad Merch, and Cursor-OpenClaw Integration. StoryDesk and OpenClaw Runtime are explicitly **Local-only** because no authoritative remote can be claimed; private GitHub lanes stay **high-level only** and are not public live-repo, CI, or PR tap rows; Bob the Bot is a distinct private application lane shown **high-level only** and is not a public live-repo, CI, or PR tap row; private-media work appears only as a high-level **Owner-only** boundary because upload and publishing stay outside this board.
@@ -32,6 +34,7 @@ Bob the Bot is a distinct private application lane, not an alias for Andrea Nano
 - [Bob application registration handoff — 2026-08-26](docs/handoffs/2026-08-26-bob-application-registration.md) records the private application boundary and remaining owner gates.
 - [Full-context decision review — 2026-09-05](docs/handoffs/2026-09-05-decision-review.md) records the phone review flow, current-snapshot guard, offline QA, and remaining owner boundary.
 - [Phone tabs leftover honesty — 2026-09-05](docs/handoffs/2026-09-05-phone-tabs-leftover.md) records first-screen live-type tabs and leftover-only presentment under Parked.
+- [Phone next-action priority — 2026-09-05](docs/handoffs/2026-09-05-phone-priority.md) records actionable-work priority and the explicit Parked route to standing owner holds.
 - [Agent handoff runbook](docs/AGENT_HANDOFF_RUNBOOK.md) is the reusable checklist and template for Grok Bot, Codex, and future agents.
 
 These are sanitized operational-continuity records, not private handoff text. This repository is public: add a new dated handoff for each completed round instead of rewriting an old snapshot, and keep private lanes high-level. Never copy private repository metadata, creative details, customer data, credentials, or local paths into a handoff.
