@@ -107,7 +107,14 @@
   .pending-item:last-child { border-bottom:0; }
   .pending-item .ptitle { font-weight:600; font-size:.95rem; margin:0; }
   .pending-head { display:flex; align-items:baseline; justify-content:space-between; gap:.6rem; }
-  .pending-item .pdetail { display:none; }
+  .pending-item .pdetail { display:block; color:var(--muted); font-size:.85rem; margin:.35rem 0; white-space:pre-wrap; overflow-wrap:anywhere; }
+  .pending-item .ptitle { overflow-wrap:anywhere; }
+  .decision-kind { color:var(--muted); font-size:.75rem; margin:.35rem 0 .6rem; overflow-wrap:anywhere; }
+  .decision-review { font-size:.8rem; line-height:1.45; overflow-wrap:anywhere; }
+  .decision-review:not(:empty) { margin-top:.65rem; padding:.7rem; border:1px solid var(--orange); border-radius:8px; background:rgba(217,119,87,.06); }
+  .decision-review p { margin:0 0 .5rem; }
+  .pending-item .decision-review .prow { grid-template-columns:1fr; }
+  .pending-item button:disabled { cursor:not-allowed; opacity:.65; }
   .pending-item .prisk {
     display:inline-block; font-size:.65rem; text-transform:uppercase; letter-spacing:.04em;
     color:var(--muted); padding:0; margin:0; flex:0 0 auto;
@@ -197,10 +204,7 @@
   @media (min-width:720px) {
     .wrap { padding:1.5rem 1.25rem 3.75rem; }
     .lane .notes { -webkit-line-clamp:2; }
-    .pending-item .pdetail {
-      display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:2; overflow:hidden;
-      color:var(--muted); font-size:.78rem; margin:.15rem 0 0;
-    }
+    .pending-item .decision-review .prow { grid-template-columns:1fr 1fr 1fr; }
     .lane.is-quiet .notes { display:-webkit-box; }
     section.pending h2, section.primary h2 { font-size:1.85rem; }
     .type-tabs { flex-wrap:wrap; overflow:visible; }
@@ -213,7 +217,7 @@
   <header class="pulse">
     <h1><span class="mark">Bob</span> Ops</h1>
     <div class="pulse-row">
-      <div class="live-stamp" id="live-stamp" data-generated-at="2026-09-05T00:24:09.202733-05:00" data-display="Sat Sep 5, 2026 · 12:24 AM CDT"><span class="live-dot" id="live-dot" aria-hidden="true"></span><span id="freshness">Live - starting</span><span class="when"> · <strong id="updated-display">Sat Sep 5, 2026 · 12:24 AM CDT</strong></span></div>
+      <div class="live-stamp" id="live-stamp" data-generated-at="2026-09-05T04:14:54.904347-05:00" data-display="Sat Sep 5, 2026 · 4:14 AM CDT"><span class="live-dot" id="live-dot" aria-hidden="true"></span><span id="freshness">Live - starting</span><span class="when"> · <strong id="updated-display">Sat Sep 5, 2026 · 4:14 AM CDT</strong></span></div>
       <div id="active-agents"><div class="agents-strip is-unknown-mac is-unknown-only" id="agents-strip"><p class="agents-unknown" id="agents-unknown" title="No Mac probe in this clone · probe stale (&gt;45m)">Agents unknown</p><div class="agent-pill" data-probe="mac" data-agent-id="codex" data-state="unknown" data-checked-at="" data-agent-url="" data-pr-url="" title="No Mac probe in this clone · probe stale (&gt;45m)"><span class="name">Codex</span><span class="chip" style="--c:#525252;--bg:#171717;--fg:#d4d4d4">Unknown</span></div><div class="agent-pill" data-probe="mac" data-agent-id="cursor" data-state="unknown" data-checked-at="" data-agent-url="" data-pr-url="" title="No Mac probe in this clone · probe stale (&gt;45m)"><span class="name">Cursor</span><span class="chip" style="--c:#525252;--bg:#171717;--fg:#d4d4d4">Unknown</span></div><div class="agent-pill" data-probe="mac" data-agent-id="claude" data-state="unknown" data-checked-at="" data-agent-url="" data-pr-url="" title="No Mac probe in this clone · probe stale (&gt;45m)"><span class="name">Claude</span><span class="chip" style="--c:#525252;--bg:#171717;--fg:#d4d4d4">Unknown</span></div></div></div>
     </div>
     <div class="status hint" id="panel-status"></div>
@@ -224,14 +228,105 @@
   </div>
   <div id="board" data-snapshot-trust="current">
   <button type="button" class="board-glance" id="board-glance" aria-label="Next action" data-tab="controls" data-focus-target="decision:adoptiq-live-cisco" aria-controls="controls">AdoptIQ live Cisco readiness</button><nav class="type-tabs" id="type-tabs" role="tablist" aria-label="Project type"><button type="button" role="tab" id="tab-live-shipping" data-tab="live-shipping" aria-controls="live-shipping" aria-selected="false">Live</button><button type="button" role="tab" id="tab-apps-utilities" data-tab="apps-utilities" aria-controls="apps-utilities" aria-selected="false">Apps</button><button type="button" role="tab" id="tab-cisco" data-tab="cisco" aria-controls="cisco" aria-selected="false">Cisco</button><button type="button" role="tab" id="tab-messaging" data-tab="messaging" aria-controls="messaging" aria-selected="false">Bob</button><button type="button" role="tab" id="tab-private-media" data-tab="private-media" aria-controls="private-media" aria-selected="false">Media</button><button type="button" role="tab" id="tab-parked" data-tab="parked" aria-controls="parked" aria-selected="false">Parked</button></nav>
-  <section id="controls" class="block pending" data-tab-panel="controls" hidden role="tabpanel" aria-label="Decisions"><h2>Decisions</h2><div id="pending-box" class="pending-box"><p class="pending-help">Public board -- Approve opens a GitHub issue as <code>rupret007</code>.</p><div id="pending-list"><div class="pending-item" data-id="adoptiq-live-cisco" data-title="AdoptIQ live Cisco readiness" data-focus-key="decision:adoptiq-live-cisco" tabindex="-1"><div class="pending-head"><div class="ptitle">AdoptIQ live Cisco readiness</div><span class="prisk high">high</span></div><div class="pdetail">Offline candidate only. Keep ready_for_live_cisco=false until an...</div><div class="prow"><a class="dec" data-dec="APPROVE" href="https://github.com/rupret007/bob-ops-dashboard/issues/new?title=BOB-APPROVE%3A+adoptiq-live-cisco&amp;body=Dashboard+control+decision%0A%0Aid%3A+adoptiq-live-cisco%0Atitle%3A+AdoptIQ+live+Cisco+readiness%0Adecision%3A+approve%0Afrom%3A+public+board%0A%0ASubmit+this+issue+while+logged+in+as+rupret007.+That+GitHub+login+is+the+real+yes.%0ABob%3A+treat+this+as+a+one-shot+inbox+item.+High-risk+still+needs+the+draft+shown+in+chat+before+acting." target="_blank" rel="noopener noreferrer">Approve</a><a class="dec warn" data-dec="HOLD" href="https://github.com/rupret007/bob-ops-dashboard/issues/new?title=BOB-HOLD%3A+adoptiq-live-cisco&amp;body=Dashboard+control+decision%0A%0Aid%3A+adoptiq-live-cisco%0Atitle%3A+AdoptIQ+live+Cisco+readiness%0Adecision%3A+hold%0Afrom%3A+public+board%0A%0ASubmit+this+issue+while+logged+in+as+rupret007.+That+GitHub+login+is+the+real+yes.%0ABob%3A+treat+this+as+a+one-shot+inbox+item.+High-risk+still+needs+the+draft+shown+in+chat+before+acting." target="_blank" rel="noopener noreferrer">Hold</a><a class="dec danger" data-dec="DENY" href="https://github.com/rupret007/bob-ops-dashboard/issues/new?title=BOB-DENY%3A+adoptiq-live-cisco&amp;body=Dashboard+control+decision%0A%0Aid%3A+adoptiq-live-cisco%0Atitle%3A+AdoptIQ+live+Cisco+readiness%0Adecision%3A+deny%0Afrom%3A+public+board%0A%0ASubmit+this+issue+while+logged+in+as+rupret007.+That+GitHub+login+is+the+real+yes.%0ABob%3A+treat+this+as+a+one-shot+inbox+item.+High-risk+still+needs+the+draft+shown+in+chat+before+acting." target="_blank" rel="noopener noreferrer">Deny</a></div></div><details class="pending-more"><summary>2 lower-risk items</summary><div class="pending-item" data-id="che-live-pull" data-title="Che live pull" data-focus-key="decision:che-live-pull" tabindex="-1"><div class="pending-head"><div class="ptitle">Che live pull</div><span class="prisk low">low</span></div><div class="pdetail">GitHub Friends look is ahead of live raddadband.com until Che pulls.</div><div class="prow"><a class="dec" data-dec="APPROVE" href="https://github.com/rupret007/bob-ops-dashboard/issues/new?title=BOB-APPROVE%3A+che-live-pull&amp;body=Dashboard+control+decision%0A%0Aid%3A+che-live-pull%0Atitle%3A+Che+live+pull%0Adecision%3A+approve%0Afrom%3A+public+board%0A%0ASubmit+this+issue+while+logged+in+as+rupret007.+That+GitHub+login+is+the+real+yes.%0ABob%3A+treat+this+as+a+one-shot+inbox+item.+High-risk+still+needs+the+draft+shown+in+chat+before+acting." target="_blank" rel="noopener noreferrer">Approve</a><a class="dec warn" data-dec="HOLD" href="https://github.com/rupret007/bob-ops-dashboard/issues/new?title=BOB-HOLD%3A+che-live-pull&amp;body=Dashboard+control+decision%0A%0Aid%3A+che-live-pull%0Atitle%3A+Che+live+pull%0Adecision%3A+hold%0Afrom%3A+public+board%0A%0ASubmit+this+issue+while+logged+in+as+rupret007.+That+GitHub+login+is+the+real+yes.%0ABob%3A+treat+this+as+a+one-shot+inbox+item.+High-risk+still+needs+the+draft+shown+in+chat+before+acting." target="_blank" rel="noopener noreferrer">Hold</a><a class="dec danger" data-dec="DENY" href="https://github.com/rupret007/bob-ops-dashboard/issues/new?title=BOB-DENY%3A+che-live-pull&amp;body=Dashboard+control+decision%0A%0Aid%3A+che-live-pull%0Atitle%3A+Che+live+pull%0Adecision%3A+deny%0Afrom%3A+public+board%0A%0ASubmit+this+issue+while+logged+in+as+rupret007.+That+GitHub+login+is+the+real+yes.%0ABob%3A+treat+this+as+a+one-shot+inbox+item.+High-risk+still+needs+the+draft+shown+in+chat+before+acting." target="_blank" rel="noopener noreferrer">Deny</a></div></div><div class="pending-item" data-id="logic-keys-wavs" data-title="Logic keys and WAVs" data-focus-key="decision:logic-keys-wavs" tabindex="-1"><div class="pending-head"><div class="ptitle">Logic keys and WAVs</div><span class="prisk low">low</span></div><div class="pdetail">Mac field-fill only. Do not invent catalog keys.</div><div class="prow"><a class="dec" data-dec="APPROVE" href="https://github.com/rupret007/bob-ops-dashboard/issues/new?title=BOB-APPROVE%3A+logic-keys-wavs&amp;body=Dashboard+control+decision%0A%0Aid%3A+logic-keys-wavs%0Atitle%3A+Logic+keys+and+WAVs%0Adecision%3A+approve%0Afrom%3A+public+board%0A%0ASubmit+this+issue+while+logged+in+as+rupret007.+That+GitHub+login+is+the+real+yes.%0ABob%3A+treat+this+as+a+one-shot+inbox+item.+High-risk+still+needs+the+draft+shown+in+chat+before+acting." target="_blank" rel="noopener noreferrer">Approve</a><a class="dec warn" data-dec="HOLD" href="https://github.com/rupret007/bob-ops-dashboard/issues/new?title=BOB-HOLD%3A+logic-keys-wavs&amp;body=Dashboard+control+decision%0A%0Aid%3A+logic-keys-wavs%0Atitle%3A+Logic+keys+and+WAVs%0Adecision%3A+hold%0Afrom%3A+public+board%0A%0ASubmit+this+issue+while+logged+in+as+rupret007.+That+GitHub+login+is+the+real+yes.%0ABob%3A+treat+this+as+a+one-shot+inbox+item.+High-risk+still+needs+the+draft+shown+in+chat+before+acting." target="_blank" rel="noopener noreferrer">Hold</a><a class="dec danger" data-dec="DENY" href="https://github.com/rupret007/bob-ops-dashboard/issues/new?title=BOB-DENY%3A+logic-keys-wavs&amp;body=Dashboard+control+decision%0A%0Aid%3A+logic-keys-wavs%0Atitle%3A+Logic+keys+and+WAVs%0Adecision%3A+deny%0Afrom%3A+public+board%0A%0ASubmit+this+issue+while+logged+in+as+rupret007.+That+GitHub+login+is+the+real+yes.%0ABob%3A+treat+this+as+a+one-shot+inbox+item.+High-risk+still+needs+the+draft+shown+in+chat+before+acting." target="_blank" rel="noopener noreferrer">Deny</a></div></div></details></div></div></section><section id="live-shipping" class="block primary" data-tab-panel="live-shipping" hidden role="tabpanel" aria-labelledby="tab-live-shipping"><h2>Live shipping</h2><div class="lanes"><article class="lane is-quiet" data-focus-key="project:webjam" tabindex="-1"><h3><a data-open="work" href="https://github.com/rupret007/webjam" target="_blank" rel="noopener noreferrer">WebJam</a></h3><div class="lane-end"><span class="chip" style="--c:#16a34a;--bg:#052e16;--fg:#bbf7d0">Green</span><a class="signal" data-open="work" href="https://github.com/rupret007/webjam/releases/latest" target="_blank" rel="noopener noreferrer">Latest != source</a></div><div class="lane-links"><a class="dec" data-open="work" href="https://github.com/rupret007/webjam" target="_blank" rel="noopener noreferrer">Open repo</a><a class="dec" data-open="work" href="https://github.com/rupret007/webjam/actions/runs/33942259432" target="_blank" rel="noopener noreferrer">Open CI</a></div><p class="notes">Making room. Latest is the published test candidate; source can be ahead.</p></article><article class="lane is-quiet" data-focus-key="project:storyliner" tabindex="-1"><h3><a data-open="work" href="https://github.com/rupret007/StoryLiner" target="_blank" rel="noopener noreferrer">StoryLiner</a></h3><div class="lane-end"><span class="chip" style="--c:#16a34a;--bg:#052e16;--fg:#bbf7d0">Green</span></div><div class="lane-links"><a class="dec" data-open="work" href="https://github.com/rupret007/StoryLiner" target="_blank" rel="noopener noreferrer">Open repo</a><a class="dec" data-open="work" href="https://github.com/rupret007/StoryLiner/actions/runs/33920096287" target="_blank" rel="noopener noreferrer">Open CI</a></div><p class="notes">Story workflow app. Current review stack and default-branch CI come from the live...</p></article><article class="lane is-quiet" data-focus-key="project:storyboard" tabindex="-1"><h3><a data-open="work" href="https://github.com/rupret007/StoryBoard" target="_blank" rel="noopener noreferrer">StoryBoard</a></h3><div class="lane-end"><span class="chip" style="--c:#16a34a;--bg:#052e16;--fg:#bbf7d0">Green</span></div><div class="lane-links"><a class="dec" data-open="work" href="https://github.com/rupret007/StoryBoard" target="_blank" rel="noopener noreferrer">Open repo</a><a class="dec" data-open="work" href="https://github.com/rupret007/StoryBoard/actions/runs/33944239779" target="_blank" rel="noopener noreferrer">Open CI</a></div><p class="notes">Band-business engine. Consumes Vault; not a second catalog.</p></article><article class="lane is-quiet" data-focus-key="project:rad-dad-merch" tabindex="-1"><h3><a data-open="work" href="https://github.com/rupret007/Rad-Dad-Merch" target="_blank" rel="noopener noreferrer">Rad Dad Merch</a></h3><div class="lane-end"><span class="chip" style="--c:#16a34a;--bg:#052e16;--fg:#bbf7d0">Green</span></div><div class="lane-links"><a class="dec" data-open="work" href="https://github.com/rupret007/Rad-Dad-Merch" target="_blank" rel="noopener noreferrer">Open repo</a><a class="dec" data-open="work" href="https://github.com/rupret007/Rad-Dad-Merch/actions/runs/33749556683" target="_blank" rel="noopener noreferrer">Open CI</a></div><p class="notes">Merch lane; watch Release integrity.</p></article><article class="lane is-quiet" data-focus-key="project:raddadsite" tabindex="-1"><h3><a data-open="work" href="https://github.com/rupret007/RadDadSite" target="_blank" rel="noopener noreferrer">RadDadSite</a></h3><div class="lane-end"><span class="chip" style="--c:#16a34a;--bg:#052e16;--fg:#bbf7d0">Green</span></div><div class="lane-links"><a class="dec" data-open="work" href="https://github.com/rupret007/RadDadSite" target="_blank" rel="noopener noreferrer">Open repo</a><a class="dec" data-open="work" href="https://github.com/rupret007/RadDadSite/actions/runs/33928564025" target="_blank" rel="noopener noreferrer">Open CI</a></div><p class="notes">Tip green typical; deploy work comes only from live open PR data.</p></article><article class="lane is-quiet" data-focus-key="project:show-night" tabindex="-1"><h3><a data-open="work" href="https://github.com/rupret007/rad-dad-show-night" target="_blank" rel="noopener noreferrer">Show Night</a></h3><div class="lane-end"><span class="chip" style="--c:#16a34a;--bg:#052e16;--fg:#bbf7d0">Green</span></div><div class="lane-links"><a class="dec" data-open="work" href="https://github.com/rupret007/rad-dad-show-night" target="_blank" rel="noopener noreferrer">Open repo</a><a class="dec" data-open="work" href="https://github.com/rupret007/rad-dad-show-night/actions/runs/33945994567" target="_blank" rel="noopener noreferrer">Open CI</a></div><p class="notes">Live run sheet. GitHub is source; live Latest is Sites. Green CI is not Latest.</p></article><article class="lane is-quiet" data-focus-key="project:turdanoid" tabindex="-1"><h3><a data-open="work" href="https://github.com/rupret007/Turdanoid" target="_blank" rel="noopener noreferrer">Turdanoid</a></h3><div class="lane-end"><span class="chip" style="--c:#16a34a;--bg:#052e16;--fg:#bbf7d0">Green</span></div><div class="lane-links"><a class="dec" data-open="work" href="https://github.com/rupret007/Turdanoid" target="_blank" rel="noopener noreferrer">Open repo</a><a class="dec" data-open="work" href="https://github.com/rupret007/Turdanoid/actions/runs/33770596691" target="_blank" rel="noopener noreferrer">Open CI</a><a class="dec" data-open="work" href="https://rupret007.github.io/Turdanoid/hub.html" target="_blank" rel="noopener noreferrer">Play game</a></div><p class="notes">Public game hub. Fun/replayability pass remains open; green CI is not completion.</p></article><article class="lane" data-focus-key="project:ai-music-vault" tabindex="-1"><h3>AI Music Vault</h3><div class="lane-end"><span class="chip" style="--c:#525252;--bg:#171717;--fg:#d4d4d4">Parked</span></div><p class="notes">Private catalog spine for StoryBoard / Show Night. Do not publish catalog content.</p></article></div></section><section id="apps-utilities" class="block secondary" data-tab-panel="apps-utilities" hidden role="tabpanel" aria-labelledby="tab-apps-utilities"><h2>Apps &amp; utilities</h2><div class="lanes"><article class="lane" data-focus-key="project:storyops-ai" tabindex="-1"><h3>StoryOps-AI</h3><div class="lane-end"><span class="chip" style="--c:#525252;--bg:#171717;--fg:#d4d4d4">Parked</span></div><p class="notes">Private workflow utility. High-level only; no customer data on this board.</p></article><article class="lane" data-focus-key="project:ball-beacon" tabindex="-1"><h3>Ball Beacon</h3><div class="lane-end"><span class="chip" style="--c:#525252;--bg:#171717;--fg:#d4d4d4">Parked</span></div><p class="notes">Private iOS utility. Software validation only; device and signing steps stay owner-only.</p></article><article class="lane" data-focus-key="project:css-conductor" tabindex="-1"><h3>CSS Conductor</h3><div class="lane-end"><span class="chip" style="--c:#525252;--bg:#171717;--fg:#d4d4d4">Parked</span></div><p class="notes">Private developer utility. High-level only; hosted-job cause stays unconfirmed.</p></article><article class="lane" data-focus-key="project:barker" tabindex="-1"><h3>Barker</h3><div class="lane-end"><span class="chip" style="--c:#525252;--bg:#171717;--fg:#d4d4d4">Parked</span></div><p class="notes">Private app. No live sends, production changes, or credential operations from this...</p></article><article class="lane is-quiet" data-focus-key="project:cursor-openclaw-integration" tabindex="-1"><h3><a data-open="work" href="https://github.com/rupret007/Cursor-OpenClaw-Integration" target="_blank" rel="noopener noreferrer">Cursor-OpenClaw Integration</a></h3><div class="lane-end"><span class="chip" style="--c:#16a34a;--bg:#052e16;--fg:#bbf7d0">Green</span></div><div class="lane-links"><a class="dec" data-open="work" href="https://github.com/rupret007/Cursor-OpenClaw-Integration" target="_blank" rel="noopener noreferrer">Open repo</a><a class="dec" data-open="work" href="https://github.com/rupret007/Cursor-OpenClaw-Integration/actions/runs/33936914635" target="_blank" rel="noopener noreferrer">Open CI</a></div><p class="notes">Integration utility. Never restart gateways or alter credentials automatically.</p></article><article class="lane is-quiet" data-focus-key="project:bob-ops-dashboard" tabindex="-1"><h3><a data-open="work" href="https://github.com/rupret007/bob-ops-dashboard" target="_blank" rel="noopener noreferrer">Bob Ops Dashboard</a></h3><div class="lane-end"><span class="chip" style="--c:#16a34a;--bg:#052e16;--fg:#bbf7d0">Green</span></div><div class="lane-links"><a class="dec" data-open="work" href="https://github.com/rupret007/bob-ops-dashboard" target="_blank" rel="noopener noreferrer">Open repo</a></div><p class="notes">Source-only feature PRs; the scheduled refresh owns generated index.html and...</p></article><article class="lane" data-focus-key="project:sliding-glass-door-screw" tabindex="-1"><h3>Sliding Glass Door Screw</h3><div class="lane-end"><span class="chip" style="--c:#525252;--bg:#171717;--fg:#d4d4d4">Parked</span></div><p class="notes">Software/design artifact only. Printing, installation, and physical fit stay owner-only.</p></article><article class="lane" data-focus-key="project:story-shelf" tabindex="-1"><h3><a data-open="work" href="https://github.com/rupret007/story-corner-shelf/pull/9" target="_blank" rel="noopener noreferrer">Story Shelf</a></h3><div class="lane-end"><span class="chip" style="--c:#ca8a04;--bg:#422006;--fg:#fef08a">Yellow</span><a class="signal" data-open="work" href="https://github.com/rupret007/story-corner-shelf/pulls" target="_blank" rel="noopener noreferrer">3 open PRs</a></div><div class="lane-links"><a class="dec" data-open="work" href="https://github.com/rupret007/story-corner-shelf/pull/9" target="_blank" rel="noopener noreferrer">Open PR</a><a class="dec" data-open="work" href="https://github.com/rupret007/story-corner-shelf" target="_blank" rel="noopener noreferrer">Open repo</a><a class="dec" data-open="work" href="https://github.com/rupret007/story-corner-shelf/actions/runs/33570401169" target="_blank" rel="noopener noreferrer">Open CI</a></div><p class="notes">Story Shelf utility. Software and documentation work only; physical installation stays...</p></article><article class="lane" data-focus-key="project:storydesk" tabindex="-1"><h3>StoryDesk</h3><div class="lane-end"><span class="chip" style="--c:#525252;--bg:#171717;--fg:#d4d4d4">Local-only</span></div><p class="notes">No authoritative GitHub remote. Local code can be verified, but hosted or merged...</p></article><article class="lane" data-focus-key="project:openclaw-runtime" tabindex="-1"><h3>OpenClaw Runtime</h3><div class="lane-end"><span class="chip" style="--c:#525252;--bg:#171717;--fg:#d4d4d4">Local-only</span></div><p class="notes">Local runtime lane. No gateway restart, credential change, or live operation from this...</p></article></div></section><section id="cisco" class="block secondary" data-tab-panel="cisco" hidden role="tabpanel" aria-labelledby="tab-cisco"><h2>Cisco work</h2><div class="lanes"><article class="lane" data-focus-key="project:adoptiq" tabindex="-1"><h3>AdoptIQ</h3><div class="lane-end"><span class="chip" style="--c:#525252;--bg:#171717;--fg:#d4d4d4">Parked</span></div><p class="notes">Private, draft, and offline-only; ready_for_live_cisco=false. No secrets or customer...</p></article><article class="lane" data-focus-key="project:tactrack" tabindex="-1"><h3>TACTrack</h3><div class="lane-end"><span class="chip" style="--c:#525252;--bg:#171717;--fg:#d4d4d4">Parked</span></div><p class="notes">Private. High-level only. No live-repo, CI, or PR taps on this board.</p></article><article class="lane" data-focus-key="project:adoptiq-notes" tabindex="-1"><h3>AdoptIQ notes</h3><div class="lane-end"><span class="chip" style="--c:#525252;--bg:#171717;--fg:#d4d4d4">Parked</span></div><p class="notes">High-level only: manager-decision UX and offline candidate path. No CSOne paths...</p></article></div></section><section id="messaging" class="block secondary" data-tab-panel="messaging" hidden role="tabpanel" aria-labelledby="tab-messaging"><h2>Messaging / Bob infra</h2><div class="lanes"><article class="lane is-quiet" data-focus-key="project:andrea-nanobot" tabindex="-1"><h3><a data-open="work" href="https://github.com/rupret007/Andrea_NanoBot" target="_blank" rel="noopener noreferrer">Andrea NanoBot</a></h3><div class="lane-end"><span class="chip" style="--c:#16a34a;--bg:#052e16;--fg:#bbf7d0">Green</span></div><div class="lane-links"><a class="dec" data-open="work" href="https://github.com/rupret007/Andrea_NanoBot" target="_blank" rel="noopener noreferrer">Open repo</a><a class="dec" data-open="work" href="https://github.com/rupret007/Andrea_NanoBot/actions/runs/33920421041" target="_blank" rel="noopener noreferrer">Open CI</a></div><p class="notes">BB AppleScript send preferred. Private API OFF. Approval-fenced sends only.</p></article><article class="lane" data-focus-key="project:bob-the-bot" tabindex="-1"><h3>Bob the Bot</h3><div class="lane-end"><span class="chip" style="--c:#525252;--bg:#171717;--fg:#d4d4d4">Parked</span></div><p class="notes">Bob application — private bootstrap. Reuses the Andrea messaging engine and guarded...</p></article><article class="lane is-quiet" data-focus-key="project:telegram-bot-the-bot" tabindex="-1"><h3>Telegram Bot the Bot</h3><div class="lane-end"><span class="chip" style="--c:#16a34a;--bg:#052e16;--fg:#bbf7d0">Green</span></div><p class="notes">Whisper + Chrome mop shipped. Bob front-door via Telegram.</p></article><article class="lane is-quiet" data-focus-key="project:codex-local-goals" tabindex="-1"><h3>Codex local goals</h3><div class="lane-end"><span class="chip" style="--c:#16a34a;--bg:#052e16;--fg:#bbf7d0">Green</span></div><p class="notes">goals=true fixed. Local Codex loop for AdoptIQ/ops lanes.</p></article></div></section><section id="private-media" class="block secondary" data-tab-panel="private-media" hidden role="tabpanel" aria-labelledby="tab-private-media"><h2>Private media</h2><div class="lanes"><article class="lane" data-focus-key="project:private-media" tabindex="-1"><h3>Private media</h3><div class="lane-end"><span class="chip" style="--c:#d97757;--bg:#2a1510;--fg:#f5c4b3">Owner-only</span></div><p class="notes">Private-content boundary. Upload and publishing stay owner-only.</p></article></div></section><section id="parked" class="block secondary" data-tab-panel="parked" hidden role="tabpanel" aria-labelledby="tab-parked"><h2>Parked</h2><div class="lanes"><article class="lane" data-focus-key="project:parked-private-catalog" tabindex="-1"><h3>Parked private catalog</h3><div class="lane-end"><span class="chip" style="--c:#525252;--bg:#171717;--fg:#d4d4d4">Parked</span></div><p class="notes">Private-content boundary. Parked catalog work stays private and owner-only.</p></article></div></section><section id="abilities" class="block foot"><details class="abilities-foot"><summary>What Bob can do</summary><p class="pending-help">Texts / food after Jeff yes. No send button. Honest: there is no order button on this board.</p><div class="lanes"><article class="lane is-quiet" data-focus-key="project:rebuild-this-board" tabindex="-1"><h3>Rebuild this board</h3><div class="lane-end"></div><p class="notes">Actions cron every 15m plus ./refresh.sh. Live gh SHAs/CI. No secrets on the public...</p></article><article class="lane is-quiet" data-focus-key="project:cursor-cloud-agents" tabindex="-1"><h3>Cursor Cloud Agents</h3><div class="lane-end"></div><p class="notes">Repo work in Cursor Cloud. Jeff-gated / cost ceiling. High-level only here.</p></article><article class="lane is-quiet" data-focus-key="project:local-codex-goals" tabindex="-1"><h3>Local Codex goals</h3><div class="lane-end"></div><p class="notes">Mac Codex loop for AdoptIQ and ops lanes. High-risk goals still shown in chat before...</p></article><article class="lane" data-focus-key="project:texts-via-andrea" tabindex="-1"><h3>Texts via Andrea</h3><div class="lane-end"><span class="chip" style="--c:#d97757;--bg:#2a1510;--fg:#f5c4b3">After yes</span></div><p class="notes">After Jeff yes only. Never auto-send. Draft must already exist. No send button on this...</p></article><article class="lane" data-focus-key="project:life-ops-domino-s" tabindex="-1"><h3>Life-ops / Domino&#x27;s</h3><div class="lane-end"><span class="chip" style="--c:#d97757;--bg:#2a1510;--fg:#f5c4b3">After yes</span></div><p class="notes">Food, errands, Domino&#x27;s: chat yes only. Honest: there is no order button on this board.</p></article><article class="lane" data-focus-key="project:private-media-boundary" tabindex="-1"><h3>Private media boundary</h3><div class="lane-end"><span class="chip" style="--c:#d97757;--bg:#2a1510;--fg:#f5c4b3">Owner-only</span></div><p class="notes">Private content stays high-level. Upload and publishing require an explicit owner...</p></article><article class="lane" data-focus-key="project:cisco-cs-desktop-high-level" tabindex="-1"><h3>Cisco CS desktop (high-level)</h3><div class="lane-end"><span class="chip" style="--c:#525252;--bg:#171717;--fg:#d4d4d4">High-level</span></div><p class="notes">AdoptIQ / TACTrack appear as high-level Cisco CS desktop only. No CSOne paths or...</p></article><article class="lane" data-focus-key="project:github-issue-inbox" tabindex="-1"><h3>GitHub issue inbox</h3><div class="lane-end"><span class="chip" style="--c:#d97757;--bg:#2a1510;--fg:#f5c4b3">Authority</span></div><p class="notes">BOB-APPROVE / BOB-DENY / BOB-HOLD from rupret007 is the real yes. The board only opens...</p></article></div></details></section><section id="features" class="block foot"><details class="how-board"><summary>How this board works</summary><p class="pending-help">Engineer notes -- not the daily ops list.</p><p class="pending-help">Public board -- Approve opens a GitHub issue; submit while logged in as <code>rupret007</code>.</p><div class="tools"><button type="button" data-action="refresh-hint">Copy command</button><button type="button" data-action="open-repo">Open repo</button><button type="button" data-action="mark-reviewed">Mark reviewed</button></div><div class="lanes"><article class="lane is-quiet" data-focus-key="project:public-board" tabindex="-1"><h3>Public board</h3><div class="lane-end"></div><p class="notes">Possession of the public URL is enough. GitHub login rupret007 is the real authority.</p></article><article class="lane is-quiet" data-focus-key="project:music-stack" tabindex="-1"><h3>Music stack</h3><div class="lane-end"></div><p class="notes">Vault, StoryBoard, Show Night, and WebJam work together. Latest != source.</p></article><article class="lane is-quiet" data-focus-key="project:type-tabs" tabindex="-1"><h3>Type tabs</h3><div class="lane-end"></div><p class="notes">Each GitHub type is its own tab. First screen is the next action, not Decisions chrome.</p></article><article class="lane is-quiet" data-focus-key="project:soft-paint-poll" tabindex="-1"><h3>Soft-paint poll</h3><div class="lane-end"></div><p class="notes">Client fetches status.json every 30s (pauses when the tab is hidden). Immediate poll...</p></article><article class="lane is-quiet" data-focus-key="project:agents-strip" tabindex="-1"><h3>Agents strip</h3><div class="lane-end"></div><p class="notes">Codex / Cursor / Claude from a Mac probe. Stale or untimestamped probes paint Unknown...</p></article><article class="lane is-quiet" data-focus-key="project:silence-banner" tabindex="-1"><h3>Silence banner</h3><div class="lane-end"></div><p class="notes">Actions cadence is ~15m. If refresh is quiet for ~45m the page warns that chips may be...</p></article><article class="lane is-quiet" data-focus-key="project:xss-safe-cards" tabindex="-1"><h3>XSS-safe cards</h3><div class="lane-end"></div><p class="notes">html.escape + safeHref on server render. Soft-paint uses esc/safeHref. ASCII-safe JS...</p></article><article class="lane is-quiet" data-focus-key="project:poll-decide-race-guards" tabindex="-1"><h3>Poll / decide race guards</h3><div class="lane-end"></div><p class="notes">pollSeq / pendingSeq drop stale fetches. stopPolling bumps pollSeq before abort so...</p></article><article class="lane is-quiet" data-focus-key="project:public-pages" tabindex="-1"><h3>Public Pages</h3><div class="lane-end"></div><p class="notes">Free-plan GitHub Pages from main. No secrets, tokens, Keeper material, or private...</p></article></div><p id="fetched-line">Live CI via <code>gh</code>: webjam, StoryLiner, StoryBoard, Rad-Dad-Merch, RadDadSite, Turdanoid, rad-dad-show-night, Andrea_NanoBot, story-corner-shelf, bob-ops-dashboard, Cursor-OpenClaw-Integration.</p></details></section>
+  <section id="controls" class="block pending" data-tab-panel="controls" hidden role="tabpanel" aria-label="Decisions"><h2>Decisions</h2><div id="pending-box" class="pending-box"><p class="pending-help">Review the full context first. Opening a GitHub draft is not submitting a decision. GitHub login as <code>rupret007</code> remains the authority.</p><noscript><p class="pending-help">Decision links require a current snapshot check and review. JavaScript is off; this board is read-only.</p></noscript><div id="pending-list"><div class="pending-item" data-id="adoptiq-live-cisco" data-title="AdoptIQ live Cisco readiness" data-focus-key="decision:adoptiq-live-cisco" tabindex="-1"><div class="pending-head"><div class="ptitle">AdoptIQ live Cisco readiness</div><span class="prisk high">high</span></div><div class="pdetail">Offline candidate only. Keep ready_for_live_cisco=false until an explicit owner decision.</div><p class="decision-kind">Boundary: owner-live-gate</p><button type="button" data-review-decision="adoptiq-live-cisco" disabled>Review choices</button><div class="decision-review" aria-live="polite"></div></div><details class="pending-more"><summary>2 lower-risk items</summary><div class="pending-item" data-id="che-live-pull" data-title="Che live pull" data-focus-key="decision:che-live-pull" tabindex="-1"><div class="pending-head"><div class="ptitle">Che live pull</div><span class="prisk low">low</span></div><div class="pdetail">GitHub Friends look is ahead of live raddadband.com until Che pulls.</div><p class="decision-kind">Boundary: jeff-gate</p><button type="button" data-review-decision="che-live-pull" disabled>Review choices</button><div class="decision-review" aria-live="polite"></div></div><div class="pending-item" data-id="logic-keys-wavs" data-title="Logic keys and WAVs" data-focus-key="decision:logic-keys-wavs" tabindex="-1"><div class="pending-head"><div class="ptitle">Logic keys and WAVs</div><span class="prisk low">low</span></div><div class="pdetail">Mac field-fill only. Do not invent catalog keys.</div><p class="decision-kind">Boundary: jeff-gate</p><button type="button" data-review-decision="logic-keys-wavs" disabled>Review choices</button><div class="decision-review" aria-live="polite"></div></div></details></div></div></section><section id="live-shipping" class="block primary" data-tab-panel="live-shipping" hidden role="tabpanel" aria-labelledby="tab-live-shipping"><h2>Live shipping</h2><div class="lanes"><article class="lane is-quiet" data-focus-key="project:webjam" tabindex="-1"><h3><a data-open="work" href="https://github.com/rupret007/webjam" target="_blank" rel="noopener noreferrer">WebJam</a></h3><div class="lane-end"><span class="chip" style="--c:#16a34a;--bg:#052e16;--fg:#bbf7d0">Green</span><a class="signal" data-open="work" href="https://github.com/rupret007/webjam/releases/latest" target="_blank" rel="noopener noreferrer">Latest != source</a></div><div class="lane-links"><a class="dec" data-open="work" href="https://github.com/rupret007/webjam" target="_blank" rel="noopener noreferrer">Open repo</a><a class="dec" data-open="work" href="https://github.com/rupret007/webjam/actions/runs/33949255159" target="_blank" rel="noopener noreferrer">Open CI</a></div><p class="notes">Making room. Latest is the published test candidate; source can be ahead.</p></article><article class="lane is-quiet" data-focus-key="project:storyliner" tabindex="-1"><h3><a data-open="work" href="https://github.com/rupret007/StoryLiner" target="_blank" rel="noopener noreferrer">StoryLiner</a></h3><div class="lane-end"><span class="chip" style="--c:#16a34a;--bg:#052e16;--fg:#bbf7d0">Green</span></div><div class="lane-links"><a class="dec" data-open="work" href="https://github.com/rupret007/StoryLiner" target="_blank" rel="noopener noreferrer">Open repo</a><a class="dec" data-open="work" href="https://github.com/rupret007/StoryLiner/actions/runs/33949849425" target="_blank" rel="noopener noreferrer">Open CI</a></div><p class="notes">Story workflow app. Current review stack and default-branch CI come from the live...</p></article><article class="lane is-quiet" data-focus-key="project:storyboard" tabindex="-1"><h3><a data-open="work" href="https://github.com/rupret007/StoryBoard" target="_blank" rel="noopener noreferrer">StoryBoard</a></h3><div class="lane-end"><span class="chip" style="--c:#16a34a;--bg:#052e16;--fg:#bbf7d0">Green</span></div><div class="lane-links"><a class="dec" data-open="work" href="https://github.com/rupret007/StoryBoard" target="_blank" rel="noopener noreferrer">Open repo</a><a class="dec" data-open="work" href="https://github.com/rupret007/StoryBoard/actions/runs/33944239779" target="_blank" rel="noopener noreferrer">Open CI</a></div><p class="notes">Band-business engine. Consumes Vault; not a second catalog.</p></article><article class="lane is-quiet" data-focus-key="project:rad-dad-merch" tabindex="-1"><h3><a data-open="work" href="https://github.com/rupret007/Rad-Dad-Merch" target="_blank" rel="noopener noreferrer">Rad Dad Merch</a></h3><div class="lane-end"><span class="chip" style="--c:#16a34a;--bg:#052e16;--fg:#bbf7d0">Green</span></div><div class="lane-links"><a class="dec" data-open="work" href="https://github.com/rupret007/Rad-Dad-Merch" target="_blank" rel="noopener noreferrer">Open repo</a><a class="dec" data-open="work" href="https://github.com/rupret007/Rad-Dad-Merch/actions/runs/33955618035" target="_blank" rel="noopener noreferrer">Open CI</a></div><p class="notes">Merch lane; watch Release integrity.</p></article><article class="lane is-quiet" data-focus-key="project:raddadsite" tabindex="-1"><h3><a data-open="work" href="https://github.com/rupret007/RadDadSite" target="_blank" rel="noopener noreferrer">RadDadSite</a></h3><div class="lane-end"><span class="chip" style="--c:#16a34a;--bg:#052e16;--fg:#bbf7d0">Green</span></div><div class="lane-links"><a class="dec" data-open="work" href="https://github.com/rupret007/RadDadSite" target="_blank" rel="noopener noreferrer">Open repo</a><a class="dec" data-open="work" href="https://github.com/rupret007/RadDadSite/actions/runs/33952600282" target="_blank" rel="noopener noreferrer">Open CI</a></div><p class="notes">Tip green typical; deploy work comes only from live open PR data.</p></article><article class="lane is-quiet" data-focus-key="project:show-night" tabindex="-1"><h3><a data-open="work" href="https://github.com/rupret007/rad-dad-show-night" target="_blank" rel="noopener noreferrer">Show Night</a></h3><div class="lane-end"><span class="chip" style="--c:#16a34a;--bg:#052e16;--fg:#bbf7d0">Green</span></div><div class="lane-links"><a class="dec" data-open="work" href="https://github.com/rupret007/rad-dad-show-night" target="_blank" rel="noopener noreferrer">Open repo</a><a class="dec" data-open="work" href="https://github.com/rupret007/rad-dad-show-night/actions/runs/33945994567" target="_blank" rel="noopener noreferrer">Open CI</a></div><p class="notes">Live run sheet. GitHub is source; live Latest is Sites. Green CI is not Latest.</p></article><article class="lane is-quiet" data-focus-key="project:turdanoid" tabindex="-1"><h3><a data-open="work" href="https://github.com/rupret007/Turdanoid" target="_blank" rel="noopener noreferrer">Turdanoid</a></h3><div class="lane-end"><span class="chip" style="--c:#16a34a;--bg:#052e16;--fg:#bbf7d0">Green</span></div><div class="lane-links"><a class="dec" data-open="work" href="https://github.com/rupret007/Turdanoid" target="_blank" rel="noopener noreferrer">Open repo</a><a class="dec" data-open="work" href="https://github.com/rupret007/Turdanoid/actions/runs/33955587440" target="_blank" rel="noopener noreferrer">Open CI</a><a class="dec" data-open="work" href="https://rupret007.github.io/Turdanoid/hub.html" target="_blank" rel="noopener noreferrer">Play game</a></div><p class="notes">Public game hub. Fun/replayability pass remains open; green CI is not completion.</p></article><article class="lane" data-focus-key="project:ai-music-vault" tabindex="-1"><h3>AI Music Vault</h3><div class="lane-end"><span class="chip" style="--c:#525252;--bg:#171717;--fg:#d4d4d4">Parked</span></div><p class="notes">Private catalog spine for StoryBoard / Show Night. Do not publish catalog content.</p></article></div></section><section id="apps-utilities" class="block secondary" data-tab-panel="apps-utilities" hidden role="tabpanel" aria-labelledby="tab-apps-utilities"><h2>Apps &amp; utilities</h2><div class="lanes"><article class="lane" data-focus-key="project:storyops-ai" tabindex="-1"><h3>StoryOps-AI</h3><div class="lane-end"><span class="chip" style="--c:#525252;--bg:#171717;--fg:#d4d4d4">Parked</span></div><p class="notes">Private workflow utility. High-level only; no customer data on this board.</p></article><article class="lane" data-focus-key="project:ball-beacon" tabindex="-1"><h3>Ball Beacon</h3><div class="lane-end"><span class="chip" style="--c:#525252;--bg:#171717;--fg:#d4d4d4">Parked</span></div><p class="notes">Private iOS utility. Software validation only; device and signing steps stay owner-only.</p></article><article class="lane" data-focus-key="project:css-conductor" tabindex="-1"><h3>CSS Conductor</h3><div class="lane-end"><span class="chip" style="--c:#525252;--bg:#171717;--fg:#d4d4d4">Parked</span></div><p class="notes">Private developer utility. High-level only; hosted-job cause stays unconfirmed.</p></article><article class="lane" data-focus-key="project:barker" tabindex="-1"><h3>Barker</h3><div class="lane-end"><span class="chip" style="--c:#525252;--bg:#171717;--fg:#d4d4d4">Parked</span></div><p class="notes">Private app. No live sends, production changes, or credential operations from this...</p></article><article class="lane is-quiet" data-focus-key="project:cursor-openclaw-integration" tabindex="-1"><h3><a data-open="work" href="https://github.com/rupret007/Cursor-OpenClaw-Integration" target="_blank" rel="noopener noreferrer">Cursor-OpenClaw Integration</a></h3><div class="lane-end"><span class="chip" style="--c:#16a34a;--bg:#052e16;--fg:#bbf7d0">Green</span></div><div class="lane-links"><a class="dec" data-open="work" href="https://github.com/rupret007/Cursor-OpenClaw-Integration" target="_blank" rel="noopener noreferrer">Open repo</a><a class="dec" data-open="work" href="https://github.com/rupret007/Cursor-OpenClaw-Integration/actions/runs/33955390177" target="_blank" rel="noopener noreferrer">Open CI</a></div><p class="notes">Integration utility. Never restart gateways or alter credentials automatically.</p></article><article class="lane is-quiet" data-focus-key="project:bob-ops-dashboard" tabindex="-1"><h3><a data-open="work" href="https://github.com/rupret007/bob-ops-dashboard" target="_blank" rel="noopener noreferrer">Bob Ops Dashboard</a></h3><div class="lane-end"><span class="chip" style="--c:#16a34a;--bg:#052e16;--fg:#bbf7d0">Green</span></div><div class="lane-links"><a class="dec" data-open="work" href="https://github.com/rupret007/bob-ops-dashboard" target="_blank" rel="noopener noreferrer">Open repo</a><a class="dec" data-open="work" href="https://github.com/rupret007/bob-ops-dashboard/actions/runs/33951296243" target="_blank" rel="noopener noreferrer">Open CI</a></div><p class="notes">Source-only feature PRs; the scheduled refresh owns generated index.html and...</p></article><article class="lane" data-focus-key="project:sliding-glass-door-screw" tabindex="-1"><h3>Sliding Glass Door Screw</h3><div class="lane-end"><span class="chip" style="--c:#525252;--bg:#171717;--fg:#d4d4d4">Parked</span></div><p class="notes">Software/design artifact only. Printing, installation, and physical fit stay owner-only.</p></article><article class="lane" data-focus-key="project:story-shelf" tabindex="-1"><h3><a data-open="work" href="https://github.com/rupret007/story-corner-shelf/pull/9" target="_blank" rel="noopener noreferrer">Story Shelf</a></h3><div class="lane-end"><span class="chip" style="--c:#ca8a04;--bg:#422006;--fg:#fef08a">Yellow</span><a class="signal" data-open="work" href="https://github.com/rupret007/story-corner-shelf/pulls" target="_blank" rel="noopener noreferrer">3 open PRs</a></div><div class="lane-links"><a class="dec" data-open="work" href="https://github.com/rupret007/story-corner-shelf/pull/9" target="_blank" rel="noopener noreferrer">Open PR</a><a class="dec" data-open="work" href="https://github.com/rupret007/story-corner-shelf" target="_blank" rel="noopener noreferrer">Open repo</a><a class="dec" data-open="work" href="https://github.com/rupret007/story-corner-shelf/actions/runs/33570401169" target="_blank" rel="noopener noreferrer">Open CI</a></div><p class="notes">Story Shelf utility. Software and documentation work only; physical installation stays...</p></article><article class="lane" data-focus-key="project:storydesk" tabindex="-1"><h3>StoryDesk</h3><div class="lane-end"><span class="chip" style="--c:#525252;--bg:#171717;--fg:#d4d4d4">Local-only</span></div><p class="notes">No authoritative GitHub remote. Local code can be verified, but hosted or merged...</p></article><article class="lane" data-focus-key="project:openclaw-runtime" tabindex="-1"><h3>OpenClaw Runtime</h3><div class="lane-end"><span class="chip" style="--c:#525252;--bg:#171717;--fg:#d4d4d4">Local-only</span></div><p class="notes">Local runtime lane. No gateway restart, credential change, or live operation from this...</p></article></div></section><section id="cisco" class="block secondary" data-tab-panel="cisco" hidden role="tabpanel" aria-labelledby="tab-cisco"><h2>Cisco work</h2><div class="lanes"><article class="lane" data-focus-key="project:adoptiq" tabindex="-1"><h3>AdoptIQ</h3><div class="lane-end"><span class="chip" style="--c:#525252;--bg:#171717;--fg:#d4d4d4">Parked</span></div><p class="notes">Private, draft, and offline-only; ready_for_live_cisco=false. No secrets or customer...</p></article><article class="lane" data-focus-key="project:tactrack" tabindex="-1"><h3>TACTrack</h3><div class="lane-end"><span class="chip" style="--c:#525252;--bg:#171717;--fg:#d4d4d4">Parked</span></div><p class="notes">Private. High-level only. No live-repo, CI, or PR taps on this board.</p></article><article class="lane" data-focus-key="project:adoptiq-notes" tabindex="-1"><h3>AdoptIQ notes</h3><div class="lane-end"><span class="chip" style="--c:#525252;--bg:#171717;--fg:#d4d4d4">Parked</span></div><p class="notes">High-level only: manager-decision UX and offline candidate path. No CSOne paths...</p></article></div></section><section id="messaging" class="block secondary" data-tab-panel="messaging" hidden role="tabpanel" aria-labelledby="tab-messaging"><h2>Messaging / Bob infra</h2><div class="lanes"><article class="lane is-quiet" data-focus-key="project:andrea-nanobot" tabindex="-1"><h3><a data-open="work" href="https://github.com/rupret007/Andrea_NanoBot" target="_blank" rel="noopener noreferrer">Andrea NanoBot</a></h3><div class="lane-end"><span class="chip" style="--c:#16a34a;--bg:#052e16;--fg:#bbf7d0">Green</span></div><div class="lane-links"><a class="dec" data-open="work" href="https://github.com/rupret007/Andrea_NanoBot" target="_blank" rel="noopener noreferrer">Open repo</a><a class="dec" data-open="work" href="https://github.com/rupret007/Andrea_NanoBot/actions/runs/33955404868" target="_blank" rel="noopener noreferrer">Open CI</a></div><p class="notes">BB AppleScript send preferred. Private API OFF. Approval-fenced sends only.</p></article><article class="lane" data-focus-key="project:bob-the-bot" tabindex="-1"><h3>Bob the Bot</h3><div class="lane-end"><span class="chip" style="--c:#525252;--bg:#171717;--fg:#d4d4d4">Parked</span></div><p class="notes">Bob application — private bootstrap. Reuses the Andrea messaging engine and guarded...</p></article><article class="lane is-quiet" data-focus-key="project:telegram-bot-the-bot" tabindex="-1"><h3>Telegram Bot the Bot</h3><div class="lane-end"><span class="chip" style="--c:#16a34a;--bg:#052e16;--fg:#bbf7d0">Green</span></div><p class="notes">Whisper + Chrome mop shipped. Bob front-door via Telegram.</p></article><article class="lane is-quiet" data-focus-key="project:codex-local-goals" tabindex="-1"><h3>Codex local goals</h3><div class="lane-end"><span class="chip" style="--c:#16a34a;--bg:#052e16;--fg:#bbf7d0">Green</span></div><p class="notes">goals=true fixed. Local Codex loop for AdoptIQ/ops lanes.</p></article></div></section><section id="private-media" class="block secondary" data-tab-panel="private-media" hidden role="tabpanel" aria-labelledby="tab-private-media"><h2>Private media</h2><div class="lanes"><article class="lane" data-focus-key="project:private-media" tabindex="-1"><h3>Private media</h3><div class="lane-end"><span class="chip" style="--c:#d97757;--bg:#2a1510;--fg:#f5c4b3">Owner-only</span></div><p class="notes">Private-content boundary. Upload and publishing stay owner-only.</p></article></div></section><section id="parked" class="block secondary" data-tab-panel="parked" hidden role="tabpanel" aria-labelledby="tab-parked"><h2>Parked</h2><div class="lanes"><article class="lane" data-focus-key="project:parked-private-catalog" tabindex="-1"><h3>Parked private catalog</h3><div class="lane-end"><span class="chip" style="--c:#525252;--bg:#171717;--fg:#d4d4d4">Parked</span></div><p class="notes">Private-content boundary. Parked catalog work stays private and owner-only.</p></article></div></section><section id="abilities" class="block foot"><details class="abilities-foot"><summary>What Bob can do</summary><p class="pending-help">Texts / food after Jeff yes. No send button. Honest: there is no order button on this board.</p><div class="lanes"><article class="lane is-quiet" data-focus-key="project:rebuild-this-board" tabindex="-1"><h3>Rebuild this board</h3><div class="lane-end"></div><p class="notes">Actions cron every 15m plus ./refresh.sh. Live gh SHAs/CI. No secrets on the public...</p></article><article class="lane is-quiet" data-focus-key="project:cursor-cloud-agents" tabindex="-1"><h3>Cursor Cloud Agents</h3><div class="lane-end"></div><p class="notes">Repo work in Cursor Cloud. Jeff-gated / cost ceiling. High-level only here.</p></article><article class="lane is-quiet" data-focus-key="project:local-codex-goals" tabindex="-1"><h3>Local Codex goals</h3><div class="lane-end"></div><p class="notes">Mac Codex loop for AdoptIQ and ops lanes. High-risk goals still shown in chat before...</p></article><article class="lane" data-focus-key="project:texts-via-andrea" tabindex="-1"><h3>Texts via Andrea</h3><div class="lane-end"><span class="chip" style="--c:#d97757;--bg:#2a1510;--fg:#f5c4b3">After yes</span></div><p class="notes">After Jeff yes only. Never auto-send. Draft must already exist. No send button on this...</p></article><article class="lane" data-focus-key="project:life-ops-domino-s" tabindex="-1"><h3>Life-ops / Domino&#x27;s</h3><div class="lane-end"><span class="chip" style="--c:#d97757;--bg:#2a1510;--fg:#f5c4b3">After yes</span></div><p class="notes">Food, errands, Domino&#x27;s: chat yes only. Honest: there is no order button on this board.</p></article><article class="lane" data-focus-key="project:private-media-boundary" tabindex="-1"><h3>Private media boundary</h3><div class="lane-end"><span class="chip" style="--c:#d97757;--bg:#2a1510;--fg:#f5c4b3">Owner-only</span></div><p class="notes">Private content stays high-level. Upload and publishing require an explicit owner...</p></article><article class="lane" data-focus-key="project:cisco-cs-desktop-high-level" tabindex="-1"><h3>Cisco CS desktop (high-level)</h3><div class="lane-end"><span class="chip" style="--c:#525252;--bg:#171717;--fg:#d4d4d4">High-level</span></div><p class="notes">AdoptIQ / TACTrack appear as high-level Cisco CS desktop only. No CSOne paths or...</p></article><article class="lane" data-focus-key="project:github-issue-inbox" tabindex="-1"><h3>GitHub issue inbox</h3><div class="lane-end"><span class="chip" style="--c:#d97757;--bg:#2a1510;--fg:#f5c4b3">Authority</span></div><p class="notes">BOB-APPROVE / BOB-DENY / BOB-HOLD from rupret007 is the real yes. The board only opens...</p></article></div></details></section><section id="features" class="block foot"><details class="how-board"><summary>How this board works</summary><p class="pending-help">Engineer notes -- not the daily ops list.</p><p class="pending-help">Public board -- Approve opens a GitHub issue; submit while logged in as <code>rupret007</code>.</p><div class="tools"><button type="button" data-action="refresh-hint">Copy command</button><button type="button" data-action="open-repo">Open repo</button><button type="button" data-action="mark-reviewed">Mark reviewed</button></div><div class="lanes"><article class="lane is-quiet" data-focus-key="project:public-board" tabindex="-1"><h3>Public board</h3><div class="lane-end"></div><p class="notes">Possession of the public URL is enough. GitHub login rupret007 is the real authority.</p></article><article class="lane is-quiet" data-focus-key="project:music-stack" tabindex="-1"><h3>Music stack</h3><div class="lane-end"></div><p class="notes">Vault, StoryBoard, Show Night, and WebJam work together. Latest != source.</p></article><article class="lane is-quiet" data-focus-key="project:type-tabs" tabindex="-1"><h3>Type tabs</h3><div class="lane-end"></div><p class="notes">Each GitHub type is its own tab. First screen is the next action, not Decisions chrome.</p></article><article class="lane is-quiet" data-focus-key="project:soft-paint-poll" tabindex="-1"><h3>Soft-paint poll</h3><div class="lane-end"></div><p class="notes">Client fetches status.json every 30s (pauses when the tab is hidden). Immediate poll...</p></article><article class="lane is-quiet" data-focus-key="project:agents-strip" tabindex="-1"><h3>Agents strip</h3><div class="lane-end"></div><p class="notes">Codex / Cursor / Claude from a Mac probe. Stale or untimestamped probes paint Unknown...</p></article><article class="lane is-quiet" data-focus-key="project:silence-banner" tabindex="-1"><h3>Silence banner</h3><div class="lane-end"></div><p class="notes">Actions cadence is ~15m. If refresh is quiet for ~45m the page warns that chips may be...</p></article><article class="lane is-quiet" data-focus-key="project:xss-safe-cards" tabindex="-1"><h3>XSS-safe cards</h3><div class="lane-end"></div><p class="notes">html.escape + safeHref on server render. Soft-paint uses esc/safeHref. ASCII-safe JS...</p></article><article class="lane is-quiet" data-focus-key="project:poll-decide-race-guards" tabindex="-1"><h3>Poll / decide race guards</h3><div class="lane-end"></div><p class="notes">pollSeq / pendingSeq drop stale fetches. stopPolling bumps pollSeq before abort so...</p></article><article class="lane is-quiet" data-focus-key="project:public-pages" tabindex="-1"><h3>Public Pages</h3><div class="lane-end"></div><p class="notes">Free-plan GitHub Pages from main. No secrets, tokens, Keeper material, or private...</p></article></div><p id="fetched-line">Live CI via <code>gh</code>: webjam, StoryLiner, StoryBoard, Rad-Dad-Merch, RadDadSite, Turdanoid, rad-dad-show-night, Andrea_NanoBot, story-corner-shelf, bob-ops-dashboard, Cursor-OpenClaw-Integration.</p></details></section>
   </div>
   <footer>
     <p><a href="https://github.com/rupret007/bob-ops-dashboard">rupret007/bob-ops-dashboard</a>
     · <a href="./status.json">status.json</a></p>
   </footer>
 </div>
+<script type="application/json" id="initial-snapshot">{"generated_at": "2026-09-05T04:14:54.904347-05:00", "generated_at_display": "Sat Sep 5, 2026 \u00b7 4:14 AM CDT", "timezone": "America/Chicago", "owner": "rupret007", "dashboard": "bob-ops-dashboard", "sections": [{"id": "controls", "title": "Decisions", "projects": [{"name": "Copy refresh command", "status": "green", "chip": "Control", "notes": "Copies ./refresh.sh --push. Does not run it.", "control_action": "refresh-hint", "action_label": "Copy command"}, {"name": "Open dashboard repo", "status": "green", "chip": "Control", "notes": "Public repo. Real merge/authority stays on GitHub as rupret007.", "url": "https://github.com/rupret007/bob-ops-dashboard", "control_action": "open-repo", "action_label": "Open repo"}, {"name": "Mark board reviewed", "status": "green", "chip": "Control", "notes": "Local timestamp on this phone only. Does not notify Bob or change GitHub.", "control_action": "mark-reviewed", "action_label": "Mark reviewed"}]}, {"id": "live-shipping", "title": "Live shipping", "projects": [{"name": "WebJam", "repo": "rupret007/webjam", "url": "https://github.com/rupret007/webjam", "repo_url": "https://github.com/rupret007/webjam", "private": false, "status": "green", "chip": "Green", "default_branch": "master", "tip_sha": "7f38ba2", "tip_date": "2026-09-05T06:14:01Z", "open_prs": 0, "open_pr_url": null, "open_pr_number": null, "open_pr_draft": false, "open_pr_stack": [], "pr_listing_complete": true, "agent_url": null, "ci": {"name": "WebJam CI", "conclusion": "success", "branch": "master", "sha": "7f38ba2", "created": "2026-09-05T06:14:04Z", "html_url": "https://github.com/rupret007/webjam/actions/runs/33949255159"}, "release": "v0.27.2", "release_sha": "9c6ca3d", "release_url": "https://github.com/rupret007/webjam/releases/tag/v0.27.2", "notes": "Making room. Latest is the published test candidate; source can be ahead.", "accessible": true}, {"name": "StoryLiner", "repo": "rupret007/StoryLiner", "url": "https://github.com/rupret007/StoryLiner", "repo_url": "https://github.com/rupret007/StoryLiner", "private": false, "status": "green", "chip": "Green", "default_branch": "main", "tip_sha": "6987829", "tip_date": "2026-09-05T06:27:06Z", "open_prs": 0, "open_pr_url": null, "open_pr_number": null, "open_pr_draft": false, "open_pr_stack": [], "pr_listing_complete": true, "agent_url": null, "ci": {"name": "CI", "conclusion": "success", "branch": "main", "sha": "6987829", "created": "2026-09-05T06:27:09Z", "html_url": "https://github.com/rupret007/StoryLiner/actions/runs/33949849425"}, "release": null, "release_sha": null, "release_url": null, "notes": "Story workflow app. Current review stack and default-branch CI come from the live refresh.", "accessible": true}, {"name": "StoryBoard", "repo": "rupret007/StoryBoard", "url": "https://github.com/rupret007/StoryBoard", "repo_url": "https://github.com/rupret007/StoryBoard", "private": false, "status": "green", "chip": "Green", "default_branch": "main", "tip_sha": "a3c8979", "tip_date": "2026-09-05T04:19:24Z", "open_prs": 0, "open_pr_url": null, "open_pr_number": null, "open_pr_draft": false, "open_pr_stack": [], "pr_listing_complete": true, "agent_url": null, "ci": {"name": "Quality", "conclusion": "success", "branch": "main", "sha": "a3c8979", "created": "2026-09-05T04:19:27Z", "html_url": "https://github.com/rupret007/StoryBoard/actions/runs/33944239779"}, "release": null, "release_sha": null, "release_url": null, "notes": "Band-business engine. Consumes Vault; not a second catalog.", "accessible": true}, {"name": "Rad Dad Merch", "repo": "rupret007/Rad-Dad-Merch", "url": "https://github.com/rupret007/Rad-Dad-Merch", "repo_url": "https://github.com/rupret007/Rad-Dad-Merch", "private": false, "status": "green", "chip": "Green", "default_branch": "main", "tip_sha": "5c44d0f", "tip_date": "2026-09-05T08:34:05Z", "open_prs": 0, "open_pr_url": null, "open_pr_number": null, "open_pr_draft": false, "open_pr_stack": [], "pr_listing_complete": true, "agent_url": null, "ci": {"name": "Release integrity", "conclusion": "success", "branch": "main", "sha": "5c44d0f", "created": "2026-09-05T08:34:08Z", "html_url": "https://github.com/rupret007/Rad-Dad-Merch/actions/runs/33955618035"}, "release": null, "release_sha": null, "release_url": null, "notes": "Merch lane; watch Release integrity.", "accessible": true}, {"name": "RadDadSite", "repo": "rupret007/RadDadSite", "url": "https://github.com/rupret007/RadDadSite", "repo_url": "https://github.com/rupret007/RadDadSite", "private": false, "status": "green", "chip": "Green", "default_branch": "main", "tip_sha": "534b1f8", "tip_date": "2026-09-05T07:27:19Z", "open_prs": 0, "open_pr_url": null, "open_pr_number": null, "open_pr_draft": false, "open_pr_stack": [], "pr_listing_complete": true, "agent_url": null, "ci": {"name": "Test, Package, and Deploy Site", "conclusion": "success", "branch": "main", "sha": "534b1f8", "created": "2026-09-05T07:27:22Z", "html_url": "https://github.com/rupret007/RadDadSite/actions/runs/33952600282"}, "release": null, "release_sha": null, "release_url": null, "notes": "Tip green typical; deploy work comes only from live open PR data.", "accessible": true}, {"name": "Show Night", "repo": "rupret007/rad-dad-show-night", "url": "https://github.com/rupret007/rad-dad-show-night", "repo_url": "https://github.com/rupret007/rad-dad-show-night", "private": false, "status": "green", "chip": "Green", "default_branch": "main", "tip_sha": "8219a21", "tip_date": "2026-09-05T04:59:05Z", "open_prs": 0, "open_pr_url": null, "open_pr_number": null, "open_pr_draft": false, "open_pr_stack": [], "pr_listing_complete": true, "agent_url": null, "ci": {"name": "leftover-honesty", "conclusion": "success", "branch": "main", "sha": "8219a21", "created": "2026-09-05T04:59:08Z", "html_url": "https://github.com/rupret007/rad-dad-show-night/actions/runs/33945994567"}, "release": null, "release_sha": null, "release_url": null, "notes": "Live run sheet. GitHub is source; live Latest is Sites. Green CI is not Latest.", "accessible": true}, {"name": "AI Music Vault", "private": true, "status": "parked", "chip": "Parked", "notes": "Private catalog spine for StoryBoard / Show Night. Do not publish catalog content.", "accessible": false, "ci": {}}, {"name": "Turdanoid", "repo": "rupret007/Turdanoid", "url": "https://github.com/rupret007/Turdanoid", "repo_url": "https://github.com/rupret007/Turdanoid", "private": false, "status": "green", "chip": "Green", "default_branch": "main", "tip_sha": "956d379", "tip_date": "2026-09-05T08:33:26Z", "open_prs": 0, "open_pr_url": null, "open_pr_number": null, "open_pr_draft": false, "open_pr_stack": [], "pr_listing_complete": true, "agent_url": null, "ci": {"name": "CI", "conclusion": "success", "branch": "main", "sha": "956d379", "created": "2026-09-05T08:33:28Z", "html_url": "https://github.com/rupret007/Turdanoid/actions/runs/33955587440"}, "release": null, "release_sha": null, "release_url": null, "notes": "Public game hub. Fun/replayability pass remains open; green CI is not completion.", "accessible": true, "live_game_url": "https://rupret007.github.io/Turdanoid/hub.html"}]}, {"id": "apps-utilities", "title": "Apps & utilities", "projects": [{"name": "StoryOps-AI", "repo": "rupret007/StoryOps-AI", "url": null, "repo_url": null, "private": null, "status": "parked", "chip": "Parked", "default_branch": null, "tip_sha": null, "tip_date": null, "open_prs": null, "open_pr_url": null, "open_pr_number": null, "open_pr_draft": false, "open_pr_stack": [], "pr_listing_complete": null, "agent_url": null, "ci": null, "release": null, "release_sha": null, "release_url": null, "notes": "Private workflow utility. High-level only; no customer data on this board.", "accessible": false}, {"name": "Ball Beacon", "repo": "rupret007/ballbeacon", "url": null, "repo_url": null, "private": null, "status": "parked", "chip": "Parked", "default_branch": null, "tip_sha": null, "tip_date": null, "open_prs": null, "open_pr_url": null, "open_pr_number": null, "open_pr_draft": false, "open_pr_stack": [], "pr_listing_complete": null, "agent_url": null, "ci": null, "release": null, "release_sha": null, "release_url": null, "notes": "Private iOS utility. Software validation only; device and signing steps stay owner-only.", "accessible": false}, {"name": "CSS Conductor", "private": true, "status": "parked", "chip": "Parked", "notes": "Private developer utility. High-level only; hosted-job cause stays unconfirmed.", "accessible": false, "ci": {}}, {"name": "Barker", "repo": "0xc0re/barker", "url": null, "repo_url": null, "private": null, "status": "parked", "chip": "Parked", "default_branch": null, "tip_sha": null, "tip_date": null, "open_prs": null, "open_pr_url": null, "open_pr_number": null, "open_pr_draft": false, "open_pr_stack": [], "pr_listing_complete": null, "agent_url": null, "ci": null, "release": null, "release_sha": null, "release_url": null, "notes": "Private app. No live sends, production changes, or credential operations from this board.", "accessible": false}, {"name": "Cursor-OpenClaw Integration", "repo": "rupret007/Cursor-OpenClaw-Integration", "url": "https://github.com/rupret007/Cursor-OpenClaw-Integration", "repo_url": "https://github.com/rupret007/Cursor-OpenClaw-Integration", "private": false, "status": "green", "chip": "Green", "default_branch": "main", "tip_sha": "173789a", "tip_date": "2026-09-05T08:29:13Z", "open_prs": 0, "open_pr_url": null, "open_pr_number": null, "open_pr_draft": false, "open_pr_stack": [], "pr_listing_complete": true, "agent_url": null, "ci": {"name": "Pull request integration", "conclusion": "success", "branch": "main", "sha": "173789a", "created": "2026-09-05T08:29:15Z", "html_url": "https://github.com/rupret007/Cursor-OpenClaw-Integration/actions/runs/33955390177"}, "release": null, "release_sha": null, "release_url": null, "notes": "Integration utility. Never restart gateways or alter credentials automatically.", "accessible": true}, {"name": "Bob Ops Dashboard", "repo": "rupret007/bob-ops-dashboard", "url": "https://github.com/rupret007/bob-ops-dashboard", "repo_url": "https://github.com/rupret007/bob-ops-dashboard", "private": false, "status": "green", "chip": "Green", "default_branch": "main", "tip_sha": "45113b2", "tip_date": "2026-09-05T06:59:11Z", "open_prs": 0, "open_pr_url": null, "open_pr_number": null, "open_pr_draft": false, "open_pr_stack": [], "pr_listing_complete": true, "agent_url": null, "ci": {"name": "QA claim smoke", "conclusion": "success", "branch": "main", "sha": "45113b2", "created": "2026-09-05T06:59:14Z", "html_url": "https://github.com/rupret007/bob-ops-dashboard/actions/runs/33951296243"}, "release": null, "release_sha": null, "release_url": null, "notes": "Source-only feature PRs; the scheduled refresh owns generated index.html and status.json.", "accessible": true}, {"name": "Sliding Glass Door Screw", "repo": "rupret007/Sliding-Glass-Door-PETG-Screw", "url": null, "repo_url": null, "private": null, "status": "parked", "chip": "Parked", "default_branch": null, "tip_sha": null, "tip_date": null, "open_prs": null, "open_pr_url": null, "open_pr_number": null, "open_pr_draft": false, "open_pr_stack": [], "pr_listing_complete": null, "agent_url": null, "ci": null, "release": null, "release_sha": null, "release_url": null, "notes": "Software/design artifact only. Printing, installation, and physical fit stay owner-only.", "accessible": false}, {"name": "Story Shelf", "repo": "rupret007/story-corner-shelf", "url": "https://github.com/rupret007/story-corner-shelf", "repo_url": "https://github.com/rupret007/story-corner-shelf", "private": false, "status": "yellow", "chip": "Yellow", "default_branch": "main", "tip_sha": "cc25e73", "tip_date": "2026-08-25T03:14:50Z", "open_prs": 3, "open_pr_url": "https://github.com/rupret007/story-corner-shelf/pull/9", "open_pr_number": 9, "open_pr_draft": false, "open_pr_stack": [], "pr_listing_complete": true, "agent_url": null, "ci": {"name": "github_actions in /. - Update #1550710283", "conclusion": "success", "branch": "main", "sha": "cc25e73", "created": "2026-09-01T23:18:15Z", "html_url": "https://github.com/rupret007/story-corner-shelf/actions/runs/33570401169"}, "release": null, "release_sha": null, "release_url": null, "notes": "Story Shelf utility. Software and documentation work only; physical installation stays owner-only.", "accessible": true}, {"name": "StoryDesk", "status": "parked", "chip": "Local-only", "notes": "No authoritative GitHub remote. Local code can be verified, but hosted or merged status cannot be claimed."}, {"name": "OpenClaw Runtime", "status": "parked", "chip": "Local-only", "notes": "Local runtime lane. No gateway restart, credential change, or live operation from this board."}]}, {"id": "active-agents", "title": "Active agents NOW", "projects": [{"name": "Codex", "status": "parked", "chip": "Unknown", "notes": "No Mac probe in this clone \u00b7 probe stale (>45m)", "agent_id": "codex", "agent_state": "unknown", "url": null, "pr_url": null}, {"name": "Cursor", "status": "parked", "chip": "Unknown", "notes": "No Mac probe in this clone \u00b7 probe stale (>45m)", "agent_id": "cursor", "agent_state": "unknown", "url": null, "pr_url": null}, {"name": "Claude", "status": "parked", "chip": "Unknown", "notes": "No Mac probe in this clone \u00b7 probe stale (>45m)", "agent_id": "claude", "agent_state": "unknown", "url": null, "pr_url": null}]}, {"id": "cisco", "title": "Cisco work", "projects": [{"name": "AdoptIQ", "private": true, "status": "parked", "chip": "Parked", "notes": "Private, draft, and offline-only; ready_for_live_cisco=false. No secrets or customer data on this page.", "accessible": false, "ci": {}}, {"name": "TACTrack", "private": true, "status": "parked", "chip": "Parked", "notes": "Private. High-level only. No live-repo, CI, or PR taps on this board.", "accessible": false, "ci": {}}, {"name": "AdoptIQ notes", "status": "parked", "chip": "Parked", "notes": "High-level only: manager-decision UX and offline candidate path. No CSOne paths, customer rows, or tokens."}]}, {"id": "messaging", "title": "Messaging / Bob infra", "projects": [{"name": "Andrea NanoBot", "repo": "rupret007/Andrea_NanoBot", "url": "https://github.com/rupret007/Andrea_NanoBot", "repo_url": "https://github.com/rupret007/Andrea_NanoBot", "private": false, "status": "green", "chip": "Green", "default_branch": "main", "tip_sha": "8adde5c", "tip_date": "2026-09-05T08:29:34Z", "open_prs": 0, "open_pr_url": null, "open_pr_number": null, "open_pr_draft": false, "open_pr_stack": [], "pr_listing_complete": true, "agent_url": null, "ci": {"name": "AGI Layer CI", "conclusion": "success", "branch": "main", "sha": "8adde5c", "created": "2026-09-05T08:29:37Z", "html_url": "https://github.com/rupret007/Andrea_NanoBot/actions/runs/33955404868"}, "release": null, "release_sha": null, "release_url": null, "notes": "BB AppleScript send preferred. Private API OFF. Approval-fenced sends only.", "accessible": true}, {"name": "Bob the Bot", "private": true, "status": "parked", "chip": "Parked", "notes": "Bob application \u2014 private bootstrap. Reuses the Andrea messaging engine and guarded OpenClaw delegation; no live sends, restarts, credentials, or production actions.", "accessible": false, "ci": {}}, {"name": "Telegram Bot the Bot", "status": "green", "chip": "Green", "notes": "Whisper + Chrome mop shipped. Bob front-door via Telegram."}, {"name": "Codex local goals", "status": "green", "chip": "Green", "notes": "goals=true fixed. Local Codex loop for AdoptIQ/ops lanes."}]}, {"id": "private-media", "title": "Private media", "projects": [{"name": "Private media", "status": "jeff-gate", "chip": "Owner-only", "notes": "Private-content boundary. Upload and publishing stay owner-only."}]}, {"id": "parked", "title": "Parked", "projects": [{"name": "Parked private catalog", "status": "parked", "chip": "Parked", "notes": "Private-content boundary. Parked catalog work stays private and owner-only."}]}, {"id": "abilities", "title": "Abilities", "projects": [{"name": "Rebuild this board", "status": "green", "chip": "Ability", "notes": "Actions cron every 15m plus ./refresh.sh. Live gh SHAs/CI. No secrets on the public page."}, {"name": "Cursor Cloud Agents", "status": "green", "chip": "Ability", "notes": "Repo work in Cursor Cloud. Jeff-gated / cost ceiling. High-level only here."}, {"name": "Local Codex goals", "status": "green", "chip": "Ability", "notes": "Mac Codex loop for AdoptIQ and ops lanes. High-risk goals still shown in chat before launch."}, {"name": "Texts via Andrea", "status": "jeff-gate", "chip": "After yes", "notes": "After Jeff yes only. Never auto-send. Draft must already exist. No send button on this page."}, {"name": "Life-ops / Domino's", "status": "jeff-gate", "chip": "After yes", "notes": "Food, errands, Domino's: chat yes only. Honest: there is no order button on this board."}, {"name": "Private media boundary", "status": "jeff-gate", "chip": "Owner-only", "notes": "Private content stays high-level. Upload and publishing require an explicit owner decision."}, {"name": "Cisco CS desktop (high-level)", "status": "parked", "chip": "High-level", "notes": "AdoptIQ / TACTrack appear as high-level Cisco CS desktop only. No CSOne paths or customer rows."}, {"name": "GitHub issue inbox", "status": "jeff-gate", "chip": "Authority", "notes": "BOB-APPROVE / BOB-DENY / BOB-HOLD from rupret007 is the real yes. The board only opens the draft."}]}, {"id": "features", "title": "How this board works", "projects": [{"name": "Public board", "status": "green", "chip": "Feature", "notes": "Possession of the public URL is enough. GitHub login rupret007 is the real authority."}, {"name": "Music stack", "status": "green", "chip": "Feature", "notes": "Vault, StoryBoard, Show Night, and WebJam work together. Latest != source."}, {"name": "Type tabs", "status": "green", "chip": "Feature", "notes": "Each GitHub type is its own tab. First screen is the next action, not Decisions chrome."}, {"name": "Soft-paint poll", "status": "green", "chip": "Feature", "notes": "Client fetches status.json every 30s (pauses when the tab is hidden). Immediate poll on pageshow / visible. Fetch aborts after 8s. Hide / iOS-return abort is not a failed poll. A stale cached status.json cannot rewind the board. Repaints when board content changes -- not on every 15m Actions timestamp. Tip CI is the current SHA; Pages / skipped helpers / this board's refresh publisher cannot hide a fail. A skipped or cancelled helper cannot beat a success or become Open CI. Lanes prefer the open PR; CI fail/running taps the Actions run when a run URL is known. A complete same-repo stack shows safe base-to-tip PR order and taps the pulls list; ambiguous chains fall back to the honest open-PR count. Vault, StoryBoard, Show Night, and WebJam work together as one music stack. WebJam Latest is the published test candidate and is not unpublished source; a proven Latest != source signal taps /releases/latest -- not dead text."}, {"name": "Agents strip", "status": "green", "chip": "Feature", "notes": "Codex / Cursor / Claude from a Mac probe. Stale or untimestamped probes paint Unknown. Never invent Running. When the box has no live Mac probe, the three pills collapse and the Agents unknown line stays in the document -- not first-screen chrome. Work links require the exact real cursor.com/agents/bc- UUID to be advertised by a currently open same-repository PR in an allowlisted public repository; probe-only and fork-PR links are dropped. Tap Open agent / Open PR (real target=_blank plus openBlank fallback). Token-like words and local paths redacted."}, {"name": "Silence banner", "status": "green", "chip": "Feature", "notes": "Actions cadence is ~15m. If refresh is quiet for ~45m the page warns that chips may be stale."}, {"name": "XSS-safe cards", "status": "green", "chip": "Feature", "notes": "html.escape + safeHref on server render. Soft-paint uses esc/safeHref. ASCII-safe JS (no smart quotes)."}, {"name": "Poll / decide race guards", "status": "green", "chip": "Feature", "notes": "pollSeq / pendingSeq drop stale fetches. stopPolling bumps pollSeq before abort so tab-hide is not a fail. Approve / Hold / Deny are real GitHub links so iOS cannot swallow a popup. Open agent / Open PR / Open repo / Open CI / Play game use the same real target=_blank plus openBlank fallback. decideBusy still debounce double-taps."}, {"name": "Public Pages", "status": "green", "chip": "Feature", "notes": "Free-plan GitHub Pages from main. No secrets, tokens, Keeper material, or private handoff text."}]}], "fetched_repos": ["webjam", "StoryLiner", "StoryBoard", "Rad-Dad-Merch", "RadDadSite", "Turdanoid", "rad-dad-show-night", "Andrea_NanoBot", "story-corner-shelf", "bob-ops-dashboard", "Cursor-OpenClaw-Integration"], "inaccessible": ["AdoptIQ", "TACTrack", "AI-Music-Vault", "Bob-the-Bot", "StoryOps-AI", "ballbeacon", "CSS_Conductor", "barker", "Sliding-Glass-Door-PETG-Screw"], "publish_notes": "Public board -- no secrets or customer paths. Private repositories stay high-level; AI Music Vault stays private-content-boundary only.", "refresh_started_ms": 1788599669003, "agents_source": "file:stale->unknown", "agents": [{"id": "codex", "name": "Codex", "state": "unknown", "detail": "No Mac probe in this clone \u00b7 probe stale (>45m)", "checked_at": null}, {"id": "cursor", "name": "Cursor", "state": "unknown", "detail": "No Mac probe in this clone \u00b7 probe stale (>45m)", "checked_at": null}, {"id": "claude", "name": "Claude", "state": "unknown", "detail": "No Mac probe in this clone \u00b7 probe stale (>45m)", "checked_at": null}], "cloud_agents": [], "pending": [{"id": "che-live-pull", "title": "Che live pull", "kind": "jeff-gate", "detail": "GitHub Friends look is ahead of live raddadband.com until Che pulls.", "risk": "low"}, {"id": "logic-keys-wavs", "title": "Logic keys and WAVs", "kind": "jeff-gate", "detail": "Mac field-fill only. Do not invent catalog keys.", "risk": "low"}, {"id": "adoptiq-live-cisco", "title": "AdoptIQ live Cisco readiness", "kind": "owner-live-gate", "detail": "Offline candidate only. Keep ready_for_live_cisco=false until an explicit owner decision.", "risk": "high"}], "decisions": [], "control": {"mode": "github-issue-inbox", "jeff_github": "rupret007", "prefixes": ["BOB-APPROVE:", "BOB-DENY:", "BOB-HOLD:"], "note": "Public board. Real authority is a GitHub issue from rupret007."}}</script>
 <script>
+function decisionReviewText(value, limit, multiline) {
+  if (typeof value !== "string" || value.length > limit) return false;
+  for (var i = 0; i < value.length; i++) {
+    var code = value.charCodeAt(i);
+    if ((code < 32 && !(multiline && (code === 10 || code === 13 || code === 9))) || code === 127) return false;
+    if (code >= 0xd800 && code <= 0xdbff) {
+      var next = value.charCodeAt(++i);
+      if (!(next >= 0xdc00 && next <= 0xdfff)) return false;
+    } else if (code >= 0xdc00 && code <= 0xdfff) return false;
+  }
+  return true;
+}
+function decisionReviewItem(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  if (!decisionReviewText(value.id, 64, false) || !/^[a-zA-Z0-9._-]+$/.test(value.id)) return null;
+  if (!decisionReviewText(value.title, 160, false) || !value.title.trim()) return null;
+  var detail = value.detail === undefined ? "" : value.detail;
+  var risk = value.risk;
+  var kind = value.kind === undefined ? "ops" : value.kind;
+  if (!decisionReviewText(detail, 2000, true) || ["high", "medium", "low"].indexOf(risk) < 0) return null;
+  if (!decisionReviewText(kind, 64, false) || !/^[ -~]+$/.test(kind) || !kind.trim()) return null;
+  return { id: value.id, title: value.title, detail: detail, risk: risk, kind: kind };
+}
+function decisionReviewIdentity(value) {
+  var item = decisionReviewItem(value);
+  return item ? JSON.stringify([item.id, item.title, item.detail, item.risk, item.kind]) : "";
+}
+function decisionTimestamp(value) {
+  if (typeof value !== "string" || value.length > 64) return null;
+  var m = /^([0-9]{4})-([0-9]{2})-([0-9]{2})T([0-9]{2}):([0-9]{2}):([0-9]{2})(?:[.]([0-9]{1,6}))?(Z|([+-])([0-9]{2}):([0-9]{2}))$/.exec(value);
+  if (!m || m[0].length !== value.length) return null;
+  var year = +m[1], month = +m[2], day = +m[3], hour = +m[4], minute = +m[5], second = +m[6];
+  var leap = year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
+  var days = [31, leap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+  if (!year || month < 1 || month > 12 || day < 1 || day > days[month - 1] || hour > 23 || minute > 59 || second > 59 || +m[10] > 23 || +m[11] > 59) return null;
+  var date = new Date(0);
+  date.setUTCFullYear(year, month - 1, day);
+  date.setUTCHours(hour, minute, second, +((m[7] || "") + "000").slice(0, 3));
+  var offset = m[8] === "Z" ? 0 : (+m[10] * 60 + +m[11]) * 60000 * (m[9] === "+" ? 1 : -1);
+  return date.getTime() - offset;
+}
+function decisionSnapshotTime(value) {
+  var ms = decisionTimestamp(value);
+  return ms !== null && ms > 0 && ms <= Date.now() ? ms : 0;
+}
+function reviewDecisionHref(verb, value, snapshot) {
+  var item = decisionReviewItem(value);
+  if (["APPROVE", "HOLD", "DENY"].indexOf(verb) < 0 || !item || decisionTimestamp(snapshot) === null) return "";
+  var body = [
+    "Dashboard control decision", "", "id: " + item.id, "title: " + item.title,
+    "decision: " + verb.toLowerCase(), "from: public board", "risk: " + item.risk,
+    "kind: " + item.kind, "reviewed_snapshot: " + snapshot,
+    "reviewed_item: " + decisionReviewIdentity(item), "", "Reviewed public detail:", item.detail, "",
+    "Submit this issue while logged in as rupret007. That GitHub login is the real yes.",
+    "Bob: treat this as a one-shot inbox item. High-risk still needs the draft shown in chat before acting.",
+    "Snapshot receipt records what was reviewed; re-check current work before acting."
+  ].join(String.fromCharCode(10));
+  function encode(value) {
+    return encodeURIComponent(value).replace(/%20/g, "+").replace(/[!'()*]/g, function (ch) { return "%" + ch.charCodeAt(0).toString(16).toUpperCase(); });
+  }
+  var url = "https://github.com/rupret007/bob-ops-dashboard/issues/new?title=" + encode("BOB-" + verb + ": " + item.id) + "&body=" + encode(body);
+  return url.length <= 8192 ? url : "";
+}
+function validateAcceptedSnapshot(data) {
+  if (!data || typeof data !== "object" || Array.isArray(data) || !decisionSnapshotTime(data.generated_at)) return false;
+  if (!Array.isArray(data.sections) || !data.sections.length || data.sections.length > 40 ||
+      !Array.isArray(data.pending) || data.pending.length > 100 || !Array.isArray(data.agents) ||
+      !Array.isArray(data.cloud_agents) || !Array.isArray(data.fetched_repos)) return false;
+  var sectionIds = Object.create(null);
+  var pendingIds = Object.create(null);
+  for (var i = 0; i < data.sections.length; i++) {
+    var section = data.sections[i];
+    if (!section || typeof section !== "object" || typeof section.id !== "string" ||
+        !decisionReviewText(section.id, 64, false) || !/^[a-z0-9-]+$/.test(section.id) || sectionIds[section.id] || !Array.isArray(section.projects) || section.projects.length > 200) return false;
+    sectionIds[section.id] = true;
+    for (var j = 0; j < section.projects.length; j++) {
+      var project = section.projects[j];
+      if (!project || typeof project !== "object" || Array.isArray(project) || !decisionReviewText(project.name, 160, false) || !project.name.trim()) return false;
+    }
+  }
+  if (!sectionIds.controls) return false;
+  for (var k = 0; k < data.pending.length; k++) {
+    var item = decisionReviewItem(data.pending[k]);
+    if (!item || pendingIds[item.id.toLowerCase()]) return false;
+    pendingIds[item.id.toLowerCase()] = true;
+  }
+  return data.agents.length <= 40 && data.cloud_agents.length <= 100 && data.fetched_repos.length <= 100 &&
+    data.agents.concat(data.cloud_agents).every(function (agent) { return agent && typeof agent === "object" && !Array.isArray(agent); }) &&
+    data.fetched_repos.every(function (name) { return decisionReviewText(name, 160, false); });
+}
 function focusKey(kind, raw) {
   var prefix = String(kind || "").replace(/^\s+|\s+$/g, "").toLowerCase();
   var value = String(raw || "").replace(/^\s+|\s+$/g, "");
@@ -251,7 +346,9 @@ function focusKey(kind, raw) {
   // Public board: URL is enough. Real yes is a GitHub issue from rupret007.
   var statusEl = document.getElementById("panel-status");
   var decideBusy = {};
-  var pendingSeq = 0;
+  var acceptedSnapshot = null;
+  var reviewedDecision = null;
+  var decisionTrust = false;
 
   function pendingEls() {
     return {
@@ -315,10 +412,117 @@ function focusKey(kind, raw) {
   }
   window.openBlank = openBlank;
 
+  function currentDecision(id) {
+    if (!acceptedSnapshot) return null;
+    for (var i = 0; i < acceptedSnapshot.items.length; i++) {
+      if (acceptedSnapshot.items[i].id === id) return acceptedSnapshot.items[i];
+    }
+    return null;
+  }
+  function decisionIsCurrent() {
+    if (!decisionTrust || !acceptedSnapshot) return false;
+    var ms = decisionSnapshotTime(acceptedSnapshot.at);
+    return !!ms && Date.now() - ms <= 45 * 60 * 1000;
+  }
+  function reviewedHref(verb, id) {
+    var item = currentDecision(id);
+    if (!decisionIsCurrent() || !item || !reviewedDecision || reviewedDecision.id !== id ||
+        reviewedDecision.identity !== decisionReviewIdentity(item)) return "";
+    return reviewDecisionHref(verb, item, acceptedSnapshot.at);
+  }
+  function renderDecisionReviews() {
+    var rows = document.querySelectorAll(".pending-item");
+    Array.prototype.forEach.call(rows, function (row) {
+      var id = row.getAttribute("data-id");
+      var item = currentDecision(id);
+      var button = row.querySelector("[data-review-decision]");
+      var panel = row.querySelector(".decision-review");
+      if (!button || !panel) return;
+      var active = document.activeElement;
+      var focusedVerb = active && active.closest && active.closest(".pending-item") === row ? active.getAttribute("data-dec") : "";
+      var available = decisionIsCurrent() && !!item;
+      button.disabled = !available;
+      button.setAttribute("aria-expanded", reviewedDecision && reviewedDecision.id === id ? "true" : "false");
+      panel.textContent = "";
+      if (!available) {
+        panel.textContent = "Read-only snapshot. Use Retry now above, then review the current decision before opening a GitHub draft.";
+        if (focusedVerb) { try { row.focus({ preventScroll: true }); } catch (e) {} }
+        return;
+      }
+      if (!reviewedDecision || reviewedDecision.id !== id || reviewedDecision.identity !== decisionReviewIdentity(item)) return;
+      var note = document.createElement("p");
+      note.textContent = "Reviewed: " + item.title + ". Snapshot " + acceptedSnapshot.at + ". Opening a draft does not submit a decision.";
+      panel.appendChild(note);
+      var boundary = document.createElement("p");
+      boundary.textContent = "Submit on GitHub as rupret007. High-risk work still needs the exact draft shown in chat and a current owner recheck; this receipt is context, not execution permission.";
+      panel.appendChild(boundary);
+      var actions = document.createElement("div");
+      actions.className = "prow";
+      ["APPROVE", "HOLD", "DENY"].forEach(function (verb) {
+        var href = reviewedHref(verb, id);
+        if (!href) return;
+        var link = document.createElement("a");
+        link.className = "dec" + (verb === "HOLD" ? " warn" : verb === "DENY" ? " danger" : "");
+        link.setAttribute("data-dec", verb);
+        link.setAttribute("href", href);
+        link.setAttribute("target", "_blank");
+        link.setAttribute("rel", "noopener noreferrer");
+        link.textContent = verb === "APPROVE" ? "Open approval draft" : verb === "HOLD" ? "Open hold draft" : "Open denial draft";
+        actions.appendChild(link);
+      });
+      if (!actions.childNodes.length) {
+        var tooLong = document.createElement("p");
+        tooLong.textContent = "This complete context is too long for a safe GitHub draft link. Nothing was shortened or submitted; review it with the owner in chat.";
+        panel.appendChild(tooLong);
+      } else panel.appendChild(actions);
+      if (["APPROVE", "HOLD", "DENY"].indexOf(focusedVerb) >= 0) {
+        var replacement = panel.querySelector('[data-dec="' + focusedVerb + '"]');
+        if (replacement) { try { replacement.focus({ preventScroll: true }); } catch (e) {} }
+      }
+    });
+  }
+  function acceptDecisionSnapshot(data) {
+    if (!validateAcceptedSnapshot(data) || (acceptedSnapshot && Date.parse(data.generated_at) < Date.parse(acceptedSnapshot.at))) {
+      setDecisionTrust("invalid");
+      return false;
+    }
+    var items = data.pending.map(decisionReviewItem);
+    var identity = JSON.stringify(items.map(decisionReviewIdentity).sort());
+    if (!acceptedSnapshot || acceptedSnapshot.identity !== identity) reviewedDecision = null;
+    acceptedSnapshot = { at: data.generated_at, items: items, identity: identity };
+    return true;
+  }
+  function setDecisionTrust(state) {
+    var next = state === "current" && !!acceptedSnapshot && !!decisionSnapshotTime(acceptedSnapshot.at) &&
+      Date.now() - Date.parse(acceptedSnapshot.at) <= 45 * 60 * 1000;
+    if (decisionTrust === next) return;
+    decisionTrust = next;
+    if (!decisionTrust) reviewedDecision = null;
+    renderDecisionReviews();
+  }
+  function reviewDecision(id) {
+    var item = currentDecision(id);
+    if (!decisionIsCurrent() || !item) {
+      setStatus("Current decision unavailable. Retry now, then review it again.", "warn");
+      renderDecisionReviews();
+      return false;
+    }
+    reviewedDecision = { id: id, identity: decisionReviewIdentity(item) };
+    renderDecisionReviews();
+    return true;
+  }
+  window.bobDecisionReview = {
+    accept: acceptDecisionSnapshot,
+    setTrust: setDecisionTrust,
+    review: reviewDecision,
+    reconcileRendering: renderDecisionReviews,
+    open: openDecisionIssue
+  };
+
   function openDecisionIssue(verb, id, title) {
-    var url = decisionHref(verb, id, title);
+    var url = reviewedHref(verb, id);
     if (!url) {
-      setStatus("Bad pending id", "bad");
+      setStatus("Review the current full context before opening a GitHub draft. If unavailable, use Retry now.", "warn");
       return;
     }
     var key = verb + ":" + String(id || "").trim();
@@ -329,103 +533,14 @@ function focusKey(kind, raw) {
     setStatus(verb + " draft opened on GitHub. Submit the issue while logged in as rupret007.", "warn");
   }
 
-  function renderPending(items) {
-    var els = pendingEls();
-    if (!els.box || !els.list) return;
-    var rank = { high: 0, medium: 1, low: 2 };
-    var rows = (items || []).filter(function (it) {
-      return it && /^[a-zA-Z0-9._-]+$/.test(String(it.id || ""));
-    }).slice().sort(function (a, b) {
-      var ra = rank.hasOwnProperty(String(a.risk || "").toLowerCase()) ? rank[String(a.risk).toLowerCase()] : 5;
-      var rb = rank.hasOwnProperty(String(b.risk || "").toLowerCase()) ? rank[String(b.risk).toLowerCase()] : 5;
-      return ra - rb;
-    });
-    els.list.innerHTML = "";
-    els.box.hidden = rows.length === 0;
-    var sec = document.getElementById("controls");
-    if (sec) sec.hidden = rows.length === 0;
-    if (!rows.length) return;
-    var attn = [];
-    var low = [];
-    rows.forEach(function (it) {
-      if (String(it.risk || "").toLowerCase() === "low") low.push(it);
-      else attn.push(it);
-    });
-    function pendingNode(it) {
-      var div = document.createElement("div");
-      div.className = "pending-item";
-      div.setAttribute("data-id", String(it.id));
-      div.setAttribute("data-title", String(it.title || it.id));
-      var focus = focusKey("decision", it.id);
-      if (focus) {
-        div.setAttribute("data-focus-key", focus);
-        div.setAttribute("tabindex", "-1");
-      }
-      div.innerHTML =
-        '<div class="pending-head"><div class="ptitle"></div><span class="prisk"></span></div>' +
-        '<div class="pdetail"></div>' +
-        '<div class="prow"></div>';
-      var prow = div.querySelector(".prow");
-      function decLink(verb, extra) {
-        var href = decisionHref(verb, it.id, it.title || it.id);
-        var a = document.createElement("a");
-        a.className = "dec" + (extra ? " " + extra : "");
-        a.setAttribute("data-dec", verb);
-        if (href) a.setAttribute("href", href);
-        a.setAttribute("target", "_blank");
-        a.setAttribute("rel", "noopener noreferrer");
-        a.textContent = verb === "APPROVE" ? "Approve" : verb === "HOLD" ? "Hold" : "Deny";
-        return a;
-      }
-      prow.appendChild(decLink("APPROVE", ""));
-      prow.appendChild(decLink("HOLD", "warn"));
-      prow.appendChild(decLink("DENY", "danger"));
-      div.querySelector(".ptitle").textContent = it.title || it.id;
-      var detail = String(it.detail || "");
-      if (detail.length > 72) {
-        var cut = detail.slice(0, 71);
-        var sp = cut.lastIndexOf(" ");
-        detail = (sp > 24 ? cut.slice(0, sp) : cut).replace(/[.,;:]$/, "") + "...";
-      }
-      div.querySelector(".pdetail").textContent = detail;
-      var rk = div.querySelector(".prisk");
-      rk.textContent = it.risk || "low";
-      rk.classList.add(riskClass(it.risk));
-      return div;
-    }
-    attn.forEach(function (it) { els.list.appendChild(pendingNode(it)); });
-    if (low.length) {
-      var more = document.createElement("details");
-      more.className = "pending-more";
-      var sum = document.createElement("summary");
-      sum.textContent = low.length + (low.length === 1 ? " lower-risk item" : " lower-risk items");
-      more.appendChild(sum);
-      low.forEach(function (it) { more.appendChild(pendingNode(it)); });
-      els.list.appendChild(more);
-    }
-  }
-
-  function loadPending() {
-    var list = document.getElementById("pending-list");
-    // First paint already has the inbox. Do not wipe/rebuild it (flash).
-    if (list && list.querySelector(".pending-item")) return;
-    var seq = ++pendingSeq;
-    fetch("./status.json?ts=" + Date.now(), { cache: "no-store" })
-      .then(function (r) {
-        if (!r.ok) throw new Error("status " + r.status);
-        return r.json();
-      })
-      .then(function (data) {
-        if (seq !== pendingSeq) return;
-        renderPending((data && data.pending) || []);
-      })
-      .catch(function () {
-        if (seq !== pendingSeq) return;
-        // Keep first-paint pending. Do not claim the inbox is empty.
-      });
-  }
 
   document.addEventListener("click", function (ev) {
+    var reviewBtn = ev.target.closest("[data-review-decision]");
+    if (reviewBtn) {
+      ev.preventDefault();
+      reviewDecision(reviewBtn.getAttribute("data-review-decision"));
+      return;
+    }
     var decBtn = ev.target.closest("[data-dec]");
     if (!decBtn) return;
     var item = decBtn.closest(".pending-item");
@@ -433,6 +548,14 @@ function focusKey(kind, raw) {
     var verb = decBtn.getAttribute("data-dec");
     var pid = item.getAttribute("data-id");
     var title = item.getAttribute("data-title");
+    var permittedHref = reviewedHref(verb, pid);
+    if (!permittedHref || decBtn.getAttribute("href") !== permittedHref) {
+      ev.preventDefault();
+      reviewedDecision = null;
+      renderDecisionReviews();
+      setStatus("This decision needs a fresh review. Use Retry now if the snapshot is unavailable.", "warn");
+      return;
+    }
     var key = verb + ":" + String(pid || "").trim();
     if (decideBusy[key]) {
       ev.preventDefault();
@@ -479,7 +602,13 @@ function focusKey(kind, raw) {
     handleJeffAction(act);
   });
 
-  loadPending();
+  // One accepted-snapshot path: an independent pending fetch cannot resurrect
+  // an older or resolved decision after the main poll paints newer content.
+  try {
+    var initialNode = document.getElementById("initial-snapshot");
+    var initialData = initialNode ? JSON.parse(initialNode.textContent) : null;
+    if (acceptDecisionSnapshot(initialData)) setDecisionTrust("current");
+  } catch (e) { setDecisionTrust("invalid"); }
 })();
 
 (function () {
@@ -963,9 +1092,7 @@ function focusKey(kind, raw) {
   });
   function pendingShell(items) {
     var rank = { high: 0, medium: 1, low: 2 };
-    var rows = (items || []).filter(function (it) {
-      return it && /^[a-zA-Z0-9._-]+$/.test(String(it.id || ""));
-    }).slice().sort(function (a, b) {
+    var rows = (items || []).map(decisionReviewItem).filter(function (it) { return !!it; }).sort(function (a, b) {
       var ra = rank.hasOwnProperty(String(a.risk || "").toLowerCase()) ? rank[String(a.risk).toLowerCase()] : 5;
       var rb = rank.hasOwnProperty(String(b.risk || "").toLowerCase()) ? rank[String(b.risk).toLowerCase()] : 5;
       return ra - rb;
@@ -976,20 +1103,15 @@ function focusKey(kind, raw) {
     rows.forEach(function (it) {
       var rawRisk = String(it.risk || "").toLowerCase();
       var risk = (rawRisk === "high" || rawRisk === "medium") ? rawRisk : "low";
-      function decA(verb, extra) {
-        var href = (window.decisionHref && window.decisionHref(verb, it.id, it.title || it.id)) || "";
-        if (!href) return "";
-        var label = verb === "APPROVE" ? "Approve" : verb === "HOLD" ? "Hold" : "Deny";
-        return '<a class="dec' + (extra ? " " + extra : "") + '" data-dec="' + esc(verb) +
-          '" href="' + esc(href) + '" target="_blank" rel="noopener noreferrer">' + label + "</a>";
-      }
       var focus = focusKey("decision", it.id);
       var focusAttr = focus ? ' data-focus-key="' + esc(focus) + '" tabindex="-1"' : "";
       var row = '<div class="pending-item" data-id="' + esc(it.id) + '" data-title="' + esc(it.title || it.id) + '"' + focusAttr + '>' +
         '<div class="pending-head"><div class="ptitle">' + esc(it.title || it.id) + "</div>" +
         '<span class="prisk ' + esc(risk) + '">' + esc(risk) + "</span></div>" +
-        '<div class="pdetail">' + esc(shortNote(it.detail || "", 72)) + "</div>" +
-        '<div class="prow">' + decA("APPROVE", "") + decA("HOLD", "warn") + decA("DENY", "danger") + "</div></div>";
+        '<div class="pdetail">' + esc(it.detail || "") + "</div>" +
+        '<p class="decision-kind">Boundary: ' + esc(it.kind === undefined ? "ops" : it.kind) + "</p>" +
+        '<button type="button" data-review-decision="' + esc(it.id) + '" disabled>Review choices</button>' +
+        '<div class="decision-review" aria-live="polite"></div></div>';
       if (rawRisk === "low") { low += row; lowCount += 1; }
       else attn += row;
     });
@@ -999,7 +1121,7 @@ function focusKey(kind, raw) {
         "</summary>" + low + "</details>";
     }
     return '<div id="pending-box" class="pending-box"' + (rows.length ? "" : " hidden") + ">" +
-      '<p class="pending-help">Public board -- Approve opens a GitHub issue as <code>rupret007</code>.</p>' +
+      '<p class="pending-help">Review the full context first. Opening a GitHub draft is not submitting a decision. GitHub login as <code>rupret007</code> remains the authority.</p>' +
       '<div id="pending-list">' + attn + low + "</div></div>";
   }
   function toolsRow(projects) {
@@ -1065,6 +1187,7 @@ function focusKey(kind, raw) {
       else boardEl.removeAttribute("aria-describedby");
     }
     if (silenceEl) silenceEl.setAttribute("data-state", state);
+    if (window.bobDecisionReview) window.bobDecisionReview.setTrust(state);
   }
 
   function showSilence(state, title, detail) {
@@ -1259,7 +1382,7 @@ function focusKey(kind, raw) {
   function boardFingerprint(data) {
     if (!data || typeof data !== "object") return "";
     function agentKey(a) { return a ? [a.id, a.state, a.detail, a.url || "", a.pr_url || ""] : []; }
-    function pendingKey(it) { return it ? [it.id, it.title, it.risk, it.detail] : []; }
+    function pendingKey(it) { return it ? [it.id, it.title, it.risk, it.detail, it.kind] : []; }
     function projectKey(p) {
       if (!p) return [];
       var ci = p.ci && typeof p.ci === "object" ? p.ci : {};
@@ -1283,11 +1406,15 @@ function focusKey(kind, raw) {
       var el = document.querySelector(sel);
       return !!(el && el.open);
     }
+    var active = document.activeElement;
+    var row = active && active.closest ? active.closest(".pending-item") : null;
+    var decisionFocus = row ? { id: row.getAttribute("data-id"), verb: active.getAttribute("data-dec") || "" } : null;
     return {
       how: isOpen("details.how-board"),
       ab: isOpen("details.abilities-foot"),
       more: isOpen("details.pending-more"),
-      tab: currentTypeTab || tabFromHash()
+      tab: currentTypeTab || tabFromHash(),
+      decisionFocus: decisionFocus
     };
   }
   function restoreOpen(s) {
@@ -1300,6 +1427,17 @@ function focusKey(kind, raw) {
     setOpen("details.abilities-foot", s.ab);
     setOpen("details.pending-more", s.more);
     applyTypeTab(s.tab || "");
+    if (s.decisionFocus) {
+      var rows = document.querySelectorAll(".pending-item");
+      for (var i = 0; i < rows.length; i++) {
+        if (rows[i].getAttribute("data-id") !== s.decisionFocus.id) continue;
+        var verb = s.decisionFocus.verb;
+        var next = ["APPROVE", "HOLD", "DENY"].indexOf(verb) >= 0 ? rows[i].querySelector('[data-dec="' + verb + '"]') : rows[i].querySelector("[data-review-decision]");
+        if (!next || next.disabled) next = rows[i];
+        try { next.focus({ preventScroll: true }); } catch (e) {}
+        break;
+      }
+    }
   }
   function paintAgents(agents, cloud) {
     var host = document.getElementById("active-agents");
@@ -1388,6 +1526,7 @@ function focusKey(kind, raw) {
     var open = snapshotOpen();
     boardEl.innerHTML = html;
     boardEl.setAttribute("data-fp", html);
+    if (window.bobDecisionReview) window.bobDecisionReview.reconcileRendering();
     restoreOpen(open);
     applyTypeTab(currentTypeTab);
     window.dispatchEvent(new CustomEvent("bob-ops-painted"));
@@ -1510,16 +1649,14 @@ function focusKey(kind, raw) {
       })
       .then(function (data) {
         if (!pollFailureCounts(seq, pollSeq)) return;
+        if (!validateAcceptedSnapshot(data)) throw new Error("Snapshot incomplete or invalid");
         var fp = boardFingerprint(data);
         var decision = pollPaintDecision(data && data.generated_at, known, lastFp, fp);
         if (decision === "ignore") {
-          // Stale CDN/cache body. Do not rewind freshness or rewrite lanes.
-          lastPollOk = Date.now();
-          pollFailStreak = 0;
-          paint();
-          updateSilence();
-          return;
+          // A stale response is not proof the retained decisions are current.
+          throw new Error("Snapshot older than the accepted board");
         }
+        if (!window.bobDecisionReview || !window.bobDecisionReview.accept(data)) throw new Error("Decision snapshot unavailable");
         lastPollOk = Date.now();
         pollFailStreak = 0;
         if (dot) {
@@ -1537,6 +1674,7 @@ function focusKey(kind, raw) {
         lastFp = fp;
         paint();
         updateSilence();
+        window.bobDecisionReview.reconcileRendering();
       })
       .catch(function () {
         if (!pollFailureCounts(seq, pollSeq)) return;
@@ -1594,6 +1732,12 @@ function focusKey(kind, raw) {
     if (document.visibilityState !== "hidden") startPolling();
   });
 
+  try {
+    var initialBody = document.getElementById("initial-snapshot");
+    var initialBoard = initialBody ? JSON.parse(initialBody.textContent) : null;
+    if (!validateAcceptedSnapshot(initialBoard)) throw new Error("Initial snapshot unavailable");
+    lastFp = boardFingerprint(initialBoard);
+  } catch (e) { pollFailStreak = 1; }
   paint();
   applyTypeTab(tabFromHash());
   // Pause polls when tab hidden; resume on visible / bfcache pageshow.
