@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-09-04T21:11:35.271703-05:00",
-  "generated_at_display": "Fri Sep 4, 2026 \u00b7 9:11 PM CDT",
+  "generated_at": "2026-09-04T21:33:05.512843-05:00",
+  "generated_at_display": "Fri Sep 4, 2026 \u00b7 9:33 PM CDT",
   "timezone": "America/Chicago",
   "owner": "rupret007",
   "dashboard": "bob-ops-dashboard",
@@ -73,10 +73,13 @@
           "accessible": true,
           "coord": {
             "repo": "webjam",
-            "agent": "codex",
+            "agent": "grok",
             "lease_state": "active",
-            "next": "Codex implements and verifies one real product delta, draft for Karen",
-            "sha": "a004bbb"
+            "next": "Grok Cloud fixes layout squeeze on draft branch, re-runs hosted green...",
+            "sha": "790e7f0",
+            "pr": 67,
+            "pr_url": "https://github.com/rupret007/webjam/pull/67",
+            "pr_draft": true
           }
         },
         {
@@ -151,9 +154,9 @@
           "accessible": true,
           "coord": {
             "repo": "StoryBoard",
-            "agent": "none",
-            "lease_state": "none",
-            "next": "FREE for next Extra High / Codex",
+            "agent": "codex",
+            "lease_state": "active",
+            "next": "Codex inspect and implement one bounded verified security/build...",
             "sha": "b7befc0"
           }
         },
@@ -449,8 +452,8 @@
           "status": "green",
           "chip": "Green",
           "default_branch": "main",
-          "tip_sha": "c926be8",
-          "tip_date": "2026-09-05T01:52:22Z",
+          "tip_sha": "19b5919",
+          "tip_date": "2026-09-05T02:11:39Z",
           "open_prs": 0,
           "open_pr_url": null,
           "open_pr_number": null,
@@ -462,9 +465,9 @@
             "name": "QA claim smoke",
             "conclusion": "success",
             "branch": "main",
-            "sha": "c926be8",
-            "created": "2026-09-05T01:52:26Z",
-            "html_url": "https://github.com/rupret007/bob-ops-dashboard/actions/runs/33937454348"
+            "sha": "19b5919",
+            "created": "2026-09-05T02:11:43Z",
+            "html_url": "https://github.com/rupret007/bob-ops-dashboard/actions/runs/33938378113"
           },
           "release": null,
           "release_sha": null,
@@ -862,7 +865,7 @@
   ],
   "inaccessible": [],
   "publish_notes": "Public board -- no secrets or customer paths. Private repositories stay high-level; AI Music Vault stays private-content-boundary only.",
-  "refresh_started_ms": 1788574218538,
+  "refresh_started_ms": 1788575511389,
   "agents_source": "file:stale->unknown",
   "agents": [
     {
