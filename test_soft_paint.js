@@ -818,18 +818,87 @@ function run() {
   if (html.indexOf('aria-label="Next action"') === -1) fail("glance must be the named next action");
   const typeTabIdsFor = eval(
     "(function () { var TYPE_TAB_IDS = ['controls','live-shipping','apps-utilities'," +
-      "'cisco','messaging','private-media','parked']; return " +
-      extractFn(src, "typeTabIdsFor") + "; })()"
+      "'cisco','messaging','private-media','parked']; var TYPE_TAB_LABELS = {" +
+      "controls:'Decisions','live-shipping':'Live','apps-utilities':'Apps'," +
+      "cisco:'Cisco',messaging:'Bob','private-media':'Media',parked:'Parked'" +
+      "}; " +
+      extractFn(src, "tabId") + "; " +
+      extractFn(src, "projectIsLiveWork") + "; " +
+      extractFn(src, "sectionHasLiveWork") + "; " +
+      extractFn(src, "sectionIsLeftoverOnly") + "; " +
+      "return " + extractFn(src, "typeTabIdsFor") + "; })()"
+  );
+  const leftoverTypeIdsFor = eval(
+    "(function () { var TYPE_TAB_IDS = ['controls','live-shipping','apps-utilities'," +
+      "'cisco','messaging','private-media','parked']; var TYPE_TAB_LABELS = {" +
+      "controls:'Decisions','live-shipping':'Live','apps-utilities':'Apps'," +
+      "cisco:'Cisco',messaging:'Bob','private-media':'Media',parked:'Parked'" +
+      "}; " +
+      extractFn(src, "tabId") + "; " +
+      extractFn(src, "projectIsLiveWork") + "; " +
+      extractFn(src, "sectionHasLiveWork") + "; " +
+      extractFn(src, "sectionIsLeftoverOnly") + "; " +
+      "return " + extractFn(src, "leftoverTypeIdsFor") + "; })()"
   );
   const tabIds = typeTabIdsFor(
-    [{ id: "live-shipping" }, { id: "apps-utilities" }, { id: "cisco" }, { id: "parked" }],
+    [
+      { id: "live-shipping", projects: [{ name: "WebJam", status: "green" }] },
+      { id: "apps-utilities", projects: [{ name: "Story Shelf", status: "yellow" }] },
+      { id: "cisco", projects: [{ name: "AdoptIQ", status: "parked" }] },
+      { id: "parked", projects: [{ name: "Catalog", status: "parked" }] },
+    ],
     [{ id: "x" }]
   );
   if (tabIds.indexOf("controls") !== -1) fail("Decisions must not be a project-type tab");
+  if (tabIds.indexOf("cisco") !== -1) fail("leftover-only Cisco must not be a first-screen tab");
   if (tabIds[0] !== "live-shipping") fail("first type tab must stay Live");
+  if (tabIds.indexOf("parked") === -1) fail("Parked must stay the leftover home tab");
+  const leftoverIds = leftoverTypeIdsFor([
+    { id: "cisco", projects: [{ name: "AdoptIQ", status: "parked" }] },
+    { id: "private-media", projects: [{ name: "Private media", status: "jeff-gate" }] },
+    { id: "live-shipping", projects: [{ name: "WebJam", status: "green" }] },
+  ]);
+  if (leftoverIds.join(",") !== "cisco,private-media") {
+    fail("leftover-only types must be Cisco and Media: " + leftoverIds.join(","));
+  }
+  const selectedLeftover = typeTabIdsFor(
+    [
+      { id: "live-shipping", projects: [{ name: "WebJam", status: "green" }] },
+      { id: "cisco", projects: [{ name: "AdoptIQ", status: "parked" }] },
+      { id: "parked", projects: [{ name: "Catalog", status: "parked" }] },
+    ],
+    [],
+    "cisco"
+  );
+  if (selectedLeftover.indexOf("cisco") === -1) {
+    fail("selected leftover type must reappear in the tab bar");
+  }
   const nav = html.split('id="type-tabs"')[1].split("</nav>")[0] || "";
   if (nav.indexOf("tab-controls") !== -1 || nav.indexOf(">Decisions<") !== -1) {
     fail("first-screen tab bar must not include Decisions chrome");
+  }
+  let snapshot = null;
+  try {
+    const raw = (html.split('id="initial-snapshot">')[1] || "").split("</script>")[0];
+    snapshot = JSON.parse(raw);
+  } catch (e) {
+    snapshot = null;
+  }
+  const paintedLeftover = leftoverTypeIdsFor((snapshot && snapshot.sections) || []);
+  if (!paintedLeftover.length) fail("snapshot must keep at least one leftover-only type");
+  paintedLeftover.forEach(function (sid) {
+    if (nav.indexOf("tab-" + sid) !== -1) {
+      fail("leftover-only " + sid + " must not be a first-screen type tab");
+    }
+  });
+  if (html.indexOf("Leftover types. Not active agents or a Jeff yes.") === -1) {
+    fail("Parked must name leftover types honestly");
+  }
+  if (html.indexOf('data-leftover-type="true"') === -1) {
+    fail("Parked leftover type links missing");
+  }
+  if (html.indexOf("Not an active agent or a Jeff yes.") === -1) {
+    fail("leftover-only panels must stay honest");
   }
   if (src.indexOf("fromGlance") === -1 || src.indexOf("revealGlanceTarget(id, focus)") === -1) {
     fail("glance must reveal its exact target");

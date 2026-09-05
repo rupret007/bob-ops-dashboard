@@ -620,7 +620,7 @@ if "Music stack" not in meta_text or stack_card not in meta_text:
     raise SystemExit("How-this-board must keep a phone-visible Music stack card")
 if len(stack_card) > 88:
     raise SystemExit("Music stack How-this-board card exceeds the 88-char phone clip")
-type_tabs_card = "Each GitHub type is its own tab. First screen is the next action, not Decisions chrome."
+type_tabs_card = "First-screen tabs are live types plus Parked. Leftover-only types sit under Parked."
 if "Type tabs" not in meta_text or type_tabs_card not in meta_text:
     raise SystemExit("How-this-board must keep a phone-visible Type tabs card")
 if len(type_tabs_card) > 88:
@@ -1470,7 +1470,7 @@ if "Agents strip" in pre_how:
     raise SystemExit("Agents strip Feature card leaked above collapsed details")
 if "Copy refresh command" in pre_how or "Mark board reviewed" in pre_how:
     raise SystemExit("engineer control cards leaked onto the default scroll")
-if "Each GitHub type is its own tab" in pre_how:
+if "Leftover-only types sit under Parked" in pre_how:
     raise SystemExit("Type tabs Feature card leaked above collapsed details")
 pre_ab = html.split('<details class="abilities-foot">', 1)[0]
 if "Rebuild this board" in pre_ab or "Life-ops" in pre_ab:
@@ -1534,6 +1534,39 @@ if 'aria-selected="true"' in nav:
     raise SystemExit("first paint must not open a type tab")
 if 'id="tab-controls"' in nav or ">Decisions<" in nav:
     raise SystemExit("Decisions must not be a first-screen project-type tab")
+if 'id="tab-live-shipping"' not in nav or 'id="tab-parked"' not in nav:
+    raise SystemExit("live types and Parked must stay on the first-screen tab bar")
+snap = None
+try:
+    raw = html.split('id="initial-snapshot">', 1)[1].split("</script>", 1)[0]
+    snap = json.loads(raw)
+except (IndexError, json.JSONDecodeError):
+    snap = st if isinstance(st, dict) else None
+live_work = {"red", "yellow", "green"}
+painted_leftover = []
+for sid in ("live-shipping", "apps-utilities", "cisco", "messaging", "private-media"):
+    sec = next(
+        (
+            row
+            for row in ((snap or {}).get("sections") or [])
+            if isinstance(row, dict) and row.get("id") == sid
+        ),
+        None,
+    )
+    projects = [p for p in ((sec or {}).get("projects") or []) if isinstance(p, dict)]
+    if projects and not any(str(p.get("status") or "").lower() in live_work for p in projects):
+        painted_leftover.append(sid)
+if not painted_leftover:
+    raise SystemExit("snapshot must keep at least one leftover-only type")
+for sid in painted_leftover:
+    if 'id="tab-' + sid + '"' in nav:
+        raise SystemExit("leftover-only " + sid + " must not be a first-screen type tab")
+if "Leftover types. Not active agents or a Jeff yes." not in html:
+    raise SystemExit("Parked must name leftover types honestly")
+if 'data-leftover-type="true"' not in html:
+    raise SystemExit("Parked leftover type links missing")
+if "Not an active agent or a Jeff yes." not in html:
+    raise SystemExit("leftover-only panels must stay honest")
 if "is-unknown-mac" not in html:
     raise SystemExit("unknown Mac probes must collapse on the Actions box")
 if "Agents unknown" not in html:
