@@ -225,6 +225,8 @@ from board_meta import (
     public_high_level_ci,
     is_quiet_lane,
     is_type_tab,
+    leftover_type_note_html,
+    leftover_types_html,
     lane_hrefs,
     merge_cloud_agents,
     signal_href,
@@ -232,6 +234,8 @@ from board_meta import (
     presentation,
     prune_closed_parked_prs,
     resolve_agents,
+    section_is_leftover_only,
+    tab_label,
     type_tabs_html,
     latest_release_url_from_repo,
     safe_actions_url,
@@ -971,13 +975,23 @@ for sec in status["sections"]:
         continue
     heading = f'<h2>{h(sec.get("title") or "")}</h2>'
     sort_attn = kind == "primary"
-    body = lanes_html(projects, sort_attention=sort_attn)
+    leftover_home = leftover_types_html(status.get("sections")) if sid_raw == "parked" else ""
+    leftover_note = leftover_type_note_html(sec)
+    body = leftover_home + leftover_note + lanes_html(projects, sort_attention=sort_attn)
     cls = "primary" if kind == "primary" else "secondary"
     panel = ""
     if is_type_tab(sid_raw):
+        leftover_only = section_is_leftover_only(sec)
+        labelledby = "" if leftover_only else f' aria-labelledby="tab-{h(sid_raw)}"'
+        leftover_label = (
+            f' aria-label="Leftover {h(tab_label(sid_raw) or sec.get("title") or sid_raw)}"'
+            if leftover_only
+            else ""
+        )
         panel = (
-            f' data-tab-panel="{h(sid_raw)}" hidden role="tabpanel" '
-            f'aria-labelledby="tab-{h(sid_raw)}"'
+            f' data-tab-panel="{h(sid_raw)}" hidden role="tabpanel"'
+            + labelledby
+            + leftover_label
         )
     sections_html.append(
         f'<section id="{h(sid_raw)}" class="block {cls}"{panel}>{heading}{body}</section>'
@@ -1025,6 +1039,18 @@ html = f'''<!DOCTYPE html>
     font-size:.72rem; font-weight:600; cursor:pointer; touch-action:manipulation;
   }}
   .type-tabs button[aria-selected="true"] {{ border-color:var(--orange); color:var(--orange); }}
+  .leftover-types {{
+    margin:0 0 .55rem; color:var(--muted); font-size:.8rem; line-height:1.4;
+  }}
+  .leftover-type-links {{
+    display:flex; flex-wrap:wrap; gap:.35rem; margin:0 0 1rem;
+  }}
+  .leftover-type-links button {{
+    background:transparent; color:var(--muted); border:1px solid var(--border);
+    border-radius:999px; padding:.35rem .75rem; font-size:.78rem; font-weight:600;
+    min-height:44px; cursor:pointer; touch-action:manipulation;
+  }}
+  .leftover-type-links button:hover {{ border-color:var(--orange); color:var(--orange); }}
   .chip {{ display:inline-flex; align-items:center; color:var(--c);
     background:transparent; border:0; padding:0; font-size:.68rem; font-weight:700;
     text-transform:uppercase; letter-spacing:.04em; white-space:nowrap; }}
@@ -1892,6 +1918,8 @@ function focusKey(kind, raw) {{
     "parked": "Parked"
   }};
   var currentTypeTab = "";
+  var lastBoardSections = null;
+  var lastBoardPending = null;
   function tabId(raw) {{
     var s = String(raw || "");
     return TYPE_TAB_LABELS.hasOwnProperty(s) ? s : "";
@@ -1900,17 +1928,75 @@ function focusKey(kind, raw) {{
     var sid = tabId(id);
     return sid ? TYPE_TAB_LABELS[sid] : "";
   }}
-  function typeTabIdsFor(sections, pending) {{
+  function projectIsLiveWork(p) {{
+    if (!p || typeof p !== "object") return false;
+    var st = String(p.status || "").replace(/^\s+|\s+$/g, "").toLowerCase();
+    return st === "red" || st === "yellow" || st === "green";
+  }}
+  function sectionHasLiveWork(sec) {{
+    if (!sec || typeof sec !== "object") return false;
+    var projects = sec.projects || [];
+    for (var i = 0; i < projects.length; i++) {{
+      if (projectIsLiveWork(projects[i])) return true;
+    }}
+    return false;
+  }}
+  function sectionIsLeftoverOnly(sec) {{
+    var sid = tabId(sec && sec.id);
+    if (!sid || sid === "controls" || sid === "parked") return false;
+    var projects = [];
+    (sec.projects || []).forEach(function (p) {{
+      if (p && typeof p === "object") projects.push(p);
+    }});
+    if (!projects.length) return false;
+    return !sectionHasLiveWork(sec);
+  }}
+  function leftoverTypeIdsFor(sections) {{
     var present = {{}};
     (sections || []).forEach(function (sec) {{
-      if (sec && sec.id) present[String(sec.id)] = 1;
+      if (sec && sec.id) present[String(sec.id)] = sec;
     }});
     var out = [];
     TYPE_TAB_IDS.forEach(function (sid) {{
-      if (sid === "controls") return;
-      if (present[sid]) out.push(sid);
+      if (sid === "controls" || sid === "parked") return;
+      if (present[sid] && sectionIsLeftoverOnly(present[sid])) out.push(sid);
     }});
     return out;
+  }}
+  function typeTabIdsFor(sections, pending, selected) {{
+    var present = {{}};
+    (sections || []).forEach(function (sec) {{
+      if (sec && sec.id) present[String(sec.id)] = sec;
+    }});
+    var want = tabId(selected);
+    var hasParkedHome = !!present.parked;
+    var out = [];
+    TYPE_TAB_IDS.forEach(function (sid) {{
+      if (sid === "controls") return;
+      var sec = present[sid];
+      if (!sec) return;
+      if (sid === "parked") {{ out.push(sid); return; }}
+      if (sectionHasLiveWork(sec) || sid === want || !hasParkedHome || !sectionIsLeftoverOnly(sec)) {{
+        out.push(sid);
+      }}
+    }});
+    return out;
+  }}
+  function leftoverTypeNoteHtml(sec) {{
+    if (!sectionIsLeftoverOnly(sec)) return "";
+    var label = tabLabel(sec && sec.id) || "This type";
+    return '<p class="leftover-types">Leftover ' + esc(label) + ". Not an active agent or a Jeff yes.</p>";
+  }}
+  function leftoverTypesHtml(sections) {{
+    var ids = leftoverTypeIdsFor(sections);
+    if (!ids.length) return "";
+    var buttons = "";
+    ids.forEach(function (sid) {{
+      buttons += '<button type="button" data-tab="' + esc(sid) + '" data-leftover-type="true">' +
+        esc(tabLabel(sid)) + "</button>";
+    }});
+    return '<p class="leftover-types">Leftover types. Not active agents or a Jeff yes.</p>' +
+      '<div class="leftover-type-links">' + buttons + "</div>";
   }}
   function glanceStatus(pending, sections) {{
     var rank = {{ high: 0, medium: 1, low: 2 }};
@@ -1967,7 +2053,7 @@ function focusKey(kind, raw) {{
   function typeTabsHtml(sections, pending, selected) {{
     var want = tabId(selected);
     var buttons = "";
-    typeTabIdsFor(sections, pending).forEach(function (sid) {{
+    typeTabIdsFor(sections, pending, want).forEach(function (sid) {{
       buttons += '<button type="button" role="tab" id="tab-' + esc(sid) + '" data-tab="' + esc(sid) +
         '" aria-controls="' + esc(sid) + '" aria-selected="' + (sid === want ? "true" : "false") + '">' +
         esc(tabLabel(sid)) + "</button>";
@@ -1978,6 +2064,14 @@ function focusKey(kind, raw) {{
   function applyTypeTab(id) {{
     var want = tabId(id);
     currentTypeTab = want;
+    var nav = document.getElementById("type-tabs");
+    if (nav && lastBoardSections) {{
+      var next = typeTabsHtml(lastBoardSections, lastBoardPending, want);
+      var wrap = document.createElement("div");
+      wrap.innerHTML = next;
+      var fresh = wrap.firstChild;
+      if (fresh && nav.parentNode) nav.parentNode.replaceChild(fresh, nav);
+    }}
     var tabs = document.querySelectorAll("#type-tabs [data-tab]");
     Array.prototype.forEach.call(tabs, function (btn) {{
       btn.setAttribute("aria-selected", tabId(btn.getAttribute("data-tab")) === want ? "true" : "false");
@@ -2472,9 +2566,11 @@ function focusKey(kind, raw) {{
   function renderBoard(data) {{
     if (!boardEl || !data || !Array.isArray(data.sections)) return;
     lastCloud = sanitizeCloudAgents((data && data.cloud_agents) || lastCloud);
+    lastBoardSections = data.sections;
+    lastBoardPending = data.pending || [];
     paintAgents(data.agents || [], lastCloud);
     var controlProjects = [];
-    var html = glanceHtml(data.pending, data.sections) + typeTabsHtml(data.sections, data.pending, "");
+    var html = glanceHtml(data.pending, data.sections) + typeTabsHtml(data.sections, data.pending, currentTypeTab);
     data.sections.forEach(function (sec) {{
       var kind = sectionKind(sec.id);
       if (kind === "pulse") return;
@@ -2501,11 +2597,16 @@ function focusKey(kind, raw) {{
         return;
       }}
       var cls = kind === "primary" ? "primary" : "secondary";
-      var panel = isTypeTab(sec.id)
-        ? ' data-tab-panel="' + esc(sec.id) + '" hidden role="tabpanel" aria-labelledby="tab-' + esc(sec.id) + '"'
-        : "";
+      var leftoverOnly = sectionIsLeftoverOnly(sec);
+      var panel = "";
+      if (isTypeTab(sec.id)) {{
+        panel = leftoverOnly
+          ? ' data-tab-panel="' + esc(sec.id) + '" hidden role="tabpanel" aria-label="Leftover ' + esc(tabLabel(sec.id) || sec.title || sec.id) + '"'
+          : ' data-tab-panel="' + esc(sec.id) + '" hidden role="tabpanel" aria-labelledby="tab-' + esc(sec.id) + '"';
+      }}
+      var leftoverHome = sec.id === "parked" ? leftoverTypesHtml(data.sections) : "";
       html += '<section id="' + esc(sec.id || "") + '" class="block ' + cls + '"' + panel + ">" +
-        "<h2>" + esc(sec.title || "") + "</h2>" +
+        "<h2>" + esc(sec.title || "") + "</h2>" + leftoverHome + leftoverTypeNoteHtml(sec) +
         lanesHtml(sec.projects || [], kind === "primary") + "</section>";
     }});
     if (boardEl.getAttribute("data-fp") === html) return;
@@ -2722,6 +2823,8 @@ function focusKey(kind, raw) {{
     var initialBody = document.getElementById("initial-snapshot");
     var initialBoard = initialBody ? JSON.parse(initialBody.textContent) : null;
     if (!validateAcceptedSnapshot(initialBoard)) throw new Error("Initial snapshot unavailable");
+    lastBoardSections = initialBoard.sections;
+    lastBoardPending = initialBoard.pending || [];
     lastFp = boardFingerprint(initialBoard);
   }} catch (e) {{ pollFailStreak = 1; }}
   paint();

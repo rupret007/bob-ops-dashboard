@@ -847,21 +847,128 @@ def is_type_tab(section_id: Any) -> bool:
     return bool(tab_id(section_id))
 
 
-def type_tab_ids_for(sections: Any, pending: Any = None) -> list[str]:
-    """Project-type tabs only. The glance opens Decisions; it is not a type tab."""
-    del pending
+def project_is_live_work(project: Any) -> bool:
+    """Red / yellow / green is live work. Parked leftover and Jeff-gate are not."""
+    if not isinstance(project, dict):
+        return False
+    return str(project.get("status") or "").strip().lower() in {"red", "yellow", "green"}
+
+
+def section_has_live_work(section: Any) -> bool:
+    """True when a type has at least one live/red/yellow/green row."""
+    if not isinstance(section, dict):
+        return False
+    return any(
+        project_is_live_work(project) for project in (section.get("projects") or [])
+    )
+
+
+def section_is_leftover_only(section: Any) -> bool:
+    """True when a real type exists but every row is parked leftover or Jeff-gate."""
+    if not isinstance(section, dict):
+        return False
+    sid = tab_id(section.get("id"))
+    if not sid or sid in {"controls", "parked"}:
+        return False
+    projects = [
+        project
+        for project in (section.get("projects") or [])
+        if isinstance(project, dict)
+    ]
+    if not projects:
+        return False
+    return not section_has_live_work(section)
+
+
+def leftover_type_ids_for(sections: Any) -> list[str]:
+    """Existing leftover-only types. Parked is the leftover home, not a leftover peer."""
     present = {
-        str(sec.get("id") or "")
+        str(sec.get("id") or ""): sec
         for sec in (sections or [])
         if isinstance(sec, dict)
     }
     out: list[str] = []
     for sid in TYPE_TAB_IDS:
-        if sid == "controls":
+        if sid in {"controls", "parked"}:
             continue
-        if sid in present:
+        sec = present.get(sid)
+        if sec and section_is_leftover_only(sec):
             out.append(sid)
     return out
+
+
+def type_tab_ids_for(
+    sections: Any, pending: Any = None, selected: Any = ""
+) -> list[str]:
+    """First-screen tabs: live types plus Parked. Leftover-only types stay off home.
+
+    The glance opens Decisions; it is not a type tab. A leftover-only type
+    reappears only while it is the selected panel (hash, Parked leftover
+    link, or a later live-work glance). Without a Parked home, existing
+    types keep their tabs so leftovers are not stranded.
+    """
+    del pending
+    present = {
+        str(sec.get("id") or ""): sec
+        for sec in (sections or [])
+        if isinstance(sec, dict)
+    }
+    want = tab_id(selected)
+    has_parked_home = "parked" in present
+    out: list[str] = []
+    for sid in TYPE_TAB_IDS:
+        if sid == "controls":
+            continue
+        sec = present.get(sid)
+        if not sec:
+            continue
+        if sid == "parked":
+            out.append(sid)
+            continue
+        if (
+            section_has_live_work(sec)
+            or sid == want
+            or not has_parked_home
+            or not section_is_leftover_only(sec)
+        ):
+            out.append(sid)
+    return out
+
+
+def leftover_type_note_html(section: Any) -> str:
+    """Honest leftover banner. Empty when the type is live work."""
+    if not section_is_leftover_only(section):
+        return ""
+    label = html_lib.escape(tab_label(section.get("id")) or "This type")
+    return (
+        '<p class="leftover-types">Leftover '
+        + label
+        + ". Not an active agent or a Jeff yes.</p>"
+    )
+
+
+def leftover_types_html(sections: Any) -> str:
+    """Parked leftover switcher. Empty when every type has live work."""
+    ids = leftover_type_ids_for(sections)
+    if not ids:
+        return ""
+    buttons: list[str] = []
+    for sid in ids:
+        label = html_lib.escape(tab_label(sid))
+        sid_e = html_lib.escape(sid)
+        buttons.append(
+            '<button type="button" data-tab="'
+            + sid_e
+            + '" data-leftover-type="true">'
+            + label
+            + "</button>"
+        )
+    return (
+        '<p class="leftover-types">Leftover types. Not active agents or a Jeff yes.</p>'
+        '<div class="leftover-type-links">'
+        + "".join(buttons)
+        + "</div>"
+    )
 
 
 def glance_pending_title(item: Any) -> str:
@@ -951,10 +1058,10 @@ def glance_html(pending: Any, sections: Any) -> str:
 
 
 def type_tabs_html(sections: Any, pending: Any, selected: Any = "") -> str:
-    """Phone tab bar for types already in the data. First paint selects none."""
+    """Phone tab bar for live types plus Parked. First paint selects none."""
     want = tab_id(selected)
     buttons: list[str] = []
-    for sid in type_tab_ids_for(sections, pending):
+    for sid in type_tab_ids_for(sections, pending, want):
         label = html_lib.escape(tab_label(sid))
         sid_e = html_lib.escape(sid)
         aria = "true" if sid == want else "false"
@@ -2005,7 +2112,7 @@ def first_class_sections() -> list[dict[str, Any]]:
                 ),
                 _card(
                     "Type tabs",
-                    "Each GitHub type is its own tab. First screen is the next action, not Decisions chrome.",
+                    "First-screen tabs are live types plus Parked. Leftover-only types sit under Parked.",
                     chip="Feature",
                 ),
                 _card(

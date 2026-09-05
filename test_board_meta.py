@@ -35,6 +35,9 @@ from board_meta import (
     is_quiet_lane,
     is_unexecuted_run,
     incomplete_public_collections,
+    leftover_type_ids_for,
+    leftover_type_note_html,
+    leftover_types_html,
     lane_hrefs,
     latest_release_url_from_repo,
     merge_cloud_agents,
@@ -45,6 +48,7 @@ from board_meta import (
     pick_open_pr,
     pick_tip_ci,
     presentation,
+    project_is_live_work,
     prune_closed_parked_prs,
     public_probe_detail,
     public_high_level_ci,
@@ -58,6 +62,8 @@ from board_meta import (
     safe_release_tag,
     safe_release_url,
     safe_repo_url,
+    section_has_live_work,
+    section_is_leftover_only,
     release_matches_tip,
     signal_href,
     sha_matches_tip,
@@ -239,7 +245,8 @@ class BoardMetaTests(unittest.TestCase):
         names = [p["name"] for s in first_class_sections() for p in s["projects"]]
         self.assertIn("Music stack", names)
         self.assertIn("Type tabs", names)
-        self.assertIn("Each GitHub type is its own tab", blob)
+        self.assertIn("live types plus Parked", blob)
+        self.assertIn("Leftover-only types sit under Parked", blob)
         type_tabs = next(p for s in first_class_sections() if s["id"] == "features" for p in s["projects"] if p["name"] == "Type tabs")
         self.assertLessEqual(len(type_tabs["notes"]), 88)
 
@@ -449,12 +456,32 @@ class BoardMetaTests(unittest.TestCase):
 
     def test_type_tabs_html_skips_empty_decisions_and_invented_ids(self):
         sections = [
-            {"id": "live-shipping", "title": "Live shipping"},
-            {"id": "apps-utilities", "title": "Apps & utilities"},
-            {"id": "cisco", "title": "Cisco work"},
-            {"id": "messaging", "title": "Messaging / Bob infra"},
-            {"id": "private-media", "title": "Private media"},
-            {"id": "parked", "title": "Parked"},
+            {
+                "id": "live-shipping",
+                "title": "Live shipping",
+                "projects": [{"name": "WebJam", "status": "green"}],
+            },
+            {
+                "id": "apps-utilities",
+                "title": "Apps & utilities",
+                "projects": [{"name": "Story Shelf", "status": "yellow"}],
+            },
+            {
+                "id": "cisco",
+                "title": "Cisco work",
+                "projects": [{"name": "AdoptIQ", "status": "parked"}],
+            },
+            {
+                "id": "messaging",
+                "title": "Messaging / Bob infra",
+                "projects": [{"name": "Andrea NanoBot", "status": "green"}],
+            },
+            {
+                "id": "private-media",
+                "title": "Private media",
+                "projects": [{"name": "Private media", "status": "jeff-gate"}],
+            },
+            {"id": "parked", "title": "Parked", "projects": [{"name": "Catalog", "status": "parked"}]},
             {"id": "abilities", "title": "Abilities"},
         ]
         self.assertEqual(
@@ -462,20 +489,22 @@ class BoardMetaTests(unittest.TestCase):
             [
                 "live-shipping",
                 "apps-utilities",
-                "cisco",
                 "messaging",
-                "private-media",
                 "parked",
             ],
         )
         self.assertNotIn("controls", type_tab_ids_for(sections, [{"id": "x"}]))
+        self.assertNotIn("cisco", type_tab_ids_for(sections, []))
+        self.assertNotIn("private-media", type_tab_ids_for(sections, []))
         html = type_tabs_html(sections, [{"id": "x"}])
         self.assertIn('id="type-tabs"', html)
         self.assertIn('data-tab="live-shipping"', html)
         self.assertIn(">Live<", html)
         self.assertIn(">Apps<", html)
-        self.assertIn(">Cisco<", html)
         self.assertIn(">Bob<", html)
+        self.assertIn(">Parked<", html)
+        self.assertNotIn(">Cisco<", html)
+        self.assertNotIn(">Media<", html)
         self.assertNotIn("music", html)
         self.assertNotIn('id="tab-controls"', html)
         self.assertNotIn(">Decisions<", html)
@@ -488,6 +517,50 @@ class BoardMetaTests(unittest.TestCase):
         self.assertIn('aria-controls="controls"', glance)
         self.assertIn('data-focus-target="decision:x"', glance)
         self.assertNotIn("<", glance_status([{"id": "x"}], sections)["text"])
+
+    def test_leftover_only_types_are_honest_under_parked(self):
+        cisco = {
+            "id": "cisco",
+            "title": "Cisco work",
+            "projects": [{"name": "AdoptIQ", "status": "parked"}],
+        }
+        media = {
+            "id": "private-media",
+            "title": "Private media",
+            "projects": [{"name": "Private media", "status": "jeff-gate"}],
+        }
+        live = {
+            "id": "live-shipping",
+            "projects": [{"name": "WebJam", "status": "green"}],
+        }
+        parked = {"id": "parked", "projects": [{"name": "Catalog", "status": "parked"}]}
+        sections = [live, cisco, media, parked]
+        self.assertTrue(project_is_live_work({"status": "green"}))
+        self.assertFalse(project_is_live_work({"status": "parked"}))
+        self.assertFalse(project_is_live_work({"status": "jeff-gate"}))
+        self.assertTrue(section_has_live_work(live))
+        self.assertTrue(section_is_leftover_only(cisco))
+        self.assertTrue(section_is_leftover_only(media))
+        self.assertFalse(section_is_leftover_only(parked))
+        self.assertEqual(leftover_type_ids_for(sections), ["cisco", "private-media"])
+        self.assertEqual(
+            type_tab_ids_for(sections, [], "cisco"),
+            ["live-shipping", "cisco", "parked"],
+        )
+        selected = type_tabs_html(sections, [], "cisco")
+        self.assertIn(">Cisco<", selected)
+        self.assertIn('aria-selected="true"', selected)
+        self.assertNotIn(">Media<", selected)
+        switcher = leftover_types_html(sections)
+        self.assertIn("Leftover types. Not active agents or a Jeff yes.", switcher)
+        self.assertIn('data-leftover-type="true"', switcher)
+        self.assertIn('data-tab="cisco"', switcher)
+        self.assertIn('data-tab="private-media"', switcher)
+        self.assertIn("Leftover Cisco. Not an active agent or a Jeff yes.", leftover_type_note_html(cisco))
+        self.assertEqual(leftover_type_note_html(live), "")
+        no_home = type_tab_ids_for([live, cisco, media], [])
+        self.assertEqual(no_home, ["live-shipping", "cisco", "private-media"])
+        self.assertEqual(leftover_types_html([live, parked]), "")
 
     def test_unknown_mac_probes_collapse_to_one_honest_line(self):
         unknown = [
