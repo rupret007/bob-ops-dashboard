@@ -877,12 +877,20 @@ function run() {
   if (nav.indexOf("tab-controls") !== -1 || nav.indexOf(">Decisions<") !== -1) {
     fail("first-screen tab bar must not include Decisions chrome");
   }
-  if (nav.indexOf("tab-cisco") !== -1 || nav.indexOf(">Cisco<") !== -1) {
-    fail("first-screen tab bar must not treat leftover-only Cisco as live work");
+  let snapshot = null;
+  try {
+    const raw = (html.split('id="initial-snapshot">')[1] || "").split("</script>")[0];
+    snapshot = JSON.parse(raw);
+  } catch (e) {
+    snapshot = null;
   }
-  if (nav.indexOf("tab-private-media") !== -1 || nav.indexOf(">Media<") !== -1) {
-    fail("first-screen tab bar must not treat leftover-only Media as live work");
-  }
+  const paintedLeftover = leftoverTypeIdsFor((snapshot && snapshot.sections) || []);
+  if (!paintedLeftover.length) fail("snapshot must keep at least one leftover-only type");
+  paintedLeftover.forEach(function (sid) {
+    if (nav.indexOf("tab-" + sid) !== -1) {
+      fail("leftover-only " + sid + " must not be a first-screen type tab");
+    }
+  });
   if (html.indexOf("Leftover types. Not active agents or a Jeff yes.") === -1) {
     fail("Parked must name leftover types honestly");
   }
