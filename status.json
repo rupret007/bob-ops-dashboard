@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-09-04T22:23:38.481352-05:00",
-  "generated_at_display": "Fri Sep 4, 2026 \u00b7 10:23 PM CDT",
+  "generated_at": "2026-09-04T22:40:11.160597-05:00",
+  "generated_at_display": "Fri Sep 4, 2026 \u00b7 10:40 PM CDT",
   "timezone": "America/Chicago",
   "owner": "rupret007",
   "dashboard": "bob-ops-dashboard",
@@ -46,11 +46,11 @@
           "url": "https://github.com/rupret007/webjam",
           "repo_url": "https://github.com/rupret007/webjam",
           "private": false,
-          "status": "green",
-          "chip": "Green",
+          "status": "yellow",
+          "chip": "Yellow",
           "default_branch": "master",
-          "tip_sha": "a004bbb",
-          "tip_date": "2026-09-05T00:55:41Z",
+          "tip_sha": "68b9f29",
+          "tip_date": "2026-09-05T03:35:01Z",
           "open_prs": 0,
           "open_pr_url": null,
           "open_pr_number": null,
@@ -60,11 +60,11 @@
           "agent_url": null,
           "ci": {
             "name": "WebJam CI",
-            "conclusion": "success",
+            "conclusion": "in_progress",
             "branch": "master",
-            "sha": "a004bbb",
-            "created": "2026-09-05T00:55:45Z",
-            "html_url": "https://github.com/rupret007/webjam/actions/runs/33934565153"
+            "sha": "68b9f29",
+            "created": "2026-09-05T03:35:04Z",
+            "html_url": "https://github.com/rupret007/webjam/actions/runs/33942259432"
           },
           "release": "v0.27.2",
           "release_sha": "9c6ca3d",
@@ -75,11 +75,8 @@
             "repo": "webjam",
             "agent": "none",
             "lease_state": "none",
-            "next": "Codex claims Ultra finish from master; #67 Karen later optional",
-            "sha": "a004bbb",
-            "pr": 67,
-            "pr_url": "https://github.com/rupret007/webjam/pull/67",
-            "pr_draft": true
+            "next": "FREE for next Extra High / Codex from origin/master",
+            "sha": "68b9f29"
           }
         },
         {
@@ -452,8 +449,8 @@
           "status": "green",
           "chip": "Green",
           "default_branch": "main",
-          "tip_sha": "74eb99a",
-          "tip_date": "2026-09-05T02:56:38Z",
+          "tip_sha": "fd682f2",
+          "tip_date": "2026-09-05T03:23:42Z",
           "open_prs": 0,
           "open_pr_url": null,
           "open_pr_number": null,
@@ -461,7 +458,14 @@
           "open_pr_stack": [],
           "pr_listing_complete": true,
           "agent_url": null,
-          "ci": null,
+          "ci": {
+            "name": "QA claim smoke",
+            "conclusion": "success",
+            "branch": "main",
+            "sha": "fd682f2",
+            "created": "2026-09-05T03:23:46Z",
+            "html_url": "https://github.com/rupret007/bob-ops-dashboard/actions/runs/33941732866"
+          },
           "release": null,
           "release_sha": null,
           "release_url": null,
@@ -858,7 +862,7 @@
   ],
   "inaccessible": [],
   "publish_notes": "Public board -- no secrets or customer paths. Private repositories stay high-level; AI Music Vault stays private-content-boundary only.",
-  "refresh_started_ms": 1788578543294,
+  "refresh_started_ms": 1788579535792,
   "agents_source": "file:stale->unknown",
   "agents": [
     {
