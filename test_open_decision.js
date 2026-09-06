@@ -133,6 +133,11 @@ function run() {
   const clicks = ui.native;
   const openDecisionIssue = ui.api.open;
   openDecisionIssue("APPROVE", "dashboard-refresh", pending[0].title);
+  if (ui.api.review("dashboard-refresh") !== false) fail("unfinished navigation must not review");
+  if (opened.length) fail("saved fallback must not open a draft");
+  ui.api.enableNavigation();
+  ui.api.setTrust("current");
+  openDecisionIssue("APPROVE", "dashboard-refresh", pending[0].title);
   if (opened.length) fail("unreviewed choice must not open");
   ui.review("dashboard-refresh");
 

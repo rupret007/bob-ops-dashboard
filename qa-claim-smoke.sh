@@ -1527,8 +1527,13 @@ bad_tabs = sorted(tab_ids - allowed_tabs)
 if bad_tabs:
     raise SystemExit("invented type tab ids: " + ", ".join(bad_tabs))
 for sid in ("live-shipping", "apps-utilities", "cisco", "parked"):
-    if not re.search(r'id="' + sid + r'"[^>]*\bhidden\b', html):
-        raise SystemExit(sid + " must stay hidden on first paint")
+    panel = re.search(r'<section id="' + sid + r'"[^>]*>', html)
+    if not panel or re.search(r'\bhidden\b', panel.group()):
+        raise SystemExit(sid + " must remain readable before JavaScript starts")
+if 'id="snapshot-fallback"' not in html or 'data-snapshot-trust="saved"' not in html:
+    raise SystemExit("saved snapshot must explain its read-only fallback")
+if 'html.dashboard-ready body.tab-home .live-stamp .when' not in html:
+    raise SystemExit("snapshot time must remain visible until navigation initializes")
 nav = html.split('id="type-tabs"', 1)[-1].split("</nav>", 1)[0] if 'id="type-tabs"' in html else ""
 if 'aria-selected="true"' in nav:
     raise SystemExit("first paint must not open a type tab")
