@@ -1576,7 +1576,7 @@ if "probe-agents-status.sh" in html.split("<script>", 1)[0]:
 if "fromGlance" not in html or "revealGlanceTarget(id, focus)" not in html:
     raise SystemExit("glance must reveal the exact named work")
 paint_at = html.find("boardEl.innerHTML = html;")
-restore_at = html.find("applyTypeTab(currentTypeTab);", paint_at)
+restore_at = html.find("restoreOpen(open);", paint_at)
 if paint_at < 0 or restore_at < paint_at:
     raise SystemExit("soft paint must restore the selected type tab")
 if "body.tab-home footer" not in html:

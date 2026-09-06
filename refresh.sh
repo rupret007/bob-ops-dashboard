@@ -1043,6 +1043,10 @@ html = f'''<!DOCTYPE html>
     font-size:.72rem; font-weight:600; cursor:pointer; touch-action:manipulation;
   }}
   .type-tabs button[aria-selected="true"] {{ border-color:var(--orange); color:var(--orange); }}
+  .type-tabs button:focus-visible, .lane:focus-visible, [data-tab-panel]:focus-visible {{
+    outline:2px solid var(--orange); outline-offset:2px;
+  }}
+  .type-tabs button:focus-visible {{ outline-offset:-3px; }}
   .leftover-types {{
     margin:0 0 .55rem; color:var(--muted); font-size:.8rem; line-height:1.4;
   }}
@@ -2108,16 +2112,38 @@ function focusKey(kind, raw) {{
   function typeTabsHtml(sections, pending, selected) {{
     var want = tabId(selected);
     var buttons = "";
-    typeTabIdsFor(sections, pending, want).forEach(function (sid) {{
+    var ids = typeTabIdsFor(sections, pending, want);
+    var stop = ids.indexOf(want) >= 0 ? want : ids[0];
+    ids.forEach(function (sid) {{
       buttons += '<button type="button" role="tab" id="tab-' + esc(sid) + '" data-tab="' + esc(sid) +
-        '" aria-controls="' + esc(sid) + '" aria-selected="' + (sid === want ? "true" : "false") + '">' +
+        '" aria-controls="' + esc(sid) + '" aria-selected="' + (sid === want ? "true" : "false") +
+        '" tabindex="' + (sid === stop ? "0" : "-1") + '">' +
         esc(tabLabel(sid)) + "</button>";
     }});
     return '<nav class="type-tabs" id="type-tabs" role="tablist" aria-label="Project type">' +
       buttons + "</nav>";
   }}
+  function focusQuietly(target) {{
+    if (!target) return;
+    try {{ target.focus({{ preventScroll: true }}); }} catch (e) {{}}
+  }}
+  function setTypeTabStop(id) {{
+    var tabs = document.querySelectorAll("#type-tabs [data-tab]");
+    var next = null;
+    Array.prototype.forEach.call(tabs, function (btn) {{
+      if (btn.getAttribute("data-tab") === id) next = btn;
+    }});
+    if (!next) next = tabs[0] || null;
+    Array.prototype.forEach.call(tabs, function (btn) {{
+      btn.setAttribute("tabindex", btn === next ? "0" : "-1");
+    }});
+    return next;
+  }}
   function applyTypeTab(id) {{
     var want = tabId(id);
+    var active = document.activeElement;
+    var focused = active && active.closest ? active.closest("#type-tabs [data-tab]") : null;
+    var focusedId = focused ? tabId(focused.getAttribute("data-tab")) : "";
     currentTypeTab = want;
     var nav = document.getElementById("type-tabs");
     if (nav && lastBoardSections) {{
@@ -2145,7 +2171,23 @@ function focusKey(kind, raw) {{
       if (want) history.replaceState(null, "", "#" + want);
       else if ((location.hash || "").length > 1) history.replaceState(null, "", location.pathname + location.search);
     }} catch (e) {{}}
+    var stop = setTypeTabStop(focusedId || want);
+    if (focused) focusQuietly(stop);
   }}
+  function handleTypeTabKey(ev) {{
+    if (ev.defaultPrevented || ev.altKey || ev.ctrlKey || ev.metaKey || ev.shiftKey) return;
+    if (["ArrowLeft", "ArrowRight", "Home", "End"].indexOf(ev.key) < 0) return;
+    var btn = ev.target && ev.target.closest ? ev.target.closest("#type-tabs [data-tab]") : null;
+    if (!btn) return;
+    var tabs = Array.prototype.slice.call(document.querySelectorAll("#type-tabs [data-tab]"));
+    var at = tabs.indexOf(btn);
+    if (at < 0) return;
+    var next = ev.key === "Home" ? 0 : ev.key === "End" ? tabs.length - 1 :
+      (at + (ev.key === "ArrowRight" ? 1 : -1) + tabs.length) % tabs.length;
+    ev.preventDefault();
+    setTypeTabStop(tabs[next].getAttribute("data-tab")).focus();
+  }}
+  document.addEventListener("keydown", handleTypeTabKey);
   var glanceTargetTimer = null;
   function validFocusKey(raw) {{
     var key = String(raw || "");
@@ -2222,6 +2264,8 @@ function focusKey(kind, raw) {{
       return;
     }}
     applyTypeTab(currentTypeTab === id ? "" : id);
+    // Leftover-type links live in the panel that just became hidden.
+    focusQuietly(setTypeTabStop(id));
   }});
   window.addEventListener("hashchange", function () {{
     applyTypeTab(tabFromHash());
@@ -2550,6 +2594,7 @@ function focusKey(kind, raw) {{
       ab: isOpen("details.abilities-foot"),
       more: isOpen("details.pending-more"),
       tab: currentTypeTab || tabFromHash(),
+      navigationFocus: snapshotNavigationFocus(active),
       decisionFocus: decisionFocus
     }};
   }}
@@ -2563,6 +2608,7 @@ function focusKey(kind, raw) {{
     setOpen("details.abilities-foot", s.ab);
     setOpen("details.pending-more", s.more);
     applyTypeTab(s.tab || "");
+    restoreNavigationFocus(s.navigationFocus);
     if (s.decisionFocus) {{
       var rows = document.querySelectorAll(".pending-item");
       for (var i = 0; i < rows.length; i++) {{
@@ -2574,6 +2620,52 @@ function focusKey(kind, raw) {{
         break;
       }}
     }}
+  }}
+  function snapshotNavigationFocus(active) {{
+    if (!active || !active.closest || !boardEl.contains(active)) return null;
+    var tab = active.closest("#type-tabs [data-tab]");
+    if (tab) return {{ tab: tabId(tab.getAttribute("data-tab")) }};
+    var panel = active.closest("[data-tab-panel]");
+    if (!panel || panel.hidden) return null;
+    if (active === panel) return {{ panel: tabId(panel.getAttribute("data-tab-panel")), key: "" }};
+    var row = active.closest(".lane[data-focus-key]");
+    if (!row) return null;
+    var action = active.closest('a[data-open="work"]');
+    if (active !== row && !action) return null;
+    return {{ panel: tabId(panel.getAttribute("data-tab-panel")), key: row.getAttribute("data-focus-key"),
+      href: action ? action.getAttribute("href") : "", label: action ? action.textContent : "" }};
+  }}
+  function findProjectFocus(panel, saved) {{
+    var row = findFocusTarget(panel, saved.key);
+    if (!row || !row.classList.contains("lane")) return null;
+    if (!saved.href) return row;
+    var actions = row.querySelectorAll('a[data-open="work"]');
+    var match = null;
+    // A familiar label with a new destination is a different action.
+    for (var i = 0; i < actions.length; i++) {{
+      if (actions[i].getAttribute("href") !== saved.href || actions[i].textContent !== saved.label) continue;
+      if (match) return row;
+      match = actions[i];
+    }}
+    return match || row;
+  }}
+  function restoreNavigationFocus(saved) {{
+    if (!saved) return;
+    if (saved.tab) {{
+      focusQuietly(setTypeTabStop(saved.tab));
+      return;
+    }}
+    var panel = document.getElementById(tabId(saved.panel));
+    if (!panel || panel.hidden) {{
+      focusQuietly(setTypeTabStop(currentTypeTab));
+      return;
+    }}
+    var next = findProjectFocus(panel, saved);
+    if (!next) {{
+      panel.setAttribute("tabindex", "-1");
+      next = panel;
+    }}
+    focusQuietly(next);
   }}
   function paintAgents(agents, cloud) {{
     var host = document.getElementById("active-agents");
@@ -2671,7 +2763,6 @@ function focusKey(kind, raw) {{
     boardEl.setAttribute("data-fp", html);
     if (window.bobDecisionReview) window.bobDecisionReview.reconcileRendering();
     restoreOpen(open);
-    applyTypeTab(currentTypeTab);
     window.dispatchEvent(new CustomEvent("bob-ops-painted"));
   }}
 

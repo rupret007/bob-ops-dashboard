@@ -36,6 +36,312 @@ function scriptsFrom(html) {
   return html.split("<script>").slice(1).map((s) => s.split("</script>")[0]).join("\n");
 }
 
+function navigationFocusChecks(html, src) {
+  const assert = require("node:assert/strict");
+  const vm = require("node:vm");
+  const functions = [
+    "esc", "focusKey", "tabId", "tabLabel", "projectIsLiveWork", "sectionHasLiveWork",
+    "sectionIsLeftoverOnly", "typeTabIdsFor", "typeTabsHtml", "tabFromHash", "focusQuietly",
+    "setTypeTabStop", "applyTypeTab", "handleTypeTabKey", "validFocusKey", "findFocusTarget",
+    "snapshotNavigationFocus", "findProjectFocus", "restoreNavigationFocus", "snapshotOpen", "restoreOpen",
+  ];
+  const constantsStart = src.indexOf("var TYPE_TAB_IDS =");
+  const constantsEnd = src.indexOf("function tabId(", constantsStart);
+  assert.ok(constantsStart >= 0 && constantsEnd > constantsStart, "Use the generated tab constants");
+  const clickStart = src.indexOf('document.addEventListener("click", function (ev) {\n    var btn = ev.target.closest("[data-tab]");');
+  const clickEnd = src.indexOf('window.addEventListener("hashchange"', clickStart);
+  assert.ok(clickStart >= 0 && clickEnd > clickStart, "Use the generated tab activation handler");
+
+  // Semantic DOM double for selectors, native button activation, and DOM
+  // replacement. Navigation policy comes entirely from the generated functions.
+  function fixture() {
+    let document;
+    const listeners = {};
+    const decode = value => value.replace(/&quot;/g, '"').replace(/&#39;|&#x27;/g, "'")
+      .replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&");
+    class Element {
+      constructor(tag = "div", attributes = {}) {
+        this.tagName = tag.toUpperCase(); this.attributes = { ...attributes };
+        this.childNodes = []; this.parentNode = null; this._text = ""; this.focusCalls = [];
+        this.classList = {
+          contains: name => (this.getAttribute("class") || "").split(/\s+/).includes(name),
+          toggle: (name, on) => {
+            const values = new Set((this.getAttribute("class") || "").split(/\s+/).filter(Boolean));
+            if (on) values.add(name); else values.delete(name);
+            this.setAttribute("class", Array.from(values).join(" "));
+          },
+        };
+      }
+      setAttribute(name, value) { this.attributes[name] = String(value); }
+      getAttribute(name) { return Object.hasOwn(this.attributes, name) ? this.attributes[name] : null; }
+      removeAttribute(name) { delete this.attributes[name]; }
+      get id() { return this.getAttribute("id") || ""; }
+      get hidden() { return this.getAttribute("hidden") !== null; }
+      get textContent() { return this._text + this.childNodes.map(child => child.textContent).join(""); }
+      set textContent(value) { this._text = String(value); this.childNodes = []; }
+      get firstChild() { return this.childNodes[0] || null; }
+      appendChild(child) { child.parentNode = this; this.childNodes.push(child); return child; }
+      contains(node) { return node === this || this.childNodes.some(child => child.contains(node)); }
+      removeChild(child) {
+        if (child.contains(document.activeElement)) document.activeElement = document.body;
+        this.childNodes = this.childNodes.filter(node => node !== child); child.parentNode = null;
+      }
+      replaceChild(fresh, old) {
+        const at = this.childNodes.indexOf(old);
+        assert.ok(at >= 0, "Only replace an attached child");
+        if (old.contains(document.activeElement)) document.activeElement = document.body;
+        this.childNodes[at] = fresh; fresh.parentNode = this; old.parentNode = null;
+      }
+      matches(selector) {
+        const split = selector.lastIndexOf(" ");
+        if (split >= 0) {
+          if (!this.matches(selector.slice(split + 1))) return false;
+          return Boolean(this.parentNode && this.parentNode.closest(selector.slice(0, split)));
+        }
+        const tag = selector.match(/^[a-z]+/i);
+        if (tag && this.tagName !== tag[0].toUpperCase()) return false;
+        const id = selector.match(/#([\w-]+)/);
+        if (id && this.id !== id[1]) return false;
+        for (const match of selector.matchAll(/\.([\w-]+)/g)) {
+          if (!this.classList.contains(match[1])) return false;
+        }
+        for (const match of selector.matchAll(/\[([\w-]+)(?:=["']([^"']*)["'])?\]/g)) {
+          if (this.getAttribute(match[1]) === null) return false;
+          if (match[2] !== undefined && this.getAttribute(match[1]) !== match[2]) return false;
+        }
+        return true;
+      }
+      closest(selector) { return this.matches(selector) ? this : this.parentNode?.closest(selector) || null; }
+      querySelectorAll(selector) {
+        return this.childNodes.flatMap(child => [
+          ...(child.matches(selector) ? [child] : []), ...child.querySelectorAll(selector),
+        ]);
+      }
+      querySelector(selector) { return this.querySelectorAll(selector)[0] || null; }
+      focus(options) {
+        if (!document.body.contains(this) || this.closest("[hidden]")) return;
+        this.focusCalls.push(options); document.activeElement = this;
+      }
+      set innerHTML(value) {
+        for (const child of [...this.childNodes]) this.removeChild(child);
+        const stack = [this];
+        for (const token of value.split(/(<\/?[^>]+>)/).filter(Boolean)) {
+          if (token.startsWith("</")) { stack.pop(); continue; }
+          if (token.startsWith("<")) {
+            const tag = token.match(/^<([a-z]+)/i);
+            assert.ok(tag, "Fixture parser accepts element markup only");
+            const attrs = {};
+            for (const match of token.matchAll(/([\w-]+)="([^"]*)"/g)) attrs[match[1]] = decode(match[2]);
+            const child = stack[stack.length - 1].appendChild(new Element(tag[1], attrs));
+            stack.push(child);
+          } else stack[stack.length - 1]._text += decode(token);
+        }
+      }
+    }
+    const body = new Element("body");
+    const board = body.appendChild(new Element("main", { id: "board" }));
+    const outside = body.appendChild(new Element("button", { id: "outside-board" }));
+    document = {
+      body, activeElement: outside,
+      getElementById: id => body.querySelector("#" + id),
+      querySelectorAll: selector => body.querySelectorAll(selector),
+      querySelector: selector => body.querySelector(selector),
+      createElement: tag => new Element(tag),
+      addEventListener: (name, handler) => { (listeners[name] ||= []).push(handler); },
+    };
+    const location = { hash: "", pathname: "/fixture.html", search: "" };
+    const history = { replaceState(_state, _title, url) { location.hash = url.startsWith("#") ? url : ""; } };
+    const ctx = vm.createContext({ document, boardEl: board, location, history });
+    vm.runInContext(src.slice(constantsStart, constantsEnd) + functions.map(name => extractFn(src, name)).join("\n"), ctx, { timeout: 1000 });
+    vm.runInContext(src.slice(clickStart, clickEnd), ctx, { timeout: 1000 });
+    const sections = [
+      { id: "live-shipping", projects: [{ name: "Fixture live", status: "green" }] },
+      { id: "apps-utilities", projects: [{ name: "Fixture app", status: "yellow" }] },
+      { id: "parked", projects: [{ name: "Fixture parked", status: "parked" }] },
+    ];
+    function install(rows = [{ key: "project:fixture-live", actions: [{ href: "https://example.invalid/review/1", label: "Review" }] }], panelIds = sections.map(section => section.id)) {
+      for (const child of [...board.childNodes]) board.removeChild(child);
+      ctx.lastBoardSections = sections.filter(section => panelIds.includes(section.id));
+      ctx.lastBoardPending = [];
+      const wrap = new Element(); wrap.innerHTML = ctx.typeTabsHtml(ctx.lastBoardSections, [], ctx.currentTypeTab);
+      board.appendChild(wrap.firstChild);
+      for (const id of panelIds) {
+        const panel = board.appendChild(new Element("section", { id, "data-tab-panel": id, hidden: "" }));
+        if (id !== "live-shipping") continue;
+        for (const spec of rows) {
+          const row = panel.appendChild(new Element("div", { class: spec.className || "lane", "data-focus-key": spec.key, tabindex: "-1" }));
+          for (const action of spec.actions || []) {
+            const link = row.appendChild(new Element("a", { "data-open": "work", href: action.href }));
+            link.textContent = action.label;
+          }
+        }
+      }
+    }
+    install();
+    function event(target, fields = {}) {
+      return { target, defaultPrevented: false, preventDefault() { this.defaultPrevented = true; }, ...fields };
+    }
+    function click(target) { const ev = event(target); for (const handler of listeners.click || []) handler(ev); return ev; }
+    function key(value, fields = {}, target = document.activeElement) {
+      const ev = event(target, { key: value, ...fields });
+      ctx.handleTypeTabKey(ev);
+      // Browsers provide Enter/Space activation for native buttons. Exercise
+      // the actual click handler after the production key handler permits it.
+      if (!ev.defaultPrevented && (value === "Enter" || value === " ") && target.tagName === "BUTTON") click(target);
+      return ev;
+    }
+    return {
+      ctx, document, board, outside, install, key, click, Element,
+      tabs: () => document.querySelectorAll("#type-tabs [data-tab]"),
+      tab: id => document.getElementById("tab-" + id),
+      panel: id => document.getElementById(id),
+      rows: () => document.querySelectorAll(".lane[data-focus-key]"),
+      actions: () => document.querySelectorAll('a[data-open="work"]'),
+      repaint(rows, panelIds) { const saved = ctx.snapshotOpen(); install(rows, panelIds); ctx.restoreOpen(saved); return saved; },
+    };
+  }
+  const cases = [];
+  const test = (name, check) => cases.push({ name, check });
+  const tabState = tabs => tabs.map(tab => [tab.getAttribute("data-tab"), tab.getAttribute("aria-selected"), tab.getAttribute("tabindex")]);
+  const stop = ui => ui.tabs().filter(tab => tab.getAttribute("tabindex") === "0");
+
+  test("generated first-paint and repaint tabs agree on one home tabstop", () => {
+    const ui = fixture();
+    const snapshot = JSON.parse(html.split('id="initial-snapshot">')[1].split("</script>")[0]);
+    const first = new ui.Element(); first.innerHTML = html.match(/<nav[^>]*id="type-tabs"[\s\S]*?<\/nav>/)[0];
+    const soft = new ui.Element(); soft.innerHTML = ui.ctx.typeTabsHtml(snapshot.sections, snapshot.pending, "");
+    const tabs = first.querySelectorAll("[data-tab]");
+    assert.deepEqual(tabState(tabs), tabState(soft.querySelectorAll("[data-tab]")));
+    assert.ok(tabs.length > 0);
+    assert.equal(tabs.filter(tab => tab.getAttribute("tabindex") === "0").length, 1);
+    assert.equal(tabs[0].getAttribute("tabindex"), "0");
+    assert.ok(tabs.every(tab => tab.getAttribute("aria-selected") === "false"));
+  });
+  test("arrows wrap and Home/End move focus without selecting a panel", () => {
+    const ui = fixture(); ui.ctx.applyTypeTab("live-shipping"); ui.tab("live-shipping").focus();
+    for (const [key, expected] of [["ArrowLeft", "parked"], ["ArrowRight", "live-shipping"], ["End", "parked"], ["Home", "live-shipping"], ["ArrowRight", "apps-utilities"]]) {
+      assert.equal(ui.key(key).defaultPrevented, true);
+      assert.equal(ui.document.activeElement, ui.tab(expected));
+      assert.deepEqual(stop(ui), [ui.tab(expected)]);
+      assert.equal(ui.ctx.currentTypeTab, "live-shipping");
+      assert.equal(ui.tab("live-shipping").getAttribute("aria-selected"), "true");
+      assert.equal(ui.tab("apps-utilities").getAttribute("aria-selected"), "false");
+      assert.equal(ui.panel("live-shipping").hidden, false);
+      assert.equal(ui.panel("apps-utilities").hidden, true);
+    }
+    ui.key("Enter");
+    assert.equal(ui.ctx.currentTypeTab, "apps-utilities", "Native activation selects the focused tab");
+    assert.equal(ui.panel("apps-utilities").hidden, false);
+    ui.key(" ");
+    assert.equal(ui.ctx.currentTypeTab, "", "Activating the selected tab returns to existing home behavior");
+    assert.ok(ui.tabs().every(tab => tab.getAttribute("aria-selected") === "false"));
+  });
+  test("modified, handled, unrelated and off-tab keys retain native behavior", () => {
+    const ui = fixture(); ui.tab("live-shipping").focus();
+    for (const fields of [{ altKey: true }, { ctrlKey: true }, { metaKey: true }, { shiftKey: true }, { defaultPrevented: true }]) {
+      const before = ui.document.activeElement;
+      const ev = ui.key("ArrowRight", fields);
+      assert.equal(ui.document.activeElement, before);
+      assert.equal(ev.defaultPrevented, Boolean(fields.defaultPrevented));
+    }
+    for (const key of ["ArrowUp", "ArrowDown", "Tab", "Escape", "a"]) {
+      assert.equal(ui.key(key).defaultPrevented, false);
+      assert.equal(ui.document.activeElement, ui.tab("live-shipping"));
+    }
+    ui.outside.focus();
+    assert.equal(ui.key("ArrowRight").defaultPrevented, false);
+    assert.equal(ui.document.activeElement, ui.outside);
+    const leftover = ui.board.appendChild(new ui.Element("button", { "data-tab": "parked" })); leftover.focus();
+    assert.equal(ui.key("Home").defaultPrevented, false, "Only the tablist owns these keys");
+    assert.equal(ui.document.activeElement, leftover);
+  });
+  test("repaint retains an arrow-focused tab independently of selection", () => {
+    const ui = fixture(); ui.ctx.applyTypeTab("live-shipping"); ui.tab("live-shipping").focus(); ui.key("ArrowRight");
+    const old = ui.document.activeElement;
+    ui.repaint();
+    assert.notEqual(ui.document.activeElement, old, "Old DOM was removed");
+    assert.equal(ui.document.activeElement, ui.tab("apps-utilities"));
+    assert.equal(ui.ctx.currentTypeTab, "live-shipping");
+    assert.equal(ui.tab("live-shipping").getAttribute("aria-selected"), "true");
+    assert.deepEqual(stop(ui), [ui.tab("apps-utilities")]);
+  });
+  test("leftover-type activation moves focus out of the panel it hides", () => {
+    const ui = fixture(); ui.ctx.applyTypeTab("parked");
+    const link = ui.panel("parked").appendChild(new ui.Element("button", { "data-tab": "apps-utilities", "data-leftover-type": "true" }));
+    link.focus(); ui.click(link);
+    assert.equal(ui.panel("parked").hidden, true);
+    assert.equal(ui.panel("apps-utilities").hidden, false);
+    assert.equal(ui.document.activeElement, ui.tab("apps-utilities"));
+    assert.deepEqual(stop(ui), [ui.tab("apps-utilities")]);
+  });
+  test("unchanged project action survives repaint by exact URL and label", () => {
+    const ui = fixture(); ui.ctx.applyTypeTab("live-shipping"); ui.actions()[0].focus();
+    const saved = ui.repaint([{ key: "project:fixture-live", actions: [
+      { href: "https://example.invalid/review/2", label: "Review" },
+      { href: "https://example.invalid/review/1", label: "Review" },
+    ] }]);
+    assert.equal(saved.navigationFocus.href, "https://example.invalid/review/1");
+    assert.equal(ui.document.activeElement, ui.actions()[1], "Never restore by link position");
+    assert.equal(ui.document.activeElement.focusCalls.at(-1).preventScroll, true);
+  });
+  for (const [name, actions] of [
+    ["missing", []],
+    ["changed URL", [{ href: "https://example.invalid/review/2", label: "Review" }]],
+    ["changed label", [{ href: "https://example.invalid/review/1", label: "Open changed work" }]],
+    ["duplicate", [{ href: "https://example.invalid/review/1", label: "Review" }, { href: "https://example.invalid/review/1", label: "Review" }]],
+  ]) test(name + " action restores its project row without choosing another action", () => {
+    const ui = fixture(); ui.ctx.applyTypeTab("live-shipping"); ui.actions()[0].focus();
+    ui.repaint([{ key: "project:fixture-live", actions }]);
+    assert.equal(ui.document.activeElement, ui.rows()[0]);
+  });
+  for (const [name, rows] of [
+    ["missing", [{ key: "project:other", actions: [] }]],
+    ["duplicate", [{ key: "project:fixture-live" }, { key: "project:fixture-live" }]],
+    ["non-lane", [{ key: "project:fixture-live", className: "pending-item" }]],
+  ]) test(name + " project restores the panel without choosing a neighboring row", () => {
+    const ui = fixture(); ui.ctx.applyTypeTab("live-shipping"); ui.actions()[0].focus(); ui.repaint(rows);
+    assert.equal(ui.document.activeElement, ui.panel("live-shipping"));
+    assert.equal(ui.panel("live-shipping").getAttribute("tabindex"), "-1");
+  });
+  test("row focus stays on the row and does not promote an action", () => {
+    const ui = fixture(); ui.ctx.applyTypeTab("live-shipping"); ui.rows()[0].focus(); ui.repaint();
+    assert.equal(ui.document.activeElement, ui.rows()[0]);
+  });
+  test("panel fallback survives the next refresh after its project disappeared", () => {
+    const ui = fixture(); ui.ctx.applyTypeTab("live-shipping"); ui.actions()[0].focus();
+    ui.repaint([]);
+    const firstPanel = ui.document.activeElement;
+    assert.equal(firstPanel, ui.panel("live-shipping"));
+    const saved = ui.repaint([]);
+    assert.equal(saved.navigationFocus.panel, "live-shipping");
+    assert.equal(saved.navigationFocus.key, "");
+    assert.notEqual(ui.document.activeElement, firstPanel);
+    assert.equal(ui.document.activeElement, ui.panel("live-shipping"));
+  });
+  test("missing or hidden focused panels fall back to the tablist", () => {
+    const ui = fixture(); ui.ctx.applyTypeTab("live-shipping"); ui.actions()[0].focus();
+    ui.repaint([], ["apps-utilities", "parked"]);
+    assert.equal(ui.document.activeElement, ui.tab("apps-utilities"));
+    ui.ctx.restoreNavigationFocus({ panel: "parked", key: "project:gone" });
+    assert.equal(ui.document.activeElement, ui.tab("apps-utilities"));
+  });
+  test("refresh does not steal focus from outside the board or unrelated controls", () => {
+    const ui = fixture(); ui.ctx.applyTypeTab("live-shipping"); ui.outside.focus();
+    const saved = ui.repaint();
+    assert.equal(saved.navigationFocus, null);
+    assert.equal(ui.document.activeElement, ui.outside);
+    const control = ui.rows()[0].appendChild(new ui.Element("button")); control.focus();
+    assert.equal(ui.ctx.snapshotNavigationFocus(control), null);
+    assert.equal(ui.ctx.snapshotNavigationFocus(null), null);
+    ui.panel("live-shipping").setAttribute("hidden", "");
+    assert.equal(ui.ctx.snapshotNavigationFocus(ui.actions()[0]), null, "Hidden panel controls cannot be a restore target");
+  });
+  for (const { name, check } of cases) {
+    try { check(); } catch (error) { throw new Error("Navigation focus: " + name + "\n" + error.stack); }
+  }
+  console.log("navigation focus smoke ok (" + cases.length + " offline cases)");
+}
+
 function run() {
   const html = fs.readFileSync(INDEX, "utf8");
   const src = scriptsFrom(html);
@@ -1020,7 +1326,7 @@ function run() {
     fail("ambiguous target must not select a neighboring row");
   }
   const paintAt = src.indexOf("boardEl.innerHTML = html;");
-  const restoreTabAt = src.indexOf("applyTypeTab(currentTypeTab);", paintAt);
+  const restoreTabAt = src.indexOf("restoreOpen(open);", paintAt);
   if (paintAt < 0 || restoreTabAt < paintAt) fail("soft paint must restore the selected tab");
   if (src.indexOf("function publicProbeDetail") === -1) fail("publicProbeDetail missing");
   const publicProbeDetail = eval("(" + extractFn(src, "publicProbeDetail") + ")");
@@ -1071,6 +1377,7 @@ function run() {
   if (preHow.indexOf("Live CI via") !== -1) fail("fetched-repo line must not lead the first phone screen");
   if (html.indexOf('id="fetched-line"') === -1) fail("fetched-repo line must remain inside How this board works");
 
+  navigationFocusChecks(html, src);
   console.log("soft-paint / agent age-gate smoke ok");
 }
 
