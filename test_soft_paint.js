@@ -217,6 +217,23 @@ function navigationFocusChecks(html, src) {
     assert.equal(tabs[0].getAttribute("tabindex"), "0");
     assert.ok(tabs.every(tab => tab.getAttribute("aria-selected") === "false"));
   });
+  test("navigation setup enhances visible saved regions into the existing compact home", () => {
+    const ui = fixture();
+    for (const id of ["live-shipping", "apps-utilities", "parked"]) {
+      ui.panel(id).removeAttribute("hidden");
+      ui.panel(id).setAttribute("role", "region");
+    }
+    ui.ctx.applyTypeTab("");
+    for (const id of ["live-shipping", "apps-utilities", "parked"]) {
+      assert.equal(ui.panel(id).hidden, true, "Enhanced home still hides the project wall");
+      assert.equal(ui.panel(id).getAttribute("role"), "tabpanel");
+    }
+    ui.ctx.applyTypeTab("live-shipping");
+    assert.equal(ui.panel("live-shipping").hidden, false);
+    assert.equal(ui.panel("apps-utilities").hidden, true);
+    assert.equal(ui.tab("live-shipping").getAttribute("aria-selected"), "true");
+    assert.deepEqual(stop(ui), [ui.tab("live-shipping")]);
+  });
   test("arrows wrap and Home/End move focus without selecting a panel", () => {
     const ui = fixture(); ui.ctx.applyTypeTab("live-shipping"); ui.tab("live-shipping").focus();
     for (const [key, expected] of [["ArrowLeft", "parked"], ["ArrowRight", "live-shipping"], ["End", "parked"], ["Home", "live-shipping"], ["ArrowRight", "apps-utilities"]]) {
@@ -921,8 +938,8 @@ function run() {
   if (html.indexOf('id="retry-status"') === -1 || html.indexOf("Retry now") === -1) {
     fail("stale snapshot banner must offer one manual retry");
   }
-  if (html.indexOf('data-snapshot-trust="current"') === -1) {
-    fail("first paint must declare its snapshot trust state");
+  if (html.indexOf('data-snapshot-trust="saved"') === -1) {
+    fail("static first paint must declare an unverified saved snapshot, not live trust");
   }
   if (src.indexOf('retryStatus.addEventListener("click"') === -1) {
     fail("Retry now must invoke the existing bounded poll path");
@@ -1337,19 +1354,64 @@ function run() {
     fail("public probe title must drop local helper names");
   }
   function tagFor(id) {
-    var mark = 'id="' + id + '"';
-    var at = html.indexOf("<section " + mark);
-    if (at < 0) at = html.indexOf('<section id="' + id + '"');
-    return at >= 0 ? html.slice(at, at + 260) : "";
+    const staticMarkup = html.split("<script")[0];
+    const match = staticMarkup.match(new RegExp('<section\\b[^>]*\\bid="' + id + '"[^>]*>'));
+    return match ? match[0] : "";
   }
   const liveTag = tagFor("live-shipping");
   if (liveTag.indexOf("data-tab-panel") === -1) fail("live-shipping must be a tab panel");
-  if (!/\bhidden\b/.test(liveTag)) {
-    fail("first paint must hide live-shipping so the wall is not the first screen");
+  if (/\bhidden\b/.test(liveTag)) {
+    fail("saved first paint must keep Live readable before navigation starts");
   }
   const decTag = tagFor("controls");
-  if (!/\bhidden\b/.test(decTag)) {
-    fail("first paint must hide Decisions until that tab is opened");
+  if (!decTag || /\bhidden\b/.test(decTag)) {
+    fail("saved first paint must keep full read-only Decisions reachable");
+  }
+  const staticMarkup = html.split("<script")[0];
+  const staticPanels = staticMarkup.match(/<section\b[^>]*\bdata-tab-panel="[^"]+"[^>]*>/g) || [];
+  if (!staticPanels.length || staticPanels.some(tag => /\bhidden\b/.test(tag) || !/\brole="region"/.test(tag))) {
+    fail("every saved type panel must be an initially visible named region");
+  }
+  if (staticPanels.some(tag => !/\baria-label(?:ledby)?="[^"]+"/.test(tag))) {
+    fail("static sections need accessible names without relying on inert tabs");
+  }
+  const htmlTag = (staticMarkup.match(/<html\b[^>]*>/) || [""])[0];
+  if (/\bclass="[^"]*\bdashboard-ready\b/.test(htmlTag)) {
+    fail("saved HTML must not claim successful JavaScript initialization");
+  }
+  if (!/\bid="snapshot-fallback"/.test(staticMarkup) || !/Saved snapshot/.test(staticMarkup) || !/read-only/.test(staticMarkup)) {
+    fail("a visible saved-snapshot read-only notice must precede enhancement");
+  }
+  if (/id="freshness"[^>]*>\s*Live/.test(staticMarkup)) {
+    fail("a static saved snapshot cannot claim Live before JavaScript verifies it");
+  }
+  if (!/\bid="updated-display"[^>]*>[^<]+</.test(staticMarkup)) {
+    fail("the saved snapshot timestamp must remain present without JavaScript");
+  }
+  if (/<a\b[^>]*\bdata-dec=/.test(staticMarkup)) {
+    fail("saved read-only markup must not expose decision-composer links");
+  }
+  const staticReviewButtons = staticMarkup.match(/<button\b[^>]*\bdata-review-decision="[^"]+"[^>]*>/g) || [];
+  if (staticReviewButtons.some(tag => !/\bdisabled\b/.test(tag))) {
+    fail("saved decision review controls must remain disabled");
+  }
+  const css = (html.match(/<style>([\s\S]*?)<\/style>/) || ["", ""])[1];
+  for (const selector of ["section.block.foot", "footer", ".live-stamp .when", ".agent-links"]) {
+    if (!css.includes("html.dashboard-ready body.tab-home " + selector)) {
+      fail("compact home hiding must wait for completed navigation: " + selector);
+    }
+  }
+  if (/(?:^|\})\s*body\.tab-home\s/.test(css)) {
+    fail("unscoped home CSS must not hide the saved-snapshot fallback");
+  }
+  if (!/html:not\(\.dashboard-ready\) \.lane \.notes\s*\{[^}]*display:block/.test(css)) {
+    fail("saved project notes must remain readable on phones, including quiet rows");
+  }
+  const setupAt = src.lastIndexOf("applyTypeTab(tabFromHash());");
+  const readinessAt = src.indexOf(".enableNavigation()", setupAt);
+  const readyClassAt = src.slice(setupAt).search(/classList\.add\(["']dashboard-ready["']\)/);
+  if (setupAt < 0 || readinessAt <= setupAt || readyClassAt < 0) {
+    fail("main script may enable navigation/compact mode only after initial tab setup");
   }
 
   if (src.indexOf("function compactUnknownMacProbes") === -1) fail("compactUnknownMacProbes missing");
@@ -1372,7 +1434,7 @@ function run() {
   if (html.indexOf("font-size:1.55rem") === -1) fail("next action must be the first-screen hero");
   if (html.indexOf("flex:1 1 0") === -1) fail("phone type tabs must share one row");
   if (html.indexOf("body.tab-home .agent-links") === -1) fail("home screen must not stack Open agent buttons");
-  if (html.indexOf('class="tab-home"') === -1) fail("first paint must start on the home tab screen");
+  if (html.indexOf('class="tab-home"') === -1) fail("saved markup must retain the enhanced home-mode hook");
   const preHow = html.split('<details class="how-board">')[0] || "";
   if (preHow.indexOf("Live CI via") !== -1) fail("fetched-repo line must not lead the first phone screen");
   if (html.indexOf('id="fetched-line"') === -1) fail("fetched-repo line must remain inside How this board works");

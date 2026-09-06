@@ -944,7 +944,7 @@ for sec in status["sections"]:
         body = pending_shell(items)
         sections_html.append(
             f'<section id="{h(sid_raw)}" class="block pending" data-tab-panel="{h(sid_raw)}" '
-            f'hidden role="tabpanel" aria-label="Decisions">'
+            f'role="region" aria-label="Decisions">'
             f'{heading}{body}</section>'
         )
         continue
@@ -993,7 +993,7 @@ for sec in status["sections"]:
             else ""
         )
         panel = (
-            f' data-tab-panel="{h(sid_raw)}" hidden role="tabpanel"'
+            f' data-tab-panel="{h(sid_raw)}" role="region"'
             + labelledby
             + leftover_label
         )
@@ -1001,6 +1001,11 @@ for sec in status["sections"]:
         f'<section id="{h(sid_raw)}" class="block {cls}"{panel}>{heading}{body}</section>'
     )
 
+snapshot_links = ''.join(
+    f'<a href="#{h(sec["id"])}">{h("Decisions" if sec["id"] == "controls" else tab_label(sec["id"]))}</a>'
+    for sec in status["sections"]
+    if sec.get("id") == "controls" or is_type_tab(sec.get("id"))
+)
 
 html = f'''<!DOCTYPE html>
 <html lang="en">
@@ -1196,12 +1201,30 @@ html = f'''<!DOCTYPE html>
   .agents-unknown {{ display:none; margin:0; color:var(--muted); font-size:.8rem; font-weight:600; }}
   .agents-strip.is-unknown-mac .agent-pill[data-probe="mac"] {{ display:none; }}
   .agents-strip.is-unknown-only {{ display:none; }}
-  body.tab-home section.block.foot {{ display:none; }}
-  body.tab-home footer {{ display:none; }}
-  body.tab-home .live-stamp .when {{ display:none; }}
-  body.tab-home .agent-links {{ display:none; }}
-  body.tab-home .agent-pill.has-links {{ flex-direction:row; flex-wrap:wrap; align-items:center; }}
-  body.tab-home .agent-pill[data-probe="cloud"] .chip {{ display:none; }}
+  html.dashboard-ready body.tab-home section.block.foot {{ display:none; }}
+  html.dashboard-ready body.tab-home footer {{ display:none; }}
+  html.dashboard-ready body.tab-home .live-stamp .when {{ display:none; }}
+  html.dashboard-ready body.tab-home .agent-links {{ display:none; }}
+  html.dashboard-ready body.tab-home .agent-pill.has-links {{ flex-direction:row; flex-wrap:wrap; align-items:center; }}
+  html.dashboard-ready body.tab-home .agent-pill[data-probe="cloud"] .chip {{ display:none; }}
+  #snapshot-fallback {{ margin:0 0 1.5rem; padding:1rem; border:1px solid var(--border); border-radius:8px; background:var(--panel); font-size:.9rem; line-height:1.5; }}
+  #snapshot-fallback p {{ margin:0 0 .65rem; }}
+  .snapshot-links {{ display:flex; flex-wrap:wrap; gap:.25rem 1rem; }}
+  .snapshot-links a {{ display:inline-flex; align-items:center; min-height:44px; }}
+  html.dashboard-ready #snapshot-fallback {{ display:none; }}
+  html:not(.dashboard-ready) #type-tabs,
+  html:not(.dashboard-ready) #board-glance,
+  html:not(.dashboard-ready) [data-tab],
+  html:not(.dashboard-ready) [data-action],
+  html:not(.dashboard-ready) [data-review-decision],
+  html:not(.dashboard-ready) .decision-review,
+  html:not(.dashboard-ready) #silence-banner,
+  html:not(.dashboard-ready) #freshness,
+  html:not(.dashboard-ready) #live-dot {{ display:none !important; }}
+  /* A partially initialized script may already have hidden panels. Preserve
+     the saved content until navigation has actually finished starting. */
+  html:not(.dashboard-ready) section.block[data-tab-panel][hidden] {{ display:block !important; }}
+  html:not(.dashboard-ready) .lane .notes {{ display:block; -webkit-line-clamp:unset; overflow:visible; }}
   .agent-pill {{ display:inline-flex; align-items:center; gap:.35rem; border:0; background:transparent; padding:0; }}
   .agent-pill.has-links {{ flex-direction:column; align-items:flex-start; gap:.3rem; }}
   .agent-pill .name {{ font-weight:600; font-size:.8rem; }}
@@ -1239,16 +1262,21 @@ html = f'''<!DOCTYPE html>
   <header class="pulse">
     <h1><span class="mark">Bob</span> Ops</h1>
     <div class="pulse-row">
-      <div class="live-stamp" id="live-stamp" data-generated-at="{h(updated_iso)}" data-display="{h(updated_ct)}"><span class="live-dot" id="live-dot" aria-hidden="true"></span><span id="freshness">Live - starting</span><span class="when"> · <strong id="updated-display">{h(updated_ct)}</strong></span></div>
+      <div class="live-stamp" id="live-stamp" data-generated-at="{h(updated_iso)}" data-display="{h(updated_ct)}"><span class="live-dot" id="live-dot" aria-hidden="true"></span><span id="freshness">Saved snapshot</span><span class="when"> · <strong id="updated-display">{h(updated_ct)}</strong></span></div>
       <div id="active-agents">{agents_strip_html(status.get("agents"), status.get("cloud_agents"))}</div>
     </div>
     <div class="status hint" id="panel-status"></div>
   </header>
+  <aside id="snapshot-fallback" role="note">
+    <p><strong>Saved snapshot — read-only.</strong> This page has not checked for updates. Project states may have changed since the time above.</p>
+    <p>Browse the saved sections below. Live checks and decision review require JavaScript to start successfully; reload to try again. Nothing here approves or runs work.</p>
+    <nav class="snapshot-links" aria-label="Saved sections">{snapshot_links}</nav>
+  </aside>
   <div id="silence-banner" role="alert" aria-live="assertive" hidden>
     <span class="silence-copy"><strong id="silence-title"></strong><span id="silence-detail"></span></span>
     <button id="retry-status" type="button">Retry now</button>
   </div>
-  <div id="board" data-snapshot-trust="current">
+  <div id="board" data-snapshot-trust="saved">
   {glance_html(status.get("pending"), status.get("sections"))}{type_tabs_html(status.get("sections"), status.get("pending"))}
   {''.join(sections_html)}
   </div>
@@ -1371,6 +1399,7 @@ function focusKey(kind, raw) {{
   var acceptedSnapshot = null;
   var reviewedDecision = null;
   var decisionTrust = false;
+  var navigationReady = false;
 
   function pendingEls() {{
     return {{
@@ -1442,7 +1471,7 @@ function focusKey(kind, raw) {{
     return null;
   }}
   function decisionIsCurrent() {{
-    if (!decisionTrust || !acceptedSnapshot) return false;
+    if (!navigationReady || !decisionTrust || !acceptedSnapshot) return false;
     var ms = decisionSnapshotTime(acceptedSnapshot.at);
     return !!ms && Date.now() - ms <= 45 * 60 * 1000;
   }}
@@ -1515,7 +1544,7 @@ function focusKey(kind, raw) {{
     return true;
   }}
   function setDecisionTrust(state) {{
-    var next = state === "current" && !!acceptedSnapshot && !!decisionSnapshotTime(acceptedSnapshot.at) &&
+    var next = navigationReady && state === "current" && !!acceptedSnapshot && !!decisionSnapshotTime(acceptedSnapshot.at) &&
       Date.now() - Date.parse(acceptedSnapshot.at) <= 45 * 60 * 1000;
     if (decisionTrust === next) return;
     decisionTrust = next;
@@ -1534,6 +1563,8 @@ function focusKey(kind, raw) {{
     return true;
   }}
   window.bobDecisionReview = {{
+    // Readiness alone never grants snapshot trust or reviews a decision.
+    enableNavigation: function () {{ navigationReady = true; }},
     accept: acceptDecisionSnapshot,
     setTrust: setDecisionTrust,
     review: reviewDecision,
@@ -1629,7 +1660,7 @@ function focusKey(kind, raw) {{
   try {{
     var initialNode = document.getElementById("initial-snapshot");
     var initialData = initialNode ? JSON.parse(initialNode.textContent) : null;
-    if (acceptDecisionSnapshot(initialData)) setDecisionTrust("current");
+    acceptDecisionSnapshot(initialData);
   }} catch (e) {{ setDecisionTrust("invalid"); }}
 }})();
 
@@ -2161,6 +2192,7 @@ function focusKey(kind, raw) {{
     Array.prototype.forEach.call(panels, function (panel) {{
       var pid = tabId(panel.getAttribute("data-tab-panel"));
       if (!pid) return;
+      panel.setAttribute("role", "tabpanel");
       if (pid === want) panel.removeAttribute("hidden");
       else panel.setAttribute("hidden", "");
     }});
@@ -2362,7 +2394,8 @@ function focusKey(kind, raw) {{
     var unverified = state !== "current";
     if (document.body) document.body.classList.toggle("snapshot-unverified", unverified);
     if (boardEl) {{
-      boardEl.setAttribute("data-snapshot-trust", unverified ? "last-verified" : "current");
+      var starting = document.documentElement && !document.documentElement.classList.contains("dashboard-ready");
+      boardEl.setAttribute("data-snapshot-trust", starting ? "saved" : unverified ? "last-verified" : "current");
       if (unverified) boardEl.setAttribute("aria-describedby", "silence-detail");
       else boardEl.removeAttribute("aria-describedby");
     }}
@@ -2979,6 +3012,12 @@ function focusKey(kind, raw) {{
   // Pause polls when tab hidden; resume on visible / bfcache pageshow.
   if (document.visibilityState !== "hidden") startPolling();
   else setTimeout(function () {{ if (document.visibilityState !== "hidden") startPolling(); }}, 5000);
+  // Progressive enhancement commits only after the navigation/poll setup above.
+  // If startup throws, the saved sections and timestamp remain readable and
+  // decision review stays disabled, even if a partial paint already ran.
+  document.documentElement.classList.add("dashboard-ready");
+  if (window.bobDecisionReview) window.bobDecisionReview.enableNavigation();
+  paint();
 }})();
 </script>
 </body>

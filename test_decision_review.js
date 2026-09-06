@@ -121,7 +121,7 @@ function controller(initial = snapshot()) {
   for (const value of initial.pending || []) {
     const row = new Element(); row.className = "pending-item";
     row.setAttribute("data-id", value.id); row.setAttribute("data-title", value.title);
-    const button = new Element("button"); button.setAttribute("data-review-decision", value.id); button.textContent = "Review choices";
+    const button = new Element("button"); button.setAttribute("data-review-decision", value.id); button.textContent = "Review choices"; button.disabled = true;
     const panel = new Element(); panel.className = "decision-review";
     row.appendChild(button); row.appendChild(panel); body.appendChild(row); rows.push(row);
   }
@@ -169,6 +169,13 @@ function controller(initial = snapshot()) {
     flushTimers() { timers.splice(0).forEach(timer => timer()); },
     blockPopup() { popupAvailable = false; },
   };
+}
+
+function readyController(initial = snapshot()) {
+  const ui = controller(initial);
+  assert.equal(typeof ui.api.enableNavigation, "function", "Navigation readiness is an explicit integration gate");
+  ui.api.enableNavigation();
+  return ui;
 }
 
 test("canonical review identity preserves every public decision field", () => {
@@ -262,8 +269,79 @@ test("generated page never has a second pending-only fetch", () => {
   assert.doesNotMatch(source, /function loadPending\(/);
 });
 
-test("review is explicit, read-only, and creates exact native GitHub links", () => {
+test("decision-controller-only startup leaves the saved snapshot read-only", () => {
   const ui = controller();
+  assert.equal(ui.row().querySelector("[data-review-decision]").disabled, true);
+  assert.equal(ui.link(), null);
+  assert.equal(ui.api.review(item.id), false, "Initial snapshot acceptance is not completed navigation");
+  ui.api.open("APPROVE", item.id, item.title);
+  assert.equal(ui.opened.length + ui.native.length, 0);
+  assert.equal(ui.link(), null);
+});
+
+test("accepting a current poll cannot bypass unfinished navigation", () => {
+  const ui = controller();
+  assert.equal(ui.api.accept(snapshot()), true);
+  ui.api.setTrust("current"); ui.api.reconcileRendering();
+  assert.equal(ui.row().querySelector("[data-review-decision]").disabled, true);
+  assert.equal(ui.api.review(item.id), false);
+  ui.api.open("HOLD", item.id, item.title);
+  assert.equal(ui.link(), null);
+  assert.equal(ui.opened.length + ui.native.length, 0);
+});
+
+test("navigation readiness is not freshness or an implicit decision review", () => {
+  const ui = controller();
+  assert.equal(typeof ui.api.enableNavigation, "function");
+  ui.api.enableNavigation(); ui.api.reconcileRendering();
+  assert.equal(ui.row().querySelector("[data-review-decision]").disabled, true,
+    "Only the existing accepted-snapshot trust check can enable review");
+  assert.equal(ui.api.review(item.id), false);
+  ui.api.setTrust("current");
+  assert.equal(ui.row().querySelector("[data-review-decision]").disabled, false);
+  assert.equal(ui.link(), null, "Setup does not review the decision on the owner's behalf");
+  ui.api.open("APPROVE", item.id, item.title);
+  assert.equal(ui.opened.length + ui.native.length, 0);
+  ui.review(); assert.ok(ui.link());
+  assert.equal(ui.opened.length + ui.native.length, 0);
+});
+
+test("readiness never revives invalid or overdue saved decisions", () => {
+  for (const initial of [
+    snapshot([item], "2036-09-05T11:55:00Z"),
+    snapshot([item], "2026-09-05T11:00:00Z"),
+    { ...snapshot(), sections: [] },
+  ]) {
+    const ui = readyController(initial);
+    ui.api.setTrust("current"); ui.api.reconcileRendering();
+    assert.equal(ui.row().querySelector("[data-review-decision]").disabled, true);
+    assert.equal(ui.api.review(item.id), false);
+    ui.api.open("DENY", item.id, item.title);
+    assert.equal(ui.link(), null);
+    assert.equal(ui.opened.length + ui.native.length, 0);
+  }
+});
+
+test("repeated navigation readiness cannot clear a failed or expired review", () => {
+  for (const state of ["poll-failed", "refresh-overdue", "invalid"]) {
+    const ui = readyController(); ui.api.setTrust("current"); ui.review();
+    assert.ok(ui.link());
+    ui.api.setTrust(state);
+    ui.api.enableNavigation(); ui.api.enableNavigation(); ui.api.reconcileRendering();
+    assert.equal(ui.row().querySelector("[data-review-decision]").disabled, true);
+    assert.equal(ui.api.review(item.id), false);
+    assert.equal(ui.link(), null);
+    ui.api.open("APPROVE", item.id, item.title);
+    assert.equal(ui.opened.length + ui.native.length, 0);
+    assert.equal(ui.api.accept(snapshot()), true);
+    ui.api.setTrust("current");
+    assert.equal(ui.link(), null, "Recovery still requires a fresh explicit review");
+    ui.review(); assert.ok(ui.link());
+  }
+});
+
+test("review is explicit, read-only, and creates exact native GitHub links", () => {
+  const ui = readyController();
   ui.api.accept(snapshot()); ui.api.setTrust("current");
   assert.equal(ui.link(), null);
   ui.api.open("APPROVE", item.id, item.title);
@@ -290,7 +368,7 @@ test("review is explicit, read-only, and creates exact native GitHub links", () 
 });
 
 test("fallback preserves reviewed identity and never loses the iOS anchor", () => {
-  const ui = controller(); ui.api.accept(snapshot()); ui.api.setTrust("current"); ui.review();
+  const ui = readyController(); ui.api.accept(snapshot()); ui.api.setTrust("current"); ui.review();
   ui.blockPopup(); ui.api.open("HOLD", item.id, "Untrusted replacement title");
   assert.equal(ui.opened.length, 1); assert.equal(ui.native.length, 1);
   assert.equal(ui.opened[0].url, ui.native[0]);
@@ -302,7 +380,7 @@ test("fallback preserves reviewed identity and never loses the iOS anchor", () =
 
 test("failure and expiry invalidate review and prevent stale composition", () => {
   for (const state of ["poll-failed", "refresh-overdue", "invalid"]) {
-    const ui = controller(); ui.api.accept(snapshot()); ui.api.setTrust("current"); ui.review();
+    const ui = readyController(); ui.api.accept(snapshot()); ui.api.setTrust("current"); ui.review();
     ui.api.setTrust(state);
     assert.equal(ui.link(), null); assert.equal(ui.row().querySelector("[data-review-decision]").disabled, true);
     ui.api.open("APPROVE", item.id, item.title);
@@ -311,7 +389,7 @@ test("failure and expiry invalidate review and prevent stale composition", () =>
     assert.equal(ui.link(), null, "Recovery requires a new review");
     ui.review(); assert.ok(ui.link());
   }
-  const ui = controller(); ui.api.accept(snapshot()); ui.api.setTrust("current"); ui.review();
+  const ui = readyController(); ui.api.accept(snapshot()); ui.api.setTrust("current"); ui.review();
   const retained = ui.link(); ui.advance(46 * 60 * 1000);
   assert.equal(ui.click(retained).defaultPrevented, true, "Event handler rechecks clock even before paint timer runs");
   assert.equal(ui.native.length + ui.opened.length, 0);
@@ -321,7 +399,7 @@ test("changed, removed, duplicate and malformed pending cannot reuse a reviewed 
   const newer = "2026-09-05T11:56:00Z";
   const changed = snapshot([{ ...item, detail: "Different exact requested scope" }], newer);
   for (const candidate of [changed, snapshot([], newer), snapshot([item, item], newer), { generated_at: newer }, snapshot([item], "2036-01-01T00:00:00Z")]) {
-    const ui = controller(); ui.api.accept(snapshot()); ui.api.setTrust("current"); ui.review();
+    const ui = readyController(); ui.api.accept(snapshot()); ui.api.setTrust("current"); ui.review();
     if (ui.api.accept(candidate)) ui.api.setTrust("current");
     ui.api.reconcileRendering();
     assert.equal(ui.link(), null, "Changed or invalid snapshot removes review actions");
@@ -331,7 +409,7 @@ test("changed, removed, duplicate and malformed pending cannot reuse a reviewed 
 });
 
 test("timestamp-only accepted refresh keeps exact choice but updates receipt time", () => {
-  const ui = controller(); ui.api.accept(snapshot()); ui.api.setTrust("current"); ui.review();
+  const ui = readyController(); ui.api.accept(snapshot()); ui.api.setTrust("current"); ui.review();
   const oldLink = ui.link();
   const newer = "2026-09-05T11:56:00Z";
   assert.equal(ui.api.accept(snapshot([item], newer)), true);
@@ -343,7 +421,7 @@ test("timestamp-only accepted refresh keeps exact choice but updates receipt tim
 });
 
 test("unchanged trust preserves keyboard focus and timestamp refresh restores the exact action", () => {
-  const ui = controller(); ui.api.accept(snapshot()); ui.api.setTrust("current"); ui.review();
+  const ui = readyController(); ui.api.accept(snapshot()); ui.api.setTrust("current"); ui.review();
   const hold = ui.link("HOLD"); hold.focus();
   for (let tick = 0; tick < 5; tick += 1) ui.api.setTrust("current");
   assert.equal(ui.link("HOLD"), hold, "One-second trust painting must not replace the focused control");
@@ -356,7 +434,7 @@ test("unchanged trust preserves keyboard focus and timestamp refresh restores th
 });
 
 function pollHarness() {
-  const ui = controller(); ui.api.accept(snapshot()); ui.api.setTrust("current"); ui.review();
+  const ui = readyController(); ui.api.accept(snapshot()); ui.api.setTrust("current"); ui.review();
   const requests = [];
   const timers = new Map();
   let timerId = 0;
@@ -435,7 +513,7 @@ test("actual poll sequence discards an old response after a newer resolved-decis
 
 test("tampered native issue URLs cannot replace the exact reviewed choice", () => {
   for (const href of ["https://evil.example/issues/new", "https://github.com/rupret007/bob-ops-dashboard/issues/new?title=BOB-APPROVE%3A+other", "javascript:alert(1)"]) {
-    const ui = controller(); ui.api.accept(snapshot()); ui.api.setTrust("current"); ui.review();
+    const ui = readyController(); ui.api.accept(snapshot()); ui.api.setTrust("current"); ui.review();
     const link = ui.link(); link.setAttribute("href", href);
     assert.equal(ui.click(link).defaultPrevented, true);
     assert.equal(ui.native.length + ui.opened.length, 0);
