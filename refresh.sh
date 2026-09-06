@@ -2028,6 +2028,25 @@ function focusKey(kind, raw) {{
       '<button type="button" id="owner-holds-link" data-tab="controls" data-focus-target="' + esc(target) +
       '" aria-controls="controls">Review owner holds</button>';
   }}
+  function glanceProjectIsCiWait(p) {{
+    if (!p || p.private) return false;
+    var ci = p.ci;
+    var concl = (ci && typeof ci === "object") ? String(ci.conclusion || "").replace(/^\s+|\s+$/g, "").toLowerCase() : "";
+    if (concl !== "in_progress" && concl !== "waiting" && concl !== "queued" && concl !== "pending" && concl !== "requested") {{
+      return false;
+    }}
+    var n = p.open_prs;
+    if (typeof n === "number" && isFinite(n) && n > 0) return false;
+    if (p.pr_listing_complete === false) return false;
+    return true;
+  }}
+  function glanceAttentionRank(p) {{
+    if (!p) return 99;
+    var st = String(p.status || "").replace(/^\s+|\s+$/g, "").toLowerCase();
+    if (st === "red") return 0;
+    if (st !== "yellow") return 99;
+    return glanceProjectIsCiWait(p) ? 3 : 2;
+  }}
   function glanceStatus(pending, sections) {{
     var rank = {{ high: 0, medium: 1, low: 2 }};
     var rows = [];
@@ -2053,9 +2072,9 @@ function focusKey(kind, raw) {{
       var sid = tabId(sec && sec.id);
       if (!sid || sid === "controls") return;
       (sec.projects || []).forEach(function (p) {{
-        var r = attentionRank(p);
+        var r = glanceAttentionRank(p);
         var target = focusKey("project", p && p.name);
-        if ((r !== 0 && r !== 2) || !target) return;
+        if ((r !== 0 && r !== 2 && r !== 3) || !target) return;
         if (r < worstRank) {{
           worstRank = r;
           worstId = sid;
@@ -2068,7 +2087,7 @@ function focusKey(kind, raw) {{
     if (worstId) {{
       var label = worstName || tabLabel(worstId);
       if (worstRank === 0) return {{ text: label + " is red", tab: worstId, focus: worstFocus }};
-      if (worstRank === 2) return {{ text: label + " needs a look", tab: worstId, focus: worstFocus }};
+      if (worstRank === 2 || worstRank === 3) return {{ text: label + " needs a look", tab: worstId, focus: worstFocus }};
     }}
     var hold = ownerHoldStatus(pending);
     if (hold) {{

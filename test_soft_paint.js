@@ -744,6 +744,8 @@ function run() {
   if (src.indexOf("function tabId") === -1) fail("tabId missing");
   if (src.indexOf("function focusKey") === -1) fail("focusKey missing");
   if (src.indexOf("function glanceStatus") === -1) fail("glanceStatus missing");
+  if (src.indexOf("function glanceProjectIsCiWait") === -1) fail("glanceProjectIsCiWait missing");
+  if (src.indexOf("function glanceAttentionRank") === -1) fail("glanceAttentionRank missing");
   if (src.indexOf("function isOwnerHold") === -1) fail("isOwnerHold missing");
   if (src.indexOf("function ownerHoldStatus") === -1) fail("ownerHoldStatus missing");
   if (src.indexOf("function ownerHoldLinkHtml") === -1) fail("ownerHoldLinkHtml missing");
@@ -772,7 +774,10 @@ function run() {
     fail("unsafe decision focus key must drop");
   }
   if (focusKey("project", "🔥") || focusKey("other", "WebJam")) fail("invalid focus key must drop");
-  const attentionRank = eval("(" + extractFn(src, "attentionRank") + ")");
+  const glanceProjectIsCiWait = eval("(" + extractFn(src, "glanceProjectIsCiWait") + ")");
+  const glanceAttentionRank = eval(
+    "(function (glanceProjectIsCiWait) { return " + extractFn(src, "glanceAttentionRank") + "; })"
+  )(glanceProjectIsCiWait);
   const decisionReviewText = eval("(" + extractFn(src, "decisionReviewText") + ")");
   const decisionReviewItem = eval("(" + extractFn(src, "decisionReviewItem") + ")");
   const isOwnerHold = eval("(" + extractFn(src, "isOwnerHold") + ")");
@@ -780,13 +785,13 @@ function run() {
   const esc = eval("(" + extractFn(src, "esc") + ")");
   const ownerHoldLinkHtml = eval("(" + extractFn(src, "ownerHoldLinkHtml") + ")");
   const glanceStatus = eval(
-    "(function (tabId, attentionRank, focusKey, isOwnerHold, ownerHoldStatus) { " +
+    "(function (tabId, glanceAttentionRank, focusKey, isOwnerHold, ownerHoldStatus) { " +
       "var TYPE_TAB_LABELS = { controls:'Decisions', 'live-shipping':'Live', " +
       "'apps-utilities':'Apps', cisco:'Cisco', messaging:'Bob', " +
       "'private-media':'Media', parked:'Parked' }; " +
       "function tabLabel(id) { return TYPE_TAB_LABELS[tabId(id)] || ''; } " +
       "return " + extractFn(src, "glanceStatus") + "; })"
-  )(tabId, attentionRank, focusKey, isOwnerHold, ownerHoldStatus);
+  )(tabId, glanceAttentionRank, focusKey, isOwnerHold, ownerHoldStatus);
   const g = glanceStatus([{ id: "x", title: "AdoptIQ" }], [{ id: "live-shipping", projects: [{ status: "yellow" }] }]);
   if (g.text !== "AdoptIQ" || g.tab !== "controls" || g.focus !== "decision:x") {
     fail("pending glance must name and target the gate");
@@ -849,6 +854,45 @@ function run() {
     }
   });
   if (glanceStatus([{ ...ownerHigh, risk: "HIGH" }], []).text !== "Quiet") fail("invalid owner fallback must fail closed to Quiet");
+  const waitWebJam = { name: "WebJam", status: "yellow", ci: { conclusion: "in_progress" }, open_prs: 0 };
+  const queuedShow = { name: "Show Night", status: "yellow", ci: { conclusion: "queued" }, open_prs: 0 };
+  const reviewShelf = { name: "Story Shelf", status: "yellow", open_prs: 3, ci: { conclusion: "success" } };
+  if (!glanceProjectIsCiWait(waitWebJam) || !glanceProjectIsCiWait(queuedShow) || glanceProjectIsCiWait(reviewShelf)) {
+    fail("CI wait classification must separate in-flight CI from review yellow");
+  }
+  if (glanceAttentionRank(waitWebJam) !== 3 || glanceAttentionRank(reviewShelf) !== 2) {
+    fail("review yellow must rank ahead of CI wait");
+  }
+  const mixedWaitReview = [
+    { id: "live-shipping", projects: [waitWebJam, queuedShow] },
+    { id: "apps-utilities", projects: [reviewShelf] },
+  ];
+  if (glanceStatus([], mixedWaitReview).focus !== "project:story-shelf") {
+    fail("CI wait must not hide review yellow: " + glanceStatus([], mixedWaitReview).focus);
+  }
+  if (glanceStatus([ownerHigh], mixedWaitReview).focus !== "project:story-shelf") {
+    fail("review yellow must stay ahead of both CI wait and standing owner holds");
+  }
+  if (glanceStatus([ownerHigh], [{ id: "live-shipping", projects: [waitWebJam] }]).focus !== "project:webjam") {
+    fail("CI wait must still beat a standing owner hold");
+  }
+  const flyingReview = { name: "WebJam", status: "yellow", ci: { conclusion: "pending" }, open_prs: 2 };
+  const waitOnly = { name: "RadDadSite", status: "yellow", ci: { conclusion: "requested" }, open_prs: 0 };
+  if (glanceProjectIsCiWait(flyingReview) || !glanceProjectIsCiWait(waitOnly)) {
+    fail("open PRs on a waiting tip remain Jeff-actionable");
+  }
+  if (glanceStatus([], [{ id: "live-shipping", projects: [waitOnly, flyingReview] }]).focus !== "project:webjam") {
+    fail("CI wait plus open PRs must stay the glance target");
+  }
+  if (glanceProjectIsCiWait({ name: "Vault", status: "yellow", private: true, ci: { conclusion: "in_progress" }, open_prs: 0 })) {
+    fail("private rows must not invent a public CI wait");
+  }
+  if (!glanceProjectIsCiWait({ name: "WebJam", status: "yellow", open_prs: true, ci: { conclusion: "in_progress" } })) {
+    fail("boolean open_prs must not count as review work");
+  }
+  if (glanceProjectIsCiWait({ name: "StoryLiner", status: "yellow", ci: { conclusion: "waiting" }, pr_listing_complete: false })) {
+    fail("incomplete public listing must stay actionable during CI wait");
+  }
   const controlsSection = [{ id: "controls", projects: [] }];
   const holdLink = ownerHoldLinkHtml([ownerLow, ownerHigh], controlsSection);
   if (!holdLink.includes('id="owner-holds-link"') || !holdLink.includes('data-tab="controls"')
