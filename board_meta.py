@@ -1026,8 +1026,43 @@ def owner_hold_link_html(pending: Any, sections: Any) -> str:
     )
 
 
+def glance_project_is_ci_wait(project: Any) -> bool:
+    """True only for public tip CI that is running or queued, with no review work.
+
+    Open PRs and an incomplete public listing stay Jeff-actionable even while
+    CI is in flight. Private rows never invent a public wait. A missing or
+    non-integer PR count is not review work.
+    """
+    if not isinstance(project, dict) or project.get("private"):
+        return False
+    if ci_conclusion(project) not in CI_ACTIVE_CONCLUSIONS:
+        return False
+    n = project.get("open_prs")
+    if isinstance(n, int) and not isinstance(n, bool) and n > 0:
+        return False
+    if project.get("pr_listing_complete") is False:
+        return False
+    return True
+
+
+def glance_attention_rank(project: Any) -> int:
+    """Glance order: red, review yellow, CI wait yellow. Other statuses drop."""
+    if not isinstance(project, dict):
+        return 99
+    status = str(project.get("status") or "").strip().lower()
+    if status == "red":
+        return 0
+    if status != "yellow":
+        return 99
+    return 3 if glance_project_is_ci_wait(project) else 2
+
+
 def glance_status(pending: Any, sections: Any) -> dict[str, str]:
-    """Decision, real red/yellow work, then standing owner hold. Never a yes-count."""
+    """Decision, red, review yellow, CI wait, then standing owner hold.
+
+    CI running/pending still beats a standing owner hold. It must not hide
+    open-PR or incomplete-listing yellow. Never a yes-count.
+    """
     rows = [
         item for item in sort_pending(pending)
         if focus_key("decision", item.get("id")) and not is_owner_hold(item)
@@ -1050,12 +1085,12 @@ def glance_status(pending: Any, sections: Any) -> dict[str, str]:
         if not sid or sid == "controls":
             continue
         for project in sec.get("projects") or []:
-            rank = attention_rank(project)
+            rank = glance_attention_rank(project)
             target = focus_key(
                 "project",
                 project.get("name") if isinstance(project, dict) else "",
             )
-            if rank not in (0, 2) or not target:
+            if rank not in (0, 2, 3) or not target:
                 continue
             if rank < worst_rank:
                 worst_rank = rank
@@ -1072,7 +1107,7 @@ def glance_status(pending: Any, sections: Any) -> dict[str, str]:
                 "tab": worst_id,
                 "focus": worst_focus,
             }
-        if worst_rank == 2:
+        if worst_rank in (2, 3):
             return {
                 "text": label + " needs a look",
                 "tab": worst_id,

@@ -14,7 +14,7 @@ Public, mobile-friendly status board for projects Bob is working on (Jeff Story 
 - No secrets, tokens, CSOne customer paths, Keeper material, or private handoff text
 - AdoptIQ appears only as a high-level private/offline summary with `ready_for_live_cisco=false`
 
-Next-action priority is explicit: a non-standing pending decision first, then a real red/yellow project, then a standing owner hold when no such work remains. Only the existing `jeff-gate` and `owner-live-gate` decision kinds count as standing holds; titles and IDs do not decide authority. **Parked → Review owner holds** keeps the exact highest-risk valid hold reachable even while a project occupies the first screen. Opening that row does not review, approve, or execute it; the existing current-snapshot review guard still applies.
+Next-action priority is explicit: a non-standing pending decision first, then a real red project, then Jeff-actionable yellow (open PRs or an incomplete public listing), then CI running/pending yellow, then a standing owner hold when no such work remains. In-flight CI still beats a standing hold; it cannot hide review yellow. Only the existing `jeff-gate` and `owner-live-gate` decision kinds count as standing holds; titles and IDs do not decide authority. **Parked → Review owner holds** keeps the exact highest-risk valid hold reachable even while a project occupies the first screen. Opening that row does not review, approve, or execute it; the existing current-snapshot review guard still applies.
 
 ## Portfolio coverage
 
@@ -35,6 +35,7 @@ Bob the Bot is a distinct private application lane, not an alias for Andrea Nano
 - [Full-context decision review — 2026-09-05](docs/handoffs/2026-09-05-decision-review.md) records the phone review flow, current-snapshot guard, offline QA, and remaining owner boundary.
 - [Phone tabs leftover honesty — 2026-09-05](docs/handoffs/2026-09-05-phone-tabs-leftover.md) records first-screen live-type tabs and leftover-only presentment under Parked.
 - [Phone next-action priority — 2026-09-05](docs/handoffs/2026-09-05-phone-priority.md) records actionable-work priority and the explicit Parked route to standing owner holds.
+- [Phone glance CI wait — 2026-09-05](docs/handoffs/2026-09-05-glance-ci-wait.md) records review yellow ahead of in-flight CI on the same first-screen next action.
 - [Agent handoff runbook](docs/AGENT_HANDOFF_RUNBOOK.md) is the reusable checklist and template for Grok Bot, Codex, and future agents.
 
 These are sanitized operational-continuity records, not private handoff text. This repository is public: add a new dated handoff for each completed round instead of rewriting an old snapshot, and keep private lanes high-level. Never copy private repository metadata, creative details, customer data, credentials, or local paths into a handoff.

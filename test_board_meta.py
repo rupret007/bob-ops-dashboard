@@ -27,7 +27,9 @@ from board_meta import (
     extract_cloud_agents_from_prs,
     first_class_sections,
     focus_key,
+    glance_attention_rank,
     glance_html,
+    glance_project_is_ci_wait,
     glance_status,
     is_ci_noise,
     is_draft_pr,
@@ -431,6 +433,114 @@ class BoardMetaTests(unittest.TestCase):
         # Existing stable ordering among equal-rank lanes stays unchanged.
         sections[1]["projects"].append({"name": "Second utility", "status": "yellow"})
         self.assertEqual(glance_status([owner], sections)["focus"], "project:review-utility")
+
+    def test_ci_wait_yellow_cannot_hide_review_yellow(self):
+        wait = {
+            "name": "WebJam",
+            "status": "yellow",
+            "ci": {"conclusion": "in_progress"},
+            "open_prs": 0,
+        }
+        queued = {
+            "name": "Show Night",
+            "status": "yellow",
+            "ci": {"conclusion": "queued"},
+            "open_prs": 0,
+        }
+        review = {
+            "name": "Story Shelf",
+            "status": "yellow",
+            "open_prs": 3,
+            "ci": {"conclusion": "success"},
+        }
+        owner = {
+            "id": "standing-hold",
+            "title": "Standing owner hold",
+            "kind": "owner-live-gate",
+            "risk": "high",
+        }
+        mixed = [
+            {"id": "live-shipping", "projects": [wait, queued]},
+            {"id": "apps-utilities", "projects": [review]},
+        ]
+        self.assertTrue(glance_project_is_ci_wait(wait))
+        self.assertTrue(glance_project_is_ci_wait(queued))
+        self.assertFalse(glance_project_is_ci_wait(review))
+        self.assertEqual(glance_attention_rank(wait), 3)
+        self.assertEqual(glance_attention_rank(review), 2)
+        self.assertEqual(glance_status([], mixed), {
+            "text": "Story Shelf needs a look",
+            "tab": "apps-utilities",
+            "focus": "project:story-shelf",
+        })
+        self.assertEqual(glance_status([owner], mixed)["focus"], "project:story-shelf")
+        self.assertEqual(glance_status([owner], [
+            {"id": "live-shipping", "projects": [wait]},
+        ]), {
+            "text": "WebJam needs a look",
+            "tab": "live-shipping",
+            "focus": "project:webjam",
+        })
+
+    def test_ci_wait_with_review_evidence_stays_actionable(self):
+        flying_review = {
+            "name": "WebJam",
+            "status": "yellow",
+            "ci": {"conclusion": "pending"},
+            "open_prs": 2,
+        }
+        wait_only = {
+            "name": "RadDadSite",
+            "status": "yellow",
+            "ci": {"conclusion": "requested"},
+            "open_prs": 0,
+        }
+        listing = {
+            "name": "StoryLiner",
+            "status": "yellow",
+            "ci": {"conclusion": "waiting"},
+            "pr_listing_complete": False,
+        }
+        self.assertFalse(glance_project_is_ci_wait(flying_review))
+        self.assertFalse(glance_project_is_ci_wait(listing))
+        self.assertTrue(glance_project_is_ci_wait(wait_only))
+        self.assertEqual(glance_status([], [{
+            "id": "live-shipping",
+            "projects": [wait_only, flying_review],
+        }])["focus"], "project:webjam")
+        self.assertEqual(glance_status([], [{
+            "id": "live-shipping",
+            "projects": [wait_only],
+        }, {
+            "id": "apps-utilities",
+            "projects": [listing],
+        }])["focus"], "project:storyliner")
+
+    def test_ci_wait_classification_does_not_invent_public_wait(self):
+        private_wait = {
+            "name": "Vault",
+            "status": "yellow",
+            "private": True,
+            "ci": {"conclusion": "in_progress"},
+            "open_prs": 0,
+        }
+        self.assertFalse(glance_project_is_ci_wait(private_wait))
+        self.assertEqual(glance_attention_rank(private_wait), 2)
+        self.assertFalse(glance_project_is_ci_wait({
+            "name": "WebJam",
+            "status": "yellow",
+            "ci": {"conclusion": "success"},
+            "open_prs": 0,
+        }))
+        self.assertTrue(glance_project_is_ci_wait({
+            "name": "WebJam",
+            "status": "yellow",
+            "open_prs": True,
+            "ci": {"conclusion": "in_progress"},
+        }))
+        self.assertFalse(glance_project_is_ci_wait(None))
+        self.assertEqual(glance_attention_rank({"status": "green"}), 99)
+        self.assertEqual(glance_attention_rank({"name": "Failing app", "status": "red"}), 0)
 
     def test_real_or_unknown_kind_decisions_keep_existing_priority_and_risk_order(self):
         owner = {"id": "standing-hold", "title": "Owner hold", "kind": "jeff-gate", "risk": "high"}
