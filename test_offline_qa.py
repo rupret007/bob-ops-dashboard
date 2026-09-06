@@ -108,7 +108,7 @@ class OfflineQaTests(unittest.TestCase):
             self.assertFalse(any("owner-data" in file.read_text() for file in destination.iterdir()))
 
     def test_output_must_be_an_empty_non_repository_temporary_child(self):
-        for unsafe in (str(ROOT), str(Path("/tmp").resolve()), "/", str(ROOT.parent / "not-temp-output")):
+        for unsafe in (str(ROOT), str(Path("/tmp").resolve()), "/", "/bob-dashboard-not-temp-output"):
             with self.subTest(unsafe=unsafe), self.assertRaises(ValueError):
                 qa.validate_output_directory(unsafe)
         with tempfile.TemporaryDirectory() as tmp:

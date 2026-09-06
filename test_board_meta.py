@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import unittest
 from datetime import datetime, timedelta, timezone
+from html.parser import HTMLParser
 from pathlib import Path
 
 from board_meta import (
@@ -91,7 +92,69 @@ from board_meta import (
 )
 
 
+def tab_buttons(markup):
+    """Read native tab semantics from generated markup without browser deps."""
+    class TabParser(HTMLParser):
+        def __init__(self):
+            super().__init__()
+            self.buttons = []
+
+        def handle_starttag(self, tag, attrs):
+            values = dict(attrs)
+            if tag == "button" and values.get("role") == "tab":
+                self.buttons.append(values)
+
+    parser = TabParser()
+    parser.feed(markup)
+    return parser.buttons
+
+
 class BoardMetaTests(unittest.TestCase):
+    def test_type_tab_first_paint_has_one_roving_stop_with_manual_selection(self):
+        sections = [
+            {"id": "live-shipping", "projects": [{"name": "Live fixture", "status": "green"}]},
+            {"id": "apps-utilities", "projects": [{"name": "App fixture", "status": "yellow"}]},
+            {"id": "parked", "projects": [{"name": "Parked fixture", "status": "parked"}]},
+        ]
+        for selected in ("", "live-shipping", "apps-utilities", "parked", "invented-tab"):
+            with self.subTest(selected=selected):
+                buttons = tab_buttons(type_tabs_html(sections, [], selected))
+                stops = [button["data-tab"] for button in buttons if button["tabindex"] == "0"]
+                expected_selected = selected if selected in ("live-shipping", "apps-utilities", "parked") else ""
+                self.assertEqual(stops, [expected_selected or "live-shipping"])
+                self.assertEqual(
+                    [button["data-tab"] for button in buttons if button["aria-selected"] == "true"],
+                    [expected_selected] if expected_selected else [],
+                )
+                for button in buttons:
+                    self.assertEqual(button["type"], "button")
+                    self.assertEqual(button["id"], "tab-" + button["data-tab"])
+                    self.assertEqual(button["aria-controls"], button["data-tab"])
+                    self.assertIn(button["tabindex"], ("0", "-1"))
+
+    def test_selected_leftover_type_gets_its_own_tabstop(self):
+        sections = [
+            {"id": "live-shipping", "projects": [{"name": "Live fixture", "status": "green"}]},
+            {"id": "private-media", "projects": [{"name": "Leftover fixture", "status": "parked"}]},
+            {"id": "parked", "projects": []},
+        ]
+        home = tab_buttons(type_tabs_html(sections, []))
+        self.assertNotIn("private-media", [button["data-tab"] for button in home])
+        selected = tab_buttons(type_tabs_html(sections, [], "private-media"))
+        self.assertEqual(
+            [button["data-tab"] for button in selected if button["tabindex"] == "0"],
+            ["private-media"],
+        )
+        self.assertEqual(
+            [button["data-tab"] for button in selected if button["aria-selected"] == "true"],
+            ["private-media"],
+        )
+
+    def test_missing_and_unknown_sections_do_not_invent_tabstops(self):
+        for sections in ([], [{"id": "invented-tab", "projects": []}], [{"id": "controls", "projects": []}]):
+            with self.subTest(sections=sections):
+                self.assertEqual(tab_buttons(type_tabs_html(sections, [], "live-shipping")), [])
+
     def test_required_public_collection_fails_closed(self):
         complete = [
             {

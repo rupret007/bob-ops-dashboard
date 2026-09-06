@@ -1148,7 +1148,9 @@ def type_tabs_html(sections: Any, pending: Any, selected: Any = "") -> str:
     """Phone tab bar for live types plus Parked. First paint selects none."""
     want = tab_id(selected)
     buttons: list[str] = []
-    for sid in type_tab_ids_for(sections, pending, want):
+    ids = type_tab_ids_for(sections, pending, want)
+    stop = want if want in ids else next(iter(ids), "")
+    for sid in ids:
         label = html_lib.escape(tab_label(sid))
         sid_e = html_lib.escape(sid)
         aria = "true" if sid == want else "false"
@@ -1161,6 +1163,8 @@ def type_tabs_html(sections: Any, pending: Any, selected: Any = "") -> str:
             + sid_e
             + '" aria-selected="'
             + aria
+            + '" tabindex="'
+            + ("0" if sid == stop else "-1")
             + '">'
             + label
             + "</button>"
