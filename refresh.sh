@@ -1757,7 +1757,7 @@ function focusKey(kind, raw) {{
     "live-shipping": "Live",
     "apps-utilities": "Apps",
     "cisco": "Cisco",
-    "messaging": "Bob",
+    "messaging": "Bots",
     "private-media": "Media",
     "parked": "Parked"
   }};
