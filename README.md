@@ -32,6 +32,8 @@ Bob the Bot is a distinct private application lane, not an alias for Andrea Nano
 
 ## Public agent continuity
 
+- [Retry keyboard focus — 2026-09-07](docs/handoffs/2026-09-07-retry-focus.md) records focus retention during snapshot checks and recovery.
+
 - [Phone browser history handoff — 2026-09-07](docs/handoffs/2026-09-07-phone-history.md) records the navigation behavior, offline checks, and review boundary.
 - [Batch A portfolio handoff — 2026-08-26](docs/handoffs/2026-08-26-batch-a.md) is an immutable completion snapshot (2026-08-26). Later leftover rounds (#31–#33) landed after it; add a new dated handoff instead of rewriting Batch A.
 - [Bob application registration handoff — 2026-08-26](docs/handoffs/2026-08-26-bob-application-registration.md) records the private application boundary and remaining owner gates.
