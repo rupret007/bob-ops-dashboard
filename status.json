@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-09-07T11:58:14.368375-05:00",
-  "generated_at_display": "Mon Sep 7, 2026 \u00b7 11:58 AM CDT",
+  "generated_at": "2026-09-07T12:14:14.791574-05:00",
+  "generated_at_display": "Mon Sep 7, 2026 \u00b7 12:14 PM CDT",
   "timezone": "America/Chicago",
   "owner": "rupret007",
   "dashboard": "bob-ops-dashboard",
@@ -73,9 +73,10 @@
           "accessible": true,
           "coord": {
             "repo": "webjam",
-            "agent": "none",
-            "lease_state": "none",
-            "next": "idle until next Art leftover"
+            "agent": "claude",
+            "lease_state": "active",
+            "next": "Claude.app Sonnet 5 High on Mini; OPEN DRAFT then stop for Karen...",
+            "sha": "9f32757"
           }
         },
         {
@@ -436,8 +437,8 @@
           "status": "green",
           "chip": "Green",
           "default_branch": "main",
-          "tip_sha": "ddf991f",
-          "tip_date": "2026-09-07T16:43:21Z",
+          "tip_sha": "8df08f1",
+          "tip_date": "2026-09-07T16:58:18Z",
           "open_prs": 0,
           "open_pr_url": null,
           "open_pr_number": null,
@@ -449,9 +450,9 @@
             "name": "QA claim smoke",
             "conclusion": "success",
             "branch": "main",
-            "sha": "ddf991f",
-            "created": "2026-09-07T16:43:25Z",
-            "html_url": "https://github.com/rupret007/bob-ops-dashboard/actions/runs/34144567283"
+            "sha": "8df08f1",
+            "created": "2026-09-07T16:58:22Z",
+            "html_url": "https://github.com/rupret007/bob-ops-dashboard/actions/runs/34145620360"
           },
           "release": null,
           "release_sha": null,
@@ -586,7 +587,7 @@
             "repo": "AdoptIQ",
             "agent": "none",
             "lease_state": "none",
-            "next": "Jeff Actions billing \u2192 hosted SUCCESS on tip 30ffa9c6 \u2192 PRE_KAREN; do..."
+            "next": "Jeff Work Cursor uses handoff; Actions billing still gate for hosted..."
           }
         },
         {
@@ -601,7 +602,7 @@
             "repo": "TACTrack",
             "agent": "none",
             "lease_state": "none",
-            "next": "hold OPEN DRAFT #25 until hosted CI can run for real"
+            "next": "Jeff Work Cursor uses handoff; billing gate before hosted green on..."
           }
         },
         {
@@ -848,7 +849,7 @@
   ],
   "inaccessible": [],
   "publish_notes": "Public board -- no secrets or customer paths. Private repositories stay high-level; AI Music Vault stays private-content-boundary only.",
-  "refresh_started_ms": 1788800221795,
+  "refresh_started_ms": 1788801181345,
   "agents_source": "file:stale->unknown",
   "agents": [
     {
