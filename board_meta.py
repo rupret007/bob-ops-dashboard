@@ -847,128 +847,21 @@ def is_type_tab(section_id: Any) -> bool:
     return bool(tab_id(section_id))
 
 
-def project_is_live_work(project: Any) -> bool:
-    """Red / yellow / green is live work. Parked leftover and Jeff-gate are not."""
-    if not isinstance(project, dict):
-        return False
-    return str(project.get("status") or "").strip().lower() in {"red", "yellow", "green"}
-
-
-def section_has_live_work(section: Any) -> bool:
-    """True when a type has at least one live/red/yellow/green row."""
-    if not isinstance(section, dict):
-        return False
-    return any(
-        project_is_live_work(project) for project in (section.get("projects") or [])
-    )
-
-
-def section_is_leftover_only(section: Any) -> bool:
-    """True when a real type exists but every row is parked leftover or Jeff-gate."""
-    if not isinstance(section, dict):
-        return False
-    sid = tab_id(section.get("id"))
-    if not sid or sid in {"controls", "parked"}:
-        return False
-    projects = [
-        project
-        for project in (section.get("projects") or [])
-        if isinstance(project, dict)
-    ]
-    if not projects:
-        return False
-    return not section_has_live_work(section)
-
-
-def leftover_type_ids_for(sections: Any) -> list[str]:
-    """Existing leftover-only types. Parked is the leftover home, not a leftover peer."""
-    present = {
-        str(sec.get("id") or ""): sec
-        for sec in (sections or [])
-        if isinstance(sec, dict)
-    }
-    out: list[str] = []
-    for sid in TYPE_TAB_IDS:
-        if sid in {"controls", "parked"}:
-            continue
-        sec = present.get(sid)
-        if sec and section_is_leftover_only(sec):
-            out.append(sid)
-    return out
-
-
-def type_tab_ids_for(
-    sections: Any, pending: Any = None, selected: Any = ""
-) -> list[str]:
-    """First-screen tabs: live types plus Parked. Leftover-only types stay off home.
-
-    The glance opens Decisions; it is not a type tab. A leftover-only type
-    reappears only while it is the selected panel (hash, Parked leftover
-    link, or a later live-work glance). Without a Parked home, existing
-    types keep their tabs so leftovers are not stranded.
-    """
+def type_tab_ids_for(sections: Any, pending: Any = None) -> list[str]:
+    """Project-type tabs only. The glance opens Decisions; it is not a type tab."""
     del pending
     present = {
-        str(sec.get("id") or ""): sec
+        str(sec.get("id") or "")
         for sec in (sections or [])
         if isinstance(sec, dict)
     }
-    want = tab_id(selected)
-    has_parked_home = "parked" in present
     out: list[str] = []
     for sid in TYPE_TAB_IDS:
         if sid == "controls":
             continue
-        sec = present.get(sid)
-        if not sec:
-            continue
-        if sid == "parked":
-            out.append(sid)
-            continue
-        if (
-            section_has_live_work(sec)
-            or sid == want
-            or not has_parked_home
-            or not section_is_leftover_only(sec)
-        ):
+        if sid in present:
             out.append(sid)
     return out
-
-
-def leftover_type_note_html(section: Any) -> str:
-    """Honest leftover banner. Empty when the type is live work."""
-    if not section_is_leftover_only(section):
-        return ""
-    label = html_lib.escape(tab_label(section.get("id")) or "This type")
-    return (
-        '<p class="leftover-types">Leftover '
-        + label
-        + ". Not an active agent or a Jeff yes.</p>"
-    )
-
-
-def leftover_types_html(sections: Any) -> str:
-    """Parked leftover switcher. Empty when every type has live work."""
-    ids = leftover_type_ids_for(sections)
-    if not ids:
-        return ""
-    buttons: list[str] = []
-    for sid in ids:
-        label = html_lib.escape(tab_label(sid))
-        sid_e = html_lib.escape(sid)
-        buttons.append(
-            '<button type="button" data-tab="'
-            + sid_e
-            + '" data-leftover-type="true">'
-            + label
-            + "</button>"
-        )
-    return (
-        '<p class="leftover-types">Leftover types. Not active agents or a Jeff yes.</p>'
-        '<div class="leftover-type-links">'
-        + "".join(buttons)
-        + "</div>"
-    )
 
 
 def glance_pending_title(item: Any) -> str:
@@ -981,127 +874,16 @@ def glance_pending_title(item: Any) -> str:
     return title
 
 
-def glance_place(kind: Any, type_id: Any = "") -> str:
-    """Allowlisted glance subtitle. Empty when quiet or the kind is unknown.
-
-    Project rows may add an existing type label. Decision and owner-hold
-    kinds never invent a project type. Callers must not pass user notes.
-    """
-    key = str(kind or "").strip().lower()
-    bases = {
-        "decide": "Decide",
-        "hold": "Owner hold",
-        "red": "Red",
-        "review": "Review",
-        "wait": "CI wait",
-    }
-    base = bases.get(key, "")
-    if not base:
-        return ""
-    label = tab_label(type_id) if key in {"red", "review", "wait"} else ""
-    if label:
-        return base + " · " + label
-    return base
-
-
-def glance_quiet() -> dict[str, str]:
-    """Empty first-screen next action. No destination and no invented work."""
-    return {"text": "Quiet", "place": "", "tab": ""}
-
-
-def is_owner_hold(item: Any) -> bool:
-    """Only explicit standing-boundary kinds, never title/ID/private inference."""
-    if not isinstance(item, dict) or not isinstance(item.get("kind"), str):
-        return False
-    # Match ECMAScript trim so first paint and browser agree even for bad input.
-    trim_space = (
-        "\t\n\v\f\r \u00a0\u1680\u2000\u2001\u2002\u2003\u2004\u2005"
-        "\u2006\u2007\u2008\u2009\u200a\u2028\u2029\u202f\u205f\u3000\ufeff"
-    )
-    return item["kind"].strip(trim_space).lower() in {"jeff-gate", "owner-live-gate"}
-
-
-def owner_hold_status(pending: Any) -> dict[str, str] | None:
-    """Highest-risk renderable standing hold, with only canonical public fields."""
-    if not isinstance(pending, list):
-        return None
-    rows = []
-    for raw in pending:
-        item = decision_review_item(raw)
-        if item is not None and is_owner_hold(item):
-            rows.append(item)
-    ordered = sort_pending(rows)
-    return ordered[0] if ordered else None
-
-
-def owner_hold_link_html(pending: Any, sections: Any) -> str:
-    """Existing Parked-panel route to a real owner hold, never a decision action."""
-    if not isinstance(sections, list) or not any(
-        isinstance(section, dict) and section.get("id") == "controls"
-        for section in sections
-    ):
-        return ""
-    item = owner_hold_status(pending)
-    if item is None:
-        return ""
-    target = html_lib.escape(focus_key("decision", item["id"]))
-    return (
-        '<p class="leftover-types">Standing owner holds are not active work. '
-        "Opening a hold does not approve or perform it.</p>"
-        '<button type="button" id="owner-holds-link" data-tab="controls" '
-        'data-focus-target="' + target + '" aria-controls="controls">'
-        "Review owner holds</button>"
-    )
-
-
-def glance_project_is_ci_wait(project: Any) -> bool:
-    """True only for public tip CI that is running or queued, with no review work.
-
-    Open PRs and an incomplete public listing stay Jeff-actionable even while
-    CI is in flight. Private rows never invent a public wait. A missing or
-    non-integer PR count is not review work.
-    """
-    if not isinstance(project, dict) or project.get("private"):
-        return False
-    if ci_conclusion(project) not in CI_ACTIVE_CONCLUSIONS:
-        return False
-    n = project.get("open_prs")
-    if isinstance(n, int) and not isinstance(n, bool) and n > 0:
-        return False
-    if project.get("pr_listing_complete") is False:
-        return False
-    return True
-
-
-def glance_attention_rank(project: Any) -> int:
-    """Glance order: red, review yellow, CI wait yellow. Other statuses drop."""
-    if not isinstance(project, dict):
-        return 99
-    status = str(project.get("status") or "").strip().lower()
-    if status == "red":
-        return 0
-    if status != "yellow":
-        return 99
-    return 3 if glance_project_is_ci_wait(project) else 2
-
-
 def glance_status(pending: Any, sections: Any) -> dict[str, str]:
-    """Decision, red, review yellow, CI wait, then standing owner hold.
-
-    CI running/pending still beats a standing owner hold. It must not hide
-    open-PR or incomplete-listing yellow. The name is the work; place is
-    the allowlisted next-action kind plus an existing type label. Never a
-    yes-count, and review vs CI wait must not share leftover look copy.
-    """
+    """One exact first-screen action. Never a yes-count or leftover Jeff-yes."""
     rows = [
         item for item in sort_pending(pending)
-        if focus_key("decision", item.get("id")) and not is_owner_hold(item)
+        if focus_key("decision", item.get("id"))
     ]
     if rows:
         title = glance_pending_title(rows[0]) or "Pending"
         return {
             "text": title,
-            "place": glance_place("decide"),
             "tab": "controls",
             "focus": focus_key("decision", rows[0].get("id")),
         }
@@ -1116,12 +898,12 @@ def glance_status(pending: Any, sections: Any) -> dict[str, str]:
         if not sid or sid == "controls":
             continue
         for project in sec.get("projects") or []:
-            rank = glance_attention_rank(project)
+            rank = attention_rank(project)
             target = focus_key(
                 "project",
                 project.get("name") if isinstance(project, dict) else "",
             )
-            if rank not in (0, 2, 3) or not target:
+            if rank not in (0, 2) or not target:
                 continue
             if rank < worst_rank:
                 worst_rank = rank
@@ -1131,52 +913,31 @@ def glance_status(pending: Any, sections: Any) -> dict[str, str]:
     # Jeff yes lives in the pending inbox. Leftover lane jeff-gate and quiet
     # work are skipped before ranking so they cannot hide a real red/yellow row.
     if worst_id:
-        name = worst_name or tab_label(worst_id)
+        label = worst_name or tab_label(worst_id)
         if worst_rank == 0:
             return {
-                "text": name,
-                "place": glance_place("red", worst_id),
+                "text": label + " is red",
                 "tab": worst_id,
                 "focus": worst_focus,
             }
         if worst_rank == 2:
             return {
-                "text": name,
-                "place": glance_place("review", worst_id),
+                "text": label + " needs a look",
                 "tab": worst_id,
                 "focus": worst_focus,
             }
-        if worst_rank == 3:
-            return {
-                "text": name,
-                "place": glance_place("wait", worst_id),
-                "tab": worst_id,
-                "focus": worst_focus,
-            }
-    owner = owner_hold_status(pending)
-    if owner is not None:
-        return {
-            "text": glance_pending_title(owner) or "Pending",
-            "place": glance_place("hold"),
-            "tab": "controls",
-            "focus": focus_key("decision", owner["id"]),
-        }
-    return glance_quiet()
+    return {"text": "Quiet", "tab": ""}
 
 
 def glance_html(pending: Any, sections: Any) -> str:
     """First-screen action opens its existing type and exact safe target."""
     glance = glance_status(pending, sections)
     text = html_lib.escape(str(glance.get("text") or "Quiet"))
-    place = html_lib.escape(str(glance.get("place") or ""))
     sid = tab_id(glance.get("tab"))
     focus = str(glance.get("focus") or "")
     extra = ' data-tab="' + html_lib.escape(sid) + '"' if sid else ""
     target = ' data-focus-target="' + html_lib.escape(focus) + '"' if focus else ""
     controls = ' aria-controls="' + html_lib.escape(sid) + '"' if sid else ""
-    place_html = (
-        '<span class="glance-place">' + place + "</span>" if place else ""
-    )
     return (
         '<button type="button" class="board-glance" id="board-glance"'
         + ' aria-label="Next action"'
@@ -1184,21 +945,16 @@ def glance_html(pending: Any, sections: Any) -> str:
         + target
         + controls
         + ">"
-        + '<span class="glance-name">'
         + text
-        + "</span>"
-        + place_html
         + "</button>"
     )
 
 
 def type_tabs_html(sections: Any, pending: Any, selected: Any = "") -> str:
-    """Phone tab bar for live types plus Parked. First paint selects none."""
+    """Phone tab bar for types already in the data. First paint selects none."""
     want = tab_id(selected)
     buttons: list[str] = []
-    ids = type_tab_ids_for(sections, pending, want)
-    stop = want if want in ids else next(iter(ids), "")
-    for sid in ids:
+    for sid in type_tab_ids_for(sections, pending):
         label = html_lib.escape(tab_label(sid))
         sid_e = html_lib.escape(sid)
         aria = "true" if sid == want else "false"
@@ -1211,8 +967,6 @@ def type_tabs_html(sections: Any, pending: Any, selected: Any = "") -> str:
             + sid_e
             + '" aria-selected="'
             + aria
-            + '" tabindex="'
-            + ("0" if sid == stop else "-1")
             + '">'
             + label
             + "</button>"
@@ -1729,107 +1483,6 @@ def decision_href(verb: Any, pid: Any, title: Any = "") -> str:
     return DECISION_ISSUE_NEW + "?" + query
 
 
-def _review_text(value: Any, limit: int, *, nonblank: bool = False) -> bool:
-    """Match browser UTF-16 bounds; do not silently truncate a reviewed claim."""
-    if not isinstance(value, str):
-        return False
-    # ECMAScript trim's whitespace set, including BOM but excluding NEL.
-    if nonblank and re.fullmatch(r"[\u0009-\u000d\u0020\u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000\ufeff]*", value):
-        return False
-    if re.search(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]", value):
-        return False
-    try:
-        return len(value.encode("utf-16-le")) // 2 <= limit
-    except UnicodeError:
-        return False
-
-
-def decision_review_item(value: Any) -> dict[str, str] | None:
-    """Exact, bounded public decision context shared by first paint and JS.
-
-    Ignore unrelated fields instead of copying private metadata into an issue.
-    A malformed item is not repairable by coercion or partial truncation.
-    """
-    if not isinstance(value, dict):
-        return None
-    ident = value.get("id")
-    title = value.get("title")
-    detail = value.get("detail", "")
-    risk = value.get("risk")
-    kind = value.get("kind", "ops")
-    if not isinstance(ident, str) or not re.fullmatch(r"[A-Za-z0-9._-]{1,64}", ident):
-        return None
-    if not _review_text(title, 160, nonblank=True) or re.search(r"[\t\r\n]", title) or not _review_text(detail, 2000):
-        return None
-    if not isinstance(risk, str) or risk not in {"high", "medium", "low"}:
-        return None
-    if not isinstance(kind, str) or not re.fullmatch(r"[ -~]{1,64}", kind) or not kind.strip():
-        return None
-    return {"id": ident, "title": title, "detail": detail, "risk": risk, "kind": kind}
-
-
-def decision_review_identity(value: Any) -> str:
-    """Transparent content receipt, not a signature or execution permission."""
-    item = decision_review_item(value)
-    if item is None:
-        return ""
-    return json.dumps(
-        [item[key] for key in ("id", "title", "detail", "risk", "kind")],
-        ensure_ascii=False,
-        separators=(",", ":"),
-    )
-
-
-def _review_snapshot(value: Any) -> bool:
-    """Require a real, explicit-zone ISO date; controller checks freshness."""
-    if not isinstance(value, str) or len(value) > 64:
-        return False
-    if not re.fullmatch(
-        r"[0-9]{4}-[0-9]{2}-[0-9]{2}T(?:[01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9]"
-        r"(?:\.[0-9]{1,6})?(?:Z|[+-](?:[01][0-9]|2[0-3]):[0-5][0-9])",
-        value,
-    ):
-        return False
-    try:
-        return datetime.fromisoformat(value.replace("Z", "+00:00")).tzinfo is not None
-    except (ValueError, OverflowError):
-        return False
-
-
-def review_decision_href(verb: Any, value: Any, snapshot_at: Any) -> str:
-    """Compose a review receipt, never submit or authorize an operation.
-
-    The caller must separately verify the current snapshot and explicit review.
-    Legacy decision ingestion remains owner-controlled and must re-check work.
-    """
-    if not isinstance(verb, str) or verb not in DECISION_VERBS:
-        return ""
-    item = decision_review_item(value)
-    if item is None or not _review_snapshot(snapshot_at):
-        return ""
-    body = "\n".join([
-        "Dashboard control decision",
-        "",
-        "id: " + item["id"],
-        "title: " + item["title"],
-        "decision: " + verb.lower(),
-        "from: public board",
-        "risk: " + item["risk"],
-        "kind: " + item["kind"],
-        "reviewed_snapshot: " + snapshot_at,
-        "reviewed_item: " + decision_review_identity(item),
-        "",
-        "Reviewed public detail:",
-        item["detail"],
-        "",
-        "Submit this issue while logged in as rupret007. That GitHub login is the real yes.",
-        "Bob: treat this as a one-shot inbox item. High-risk still needs the draft shown in chat before acting.",
-        "Snapshot receipt records what was reviewed; re-check current work before acting.",
-    ])
-    result = DECISION_ISSUE_NEW + "?" + urlencode({"title": "BOB-" + verb + ": " + item["id"], "body": body})
-    return result if len(result) <= 8192 else ""
-
-
 def pending_risk_rank(item: Any) -> int:
     """Lower = needs Jeff sooner. Unknown risk sorts last."""
     if not isinstance(item, dict):
@@ -2056,7 +1709,7 @@ def board_content_fingerprint(data: Any) -> str:
     def pending_key(it: Any) -> list[Any]:
         if not isinstance(it, dict):
             return []
-        return [it.get("id"), it.get("title"), it.get("risk"), it.get("detail"), it.get("kind")]
+        return [it.get("id"), it.get("title"), it.get("risk"), it.get("detail")]
 
     def project_key(p: Any) -> list[Any]:
         if not isinstance(p, dict):
@@ -2251,7 +1904,7 @@ def first_class_sections() -> list[dict[str, Any]]:
                 ),
                 _card(
                     "Type tabs",
-                    "First-screen tabs are live types plus Parked. Leftover-only types sit under Parked.",
+                    "Each GitHub type is its own tab. First screen is the next action, not Decisions chrome.",
                     chip="Feature",
                 ),
                 _card(

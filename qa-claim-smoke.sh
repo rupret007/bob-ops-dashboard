@@ -7,7 +7,7 @@ ROOT="$(cd "$(dirname "$0")" && pwd)"
 INDEX="${1:-$ROOT/index.html}"
 STATUS="${STATUS_JSON:-$ROOT/status.json}"
 REFRESH="${REFRESH_SH:-$ROOT/refresh.sh}"
-TMP="$(mktemp -d "${TMPDIR:-/tmp}/bob-claim-smoke.XXXXXXXX")"
+TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 
 fail() { echo "FAIL: $*" >&2; exit 1; }
@@ -288,15 +288,6 @@ pass "board_meta unit tests"
 [[ -f "$ROOT/test_refresh_outage_guard.py" ]] || fail "missing test_refresh_outage_guard.py"
 python3 "$ROOT/test_refresh_outage_guard.py" -v || fail "refresh outage guard integration test"
 pass "refresh outage guard preserves generated artifacts"
-[[ -f "$ROOT/test_offline_qa.py" ]] || fail "missing offline QA harness tests"
-python3 "$ROOT/test_offline_qa.py" -v || fail "offline QA harness tests"
-pass "offline QA fixture isolation"
-[[ -f "$ROOT/test_decision_review.py" ]] || fail "missing decision review unit tests"
-python3 "$ROOT/test_decision_review.py" -v || fail "decision review unit tests"
-pass "decision review unit tests"
-[[ -f "$ROOT/test_decision_review.js" ]] || fail "missing decision review browser-state tests"
-node "$ROOT/test_decision_review.js" "$INDEX" || fail "decision review browser-state tests"
-pass "decision review browser-state tests"
 [[ -f "$ROOT/test_open_decision.js" ]] || fail "missing test_open_decision.js"
 node "$ROOT/test_open_decision.js" "$INDEX" || fail "open-decision smoke"
 pass "open-decision smoke"
@@ -620,7 +611,7 @@ if "Music stack" not in meta_text or stack_card not in meta_text:
     raise SystemExit("How-this-board must keep a phone-visible Music stack card")
 if len(stack_card) > 88:
     raise SystemExit("Music stack How-this-board card exceeds the 88-char phone clip")
-type_tabs_card = "First-screen tabs are live types plus Parked. Leftover-only types sit under Parked."
+type_tabs_card = "Each GitHub type is its own tab. First screen is the next action, not Decisions chrome."
 if "Type tabs" not in meta_text or type_tabs_card not in meta_text:
     raise SystemExit("How-this-board must keep a phone-visible Type tabs card")
 if len(type_tabs_card) > 88:
@@ -939,7 +930,6 @@ if command -v gh >/dev/null; then
   MOCK_BIN="$PRIVATE_E2E/bin"
   mkdir -p "$MOCK_BIN"
   cp "$ROOT/refresh.sh" "$ROOT/board_meta.py" "$ROOT/README.md" "$PRIVATE_E2E/"
-  python3 "$ROOT/offline_qa_fixtures.py" seed-agents "$PRIVATE_E2E" || fail "private fixture agent seed failed"
   chmod +x "$PRIVATE_E2E/refresh.sh"
   python3 - "$MOCK_BIN/gh" <<'PY' || fail "private fixture setup failed"
 from pathlib import Path
@@ -1470,7 +1460,7 @@ if "Agents strip" in pre_how:
     raise SystemExit("Agents strip Feature card leaked above collapsed details")
 if "Copy refresh command" in pre_how or "Mark board reviewed" in pre_how:
     raise SystemExit("engineer control cards leaked onto the default scroll")
-if "Leftover-only types sit under Parked" in pre_how:
+if "Each GitHub type is its own tab" in pre_how:
     raise SystemExit("Type tabs Feature card leaked above collapsed details")
 pre_ab = html.split('<details class="abilities-foot">', 1)[0]
 if "Rebuild this board" in pre_ab or "Life-ops" in pre_ab:
@@ -1502,12 +1492,6 @@ glance_at = html.find('id="board-glance"')
 glance_tag = html[glance_at:html.find("</button>", glance_at) + 9] if glance_at >= 0 else ""
 if 'aria-label="Next action"' not in glance_tag:
     raise SystemExit("first-screen glance must be the named next action")
-if 'class="glance-name"' not in glance_tag:
-    raise SystemExit("first-screen glance must put the work on its own line")
-if 'data-tab="' in glance_tag and 'class="glance-place"' not in glance_tag:
-    raise SystemExit("first-screen glance with a destination must name the action and type")
-if "needs a look" in glance_tag:
-    raise SystemExit("first-screen glance must not use leftover vague look copy")
 if 'data-focus-target="' not in glance_tag:
     raise SystemExit("first-screen glance must name an exact safe target")
 if re.search(r"\+\s*\d+\s*more", glance_tag):
@@ -1533,51 +1517,13 @@ bad_tabs = sorted(tab_ids - allowed_tabs)
 if bad_tabs:
     raise SystemExit("invented type tab ids: " + ", ".join(bad_tabs))
 for sid in ("live-shipping", "apps-utilities", "cisco", "parked"):
-    panel = re.search(r'<section id="' + sid + r'"[^>]*>', html)
-    if not panel or re.search(r'\bhidden\b', panel.group()):
-        raise SystemExit(sid + " must remain readable before JavaScript starts")
-if 'id="snapshot-fallback"' not in html or 'data-snapshot-trust="saved"' not in html:
-    raise SystemExit("saved snapshot must explain its read-only fallback")
-if 'html.dashboard-ready body.tab-home .live-stamp .when' not in html:
-    raise SystemExit("snapshot time must remain visible until navigation initializes")
+    if not re.search(r'id="' + sid + r'"[^>]*\bhidden\b', html):
+        raise SystemExit(sid + " must stay hidden on first paint")
 nav = html.split('id="type-tabs"', 1)[-1].split("</nav>", 1)[0] if 'id="type-tabs"' in html else ""
 if 'aria-selected="true"' in nav:
     raise SystemExit("first paint must not open a type tab")
 if 'id="tab-controls"' in nav or ">Decisions<" in nav:
     raise SystemExit("Decisions must not be a first-screen project-type tab")
-if 'id="tab-live-shipping"' not in nav or 'id="tab-parked"' not in nav:
-    raise SystemExit("live types and Parked must stay on the first-screen tab bar")
-snap = None
-try:
-    raw = html.split('id="initial-snapshot">', 1)[1].split("</script>", 1)[0]
-    snap = json.loads(raw)
-except (IndexError, json.JSONDecodeError):
-    snap = st if isinstance(st, dict) else None
-live_work = {"red", "yellow", "green"}
-painted_leftover = []
-for sid in ("live-shipping", "apps-utilities", "cisco", "messaging", "private-media"):
-    sec = next(
-        (
-            row
-            for row in ((snap or {}).get("sections") or [])
-            if isinstance(row, dict) and row.get("id") == sid
-        ),
-        None,
-    )
-    projects = [p for p in ((sec or {}).get("projects") or []) if isinstance(p, dict)]
-    if projects and not any(str(p.get("status") or "").lower() in live_work for p in projects):
-        painted_leftover.append(sid)
-if not painted_leftover:
-    raise SystemExit("snapshot must keep at least one leftover-only type")
-for sid in painted_leftover:
-    if 'id="tab-' + sid + '"' in nav:
-        raise SystemExit("leftover-only " + sid + " must not be a first-screen type tab")
-if "Leftover types. Not active agents or a Jeff yes." not in html:
-    raise SystemExit("Parked must name leftover types honestly")
-if 'data-leftover-type="true"' not in html:
-    raise SystemExit("Parked leftover type links missing")
-if "Not an active agent or a Jeff yes." not in html:
-    raise SystemExit("leftover-only panels must stay honest")
 if "is-unknown-mac" not in html:
     raise SystemExit("unknown Mac probes must collapse on the Actions box")
 if "Agents unknown" not in html:
@@ -1587,7 +1533,7 @@ if "probe-agents-status.sh" in html.split("<script>", 1)[0]:
 if "fromGlance" not in html or "revealGlanceTarget(id, focus)" not in html:
     raise SystemExit("glance must reveal the exact named work")
 paint_at = html.find("boardEl.innerHTML = html;")
-restore_at = html.find("restoreOpen(open);", paint_at)
+restore_at = html.find("applyTypeTab(currentTypeTab);", paint_at)
 if paint_at < 0 or restore_at < paint_at:
     raise SystemExit("soft paint must restore the selected type tab")
 if "body.tab-home footer" not in html:
@@ -1598,7 +1544,7 @@ if "is-unknown-mac .agents-unknown" in html:
     raise SystemExit("Agents unknown must not become first-screen chrome")
 if ".agents-strip.is-unknown-only" not in html:
     raise SystemExit("unknown-only agent chrome must collapse")
-if "font-size:1.35rem" not in html or ".glance-name" not in html:
+if "font-size:1.55rem" not in html:
     raise SystemExit("next action must be the first-screen hero")
 if "flex:1 1 0" not in html:
     raise SystemExit("phone type tabs must share one row so Parked is not clipped")

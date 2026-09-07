@@ -213,7 +213,6 @@ from board_meta import (
     compact_signal,
     compact_unknown_mac_probes,
     decision_href,
-    decision_review_item,
     incomplete_public_collections,
     parse_coord_issue,
     public_coord,
@@ -225,18 +224,13 @@ from board_meta import (
     public_high_level_ci,
     is_quiet_lane,
     is_type_tab,
-    leftover_type_note_html,
-    leftover_types_html,
     lane_hrefs,
     merge_cloud_agents,
-    owner_hold_link_html,
     signal_href,
     merge_first_class,
     presentation,
     prune_closed_parked_prs,
     resolve_agents,
-    section_is_leftover_only,
-    tab_label,
     type_tabs_html,
     latest_release_url_from_repo,
     safe_actions_url,
@@ -761,8 +755,7 @@ def pending_dec_link(verb, pid, title, extra_class=""):
     )
 
 def pending_item_html(it):
-    it = decision_review_item(it)
-    if not it:
+    if not isinstance(it, dict):
         return ""
     pid = str(it.get("id") or "")
     if not re.match(r"^[a-zA-Z0-9._-]+$", pid):
@@ -772,7 +765,7 @@ def pending_item_html(it):
     if risk not in ("high", "medium", "low"):
         risk = "low"
     kind = str(it.get("kind") or "ops")
-    detail = it["detail"]
+    detail = short_note(it.get("detail") or "", 72)
     focus = focus_key("decision", pid)
     focus_attr = f' data-focus-key="{h(focus)}" tabindex="-1"' if focus else ""
     return (
@@ -780,9 +773,11 @@ def pending_item_html(it):
         f'<div class="pending-head"><div class="ptitle">{h(title)}</div>'
         f'<span class="prisk {h(risk)}">{h(risk)}</span></div>'
         f'<div class="pdetail">{h(detail)}</div>'
-        f'<p class="decision-kind">Boundary: {h(kind)}</p>'
-        f'<button type="button" data-review-decision="{h(pid)}" disabled>Review choices</button>'
-        f'<div class="decision-review" aria-live="polite"></div></div>'
+        f'<div class="prow">'
+        f'{pending_dec_link("APPROVE", pid, title)}'
+        f'{pending_dec_link("HOLD", pid, title, "warn")}'
+        f'{pending_dec_link("DENY", pid, title, "danger")}'
+        f'</div></div>'
     )
 
 def pending_shell(items):
@@ -801,8 +796,7 @@ def pending_shell(items):
     hidden = "" if (attn_html or low_html) else " hidden"
     return (
         f'<div id="pending-box" class="pending-box"{hidden}>'
-        f'<p class="pending-help">Review the full context first. Opening a GitHub draft is not submitting a decision. GitHub login as <code>rupret007</code> remains the authority.</p>'
-        '<noscript><p class="pending-help">Decision links require a current snapshot check and review. JavaScript is off; this board is read-only.</p></noscript>'
+        f'<p class="pending-help">Public board -- Approve opens a GitHub issue as <code>rupret007</code>.</p>'
         f'<div id="pending-list">{"".join(attn_html)}{more}</div></div>'
     )
 
@@ -944,7 +938,7 @@ for sec in status["sections"]:
         body = pending_shell(items)
         sections_html.append(
             f'<section id="{h(sid_raw)}" class="block pending" data-tab-panel="{h(sid_raw)}" '
-            f'role="region" aria-label="Decisions">'
+            f'hidden role="tabpanel" aria-label="Decisions">'
             f'{heading}{body}</section>'
         )
         continue
@@ -976,36 +970,18 @@ for sec in status["sections"]:
         continue
     heading = f'<h2>{h(sec.get("title") or "")}</h2>'
     sort_attn = kind == "primary"
-    leftover_home = (
-        owner_hold_link_html(status.get("pending"), status.get("sections"))
-        + leftover_types_html(status.get("sections"))
-    ) if sid_raw == "parked" else ""
-    leftover_note = leftover_type_note_html(sec)
-    body = leftover_home + leftover_note + lanes_html(projects, sort_attention=sort_attn)
+    body = lanes_html(projects, sort_attention=sort_attn)
     cls = "primary" if kind == "primary" else "secondary"
     panel = ""
     if is_type_tab(sid_raw):
-        leftover_only = section_is_leftover_only(sec)
-        labelledby = "" if leftover_only else f' aria-labelledby="tab-{h(sid_raw)}"'
-        leftover_label = (
-            f' aria-label="Leftover {h(tab_label(sid_raw) or sec.get("title") or sid_raw)}"'
-            if leftover_only
-            else ""
-        )
         panel = (
-            f' data-tab-panel="{h(sid_raw)}" role="region"'
-            + labelledby
-            + leftover_label
+            f' data-tab-panel="{h(sid_raw)}" hidden role="tabpanel" '
+            f'aria-labelledby="tab-{h(sid_raw)}"'
         )
     sections_html.append(
         f'<section id="{h(sid_raw)}" class="block {cls}"{panel}>{heading}{body}</section>'
     )
 
-snapshot_links = ''.join(
-    f'<a href="#{h(sec["id"])}">{h("Decisions" if sec["id"] == "controls" else tab_label(sec["id"]))}</a>'
-    for sec in status["sections"]
-    if sec.get("id") == "controls" or is_type_tab(sec.get("id"))
-)
 
 html = f'''<!DOCTYPE html>
 <html lang="en">
@@ -1031,17 +1007,10 @@ html = f'''<!DOCTYPE html>
   header.pulse h1 .mark {{ color:var(--orange); }}
   .pulse-row {{ display:flex; flex-direction:column; gap:.4rem; margin-top:.45rem; }}
   .board-glance {{
-    display:flex; flex-direction:column; align-items:flex-start; justify-content:center;
-    margin:0 0 .4rem; padding:.05rem 0 .1rem; border:0;
-    background:transparent; color:#fff; font:inherit; min-height:52px;
+    display:flex; align-items:center; margin:0 0 .55rem; padding:.1rem 0 .2rem; border:0;
+    background:transparent; color:#fff; font:inherit; font-size:1.55rem;
+    font-weight:800; letter-spacing:-.03em; line-height:1.15; min-height:52px;
     text-align:left; width:100%; cursor:pointer; touch-action:manipulation;
-  }}
-  .board-glance .glance-name {{
-    font-size:1.35rem; font-weight:800; letter-spacing:-.03em; line-height:1.15;
-  }}
-  .board-glance .glance-place {{
-    margin-top:.1rem; color:var(--muted); font-size:.72rem; font-weight:700;
-    letter-spacing:.05em; text-transform:uppercase; line-height:1.2;
   }}
   .board-glance:not([data-tab]) {{ cursor:default; }}
   .type-tabs {{
@@ -1055,24 +1024,6 @@ html = f'''<!DOCTYPE html>
     font-size:.72rem; font-weight:600; cursor:pointer; touch-action:manipulation;
   }}
   .type-tabs button[aria-selected="true"] {{ border-color:var(--orange); color:var(--orange); }}
-  .type-tabs button:focus-visible, .lane:focus-visible, [data-tab-panel]:focus-visible {{
-    outline:2px solid var(--orange); outline-offset:2px;
-  }}
-  .type-tabs button:focus-visible {{ outline-offset:-3px; }}
-  .leftover-types {{
-    margin:0 0 .55rem; color:var(--muted); font-size:.8rem; line-height:1.4;
-  }}
-  .leftover-type-links {{
-    display:flex; flex-wrap:wrap; gap:.35rem; margin:0 0 1rem;
-  }}
-  .leftover-type-links button, #owner-holds-link {{
-    background:transparent; color:var(--muted); border:1px solid var(--border);
-    border-radius:999px; padding:.35rem .75rem; font-size:.78rem; font-weight:600;
-    min-height:44px; cursor:pointer; touch-action:manipulation;
-  }}
-  .leftover-type-links button:hover, #owner-holds-link:hover {{ border-color:var(--orange); color:var(--orange); }}
-  #owner-holds-link {{ width:100%; margin:0 0 1rem; }}
-  #owner-holds-link:focus-visible {{ outline:2px solid var(--orange); outline-offset:3px; }}
   .chip {{ display:inline-flex; align-items:center; color:var(--c);
     background:transparent; border:0; padding:0; font-size:.68rem; font-weight:700;
     text-transform:uppercase; letter-spacing:.04em; white-space:nowrap; }}
@@ -1141,14 +1092,7 @@ html = f'''<!DOCTYPE html>
   .pending-item:last-child {{ border-bottom:0; }}
   .pending-item .ptitle {{ font-weight:600; font-size:.95rem; margin:0; }}
   .pending-head {{ display:flex; align-items:baseline; justify-content:space-between; gap:.6rem; }}
-  .pending-item .pdetail {{ display:block; color:var(--muted); font-size:.85rem; margin:.35rem 0; white-space:pre-wrap; overflow-wrap:anywhere; }}
-  .pending-item .ptitle {{ overflow-wrap:anywhere; }}
-  .decision-kind {{ color:var(--muted); font-size:.75rem; margin:.35rem 0 .6rem; overflow-wrap:anywhere; }}
-  .decision-review {{ font-size:.8rem; line-height:1.45; overflow-wrap:anywhere; }}
-  .decision-review:not(:empty) {{ margin-top:.65rem; padding:.7rem; border:1px solid var(--orange); border-radius:8px; background:rgba(217,119,87,.06); }}
-  .decision-review p {{ margin:0 0 .5rem; }}
-  .pending-item .decision-review .prow {{ grid-template-columns:1fr; }}
-  .pending-item button:disabled {{ cursor:not-allowed; opacity:.65; }}
+  .pending-item .pdetail {{ display:none; }}
   .pending-item .prisk {{
     display:inline-block; font-size:.65rem; text-transform:uppercase; letter-spacing:.04em;
     color:var(--muted); padding:0; margin:0; flex:0 0 auto;
@@ -1196,7 +1140,7 @@ html = f'''<!DOCTYPE html>
     touch-action:manipulation;
   }}
   #retry-status:hover {{ border-color:#fecaca; background:#601111; }}
-  #retry-status[aria-disabled="true"] {{ cursor:wait; opacity:.7; }}
+  #retry-status:disabled {{ cursor:wait; opacity:.7; }}
   body.snapshot-unverified #board {{ opacity:.78; }}
   @media (max-width:520px) {{
     #silence-banner.show {{ align-items:stretch; flex-direction:column; }}
@@ -1208,30 +1152,12 @@ html = f'''<!DOCTYPE html>
   .agents-unknown {{ display:none; margin:0; color:var(--muted); font-size:.8rem; font-weight:600; }}
   .agents-strip.is-unknown-mac .agent-pill[data-probe="mac"] {{ display:none; }}
   .agents-strip.is-unknown-only {{ display:none; }}
-  html.dashboard-ready body.tab-home section.block.foot {{ display:none; }}
-  html.dashboard-ready body.tab-home footer {{ display:none; }}
-  html.dashboard-ready body.tab-home .live-stamp .when {{ display:none; }}
-  html.dashboard-ready body.tab-home .agent-links {{ display:none; }}
-  html.dashboard-ready body.tab-home .agent-pill.has-links {{ flex-direction:row; flex-wrap:wrap; align-items:center; }}
-  html.dashboard-ready body.tab-home .agent-pill[data-probe="cloud"] .chip {{ display:none; }}
-  #snapshot-fallback {{ margin:0 0 1.5rem; padding:1rem; border:1px solid var(--border); border-radius:8px; background:var(--panel); font-size:.9rem; line-height:1.5; }}
-  #snapshot-fallback p {{ margin:0 0 .65rem; }}
-  .snapshot-links {{ display:flex; flex-wrap:wrap; gap:.25rem 1rem; }}
-  .snapshot-links a {{ display:inline-flex; align-items:center; min-height:44px; }}
-  html.dashboard-ready #snapshot-fallback {{ display:none; }}
-  html:not(.dashboard-ready) #type-tabs,
-  html:not(.dashboard-ready) #board-glance,
-  html:not(.dashboard-ready) [data-tab],
-  html:not(.dashboard-ready) [data-action],
-  html:not(.dashboard-ready) [data-review-decision],
-  html:not(.dashboard-ready) .decision-review,
-  html:not(.dashboard-ready) #silence-banner,
-  html:not(.dashboard-ready) #freshness,
-  html:not(.dashboard-ready) #live-dot {{ display:none !important; }}
-  /* A partially initialized script may already have hidden panels. Preserve
-     the saved content until navigation has actually finished starting. */
-  html:not(.dashboard-ready) section.block[data-tab-panel][hidden] {{ display:block !important; }}
-  html:not(.dashboard-ready) .lane .notes {{ display:block; -webkit-line-clamp:unset; overflow:visible; }}
+  body.tab-home section.block.foot {{ display:none; }}
+  body.tab-home footer {{ display:none; }}
+  body.tab-home .live-stamp .when {{ display:none; }}
+  body.tab-home .agent-links {{ display:none; }}
+  body.tab-home .agent-pill.has-links {{ flex-direction:row; flex-wrap:wrap; align-items:center; }}
+  body.tab-home .agent-pill[data-probe="cloud"] .chip {{ display:none; }}
   .agent-pill {{ display:inline-flex; align-items:center; gap:.35rem; border:0; background:transparent; padding:0; }}
   .agent-pill.has-links {{ flex-direction:column; align-items:flex-start; gap:.3rem; }}
   .agent-pill .name {{ font-weight:600; font-size:.8rem; }}
@@ -1256,7 +1182,10 @@ html = f'''<!DOCTYPE html>
   @media (min-width:720px) {{
     .wrap {{ padding:1.5rem 1.25rem 3.75rem; }}
     .lane .notes {{ -webkit-line-clamp:2; }}
-    .pending-item .decision-review .prow {{ grid-template-columns:1fr 1fr 1fr; }}
+    .pending-item .pdetail {{
+      display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:2; overflow:hidden;
+      color:var(--muted); font-size:.78rem; margin:.15rem 0 0;
+    }}
     .lane.is-quiet .notes {{ display:-webkit-box; }}
     section.pending h2, section.primary h2 {{ font-size:1.85rem; }}
     .type-tabs {{ flex-wrap:wrap; overflow:visible; }}
@@ -1269,21 +1198,16 @@ html = f'''<!DOCTYPE html>
   <header class="pulse">
     <h1><span class="mark">Bob</span> Ops</h1>
     <div class="pulse-row">
-      <div class="live-stamp" id="live-stamp" data-generated-at="{h(updated_iso)}" data-display="{h(updated_ct)}"><span class="live-dot" id="live-dot" aria-hidden="true"></span><span id="freshness">Saved snapshot</span><span class="when"> · <strong id="updated-display">{h(updated_ct)}</strong></span></div>
+      <div class="live-stamp" id="live-stamp" data-generated-at="{h(updated_iso)}" data-display="{h(updated_ct)}"><span class="live-dot" id="live-dot" aria-hidden="true"></span><span id="freshness">Live - starting</span><span class="when"> · <strong id="updated-display">{h(updated_ct)}</strong></span></div>
       <div id="active-agents">{agents_strip_html(status.get("agents"), status.get("cloud_agents"))}</div>
     </div>
     <div class="status hint" id="panel-status"></div>
   </header>
-  <aside id="snapshot-fallback" role="note">
-    <p><strong>Saved snapshot — read-only.</strong> This page has not checked for updates. Project states may have changed since the time above.</p>
-    <p>Browse the saved sections below. Live checks and decision review require JavaScript to start successfully; reload to try again. Nothing here approves or runs work.</p>
-    <nav class="snapshot-links" aria-label="Saved sections">{snapshot_links}</nav>
-  </aside>
   <div id="silence-banner" role="alert" aria-live="assertive" hidden>
     <span class="silence-copy"><strong id="silence-title"></strong><span id="silence-detail"></span></span>
     <button id="retry-status" type="button">Retry now</button>
   </div>
-  <div id="board" data-snapshot-trust="saved">
+  <div id="board" data-snapshot-trust="current">
   {glance_html(status.get("pending"), status.get("sections"))}{type_tabs_html(status.get("sections"), status.get("pending"))}
   {''.join(sections_html)}
   </div>
@@ -1292,98 +1216,7 @@ html = f'''<!DOCTYPE html>
     · <a href="./status.json">status.json</a></p>
   </footer>
 </div>
-<script type="application/json" id="initial-snapshot">{json.dumps(status, ensure_ascii=True).replace('<', chr(92) + 'u003c')}</script>
 <script>
-function decisionReviewText(value, limit, multiline) {{
-  if (typeof value !== "string" || value.length > limit) return false;
-  for (var i = 0; i < value.length; i++) {{
-    var code = value.charCodeAt(i);
-    if ((code < 32 && !(multiline && (code === 10 || code === 13 || code === 9))) || code === 127) return false;
-    if (code >= 0xd800 && code <= 0xdbff) {{
-      var next = value.charCodeAt(++i);
-      if (!(next >= 0xdc00 && next <= 0xdfff)) return false;
-    }} else if (code >= 0xdc00 && code <= 0xdfff) return false;
-  }}
-  return true;
-}}
-function decisionReviewItem(value) {{
-  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
-  if (!decisionReviewText(value.id, 64, false) || !/^[a-zA-Z0-9._-]+$/.test(value.id)) return null;
-  if (!decisionReviewText(value.title, 160, false) || !value.title.trim()) return null;
-  var detail = value.detail === undefined ? "" : value.detail;
-  var risk = value.risk;
-  var kind = value.kind === undefined ? "ops" : value.kind;
-  if (!decisionReviewText(detail, 2000, true) || ["high", "medium", "low"].indexOf(risk) < 0) return null;
-  if (!decisionReviewText(kind, 64, false) || !/^[ -~]+$/.test(kind) || !kind.trim()) return null;
-  return {{ id: value.id, title: value.title, detail: detail, risk: risk, kind: kind }};
-}}
-function decisionReviewIdentity(value) {{
-  var item = decisionReviewItem(value);
-  return item ? JSON.stringify([item.id, item.title, item.detail, item.risk, item.kind]) : "";
-}}
-function decisionTimestamp(value) {{
-  if (typeof value !== "string" || value.length > 64) return null;
-  var m = /^([0-9]{{4}})-([0-9]{{2}})-([0-9]{{2}})T([0-9]{{2}}):([0-9]{{2}}):([0-9]{{2}})(?:[.]([0-9]{{1,6}}))?(Z|([+-])([0-9]{{2}}):([0-9]{{2}}))$/.exec(value);
-  if (!m || m[0].length !== value.length) return null;
-  var year = +m[1], month = +m[2], day = +m[3], hour = +m[4], minute = +m[5], second = +m[6];
-  var leap = year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
-  var days = [31, leap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
-  if (!year || month < 1 || month > 12 || day < 1 || day > days[month - 1] || hour > 23 || minute > 59 || second > 59 || +m[10] > 23 || +m[11] > 59) return null;
-  var date = new Date(0);
-  date.setUTCFullYear(year, month - 1, day);
-  date.setUTCHours(hour, minute, second, +((m[7] || "") + "000").slice(0, 3));
-  var offset = m[8] === "Z" ? 0 : (+m[10] * 60 + +m[11]) * 60000 * (m[9] === "+" ? 1 : -1);
-  return date.getTime() - offset;
-}}
-function decisionSnapshotTime(value) {{
-  var ms = decisionTimestamp(value);
-  return ms !== null && ms > 0 && ms <= Date.now() ? ms : 0;
-}}
-function reviewDecisionHref(verb, value, snapshot) {{
-  var item = decisionReviewItem(value);
-  if (["APPROVE", "HOLD", "DENY"].indexOf(verb) < 0 || !item || decisionTimestamp(snapshot) === null) return "";
-  var body = [
-    "Dashboard control decision", "", "id: " + item.id, "title: " + item.title,
-    "decision: " + verb.toLowerCase(), "from: public board", "risk: " + item.risk,
-    "kind: " + item.kind, "reviewed_snapshot: " + snapshot,
-    "reviewed_item: " + decisionReviewIdentity(item), "", "Reviewed public detail:", item.detail, "",
-    "Submit this issue while logged in as rupret007. That GitHub login is the real yes.",
-    "Bob: treat this as a one-shot inbox item. High-risk still needs the draft shown in chat before acting.",
-    "Snapshot receipt records what was reviewed; re-check current work before acting."
-  ].join(String.fromCharCode(10));
-  function encode(value) {{
-    return encodeURIComponent(value).replace(/%20/g, "+").replace(/[!'()*]/g, function (ch) {{ return "%" + ch.charCodeAt(0).toString(16).toUpperCase(); }});
-  }}
-  var url = "https://github.com/rupret007/bob-ops-dashboard/issues/new?title=" + encode("BOB-" + verb + ": " + item.id) + "&body=" + encode(body);
-  return url.length <= 8192 ? url : "";
-}}
-function validateAcceptedSnapshot(data) {{
-  if (!data || typeof data !== "object" || Array.isArray(data) || !decisionSnapshotTime(data.generated_at)) return false;
-  if (!Array.isArray(data.sections) || !data.sections.length || data.sections.length > 40 ||
-      !Array.isArray(data.pending) || data.pending.length > 100 || !Array.isArray(data.agents) ||
-      !Array.isArray(data.cloud_agents) || !Array.isArray(data.fetched_repos)) return false;
-  var sectionIds = Object.create(null);
-  var pendingIds = Object.create(null);
-  for (var i = 0; i < data.sections.length; i++) {{
-    var section = data.sections[i];
-    if (!section || typeof section !== "object" || typeof section.id !== "string" ||
-        !decisionReviewText(section.id, 64, false) || !/^[a-z0-9-]+$/.test(section.id) || sectionIds[section.id] || !Array.isArray(section.projects) || section.projects.length > 200) return false;
-    sectionIds[section.id] = true;
-    for (var j = 0; j < section.projects.length; j++) {{
-      var project = section.projects[j];
-      if (!project || typeof project !== "object" || Array.isArray(project) || !decisionReviewText(project.name, 160, false) || !project.name.trim()) return false;
-    }}
-  }}
-  if (!sectionIds.controls) return false;
-  for (var k = 0; k < data.pending.length; k++) {{
-    var item = decisionReviewItem(data.pending[k]);
-    if (!item || pendingIds[item.id.toLowerCase()]) return false;
-    pendingIds[item.id.toLowerCase()] = true;
-  }}
-  return data.agents.length <= 40 && data.cloud_agents.length <= 100 && data.fetched_repos.length <= 100 &&
-    data.agents.concat(data.cloud_agents).every(function (agent) {{ return agent && typeof agent === "object" && !Array.isArray(agent); }}) &&
-    data.fetched_repos.every(function (name) {{ return decisionReviewText(name, 160, false); }});
-}}
 function focusKey(kind, raw) {{
   var prefix = String(kind || "").replace(/^\s+|\s+$/g, "").toLowerCase();
   var value = String(raw || "").replace(/^\s+|\s+$/g, "");
@@ -1403,10 +1236,7 @@ function focusKey(kind, raw) {{
   // Public board: URL is enough. Real yes is a GitHub issue from rupret007.
   var statusEl = document.getElementById("panel-status");
   var decideBusy = {{}};
-  var acceptedSnapshot = null;
-  var reviewedDecision = null;
-  var decisionTrust = false;
-  var navigationReady = false;
+  var pendingSeq = 0;
 
   function pendingEls() {{
     return {{
@@ -1470,119 +1300,10 @@ function focusKey(kind, raw) {{
   }}
   window.openBlank = openBlank;
 
-  function currentDecision(id) {{
-    if (!acceptedSnapshot) return null;
-    for (var i = 0; i < acceptedSnapshot.items.length; i++) {{
-      if (acceptedSnapshot.items[i].id === id) return acceptedSnapshot.items[i];
-    }}
-    return null;
-  }}
-  function decisionIsCurrent() {{
-    if (!navigationReady || !decisionTrust || !acceptedSnapshot) return false;
-    var ms = decisionSnapshotTime(acceptedSnapshot.at);
-    return !!ms && Date.now() - ms <= 45 * 60 * 1000;
-  }}
-  function reviewedHref(verb, id) {{
-    var item = currentDecision(id);
-    if (!decisionIsCurrent() || !item || !reviewedDecision || reviewedDecision.id !== id ||
-        reviewedDecision.identity !== decisionReviewIdentity(item)) return "";
-    return reviewDecisionHref(verb, item, acceptedSnapshot.at);
-  }}
-  function renderDecisionReviews() {{
-    var rows = document.querySelectorAll(".pending-item");
-    Array.prototype.forEach.call(rows, function (row) {{
-      var id = row.getAttribute("data-id");
-      var item = currentDecision(id);
-      var button = row.querySelector("[data-review-decision]");
-      var panel = row.querySelector(".decision-review");
-      if (!button || !panel) return;
-      var active = document.activeElement;
-      var focusedVerb = active && active.closest && active.closest(".pending-item") === row ? active.getAttribute("data-dec") : "";
-      var available = decisionIsCurrent() && !!item;
-      button.disabled = !available;
-      button.setAttribute("aria-expanded", reviewedDecision && reviewedDecision.id === id ? "true" : "false");
-      panel.textContent = "";
-      if (!available) {{
-        panel.textContent = "Read-only snapshot. Use Retry now above, then review the current decision before opening a GitHub draft.";
-        if (focusedVerb) {{ try {{ row.focus({{ preventScroll: true }}); }} catch (e) {{}} }}
-        return;
-      }}
-      if (!reviewedDecision || reviewedDecision.id !== id || reviewedDecision.identity !== decisionReviewIdentity(item)) return;
-      var note = document.createElement("p");
-      note.textContent = "Reviewed: " + item.title + ". Snapshot " + acceptedSnapshot.at + ". Opening a draft does not submit a decision.";
-      panel.appendChild(note);
-      var boundary = document.createElement("p");
-      boundary.textContent = "Submit on GitHub as rupret007. High-risk work still needs the exact draft shown in chat and a current owner recheck; this receipt is context, not execution permission.";
-      panel.appendChild(boundary);
-      var actions = document.createElement("div");
-      actions.className = "prow";
-      ["APPROVE", "HOLD", "DENY"].forEach(function (verb) {{
-        var href = reviewedHref(verb, id);
-        if (!href) return;
-        var link = document.createElement("a");
-        link.className = "dec" + (verb === "HOLD" ? " warn" : verb === "DENY" ? " danger" : "");
-        link.setAttribute("data-dec", verb);
-        link.setAttribute("href", href);
-        link.setAttribute("target", "_blank");
-        link.setAttribute("rel", "noopener noreferrer");
-        link.textContent = verb === "APPROVE" ? "Open approval draft" : verb === "HOLD" ? "Open hold draft" : "Open denial draft";
-        actions.appendChild(link);
-      }});
-      if (!actions.childNodes.length) {{
-        var tooLong = document.createElement("p");
-        tooLong.textContent = "This complete context is too long for a safe GitHub draft link. Nothing was shortened or submitted; review it with the owner in chat.";
-        panel.appendChild(tooLong);
-      }} else panel.appendChild(actions);
-      if (["APPROVE", "HOLD", "DENY"].indexOf(focusedVerb) >= 0) {{
-        var replacement = panel.querySelector('[data-dec="' + focusedVerb + '"]');
-        if (replacement) {{ try {{ replacement.focus({{ preventScroll: true }}); }} catch (e) {{}} }}
-      }}
-    }});
-  }}
-  function acceptDecisionSnapshot(data) {{
-    if (!validateAcceptedSnapshot(data) || (acceptedSnapshot && Date.parse(data.generated_at) < Date.parse(acceptedSnapshot.at))) {{
-      setDecisionTrust("invalid");
-      return false;
-    }}
-    var items = data.pending.map(decisionReviewItem);
-    var identity = JSON.stringify(items.map(decisionReviewIdentity).sort());
-    if (!acceptedSnapshot || acceptedSnapshot.identity !== identity) reviewedDecision = null;
-    acceptedSnapshot = {{ at: data.generated_at, items: items, identity: identity }};
-    return true;
-  }}
-  function setDecisionTrust(state) {{
-    var next = navigationReady && state === "current" && !!acceptedSnapshot && !!decisionSnapshotTime(acceptedSnapshot.at) &&
-      Date.now() - Date.parse(acceptedSnapshot.at) <= 45 * 60 * 1000;
-    if (decisionTrust === next) return;
-    decisionTrust = next;
-    if (!decisionTrust) reviewedDecision = null;
-    renderDecisionReviews();
-  }}
-  function reviewDecision(id) {{
-    var item = currentDecision(id);
-    if (!decisionIsCurrent() || !item) {{
-      setStatus("Current decision unavailable. Retry now, then review it again.", "warn");
-      renderDecisionReviews();
-      return false;
-    }}
-    reviewedDecision = {{ id: id, identity: decisionReviewIdentity(item) }};
-    renderDecisionReviews();
-    return true;
-  }}
-  window.bobDecisionReview = {{
-    // Readiness alone never grants snapshot trust or reviews a decision.
-    enableNavigation: function () {{ navigationReady = true; }},
-    accept: acceptDecisionSnapshot,
-    setTrust: setDecisionTrust,
-    review: reviewDecision,
-    reconcileRendering: renderDecisionReviews,
-    open: openDecisionIssue
-  }};
-
   function openDecisionIssue(verb, id, title) {{
-    var url = reviewedHref(verb, id);
+    var url = decisionHref(verb, id, title);
     if (!url) {{
-      setStatus("Review the current full context before opening a GitHub draft. If unavailable, use Retry now.", "warn");
+      setStatus("Bad pending id", "bad");
       return;
     }}
     var key = verb + ":" + String(id || "").trim();
@@ -1593,14 +1314,103 @@ function focusKey(kind, raw) {{
     setStatus(verb + " draft opened on GitHub. Submit the issue while logged in as rupret007.", "warn");
   }}
 
+  function renderPending(items) {{
+    var els = pendingEls();
+    if (!els.box || !els.list) return;
+    var rank = {{ high: 0, medium: 1, low: 2 }};
+    var rows = (items || []).filter(function (it) {{
+      return it && /^[a-zA-Z0-9._-]+$/.test(String(it.id || ""));
+    }}).slice().sort(function (a, b) {{
+      var ra = rank.hasOwnProperty(String(a.risk || "").toLowerCase()) ? rank[String(a.risk).toLowerCase()] : 5;
+      var rb = rank.hasOwnProperty(String(b.risk || "").toLowerCase()) ? rank[String(b.risk).toLowerCase()] : 5;
+      return ra - rb;
+    }});
+    els.list.innerHTML = "";
+    els.box.hidden = rows.length === 0;
+    var sec = document.getElementById("controls");
+    if (sec) sec.hidden = rows.length === 0;
+    if (!rows.length) return;
+    var attn = [];
+    var low = [];
+    rows.forEach(function (it) {{
+      if (String(it.risk || "").toLowerCase() === "low") low.push(it);
+      else attn.push(it);
+    }});
+    function pendingNode(it) {{
+      var div = document.createElement("div");
+      div.className = "pending-item";
+      div.setAttribute("data-id", String(it.id));
+      div.setAttribute("data-title", String(it.title || it.id));
+      var focus = focusKey("decision", it.id);
+      if (focus) {{
+        div.setAttribute("data-focus-key", focus);
+        div.setAttribute("tabindex", "-1");
+      }}
+      div.innerHTML =
+        '<div class="pending-head"><div class="ptitle"></div><span class="prisk"></span></div>' +
+        '<div class="pdetail"></div>' +
+        '<div class="prow"></div>';
+      var prow = div.querySelector(".prow");
+      function decLink(verb, extra) {{
+        var href = decisionHref(verb, it.id, it.title || it.id);
+        var a = document.createElement("a");
+        a.className = "dec" + (extra ? " " + extra : "");
+        a.setAttribute("data-dec", verb);
+        if (href) a.setAttribute("href", href);
+        a.setAttribute("target", "_blank");
+        a.setAttribute("rel", "noopener noreferrer");
+        a.textContent = verb === "APPROVE" ? "Approve" : verb === "HOLD" ? "Hold" : "Deny";
+        return a;
+      }}
+      prow.appendChild(decLink("APPROVE", ""));
+      prow.appendChild(decLink("HOLD", "warn"));
+      prow.appendChild(decLink("DENY", "danger"));
+      div.querySelector(".ptitle").textContent = it.title || it.id;
+      var detail = String(it.detail || "");
+      if (detail.length > 72) {{
+        var cut = detail.slice(0, 71);
+        var sp = cut.lastIndexOf(" ");
+        detail = (sp > 24 ? cut.slice(0, sp) : cut).replace(/[.,;:]$/, "") + "...";
+      }}
+      div.querySelector(".pdetail").textContent = detail;
+      var rk = div.querySelector(".prisk");
+      rk.textContent = it.risk || "low";
+      rk.classList.add(riskClass(it.risk));
+      return div;
+    }}
+    attn.forEach(function (it) {{ els.list.appendChild(pendingNode(it)); }});
+    if (low.length) {{
+      var more = document.createElement("details");
+      more.className = "pending-more";
+      var sum = document.createElement("summary");
+      sum.textContent = low.length + (low.length === 1 ? " lower-risk item" : " lower-risk items");
+      more.appendChild(sum);
+      low.forEach(function (it) {{ more.appendChild(pendingNode(it)); }});
+      els.list.appendChild(more);
+    }}
+  }}
+
+  function loadPending() {{
+    var list = document.getElementById("pending-list");
+    // First paint already has the inbox. Do not wipe/rebuild it (flash).
+    if (list && list.querySelector(".pending-item")) return;
+    var seq = ++pendingSeq;
+    fetch("./status.json?ts=" + Date.now(), {{ cache: "no-store" }})
+      .then(function (r) {{
+        if (!r.ok) throw new Error("status " + r.status);
+        return r.json();
+      }})
+      .then(function (data) {{
+        if (seq !== pendingSeq) return;
+        renderPending((data && data.pending) || []);
+      }})
+      .catch(function () {{
+        if (seq !== pendingSeq) return;
+        // Keep first-paint pending. Do not claim the inbox is empty.
+      }});
+  }}
 
   document.addEventListener("click", function (ev) {{
-    var reviewBtn = ev.target.closest("[data-review-decision]");
-    if (reviewBtn) {{
-      ev.preventDefault();
-      reviewDecision(reviewBtn.getAttribute("data-review-decision"));
-      return;
-    }}
     var decBtn = ev.target.closest("[data-dec]");
     if (!decBtn) return;
     var item = decBtn.closest(".pending-item");
@@ -1608,14 +1418,6 @@ function focusKey(kind, raw) {{
     var verb = decBtn.getAttribute("data-dec");
     var pid = item.getAttribute("data-id");
     var title = item.getAttribute("data-title");
-    var permittedHref = reviewedHref(verb, pid);
-    if (!permittedHref || decBtn.getAttribute("href") !== permittedHref) {{
-      ev.preventDefault();
-      reviewedDecision = null;
-      renderDecisionReviews();
-      setStatus("This decision needs a fresh review. Use Retry now if the snapshot is unavailable.", "warn");
-      return;
-    }}
     var key = verb + ":" + String(pid || "").trim();
     if (decideBusy[key]) {{
       ev.preventDefault();
@@ -1662,13 +1464,7 @@ function focusKey(kind, raw) {{
     handleJeffAction(act);
   }});
 
-  // One accepted-snapshot path: an independent pending fetch cannot resurrect
-  // an older or resolved decision after the main poll paints newer content.
-  try {{
-    var initialNode = document.getElementById("initial-snapshot");
-    var initialData = initialNode ? JSON.parse(initialNode.textContent) : null;
-    acceptDecisionSnapshot(initialData);
-  }} catch (e) {{ setDecisionTrust("invalid"); }}
+  loadPending();
 }})();
 
 (function () {{
@@ -1966,8 +1762,6 @@ function focusKey(kind, raw) {{
     "parked": "Parked"
   }};
   var currentTypeTab = "";
-  var lastBoardSections = null;
-  var lastBoardPending = null;
   function tabId(raw) {{
     var s = String(raw || "");
     return TYPE_TAB_LABELS.hasOwnProperty(s) ? s : "";
@@ -1976,133 +1770,23 @@ function focusKey(kind, raw) {{
     var sid = tabId(id);
     return sid ? TYPE_TAB_LABELS[sid] : "";
   }}
-  function projectIsLiveWork(p) {{
-    if (!p || typeof p !== "object") return false;
-    var st = String(p.status || "").replace(/^\s+|\s+$/g, "").toLowerCase();
-    return st === "red" || st === "yellow" || st === "green";
-  }}
-  function sectionHasLiveWork(sec) {{
-    if (!sec || typeof sec !== "object") return false;
-    var projects = sec.projects || [];
-    for (var i = 0; i < projects.length; i++) {{
-      if (projectIsLiveWork(projects[i])) return true;
-    }}
-    return false;
-  }}
-  function sectionIsLeftoverOnly(sec) {{
-    var sid = tabId(sec && sec.id);
-    if (!sid || sid === "controls" || sid === "parked") return false;
-    var projects = [];
-    (sec.projects || []).forEach(function (p) {{
-      if (p && typeof p === "object") projects.push(p);
-    }});
-    if (!projects.length) return false;
-    return !sectionHasLiveWork(sec);
-  }}
-  function leftoverTypeIdsFor(sections) {{
+  function typeTabIdsFor(sections, pending) {{
     var present = {{}};
     (sections || []).forEach(function (sec) {{
-      if (sec && sec.id) present[String(sec.id)] = sec;
+      if (sec && sec.id) present[String(sec.id)] = 1;
     }});
-    var out = [];
-    TYPE_TAB_IDS.forEach(function (sid) {{
-      if (sid === "controls" || sid === "parked") return;
-      if (present[sid] && sectionIsLeftoverOnly(present[sid])) out.push(sid);
-    }});
-    return out;
-  }}
-  function typeTabIdsFor(sections, pending, selected) {{
-    var present = {{}};
-    (sections || []).forEach(function (sec) {{
-      if (sec && sec.id) present[String(sec.id)] = sec;
-    }});
-    var want = tabId(selected);
-    var hasParkedHome = !!present.parked;
     var out = [];
     TYPE_TAB_IDS.forEach(function (sid) {{
       if (sid === "controls") return;
-      var sec = present[sid];
-      if (!sec) return;
-      if (sid === "parked") {{ out.push(sid); return; }}
-      if (sectionHasLiveWork(sec) || sid === want || !hasParkedHome || !sectionIsLeftoverOnly(sec)) {{
-        out.push(sid);
-      }}
+      if (present[sid]) out.push(sid);
     }});
     return out;
-  }}
-  function leftoverTypeNoteHtml(sec) {{
-    if (!sectionIsLeftoverOnly(sec)) return "";
-    var label = tabLabel(sec && sec.id) || "This type";
-    return '<p class="leftover-types">Leftover ' + esc(label) + ". Not an active agent or a Jeff yes.</p>";
-  }}
-  function leftoverTypesHtml(sections) {{
-    var ids = leftoverTypeIdsFor(sections);
-    if (!ids.length) return "";
-    var buttons = "";
-    ids.forEach(function (sid) {{
-      buttons += '<button type="button" data-tab="' + esc(sid) + '" data-leftover-type="true">' +
-        esc(tabLabel(sid)) + "</button>";
-    }});
-    return '<p class="leftover-types">Leftover types. Not active agents or a Jeff yes.</p>' +
-      '<div class="leftover-type-links">' + buttons + "</div>";
-  }}
-  function isOwnerHold(item) {{
-    if (!item || typeof item !== "object" || typeof item.kind !== "string") return false;
-    var kind = item.kind.trim().toLowerCase();
-    return kind === "jeff-gate" || kind === "owner-live-gate";
-  }}
-  function ownerHoldStatus(pending) {{
-    var rank = {{ high: 0, medium: 1, low: 2 }};
-    var rows = (Array.isArray(pending) ? pending : []).map(decisionReviewItem).filter(function (item) {{
-      return item && isOwnerHold(item);
-    }});
-    rows.sort(function (a, b) {{ return rank[a.risk] - rank[b.risk]; }});
-    return rows.length ? rows[0] : null;
-  }}
-  function ownerHoldLinkHtml(pending, sections) {{
-    var hasControls = (Array.isArray(sections) ? sections : []).some(function (sec) {{
-      return sec && sec.id === "controls";
-    }});
-    var hold = hasControls ? ownerHoldStatus(pending) : null;
-    var target = hold ? focusKey("decision", hold.id) : "";
-    if (!target) return "";
-    return '<p class="leftover-types">Standing owner holds are not active work. Opening a hold does not approve or perform it.</p>' +
-      '<button type="button" id="owner-holds-link" data-tab="controls" data-focus-target="' + esc(target) +
-      '" aria-controls="controls">Review owner holds</button>';
-  }}
-  function glanceProjectIsCiWait(p) {{
-    if (!p || p.private) return false;
-    var ci = p.ci;
-    var concl = (ci && typeof ci === "object") ? String(ci.conclusion || "").replace(/^\s+|\s+$/g, "").toLowerCase() : "";
-    if (concl !== "in_progress" && concl !== "waiting" && concl !== "queued" && concl !== "pending" && concl !== "requested") {{
-      return false;
-    }}
-    var n = p.open_prs;
-    if (typeof n === "number" && isFinite(n) && n > 0) return false;
-    if (p.pr_listing_complete === false) return false;
-    return true;
-  }}
-  function glanceAttentionRank(p) {{
-    if (!p) return 99;
-    var st = String(p.status || "").replace(/^\s+|\s+$/g, "").toLowerCase();
-    if (st === "red") return 0;
-    if (st !== "yellow") return 99;
-    return glanceProjectIsCiWait(p) ? 3 : 2;
-  }}
-  function glancePlace(kind, typeId) {{
-    var key = String(kind || "").replace(/^\s+|\s+$/g, "").toLowerCase();
-    var bases = {{ decide: "Decide", hold: "Owner hold", red: "Red", review: "Review", wait: "CI wait" }};
-    var base = bases.hasOwnProperty(key) ? bases[key] : "";
-    if (!base) return "";
-    var label = (key === "red" || key === "review" || key === "wait") ? tabLabel(typeId) : "";
-    if (label) return base + " \\u00b7 " + label;
-    return base;
   }}
   function glanceStatus(pending, sections) {{
     var rank = {{ high: 0, medium: 1, low: 2 }};
     var rows = [];
     (pending || []).forEach(function (it) {{
-      if (it && typeof it === "object" && focusKey("decision", it.id) && !isOwnerHold(it)) rows.push(it);
+      if (it && typeof it === "object" && focusKey("decision", it.id)) rows.push(it);
     }});
     rows.sort(function (a, b) {{
       var ra = rank.hasOwnProperty(String(a.risk || "").toLowerCase()) ? rank[String(a.risk).toLowerCase()] : 5;
@@ -2113,7 +1797,7 @@ function focusKey(kind, raw) {{
       var title = rows[0] && rows[0].title != null ? String(rows[0].title).replace(/^\s+|\s+$/g, "") : "";
       if (title.length > 28) title = title.slice(0, 28).replace(/\s+$/g, "");
       if (!title) title = "Pending";
-      return {{ text: title, place: glancePlace("decide"), tab: "controls", focus: focusKey("decision", rows[0].id) }};
+      return {{ text: title, tab: "controls", focus: focusKey("decision", rows[0].id) }};
     }}
     var worstRank = 99;
     var worstId = "";
@@ -2123,9 +1807,9 @@ function focusKey(kind, raw) {{
       var sid = tabId(sec && sec.id);
       if (!sid || sid === "controls") return;
       (sec.projects || []).forEach(function (p) {{
-        var r = glanceAttentionRank(p);
+        var r = attentionRank(p);
         var target = focusKey("project", p && p.name);
-        if ((r !== 0 && r !== 2 && r !== 3) || !target) return;
+        if ((r !== 0 && r !== 2) || !target) return;
         if (r < worstRank) {{
           worstRank = r;
           worstId = sid;
@@ -2136,72 +1820,34 @@ function focusKey(kind, raw) {{
       }});
     }});
     if (worstId) {{
-      var name = worstName || tabLabel(worstId);
-      if (worstRank === 0) return {{ text: name, place: glancePlace("red", worstId), tab: worstId, focus: worstFocus }};
-      if (worstRank === 2) return {{ text: name, place: glancePlace("review", worstId), tab: worstId, focus: worstFocus }};
-      if (worstRank === 3) return {{ text: name, place: glancePlace("wait", worstId), tab: worstId, focus: worstFocus }};
+      var label = worstName || tabLabel(worstId);
+      if (worstRank === 0) return {{ text: label + " is red", tab: worstId, focus: worstFocus }};
+      if (worstRank === 2) return {{ text: label + " needs a look", tab: worstId, focus: worstFocus }};
     }}
-    var hold = ownerHoldStatus(pending);
-    if (hold) {{
-      var holdTitle = hold.title.trim();
-      if (holdTitle.length > 28) holdTitle = holdTitle.slice(0, 28).replace(/\s+$/g, "");
-      return {{ text: holdTitle || "Pending", place: glancePlace("hold"), tab: "controls", focus: focusKey("decision", hold.id) }};
-    }}
-    return {{ text: "Quiet", place: "", tab: "" }};
+    return {{ text: "Quiet", tab: "" }};
   }}
   function glanceHtml(pending, sections) {{
     var g = glanceStatus(pending, sections);
     var extra = g.tab ? ' data-tab="' + esc(g.tab) + '"' : "";
     var target = g.focus ? ' data-focus-target="' + esc(g.focus) + '"' : "";
     var controls = g.tab ? ' aria-controls="' + esc(g.tab) + '"' : "";
-    var place = g.place ? '<span class="glance-place">' + esc(g.place) + "</span>" : "";
     return '<button type="button" class="board-glance" id="board-glance" aria-label="Next action"' + extra + target + controls + ">" +
-      '<span class="glance-name">' + esc(g.text || "Quiet") + "</span>" + place + "</button>";
+      esc(g.text || "Quiet") + "</button>";
   }}
   function typeTabsHtml(sections, pending, selected) {{
     var want = tabId(selected);
     var buttons = "";
-    var ids = typeTabIdsFor(sections, pending, want);
-    var stop = ids.indexOf(want) >= 0 ? want : ids[0];
-    ids.forEach(function (sid) {{
+    typeTabIdsFor(sections, pending).forEach(function (sid) {{
       buttons += '<button type="button" role="tab" id="tab-' + esc(sid) + '" data-tab="' + esc(sid) +
-        '" aria-controls="' + esc(sid) + '" aria-selected="' + (sid === want ? "true" : "false") +
-        '" tabindex="' + (sid === stop ? "0" : "-1") + '">' +
+        '" aria-controls="' + esc(sid) + '" aria-selected="' + (sid === want ? "true" : "false") + '">' +
         esc(tabLabel(sid)) + "</button>";
     }});
     return '<nav class="type-tabs" id="type-tabs" role="tablist" aria-label="Project type">' +
       buttons + "</nav>";
   }}
-  function focusQuietly(target) {{
-    if (!target) return;
-    try {{ target.focus({{ preventScroll: true }}); }} catch (e) {{}}
-  }}
-  function setTypeTabStop(id) {{
-    var tabs = document.querySelectorAll("#type-tabs [data-tab]");
-    var next = null;
-    Array.prototype.forEach.call(tabs, function (btn) {{
-      if (btn.getAttribute("data-tab") === id) next = btn;
-    }});
-    if (!next) next = tabs[0] || null;
-    Array.prototype.forEach.call(tabs, function (btn) {{
-      btn.setAttribute("tabindex", btn === next ? "0" : "-1");
-    }});
-    return next;
-  }}
   function applyTypeTab(id) {{
     var want = tabId(id);
-    var active = document.activeElement;
-    var focused = active && active.closest ? active.closest("#type-tabs [data-tab]") : null;
-    var focusedId = focused ? tabId(focused.getAttribute("data-tab")) : "";
     currentTypeTab = want;
-    var nav = document.getElementById("type-tabs");
-    if (nav && lastBoardSections) {{
-      var next = typeTabsHtml(lastBoardSections, lastBoardPending, want);
-      var wrap = document.createElement("div");
-      wrap.innerHTML = next;
-      var fresh = wrap.firstChild;
-      if (fresh && nav.parentNode) nav.parentNode.replaceChild(fresh, nav);
-    }}
     var tabs = document.querySelectorAll("#type-tabs [data-tab]");
     Array.prototype.forEach.call(tabs, function (btn) {{
       btn.setAttribute("aria-selected", tabId(btn.getAttribute("data-tab")) === want ? "true" : "false");
@@ -2210,58 +1856,17 @@ function focusKey(kind, raw) {{
     Array.prototype.forEach.call(panels, function (panel) {{
       var pid = tabId(panel.getAttribute("data-tab-panel"));
       if (!pid) return;
-      panel.setAttribute("role", "tabpanel");
       if (pid === want) panel.removeAttribute("hidden");
       else panel.setAttribute("hidden", "");
     }});
     try {{
       document.body.classList.toggle("tab-home", !want);
     }} catch (e2) {{}}
-    var stop = setTypeTabStop(focusedId || want);
-    if (focused) focusQuietly(stop);
-  }}
-  function navigateTypeTab(id) {{
-    var want = tabId(id);
-    var hash = want ? "#" + want : "";
-    // Only deliberate navigation gets a history entry. Record it before
-    // changing panels so the browser can restore the previous scroll position.
     try {{
-      if ((location.hash || "") !== hash) {{
-        history.pushState(null, "", location.pathname + location.search + hash);
-      }}
+      if (want) history.replaceState(null, "", "#" + want);
+      else if ((location.hash || "").length > 1) history.replaceState(null, "", location.pathname + location.search);
     }} catch (e) {{}}
-    applyTypeTab(want);
   }}
-  function restoreTypeTabFromHistory() {{
-    var active = document.activeElement;
-    // Some browsers reset focus to body before dispatching hashchange.
-    var restoreFocus = !active || active === document.body || (boardEl && boardEl.contains(active));
-    var want = tabFromHash();
-    applyTypeTab(want);
-    if (!restoreFocus) return;
-    var next = document.getElementById(want ? "tab-" + want : "board-glance");
-    if (!next && want) {{
-      next = document.getElementById(want);
-      if (next) next.setAttribute("tabindex", "-1");
-    }}
-    // Back must not strand keyboard focus in a panel it just hid. Leave
-    // scrolling to the browser, and never focus a decision action.
-    focusQuietly(next);
-  }}
-  function handleTypeTabKey(ev) {{
-    if (ev.defaultPrevented || ev.altKey || ev.ctrlKey || ev.metaKey || ev.shiftKey) return;
-    if (["ArrowLeft", "ArrowRight", "Home", "End"].indexOf(ev.key) < 0) return;
-    var btn = ev.target && ev.target.closest ? ev.target.closest("#type-tabs [data-tab]") : null;
-    if (!btn) return;
-    var tabs = Array.prototype.slice.call(document.querySelectorAll("#type-tabs [data-tab]"));
-    var at = tabs.indexOf(btn);
-    if (at < 0) return;
-    var next = ev.key === "Home" ? 0 : ev.key === "End" ? tabs.length - 1 :
-      (at + (ev.key === "ArrowRight" ? 1 : -1) + tabs.length) % tabs.length;
-    ev.preventDefault();
-    setTypeTabStop(tabs[next].getAttribute("data-tab")).focus();
-  }}
-  document.addEventListener("keydown", handleTypeTabKey);
   var glanceTargetTimer = null;
   function validFocusKey(raw) {{
     var key = String(raw || "");
@@ -2328,23 +1933,24 @@ function focusKey(kind, raw) {{
     if (!id) return;
     ev.preventDefault();
     var fromGlance = btn.id === "board-glance";
-    var fromOwnerHolds = btn.id === "owner-holds-link";
-    if (fromGlance || fromOwnerHolds) {{
-      navigateTypeTab(id);
+    if (fromGlance) {{
+      applyTypeTab(id);
       var focus = btn.getAttribute("data-focus-target") || "";
       var reveal = function () {{ revealGlanceTarget(id, focus); }};
       if (window.requestAnimationFrame) window.requestAnimationFrame(reveal);
       else setTimeout(reveal, 0);
       return;
     }}
-    navigateTypeTab(currentTypeTab === id ? "" : id);
-    // Leftover-type links live in the panel that just became hidden.
-    focusQuietly(setTypeTabStop(id));
+    applyTypeTab(currentTypeTab === id ? "" : id);
   }});
-  window.addEventListener("hashchange", restoreTypeTabFromHistory);
+  window.addEventListener("hashchange", function () {{
+    applyTypeTab(tabFromHash());
+  }});
   function pendingShell(items) {{
     var rank = {{ high: 0, medium: 1, low: 2 }};
-    var rows = (items || []).map(decisionReviewItem).filter(function (it) {{ return !!it; }}).sort(function (a, b) {{
+    var rows = (items || []).filter(function (it) {{
+      return it && /^[a-zA-Z0-9._-]+$/.test(String(it.id || ""));
+    }}).slice().sort(function (a, b) {{
       var ra = rank.hasOwnProperty(String(a.risk || "").toLowerCase()) ? rank[String(a.risk).toLowerCase()] : 5;
       var rb = rank.hasOwnProperty(String(b.risk || "").toLowerCase()) ? rank[String(b.risk).toLowerCase()] : 5;
       return ra - rb;
@@ -2355,15 +1961,20 @@ function focusKey(kind, raw) {{
     rows.forEach(function (it) {{
       var rawRisk = String(it.risk || "").toLowerCase();
       var risk = (rawRisk === "high" || rawRisk === "medium") ? rawRisk : "low";
+      function decA(verb, extra) {{
+        var href = (window.decisionHref && window.decisionHref(verb, it.id, it.title || it.id)) || "";
+        if (!href) return "";
+        var label = verb === "APPROVE" ? "Approve" : verb === "HOLD" ? "Hold" : "Deny";
+        return '<a class="dec' + (extra ? " " + extra : "") + '" data-dec="' + esc(verb) +
+          '" href="' + esc(href) + '" target="_blank" rel="noopener noreferrer">' + label + "</a>";
+      }}
       var focus = focusKey("decision", it.id);
       var focusAttr = focus ? ' data-focus-key="' + esc(focus) + '" tabindex="-1"' : "";
       var row = '<div class="pending-item" data-id="' + esc(it.id) + '" data-title="' + esc(it.title || it.id) + '"' + focusAttr + '>' +
         '<div class="pending-head"><div class="ptitle">' + esc(it.title || it.id) + "</div>" +
         '<span class="prisk ' + esc(risk) + '">' + esc(risk) + "</span></div>" +
-        '<div class="pdetail">' + esc(it.detail || "") + "</div>" +
-        '<p class="decision-kind">Boundary: ' + esc(it.kind === undefined ? "ops" : it.kind) + "</p>" +
-        '<button type="button" data-review-decision="' + esc(it.id) + '" disabled>Review choices</button>' +
-        '<div class="decision-review" aria-live="polite"></div></div>';
+        '<div class="pdetail">' + esc(shortNote(it.detail || "", 72)) + "</div>" +
+        '<div class="prow">' + decA("APPROVE", "") + decA("HOLD", "warn") + decA("DENY", "danger") + "</div></div>";
       if (rawRisk === "low") {{ low += row; lowCount += 1; }}
       else attn += row;
     }});
@@ -2373,7 +1984,7 @@ function focusKey(kind, raw) {{
         "</summary>" + low + "</details>";
     }}
     return '<div id="pending-box" class="pending-box"' + (rows.length ? "" : " hidden") + ">" +
-      '<p class="pending-help">Review the full context first. Opening a GitHub draft is not submitting a decision. GitHub login as <code>rupret007</code> remains the authority.</p>' +
+      '<p class="pending-help">Public board -- Approve opens a GitHub issue as <code>rupret007</code>.</p>' +
       '<div id="pending-list">' + attn + low + "</div></div>";
   }}
   function toolsRow(projects) {{
@@ -2434,13 +2045,11 @@ function focusKey(kind, raw) {{
     var unverified = state !== "current";
     if (document.body) document.body.classList.toggle("snapshot-unverified", unverified);
     if (boardEl) {{
-      var starting = document.documentElement && !document.documentElement.classList.contains("dashboard-ready");
-      boardEl.setAttribute("data-snapshot-trust", starting ? "saved" : unverified ? "last-verified" : "current");
+      boardEl.setAttribute("data-snapshot-trust", unverified ? "last-verified" : "current");
       if (unverified) boardEl.setAttribute("aria-describedby", "silence-detail");
       else boardEl.removeAttribute("aria-describedby");
     }}
     if (silenceEl) silenceEl.setAttribute("data-state", state);
-    if (window.bobDecisionReview) window.bobDecisionReview.setTrust(state);
   }}
 
   function showSilence(state, title, detail) {{
@@ -2454,20 +2063,11 @@ function focusKey(kind, raw) {{
 
   function hideSilence() {{
     if (!silenceEl) return;
-    var restoreRetryFocus = retryStatus && document.activeElement === retryStatus;
     if (silenceTitleEl) silenceTitleEl.textContent = "";
     if (silenceDetailEl) silenceDetailEl.textContent = "";
     silenceEl.classList.remove("show");
     silenceEl.hidden = true;
     setSnapshotTrust("current");
-    if (restoreRetryFocus) {{
-      var next = document.getElementById(currentTypeTab ? "tab-" + currentTypeTab : "board-glance");
-      if (!next && currentTypeTab) {{
-        next = document.getElementById(currentTypeTab);
-        if (next) next.setAttribute("tabindex", "-1");
-      }}
-      focusQuietly(next);
-    }}
   }}
 
   function fmtSilenceAge(ms) {{
@@ -2644,7 +2244,7 @@ function focusKey(kind, raw) {{
   function boardFingerprint(data) {{
     if (!data || typeof data !== "object") return "";
     function agentKey(a) {{ return a ? [a.id, a.state, a.detail, a.url || "", a.pr_url || ""] : []; }}
-    function pendingKey(it) {{ return it ? [it.id, it.title, it.risk, it.detail, it.kind] : []; }}
+    function pendingKey(it) {{ return it ? [it.id, it.title, it.risk, it.detail] : []; }}
     function projectKey(p) {{
       if (!p) return [];
       var ci = p.ci && typeof p.ci === "object" ? p.ci : {{}};
@@ -2668,16 +2268,11 @@ function focusKey(kind, raw) {{
       var el = document.querySelector(sel);
       return !!(el && el.open);
     }}
-    var active = document.activeElement;
-    var row = active && active.closest ? active.closest(".pending-item") : null;
-    var decisionFocus = row ? {{ id: row.getAttribute("data-id"), verb: active.getAttribute("data-dec") || "" }} : null;
     return {{
       how: isOpen("details.how-board"),
       ab: isOpen("details.abilities-foot"),
       more: isOpen("details.pending-more"),
-      tab: currentTypeTab || tabFromHash(),
-      navigationFocus: snapshotNavigationFocus(active),
-      decisionFocus: decisionFocus
+      tab: currentTypeTab || tabFromHash()
     }};
   }}
   function restoreOpen(s) {{
@@ -2690,64 +2285,6 @@ function focusKey(kind, raw) {{
     setOpen("details.abilities-foot", s.ab);
     setOpen("details.pending-more", s.more);
     applyTypeTab(s.tab || "");
-    restoreNavigationFocus(s.navigationFocus);
-    if (s.decisionFocus) {{
-      var rows = document.querySelectorAll(".pending-item");
-      for (var i = 0; i < rows.length; i++) {{
-        if (rows[i].getAttribute("data-id") !== s.decisionFocus.id) continue;
-        var verb = s.decisionFocus.verb;
-        var next = ["APPROVE", "HOLD", "DENY"].indexOf(verb) >= 0 ? rows[i].querySelector('[data-dec="' + verb + '"]') : rows[i].querySelector("[data-review-decision]");
-        if (!next || next.disabled) next = rows[i];
-        try {{ next.focus({{ preventScroll: true }}); }} catch (e) {{}}
-        break;
-      }}
-    }}
-  }}
-  function snapshotNavigationFocus(active) {{
-    if (!active || !active.closest || !boardEl.contains(active)) return null;
-    var tab = active.closest("#type-tabs [data-tab]");
-    if (tab) return {{ tab: tabId(tab.getAttribute("data-tab")) }};
-    var panel = active.closest("[data-tab-panel]");
-    if (!panel || panel.hidden) return null;
-    if (active === panel) return {{ panel: tabId(panel.getAttribute("data-tab-panel")), key: "" }};
-    var row = active.closest(".lane[data-focus-key]");
-    if (!row) return null;
-    var action = active.closest('a[data-open="work"]');
-    if (active !== row && !action) return null;
-    return {{ panel: tabId(panel.getAttribute("data-tab-panel")), key: row.getAttribute("data-focus-key"),
-      href: action ? action.getAttribute("href") : "", label: action ? action.textContent : "" }};
-  }}
-  function findProjectFocus(panel, saved) {{
-    var row = findFocusTarget(panel, saved.key);
-    if (!row || !row.classList.contains("lane")) return null;
-    if (!saved.href) return row;
-    var actions = row.querySelectorAll('a[data-open="work"]');
-    var match = null;
-    // A familiar label with a new destination is a different action.
-    for (var i = 0; i < actions.length; i++) {{
-      if (actions[i].getAttribute("href") !== saved.href || actions[i].textContent !== saved.label) continue;
-      if (match) return row;
-      match = actions[i];
-    }}
-    return match || row;
-  }}
-  function restoreNavigationFocus(saved) {{
-    if (!saved) return;
-    if (saved.tab) {{
-      focusQuietly(setTypeTabStop(saved.tab));
-      return;
-    }}
-    var panel = document.getElementById(tabId(saved.panel));
-    if (!panel || panel.hidden) {{
-      focusQuietly(setTypeTabStop(currentTypeTab));
-      return;
-    }}
-    var next = findProjectFocus(panel, saved);
-    if (!next) {{
-      panel.setAttribute("tabindex", "-1");
-      next = panel;
-    }}
-    focusQuietly(next);
   }}
   function paintAgents(agents, cloud) {{
     var host = document.getElementById("active-agents");
@@ -2796,11 +2333,9 @@ function focusKey(kind, raw) {{
   function renderBoard(data) {{
     if (!boardEl || !data || !Array.isArray(data.sections)) return;
     lastCloud = sanitizeCloudAgents((data && data.cloud_agents) || lastCloud);
-    lastBoardSections = data.sections;
-    lastBoardPending = data.pending || [];
     paintAgents(data.agents || [], lastCloud);
     var controlProjects = [];
-    var html = glanceHtml(data.pending, data.sections) + typeTabsHtml(data.sections, data.pending, currentTypeTab);
+    var html = glanceHtml(data.pending, data.sections) + typeTabsHtml(data.sections, data.pending, "");
     data.sections.forEach(function (sec) {{
       var kind = sectionKind(sec.id);
       if (kind === "pulse") return;
@@ -2827,24 +2362,19 @@ function focusKey(kind, raw) {{
         return;
       }}
       var cls = kind === "primary" ? "primary" : "secondary";
-      var leftoverOnly = sectionIsLeftoverOnly(sec);
-      var panel = "";
-      if (isTypeTab(sec.id)) {{
-        panel = leftoverOnly
-          ? ' data-tab-panel="' + esc(sec.id) + '" hidden role="tabpanel" aria-label="Leftover ' + esc(tabLabel(sec.id) || sec.title || sec.id) + '"'
-          : ' data-tab-panel="' + esc(sec.id) + '" hidden role="tabpanel" aria-labelledby="tab-' + esc(sec.id) + '"';
-      }}
-      var leftoverHome = sec.id === "parked" ? ownerHoldLinkHtml(data.pending, data.sections) + leftoverTypesHtml(data.sections) : "";
+      var panel = isTypeTab(sec.id)
+        ? ' data-tab-panel="' + esc(sec.id) + '" hidden role="tabpanel" aria-labelledby="tab-' + esc(sec.id) + '"'
+        : "";
       html += '<section id="' + esc(sec.id || "") + '" class="block ' + cls + '"' + panel + ">" +
-        "<h2>" + esc(sec.title || "") + "</h2>" + leftoverHome + leftoverTypeNoteHtml(sec) +
+        "<h2>" + esc(sec.title || "") + "</h2>" +
         lanesHtml(sec.projects || [], kind === "primary") + "</section>";
     }});
     if (boardEl.getAttribute("data-fp") === html) return;
     var open = snapshotOpen();
     boardEl.innerHTML = html;
     boardEl.setAttribute("data-fp", html);
-    if (window.bobDecisionReview) window.bobDecisionReview.reconcileRendering();
     restoreOpen(open);
+    applyTypeTab(currentTypeTab);
     window.dispatchEvent(new CustomEvent("bob-ops-painted"));
   }}
 
@@ -2888,7 +2418,7 @@ function focusKey(kind, raw) {{
   var pollTimeout = null;
   function setRetryBusy(busy) {{
     if (!retryStatus) return;
-    retryStatus.setAttribute("aria-disabled", busy ? "true" : "false");
+    retryStatus.disabled = !!busy;
     retryStatus.textContent = busy ? "Checking..." : "Retry now";
     retryStatus.setAttribute("aria-busy", busy ? "true" : "false");
   }}
@@ -2965,14 +2495,16 @@ function focusKey(kind, raw) {{
       }})
       .then(function (data) {{
         if (!pollFailureCounts(seq, pollSeq)) return;
-        if (!validateAcceptedSnapshot(data)) throw new Error("Snapshot incomplete or invalid");
         var fp = boardFingerprint(data);
         var decision = pollPaintDecision(data && data.generated_at, known, lastFp, fp);
         if (decision === "ignore") {{
-          // A stale response is not proof the retained decisions are current.
-          throw new Error("Snapshot older than the accepted board");
+          // Stale CDN/cache body. Do not rewind freshness or rewrite lanes.
+          lastPollOk = Date.now();
+          pollFailStreak = 0;
+          paint();
+          updateSilence();
+          return;
         }}
-        if (!window.bobDecisionReview || !window.bobDecisionReview.accept(data)) throw new Error("Decision snapshot unavailable");
         lastPollOk = Date.now();
         pollFailStreak = 0;
         if (dot) {{
@@ -2990,7 +2522,6 @@ function focusKey(kind, raw) {{
         lastFp = fp;
         paint();
         updateSilence();
-        window.bobDecisionReview.reconcileRendering();
       }})
       .catch(function () {{
         if (!pollFailureCounts(seq, pollSeq)) return;
@@ -3008,11 +2539,10 @@ function focusKey(kind, raw) {{
       }});
   }}
 
-  function retrySnapshot() {{
-    if (retryStatus && retryStatus.getAttribute("aria-disabled") !== "true" && document.visibilityState !== "hidden") poll();
-  }}
   if (retryStatus) {{
-    retryStatus.addEventListener("click", retrySnapshot);
+    retryStatus.addEventListener("click", function () {{
+      if (document.visibilityState !== "hidden") poll();
+    }});
   }}
 
   var pollTimer = null;
@@ -3049,25 +2579,11 @@ function focusKey(kind, raw) {{
     if (document.visibilityState !== "hidden") startPolling();
   }});
 
-  try {{
-    var initialBody = document.getElementById("initial-snapshot");
-    var initialBoard = initialBody ? JSON.parse(initialBody.textContent) : null;
-    if (!validateAcceptedSnapshot(initialBoard)) throw new Error("Initial snapshot unavailable");
-    lastBoardSections = initialBoard.sections;
-    lastBoardPending = initialBoard.pending || [];
-    lastFp = boardFingerprint(initialBoard);
-  }} catch (e) {{ pollFailStreak = 1; }}
   paint();
   applyTypeTab(tabFromHash());
   // Pause polls when tab hidden; resume on visible / bfcache pageshow.
   if (document.visibilityState !== "hidden") startPolling();
   else setTimeout(function () {{ if (document.visibilityState !== "hidden") startPolling(); }}, 5000);
-  // Progressive enhancement commits only after the navigation/poll setup above.
-  // If startup throws, the saved sections and timestamp remain readable and
-  // decision review stays disabled, even if a partial paint already ran.
-  document.documentElement.classList.add("dashboard-ready");
-  if (window.bobDecisionReview) window.bobDecisionReview.enableNavigation();
-  paint();
 }})();
 </script>
 </body>
@@ -3116,11 +2632,6 @@ if [[ $PUSH -eq 1 ]]; then
   [[ -f "$ROOT/test_open_decision.js" ]] && cp "$ROOT/test_open_decision.js" "$WORK/"
   [[ -f "$ROOT/test_open_links.js" ]] && cp "$ROOT/test_open_links.js" "$WORK/"
   [[ -f "$ROOT/test_soft_paint.js" ]] && cp "$ROOT/test_soft_paint.js" "$WORK/"
-  [[ -f "$ROOT/qa-offline.py" ]] && cp "$ROOT/qa-offline.py" "$WORK/"
-  [[ -f "$ROOT/offline_qa_fixtures.py" ]] && cp "$ROOT/offline_qa_fixtures.py" "$WORK/"
-  [[ -f "$ROOT/test_offline_qa.py" ]] && cp "$ROOT/test_offline_qa.py" "$WORK/"
-  [[ -f "$ROOT/test_decision_review.py" ]] && cp "$ROOT/test_decision_review.py" "$WORK/"
-  [[ -f "$ROOT/test_decision_review.js" ]] && cp "$ROOT/test_decision_review.js" "$WORK/"
   [[ -f "$ROOT/.gitignore" ]] && cp "$ROOT/.gitignore" "$WORK/"
   # Do not commit agents-status.json by default (Mac-local probe snapshot); refresh merges it when present.
   if [[ -f "$ROOT/.github/workflows/refresh-dashboard.yml" ]]; then
@@ -3143,11 +2654,6 @@ if [[ $PUSH -eq 1 ]]; then
   [[ -f test_open_decision.js ]] && git add test_open_decision.js
   [[ -f test_open_links.js ]] && git add test_open_links.js
   [[ -f test_soft_paint.js ]] && git add test_soft_paint.js
-  [[ -f qa-offline.py ]] && git add qa-offline.py
-  [[ -f offline_qa_fixtures.py ]] && git add offline_qa_fixtures.py
-  [[ -f test_offline_qa.py ]] && git add test_offline_qa.py
-  [[ -f test_decision_review.py ]] && git add test_decision_review.py
-  [[ -f test_decision_review.js ]] && git add test_decision_review.js
   [[ -f .gitignore ]] && git add .gitignore
   [[ -f .github/workflows/refresh-dashboard.yml ]] && git add .github/workflows/refresh-dashboard.yml
   [[ -f .github/workflows/qa-claim-smoke.yml ]] && git add .github/workflows/qa-claim-smoke.yml
