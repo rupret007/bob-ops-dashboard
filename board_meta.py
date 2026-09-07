@@ -981,6 +981,34 @@ def glance_pending_title(item: Any) -> str:
     return title
 
 
+def glance_place(kind: Any, type_id: Any = "") -> str:
+    """Allowlisted glance subtitle. Empty when quiet or the kind is unknown.
+
+    Project rows may add an existing type label. Decision and owner-hold
+    kinds never invent a project type. Callers must not pass user notes.
+    """
+    key = str(kind or "").strip().lower()
+    bases = {
+        "decide": "Decide",
+        "hold": "Owner hold",
+        "red": "Red",
+        "review": "Review",
+        "wait": "CI wait",
+    }
+    base = bases.get(key, "")
+    if not base:
+        return ""
+    label = tab_label(type_id) if key in {"red", "review", "wait"} else ""
+    if label:
+        return base + " · " + label
+    return base
+
+
+def glance_quiet() -> dict[str, str]:
+    """Empty first-screen next action. No destination and no invented work."""
+    return {"text": "Quiet", "place": "", "tab": ""}
+
+
 def is_owner_hold(item: Any) -> bool:
     """Only explicit standing-boundary kinds, never title/ID/private inference."""
     if not isinstance(item, dict) or not isinstance(item.get("kind"), str):
@@ -1061,7 +1089,9 @@ def glance_status(pending: Any, sections: Any) -> dict[str, str]:
     """Decision, red, review yellow, CI wait, then standing owner hold.
 
     CI running/pending still beats a standing owner hold. It must not hide
-    open-PR or incomplete-listing yellow. Never a yes-count.
+    open-PR or incomplete-listing yellow. The name is the work; place is
+    the allowlisted next-action kind plus an existing type label. Never a
+    yes-count, and review vs CI wait must not share leftover look copy.
     """
     rows = [
         item for item in sort_pending(pending)
@@ -1071,6 +1101,7 @@ def glance_status(pending: Any, sections: Any) -> dict[str, str]:
         title = glance_pending_title(rows[0]) or "Pending"
         return {
             "text": title,
+            "place": glance_place("decide"),
             "tab": "controls",
             "focus": focus_key("decision", rows[0].get("id")),
         }
@@ -1100,16 +1131,25 @@ def glance_status(pending: Any, sections: Any) -> dict[str, str]:
     # Jeff yes lives in the pending inbox. Leftover lane jeff-gate and quiet
     # work are skipped before ranking so they cannot hide a real red/yellow row.
     if worst_id:
-        label = worst_name or tab_label(worst_id)
+        name = worst_name or tab_label(worst_id)
         if worst_rank == 0:
             return {
-                "text": label + " is red",
+                "text": name,
+                "place": glance_place("red", worst_id),
                 "tab": worst_id,
                 "focus": worst_focus,
             }
-        if worst_rank in (2, 3):
+        if worst_rank == 2:
             return {
-                "text": label + " needs a look",
+                "text": name,
+                "place": glance_place("review", worst_id),
+                "tab": worst_id,
+                "focus": worst_focus,
+            }
+        if worst_rank == 3:
+            return {
+                "text": name,
+                "place": glance_place("wait", worst_id),
                 "tab": worst_id,
                 "focus": worst_focus,
             }
@@ -1117,21 +1157,26 @@ def glance_status(pending: Any, sections: Any) -> dict[str, str]:
     if owner is not None:
         return {
             "text": glance_pending_title(owner) or "Pending",
+            "place": glance_place("hold"),
             "tab": "controls",
             "focus": focus_key("decision", owner["id"]),
         }
-    return {"text": "Quiet", "tab": ""}
+    return glance_quiet()
 
 
 def glance_html(pending: Any, sections: Any) -> str:
     """First-screen action opens its existing type and exact safe target."""
     glance = glance_status(pending, sections)
     text = html_lib.escape(str(glance.get("text") or "Quiet"))
+    place = html_lib.escape(str(glance.get("place") or ""))
     sid = tab_id(glance.get("tab"))
     focus = str(glance.get("focus") or "")
     extra = ' data-tab="' + html_lib.escape(sid) + '"' if sid else ""
     target = ' data-focus-target="' + html_lib.escape(focus) + '"' if focus else ""
     controls = ' aria-controls="' + html_lib.escape(sid) + '"' if sid else ""
+    place_html = (
+        '<span class="glance-place">' + place + "</span>" if place else ""
+    )
     return (
         '<button type="button" class="board-glance" id="board-glance"'
         + ' aria-label="Next action"'
@@ -1139,7 +1184,10 @@ def glance_html(pending: Any, sections: Any) -> str:
         + target
         + controls
         + ">"
+        + '<span class="glance-name">'
         + text
+        + "</span>"
+        + place_html
         + "</button>"
     )
 

@@ -30,7 +30,9 @@ from board_meta import (
     focus_key,
     glance_attention_rank,
     glance_html,
+    glance_place,
     glance_project_is_ci_wait,
+    glance_quiet,
     glance_status,
     is_ci_noise,
     is_draft_pr,
@@ -383,27 +385,31 @@ class BoardMetaTests(unittest.TestCase):
         pending = [{"id": "adoptiq-live-cisco", "title": "AdoptIQ", "risk": "high"}]
         g = glance_status(pending, sections)
         self.assertEqual(g["text"], "AdoptIQ")
+        self.assertEqual(g["place"], "Decide")
         self.assertEqual(g["tab"], "controls")
         self.assertEqual(g["focus"], "decision:adoptiq-live-cisco")
         g4 = glance_status(pending * 4, sections)
         self.assertEqual(g4["text"], "AdoptIQ")
+        self.assertEqual(g4["place"], "Decide")
         self.assertNotIn("more", g4["text"])
         quiet_live = glance_status([], sections)
-        self.assertEqual(quiet_live["text"], "AdoptIQ is red")
+        self.assertEqual(quiet_live["text"], "AdoptIQ")
+        self.assertEqual(quiet_live["place"], "Red · Cisco")
         self.assertEqual(quiet_live["tab"], "cisco")
         self.assertEqual(quiet_live["focus"], "project:adoptiq")
         yellow_only = glance_status(
             [],
             [{"id": "live-shipping", "projects": [{"name": "WebJam", "status": "yellow"}]}],
         )
-        self.assertEqual(yellow_only["text"], "WebJam needs a look")
+        self.assertEqual(yellow_only["text"], "WebJam")
+        self.assertEqual(yellow_only["place"], "Review · Live")
         self.assertEqual(yellow_only["tab"], "live-shipping")
         self.assertEqual(yellow_only["focus"], "project:webjam")
         leftover_jeff = glance_status(
             [],
             [{"id": "apps-utilities", "projects": [{"name": "Door", "status": "jeff-gate"}]}],
         )
-        self.assertEqual(leftover_jeff, {"text": "Quiet", "tab": ""})
+        self.assertEqual(leftover_jeff, glance_quiet())
         leftover_media = glance_status(
             [],
             [{
@@ -415,8 +421,8 @@ class BoardMetaTests(unittest.TestCase):
                 }],
             }],
         )
-        self.assertEqual(leftover_media, {"text": "Quiet", "tab": ""})
-        self.assertEqual(glance_status([], []), {"text": "Quiet", "tab": ""})
+        self.assertEqual(leftover_media, glance_quiet())
+        self.assertEqual(glance_status([], []), glance_quiet())
         honest_live = glance_status(
             [],
             [
@@ -441,7 +447,8 @@ class BoardMetaTests(unittest.TestCase):
         self.assertEqual(
             honest_live,
             {
-                "text": "Story Shelf needs a look",
+                "text": "Story Shelf",
+                "place": "Review · Apps",
                 "tab": "apps-utilities",
                 "focus": "project:story-shelf",
             },
@@ -457,8 +464,46 @@ class BoardMetaTests(unittest.TestCase):
                 ],
             }],
         )
-        self.assertEqual(owner_hold_plus_work["text"], "TACTrack needs a look")
+        self.assertEqual(owner_hold_plus_work["text"], "TACTrack")
+        self.assertEqual(owner_hold_plus_work["place"], "Review · Apps")
         self.assertEqual(owner_hold_plus_work["focus"], "project:tactrack")
+
+    def test_glance_place_is_allowlisted_and_splits_review_from_wait(self):
+        self.assertEqual(glance_place("decide"), "Decide")
+        self.assertEqual(glance_place("hold"), "Owner hold")
+        self.assertEqual(glance_place("red", "cisco"), "Red · Cisco")
+        self.assertEqual(glance_place("review", "apps-utilities"), "Review · Apps")
+        self.assertEqual(glance_place("wait", "live-shipping"), "CI wait · Live")
+        self.assertEqual(glance_place("wait", "music"), "CI wait")
+        self.assertEqual(glance_place("review", "javascript:alert(1)"), "Review")
+        self.assertEqual(glance_place("look"), "")
+        self.assertEqual(glance_place("needs a look", "live-shipping"), "")
+        self.assertEqual(glance_place("decide", "live-shipping"), "Decide")
+        wait = glance_status([], [{
+            "id": "live-shipping",
+            "projects": [{
+                "name": "WebJam",
+                "status": "yellow",
+                "ci": {"conclusion": "in_progress"},
+                "open_prs": 0,
+            }],
+        }])
+        review = glance_status([], [{
+            "id": "apps-utilities",
+            "projects": [{"name": "Story Shelf", "status": "yellow", "open_prs": 3}],
+        }])
+        self.assertEqual(wait["place"], "CI wait · Live")
+        self.assertEqual(review["place"], "Review · Apps")
+        self.assertNotEqual(wait["place"], review["place"])
+        markup = glance_html([], [{
+            "id": "apps-utilities",
+            "projects": [{"name": '<img src=x onerror=alert(1)>', "status": "yellow"}],
+        }])
+        self.assertIn("&lt;img", markup)
+        self.assertNotIn("<img", markup)
+        self.assertIn("Review · Apps", markup)
+        self.assertNotIn("needs a look", markup)
+        self.assertNotIn("more", markup)
 
     def test_owner_hold_classification_uses_only_exact_explicit_kind(self):
         for kind in ("jeff-gate", "owner-live-gate", " JEFF-GATE ", "\tOWNER-LIVE-GATE\n", "\ufeffjeff-gate\ufeff"):
@@ -487,11 +532,17 @@ class BoardMetaTests(unittest.TestCase):
             ]},
         ]
         self.assertEqual(glance_status([owner], sections), {
-            "text": "Failing app is red", "tab": "live-shipping", "focus": "project:failing-app",
+            "text": "Failing app",
+            "place": "Red · Live",
+            "tab": "live-shipping",
+            "focus": "project:failing-app",
         })
         sections[2]["projects"][0]["status"] = "green"
         self.assertEqual(glance_status([owner], sections), {
-            "text": "Review utility needs a look", "tab": "apps-utilities", "focus": "project:review-utility",
+            "text": "Review utility",
+            "place": "Review · Apps",
+            "tab": "apps-utilities",
+            "focus": "project:review-utility",
         })
         # Existing stable ordering among equal-rank lanes stays unchanged.
         sections[1]["projects"].append({"name": "Second utility", "status": "yellow"})
@@ -532,7 +583,8 @@ class BoardMetaTests(unittest.TestCase):
         self.assertEqual(glance_attention_rank(wait), 3)
         self.assertEqual(glance_attention_rank(review), 2)
         self.assertEqual(glance_status([], mixed), {
-            "text": "Story Shelf needs a look",
+            "text": "Story Shelf",
+            "place": "Review · Apps",
             "tab": "apps-utilities",
             "focus": "project:story-shelf",
         })
@@ -540,7 +592,8 @@ class BoardMetaTests(unittest.TestCase):
         self.assertEqual(glance_status([owner], [
             {"id": "live-shipping", "projects": [wait]},
         ]), {
-            "text": "WebJam needs a look",
+            "text": "WebJam",
+            "place": "CI wait · Live",
             "tab": "live-shipping",
             "focus": "project:webjam",
         })
@@ -614,7 +667,10 @@ class BoardMetaTests(unittest.TestCase):
                 decision["kind"] = kind
             with self.subTest(kind=kind):
                 self.assertEqual(glance_status([owner, decision], sections), {
-                    "text": "Current decision", "tab": "controls", "focus": "decision:actual-decision",
+                    "text": "Current decision",
+                    "place": "Decide",
+                    "tab": "controls",
+                    "focus": "decision:actual-decision",
                 })
         low = {"id": "low", "title": "Low decision", "risk": "low", "kind": "ops"}
         high = {"id": "high", "title": "High decision", "risk": "high", "kind": "ops"}
@@ -630,9 +686,14 @@ class BoardMetaTests(unittest.TestCase):
         self.assertEqual(glance_status(source, [
             {"id": "live-shipping", "projects": [{"name": "Quiet app", "status": "green"}]},
             {"id": "parked", "projects": [{"name": "Leftover", "status": "parked"}]},
-        ]), {"text": "High owner hold", "tab": "controls", "focus": "decision:high-hold"})
+        ]), {
+            "text": "High owner hold",
+            "place": "Owner hold",
+            "tab": "controls",
+            "focus": "decision:high-hold",
+        })
         self.assertEqual(source, original)
-        self.assertEqual(glance_status([], []), {"text": "Quiet", "tab": ""})
+        self.assertEqual(glance_status([], []), glance_quiet())
 
     def test_malformed_owner_rows_do_not_create_a_false_fallback_or_parked_route(self):
         valid = {"id": "owner", "title": "Owner hold", "risk": "high", "kind": "owner-live-gate"}
@@ -647,7 +708,7 @@ class BoardMetaTests(unittest.TestCase):
             with self.subTest(patch=patch):
                 self.assertIsNone(owner_hold_status([row]))
                 self.assertEqual(owner_hold_link_html([row], sections), "")
-                self.assertEqual(glance_status([row], []), {"text": "Quiet", "tab": ""})
+                self.assertEqual(glance_status([row], []), glance_quiet())
         for pending in (None, [], {}, "invalid", 4, [None, "invalid", {}]):
             with self.subTest(pending=pending):
                 self.assertIsNone(owner_hold_status(pending))
@@ -696,7 +757,8 @@ class BoardMetaTests(unittest.TestCase):
             [{"id": "../../escape", "title": "Do not focus", "risk": "high"}],
             [{"id": "live-shipping", "projects": [{"name": "WebJam", "status": "yellow"}]}],
         )
-        self.assertEqual(fallback["text"], "WebJam needs a look")
+        self.assertEqual(fallback["text"], "WebJam")
+        self.assertEqual(fallback["place"], "Review · Live")
         self.assertEqual(fallback["focus"], "project:webjam")
 
     def test_refresh_standing_is_current_jeff_gates(self):
@@ -741,6 +803,7 @@ class BoardMetaTests(unittest.TestCase):
         # sort_pending puts high-risk first; AdoptIQ title is 28 chars so it fits.
         # First screen names that one next action -- never a leftover yes-count.
         self.assertEqual(g["text"], "AdoptIQ live Cisco readiness")
+        self.assertEqual(g["place"], "Owner hold")
         self.assertEqual(g["tab"], "controls")
         self.assertEqual(g["focus"], "decision:adoptiq-live-cisco")
         self.assertNotIn("more", g["text"])
@@ -803,11 +866,15 @@ class BoardMetaTests(unittest.TestCase):
         self.assertNotIn('aria-selected="true"', html)
         glance = glance_html([{"id": "x"}], sections)
         self.assertIn("Pending", glance)
+        self.assertIn('class="glance-name"', glance)
+        self.assertIn('class="glance-place"', glance)
+        self.assertIn("Decide", glance)
         self.assertIn('data-tab="controls"', glance)
         self.assertIn('aria-label="Next action"', glance)
         self.assertIn('aria-controls="controls"', glance)
         self.assertIn('data-focus-target="decision:x"', glance)
         self.assertNotIn("<", glance_status([{"id": "x"}], sections)["text"])
+        self.assertNotIn("needs a look", glance)
 
     def test_leftover_only_types_are_honest_under_parked(self):
         cisco = {
@@ -2443,7 +2510,7 @@ class CoordLeaseTests(unittest.TestCase):
         self.assertEqual(status_with_coord_review("green", leftover), "green")
         self.assertEqual(
             glance_status([], [{"id": "live-shipping", "projects": [leftover]}]),
-            {"text": "Quiet", "tab": ""},
+            glance_quiet(),
         )
         self.assertIsNone(parse_coord_issue({"title": "random issue"}))
 
@@ -2501,7 +2568,7 @@ class CoordLeaseTests(unittest.TestCase):
         self.assertEqual(status_with_coord_review("jeff-gate", leftover), "jeff-gate")
         self.assertEqual(
             glance_status([], [{"id": "live-shipping", "projects": [leftover]}]),
-            {"text": "Quiet", "tab": ""},
+            glance_quiet(),
         )
 
         ready_ref = dict(ref, draft=False)
