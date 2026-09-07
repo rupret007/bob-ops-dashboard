@@ -749,7 +749,7 @@ function run() {
   const tabId = eval(
     "(function () { var TYPE_TAB_LABELS = {" +
       "controls:'Decisions','live-shipping':'Live','apps-utilities':'Apps'," +
-      "cisco:'Cisco',messaging:'Bob','private-media':'Media',parked:'Parked'" +
+      "cisco:'Cisco',messaging:'Bots','private-media':'Media',parked:'Parked'" +
     "}; return " + extractFn(src, "tabId") + "; })()"
   );
   if (tabId("live-shipping") !== "live-shipping") fail("live-shipping is a real type tab");
@@ -769,7 +769,7 @@ function run() {
   const glanceStatus = eval(
     "(function (tabId, attentionRank, focusKey) { " +
       "var TYPE_TAB_LABELS = { controls:'Decisions', 'live-shipping':'Live', " +
-      "'apps-utilities':'Apps', cisco:'Cisco', messaging:'Bob', " +
+      "'apps-utilities':'Apps', cisco:'Cisco', messaging:'Bots', " +
       "'private-media':'Media', parked:'Parked' }; " +
       "function tabLabel(id) { return TYPE_TAB_LABELS[tabId(id)] || ''; } " +
       "return " + extractFn(src, "glanceStatus") + "; })"

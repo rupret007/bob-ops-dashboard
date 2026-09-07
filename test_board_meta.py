@@ -290,7 +290,7 @@ class BoardMetaTests(unittest.TestCase):
         self.assertEqual(tab_id("music"), "")
         self.assertEqual(tab_id("javascript:alert(1)"), "")
         self.assertEqual(tab_id("abilities"), "")
-        self.assertEqual(tab_label("messaging"), "Bob")
+        self.assertEqual(tab_label("messaging"), "Bots")
         self.assertFalse(is_type_tab("features"))
         self.assertTrue(is_type_tab("cisco"))
 
@@ -475,7 +475,7 @@ class BoardMetaTests(unittest.TestCase):
         self.assertIn(">Live<", html)
         self.assertIn(">Apps<", html)
         self.assertIn(">Cisco<", html)
-        self.assertIn(">Bob<", html)
+        self.assertIn(">Bots<", html)
         self.assertNotIn("music", html)
         self.assertNotIn('id="tab-controls"', html)
         self.assertNotIn(">Decisions<", html)
