@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-09-07T14:58:00.878060-05:00",
-  "generated_at_display": "Mon Sep 7, 2026 \u00b7 2:58 PM CDT",
+  "generated_at": "2026-09-07T15:22:43.087209-05:00",
+  "generated_at_display": "Mon Sep 7, 2026 \u00b7 3:22 PM CDT",
   "timezone": "America/Chicago",
   "owner": "rupret007",
   "dashboard": "bob-ops-dashboard",
@@ -46,11 +46,11 @@
           "url": "https://github.com/rupret007/webjam",
           "repo_url": "https://github.com/rupret007/webjam",
           "private": false,
-          "status": "green",
-          "chip": "Green",
+          "status": "yellow",
+          "chip": "Yellow",
           "default_branch": "master",
-          "tip_sha": "433b9e4",
-          "tip_date": "2026-09-07T18:31:39Z",
+          "tip_sha": "83ca74c",
+          "tip_date": "2026-09-07T20:14:07Z",
           "open_prs": 0,
           "open_pr_url": null,
           "open_pr_number": null,
@@ -60,11 +60,11 @@
           "agent_url": null,
           "ci": {
             "name": "WebJam CI",
-            "conclusion": "success",
+            "conclusion": "in_progress",
             "branch": "master",
-            "sha": "433b9e4",
-            "created": "2026-09-07T18:31:42Z",
-            "html_url": "https://github.com/rupret007/webjam/actions/runs/34151990613"
+            "sha": "83ca74c",
+            "created": "2026-09-07T20:14:09Z",
+            "html_url": "https://github.com/rupret007/webjam/actions/runs/34158620479"
           },
           "release": "v0.27.2",
           "release_sha": "9c6ca3d",
@@ -75,8 +75,7 @@
             "repo": "webjam",
             "agent": "none",
             "lease_state": "none",
-            "next": "Karen leftover+security+UX; after PASS Bob leftover-squashes tip MATCH...",
-            "sha": "433b9e4"
+            "next": "idle until next Art leftover"
           }
         },
         {
@@ -437,8 +436,8 @@
           "status": "green",
           "chip": "Green",
           "default_branch": "main",
-          "tip_sha": "053acfc",
-          "tip_date": "2026-09-07T19:07:57Z",
+          "tip_sha": "05ecb87",
+          "tip_date": "2026-09-07T19:58:05Z",
           "open_prs": 0,
           "open_pr_url": null,
           "open_pr_number": null,
@@ -450,9 +449,9 @@
             "name": "QA claim smoke",
             "conclusion": "success",
             "branch": "main",
-            "sha": "053acfc",
-            "created": "2026-09-07T19:08:01Z",
-            "html_url": "https://github.com/rupret007/bob-ops-dashboard/actions/runs/34154394916"
+            "sha": "05ecb87",
+            "created": "2026-09-07T19:58:08Z",
+            "html_url": "https://github.com/rupret007/bob-ops-dashboard/actions/runs/34157587942"
           },
           "release": null,
           "release_sha": null,
@@ -651,7 +650,8 @@
             "repo": "Andrea_NanoBot",
             "agent": "none",
             "lease_state": "none",
-            "next": "idle until next polish leftover"
+            "next": "Claude Goal Running; draft PR then Karen leftover+security; Bob AFTER...",
+            "sha": "f414273"
           }
         },
         {
@@ -848,7 +848,7 @@
   ],
   "inaccessible": [],
   "publish_notes": "Public board -- no secrets or customer paths. Private repositories stay high-level; AI Music Vault stays private-content-boundary only.",
-  "refresh_started_ms": 1788811010585,
+  "refresh_started_ms": 1788812492037,
   "agents_source": "file:stale->unknown",
   "agents": [
     {
