@@ -1187,7 +1187,7 @@ function run() {
   const fixtureYellow = [{ id: "apps-utilities", projects: [{ name: "Fixture app", status: "yellow" }] }];
   if (glanceStatus([ownerHigh], fixtureRed).focus !== "project:fixture-app") fail("standing owner hold must not hide current red work");
   if (glanceStatus([ownerHigh], fixtureYellow).text !== "Fixture app" || glanceStatus([ownerHigh], fixtureYellow).place !== "Review · Apps") fail("standing owner hold must not hide current yellow work");
-  if (glanceStatus([ownerLow, ownerHigh], []).focus !== "decision:fixture-owner") fail("owner hold must remain available as fallback when no active work exists");
+  if (glanceStatus([ownerLow, ownerHigh], []).focus !== "decision:fixture-owner" || glanceStatus([ownerLow, ownerHigh], []).place !== "Owner hold") fail("owner hold must remain available as fallback when no active work exists");
   ["review", "security", "unknown-kind", undefined].forEach(function (kind) {
     const normal = { id: "fixture-action", title: "Ordinary pending action", risk: "low", kind: kind };
     if (glanceStatus([ownerHigh, normal], fixtureRed).focus !== "decision:fixture-action") {
@@ -1462,7 +1462,7 @@ function run() {
   if (html.indexOf("body.tab-home .live-stamp .when") === -1) fail("home screen must hide the long timestamp");
   if (html.indexOf("is-unknown-mac .agents-unknown") !== -1) fail("Agents unknown must not become first-screen chrome");
   if (html.indexOf(".agents-strip.is-unknown-only") === -1) fail("unknown-only agent chrome must collapse");
-  if (html.indexOf("font-size:1.55rem") === -1) fail("next action must be the first-screen hero");
+  if (html.indexOf("font-size:1.35rem") === -1 || html.indexOf(".glance-name") === -1) fail("next action must be the first-screen hero");
   if (html.indexOf("flex:1 1 0") === -1) fail("phone type tabs must share one row");
   if (html.indexOf("body.tab-home .agent-links") === -1) fail("home screen must not stack Open agent buttons");
   if (html.indexOf('class="tab-home"') === -1) fail("saved markup must retain the enhanced home-mode hook");

@@ -1598,7 +1598,7 @@ if "is-unknown-mac .agents-unknown" in html:
     raise SystemExit("Agents unknown must not become first-screen chrome")
 if ".agents-strip.is-unknown-only" not in html:
     raise SystemExit("unknown-only agent chrome must collapse")
-if "font-size:1.55rem" not in html:
+if "font-size:1.35rem" not in html or ".glance-name" not in html:
     raise SystemExit("next action must be the first-screen hero")
 if "flex:1 1 0" not in html:
     raise SystemExit("phone type tabs must share one row so Parked is not clipped")
