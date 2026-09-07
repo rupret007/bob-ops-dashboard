@@ -1142,8 +1142,8 @@ function run() {
     { id: "logic-keys-wavs", title: "Logic keys and WAVs", risk: "low" },
     { id: "adoptiq-live-cisco", title: "AdoptIQ live Cisco readiness", risk: "high" },
   ], []);
-  if (g3.text !== "AdoptIQ live Cisco readiness" || g3.place !== "Owner hold" || g3.tab !== "controls" || g3.focus !== "decision:adoptiq-live-cisco") {
-    fail("three-gate glance must name the one next action: " + g3.text);
+  if (g3.text !== "AdoptIQ live Cisco readiness" || g3.place !== "Decide" || g3.tab !== "controls" || g3.focus !== "decision:adoptiq-live-cisco") {
+    fail("three-gate glance must name the one next action: " + g3.text + " / " + g3.place);
   }
   if (/\+\s*\d+\s*more/.test(g3.text)) {
     fail("first-screen glance must not be a leftover yes-count");
