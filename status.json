@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-09-07T18:14:12.056956-05:00",
-  "generated_at_display": "Mon Sep 7, 2026 \u00b7 6:14 PM CDT",
+  "generated_at": "2026-09-07T18:35:03.745084-05:00",
+  "generated_at_display": "Mon Sep 7, 2026 \u00b7 6:35 PM CDT",
   "timezone": "America/Chicago",
   "owner": "rupret007",
   "dashboard": "bob-ops-dashboard",
@@ -46,8 +46,8 @@
           "url": "https://github.com/rupret007/webjam",
           "repo_url": "https://github.com/rupret007/webjam",
           "private": false,
-          "status": "yellow",
-          "chip": "Yellow",
+          "status": "green",
+          "chip": "Green",
           "default_branch": "master",
           "tip_sha": "71ea084",
           "tip_date": "2026-09-07T22:40:27Z",
@@ -60,7 +60,7 @@
           "agent_url": null,
           "ci": {
             "name": "WebJam CI",
-            "conclusion": "in_progress",
+            "conclusion": "success",
             "branch": "master",
             "sha": "71ea084",
             "created": "2026-09-07T22:40:29Z",
@@ -228,8 +228,11 @@
             "repo": "RadDadSite",
             "agent": "none",
             "lease_state": "none",
-            "next": "Claude Goal running; AFTER when DRAFT PR opens for Karen",
-            "sha": "ed14cac"
+            "next": "WITH_KAREN leftover+security on #43; Bob leftover-squashes after PASS",
+            "sha": "73c0780",
+            "pr": 43,
+            "pr_url": "https://github.com/rupret007/RadDadSite/pull/43",
+            "pr_draft": true
           }
         },
         {
@@ -298,8 +301,8 @@
           "status": "green",
           "chip": "Green",
           "default_branch": "main",
-          "tip_sha": "98441c2",
-          "tip_date": "2026-09-07T16:47:29Z",
+          "tip_sha": "7c10641",
+          "tip_date": "2026-09-07T23:19:43Z",
           "open_prs": 0,
           "open_pr_url": null,
           "open_pr_number": null,
@@ -311,9 +314,9 @@
             "name": "CI",
             "conclusion": "success",
             "branch": "main",
-            "sha": "98441c2",
-            "created": "2026-09-07T16:47:32Z",
-            "html_url": "https://github.com/rupret007/Turdanoid/actions/runs/34144863621"
+            "sha": "7c10641",
+            "created": "2026-09-07T23:19:45Z",
+            "html_url": "https://github.com/rupret007/Turdanoid/actions/runs/34169665109"
           },
           "release": null,
           "release_sha": null,
@@ -325,11 +328,7 @@
             "repo": "Turdanoid",
             "agent": "none",
             "lease_state": "none",
-            "next": "WITH_KAREN leftover+security on #30; Bob leftover-squashes after PASS",
-            "sha": "ee21db3",
-            "pr": 30,
-            "pr_url": "https://github.com/rupret007/Turdanoid/pull/30",
-            "pr_draft": true
+            "next": "idle until next Turdanoid leftover"
           }
         }
       ]
@@ -445,8 +444,8 @@
           "status": "green",
           "chip": "Green",
           "default_branch": "main",
-          "tip_sha": "7f6a6e5",
-          "tip_date": "2026-09-07T22:51:05Z",
+          "tip_sha": "5f8fc0c",
+          "tip_date": "2026-09-07T23:14:16Z",
           "open_prs": 0,
           "open_pr_url": null,
           "open_pr_number": null,
@@ -458,9 +457,9 @@
             "name": "QA claim smoke",
             "conclusion": "success",
             "branch": "main",
-            "sha": "7f6a6e5",
-            "created": "2026-09-07T22:51:08Z",
-            "html_url": "https://github.com/rupret007/bob-ops-dashboard/actions/runs/34168063647"
+            "sha": "5f8fc0c",
+            "created": "2026-09-07T23:14:19Z",
+            "html_url": "https://github.com/rupret007/bob-ops-dashboard/actions/runs/34169350323"
           },
           "release": null,
           "release_sha": null,
@@ -471,7 +470,8 @@
             "repo": "bob-ops-dashboard",
             "agent": "none",
             "lease_state": "none",
-            "next": "idle until next dashboard leftover"
+            "next": "Claude Goal starting; AFTER when DRAFT PR opens for Karen",
+            "sha": "5f8fc0c"
           }
         },
         {
@@ -856,7 +856,7 @@
   ],
   "inaccessible": [],
   "publish_notes": "Public board -- no secrets or customer paths. Private repositories stay high-level; AI Music Vault stays private-content-boundary only.",
-  "refresh_started_ms": 1788822779531,
+  "refresh_started_ms": 1788824032153,
   "agents_source": "file:stale->unknown",
   "agents": [
     {
