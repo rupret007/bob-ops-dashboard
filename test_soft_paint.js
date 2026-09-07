@@ -1083,6 +1083,9 @@ function run() {
   const fakeSilence = fakeElement();
   const fakeTitle = fakeElement();
   const fakeDetail = fakeElement();
+  const retryStatus = fakeElement();
+  const retryDocument = { activeElement: null, visibilityState: "visible", getElementById: () => null };
+  const focused = [];
   const decisionTrustUpdates = [];
   const reviewWindow = { bobDecisionReview: { setTrust: state => decisionTrustUpdates.push(state) } };
   const setSnapshotTrust = eval(
@@ -1093,9 +1096,11 @@ function run() {
       extractFn(src, "showSilence") + "; })"
   )(fakeSilence, fakeTitle, fakeDetail, setSnapshotTrust);
   const hideSilence = eval(
-    "(function (silenceEl, silenceTitleEl, silenceDetailEl, setSnapshotTrust) { return " +
+    "(function (silenceEl, silenceTitleEl, silenceDetailEl, setSnapshotTrust, retryStatus, document, currentTypeTab, focusQuietly) { return " +
       extractFn(src, "hideSilence") + "; })"
-  )(fakeSilence, fakeTitle, fakeDetail, setSnapshotTrust);
+  );
+  const hideForView = (view) => hideSilence(fakeSilence, fakeTitle, fakeDetail, setSnapshotTrust,
+    retryStatus, retryDocument, view, target => { if (target) focused.push(target); });
 
   showSilence("poll-failed", "Live check unavailable", "Showing the last verified snapshot.");
   if (decisionTrustUpdates.at(-1) !== "poll-failed") fail("failed poll must revoke decision review trust too");
@@ -1117,7 +1122,7 @@ function run() {
   if (fakeTitle.textContent !== "Live check unavailable" || !fakeDetail.textContent.includes("last verified")) {
     fail("historical mode must explain the user-visible condition");
   }
-  hideSilence();
+  hideForView("")();
   if (decisionTrustUpdates.at(-1) !== "current") fail("current snapshot must update decision review trust too");
   if (!fakeSilence.hidden || fakeSilence.classList.contains("show")) {
     fail("successful current snapshot must clear the warning");
@@ -1131,6 +1136,37 @@ function run() {
   if (fakeBody.classList.contains("snapshot-unverified")) {
     fail("current board must clear stale styling");
   }
+
+  const assert = require("node:assert/strict");
+  const setRetryBusy = eval("(function (retryStatus) { return " + extractFn(src, "setRetryBusy") + "; })")(retryStatus);
+  let retryCalls = 0;
+  const retrySnapshot = eval("(function (retryStatus, document, poll) { return " + extractFn(src, "retrySnapshot") + "; })")(
+    retryStatus, retryDocument, () => { retryCalls++; setRetryBusy(true); });
+  retryDocument.activeElement = retryStatus;
+  retrySnapshot(); retrySnapshot();
+  assert.equal(retryCalls, 1, "repeated activation cannot replace an in-flight check");
+  assert.equal(retryStatus.disabled, false, "checking retains a keyboard-focusable retry button");
+  assert.equal(retryStatus.getAttribute("aria-disabled"), "true");
+  assert.equal(retryStatus.getAttribute("aria-busy"), "true");
+  setRetryBusy(false);
+  retryDocument.visibilityState = "hidden";
+  retrySnapshot();
+  assert.equal(retryCalls, 1, "hidden pages cannot start a manual retry");
+  retryDocument.visibilityState = "visible";
+  retrySnapshot();
+  assert.equal(retryCalls, 2, "retry becomes usable after completion");
+  setRetryBusy(false);
+  for (const view of ["", "live-shipping", "controls"]) {
+    const destination = fakeElement();
+    retryDocument.getElementById = id => id === (view === "controls" ? "controls" : view ? "tab-live-shipping" : "board-glance") ? destination : null;
+    hideForView(view)();
+    assert.equal(focused.at(-1), destination, "recovery returns to the current view");
+    if (view === "controls") assert.equal(destination.getAttribute("tabindex"), "-1");
+  }
+  const focusCount = focused.length;
+  retryDocument.activeElement = fakeBody;
+  hideForView("live")();
+  assert.equal(focused.length, focusCount, "background recovery never steals focus elsewhere");
 
   const stopPolling = extractFn(src, "stopPolling");
   const incAt = stopPolling.indexOf("pollSeq += 1");

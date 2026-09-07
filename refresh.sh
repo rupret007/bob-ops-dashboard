@@ -1196,7 +1196,7 @@ html = f'''<!DOCTYPE html>
     touch-action:manipulation;
   }}
   #retry-status:hover {{ border-color:#fecaca; background:#601111; }}
-  #retry-status:disabled {{ cursor:wait; opacity:.7; }}
+  #retry-status[aria-disabled="true"] {{ cursor:wait; opacity:.7; }}
   body.snapshot-unverified #board {{ opacity:.78; }}
   @media (max-width:520px) {{
     #silence-banner.show {{ align-items:stretch; flex-direction:column; }}
@@ -2454,11 +2454,20 @@ function focusKey(kind, raw) {{
 
   function hideSilence() {{
     if (!silenceEl) return;
+    var restoreRetryFocus = retryStatus && document.activeElement === retryStatus;
     if (silenceTitleEl) silenceTitleEl.textContent = "";
     if (silenceDetailEl) silenceDetailEl.textContent = "";
     silenceEl.classList.remove("show");
     silenceEl.hidden = true;
     setSnapshotTrust("current");
+    if (restoreRetryFocus) {{
+      var next = document.getElementById(currentTypeTab ? "tab-" + currentTypeTab : "board-glance");
+      if (!next && currentTypeTab) {{
+        next = document.getElementById(currentTypeTab);
+        if (next) next.setAttribute("tabindex", "-1");
+      }}
+      focusQuietly(next);
+    }}
   }}
 
   function fmtSilenceAge(ms) {{
@@ -2879,7 +2888,7 @@ function focusKey(kind, raw) {{
   var pollTimeout = null;
   function setRetryBusy(busy) {{
     if (!retryStatus) return;
-    retryStatus.disabled = !!busy;
+    retryStatus.setAttribute("aria-disabled", busy ? "true" : "false");
     retryStatus.textContent = busy ? "Checking..." : "Retry now";
     retryStatus.setAttribute("aria-busy", busy ? "true" : "false");
   }}
@@ -2999,10 +3008,11 @@ function focusKey(kind, raw) {{
       }});
   }}
 
+  function retrySnapshot() {{
+    if (retryStatus && retryStatus.getAttribute("aria-disabled") !== "true" && document.visibilityState !== "hidden") poll();
+  }}
   if (retryStatus) {{
-    retryStatus.addEventListener("click", function () {{
-      if (document.visibilityState !== "hidden") poll();
-    }});
+    retryStatus.addEventListener("click", retrySnapshot);
   }}
 
   var pollTimer = null;
