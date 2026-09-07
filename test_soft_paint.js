@@ -1066,6 +1066,7 @@ function run() {
 
   if (src.indexOf("function tabId") === -1) fail("tabId missing");
   if (src.indexOf("function focusKey") === -1) fail("focusKey missing");
+  if (src.indexOf("function glancePlace") === -1) fail("glancePlace missing");
   if (src.indexOf("function glanceStatus") === -1) fail("glanceStatus missing");
   if (src.indexOf("function glanceProjectIsCiWait") === -1) fail("glanceProjectIsCiWait missing");
   if (src.indexOf("function glanceAttentionRank") === -1) fail("glanceAttentionRank missing");
@@ -1107,16 +1108,33 @@ function run() {
   const ownerHoldStatus = eval("(" + extractFn(src, "ownerHoldStatus") + ")");
   const esc = eval("(" + extractFn(src, "esc") + ")");
   const ownerHoldLinkHtml = eval("(" + extractFn(src, "ownerHoldLinkHtml") + ")");
+  const glancePlace = eval(
+    "(function (tabId) { " +
+      "var TYPE_TAB_LABELS = { controls:'Decisions', 'live-shipping':'Live', " +
+      "'apps-utilities':'Apps', cisco:'Cisco', messaging:'Bob', " +
+      "'private-media':'Media', parked:'Parked' }; " +
+      "function tabLabel(id) { return TYPE_TAB_LABELS[tabId(id)] || ''; } " +
+      "return " + extractFn(src, "glancePlace") + "; })"
+  )(tabId);
   const glanceStatus = eval(
-    "(function (tabId, glanceAttentionRank, focusKey, isOwnerHold, ownerHoldStatus) { " +
+    "(function (tabId, glanceAttentionRank, focusKey, isOwnerHold, ownerHoldStatus, glancePlace) { " +
       "var TYPE_TAB_LABELS = { controls:'Decisions', 'live-shipping':'Live', " +
       "'apps-utilities':'Apps', cisco:'Cisco', messaging:'Bob', " +
       "'private-media':'Media', parked:'Parked' }; " +
       "function tabLabel(id) { return TYPE_TAB_LABELS[tabId(id)] || ''; } " +
       "return " + extractFn(src, "glanceStatus") + "; })"
-  )(tabId, glanceAttentionRank, focusKey, isOwnerHold, ownerHoldStatus);
+  )(tabId, glanceAttentionRank, focusKey, isOwnerHold, ownerHoldStatus, glancePlace);
+  if (glancePlace("decide") !== "Decide" || glancePlace("hold") !== "Owner hold") {
+    fail("decision glance place must stay allowlisted");
+  }
+  if (glancePlace("review", "apps-utilities") !== "Review · Apps") fail("review place must name Apps");
+  if (glancePlace("wait", "live-shipping") !== "CI wait · Live") fail("CI wait place must name Live");
+  if (glancePlace("red", "cisco") !== "Red · Cisco") fail("red place must name Cisco");
+  if (glancePlace("look", "live-shipping") || glancePlace("review", "javascript:alert(1)") !== "Review") {
+    fail("glance place must ignore unknown kinds and invented types");
+  }
   const g = glanceStatus([{ id: "x", title: "AdoptIQ" }], [{ id: "live-shipping", projects: [{ status: "yellow" }] }]);
-  if (g.text !== "AdoptIQ" || g.tab !== "controls" || g.focus !== "decision:x") {
+  if (g.text !== "AdoptIQ" || g.place !== "Decide" || g.tab !== "controls" || g.focus !== "decision:x") {
     fail("pending glance must name and target the gate");
   }
   const g3 = glanceStatus([
@@ -1124,7 +1142,7 @@ function run() {
     { id: "logic-keys-wavs", title: "Logic keys and WAVs", risk: "low" },
     { id: "adoptiq-live-cisco", title: "AdoptIQ live Cisco readiness", risk: "high" },
   ], []);
-  if (g3.text !== "AdoptIQ live Cisco readiness" || g3.tab !== "controls" || g3.focus !== "decision:adoptiq-live-cisco") {
+  if (g3.text !== "AdoptIQ live Cisco readiness" || g3.place !== "Owner hold" || g3.tab !== "controls" || g3.focus !== "decision:adoptiq-live-cisco") {
     fail("three-gate glance must name the one next action: " + g3.text);
   }
   if (/\+\s*\d+\s*more/.test(g3.text)) {
@@ -1134,22 +1152,22 @@ function run() {
     id: "apps-utilities",
     projects: [{ name: "Door", status: "jeff-gate" }],
   }]);
-  if (leftoverJeff.text !== "Quiet" || leftoverJeff.tab !== "") {
+  if (leftoverJeff.text !== "Quiet" || leftoverJeff.place !== "" || leftoverJeff.tab !== "") {
     fail("leftover lane Jeff-gate must not look like an active Jeff yes: " + leftoverJeff.text);
   }
   const live = glanceStatus([], [{ id: "live-shipping", projects: [{ name: "WebJam", status: "yellow" }] }]);
-  if (live.text !== "WebJam needs a look" || live.tab !== "live-shipping" || live.focus !== "project:webjam") {
+  if (live.text !== "WebJam" || live.place !== "Review · Live" || live.tab !== "live-shipping" || live.focus !== "project:webjam") {
     fail("live yellow must be one short glance");
   }
   const mixed = glanceStatus([], [{
     id: "apps-utilities",
     projects: [{ name: "Door", status: "jeff-gate" }, { name: "TACTrack", status: "yellow" }],
   }]);
-  if (mixed.text !== "TACTrack needs a look" || mixed.focus !== "project:tactrack") {
+  if (mixed.text !== "TACTrack" || mixed.place !== "Review · Apps" || mixed.focus !== "project:tactrack") {
     fail("owner-only row must not hide actionable work");
   }
   const quiet = glanceStatus([], [{ id: "live-shipping", projects: [{ status: "green" }] }]);
-  if (quiet.text !== "Quiet" || quiet.tab !== "") fail("all-green glance must stay Quiet");
+  if (quiet.text !== "Quiet" || quiet.place !== "" || quiet.tab !== "") fail("all-green glance must stay Quiet");
 
   const ownerHigh = { id: "fixture-owner", title: "Standing owner boundary", detail: "Fixture public detail.", risk: "high", kind: "owner-live-gate" };
   const ownerLow = { id: "fixture-other-owner", title: "Another owner boundary", detail: "Other fixture detail.", risk: "low", kind: "jeff-gate" };
@@ -1168,7 +1186,7 @@ function run() {
   const fixtureRed = [{ id: "apps-utilities", projects: [{ name: "Fixture app", status: "red" }] }];
   const fixtureYellow = [{ id: "apps-utilities", projects: [{ name: "Fixture app", status: "yellow" }] }];
   if (glanceStatus([ownerHigh], fixtureRed).focus !== "project:fixture-app") fail("standing owner hold must not hide current red work");
-  if (glanceStatus([ownerHigh], fixtureYellow).text !== "Fixture app needs a look") fail("standing owner hold must not hide current yellow work");
+  if (glanceStatus([ownerHigh], fixtureYellow).text !== "Fixture app" || glanceStatus([ownerHigh], fixtureYellow).place !== "Review · Apps") fail("standing owner hold must not hide current yellow work");
   if (glanceStatus([ownerLow, ownerHigh], []).focus !== "decision:fixture-owner") fail("owner hold must remain available as fallback when no active work exists");
   ["review", "security", "unknown-kind", undefined].forEach(function (kind) {
     const normal = { id: "fixture-action", title: "Ordinary pending action", risk: "low", kind: kind };
@@ -1193,11 +1211,17 @@ function run() {
   if (glanceStatus([], mixedWaitReview).focus !== "project:story-shelf") {
     fail("CI wait must not hide review yellow: " + glanceStatus([], mixedWaitReview).focus);
   }
+  if (glanceStatus([], mixedWaitReview).place !== "Review · Apps") {
+    fail("review yellow glance must name Review and Apps: " + glanceStatus([], mixedWaitReview).place);
+  }
   if (glanceStatus([ownerHigh], mixedWaitReview).focus !== "project:story-shelf") {
     fail("review yellow must stay ahead of both CI wait and standing owner holds");
   }
   if (glanceStatus([ownerHigh], [{ id: "live-shipping", projects: [waitWebJam] }]).focus !== "project:webjam") {
     fail("CI wait must still beat a standing owner hold");
+  }
+  if (glanceStatus([ownerHigh], [{ id: "live-shipping", projects: [waitWebJam] }]).place !== "CI wait · Live") {
+    fail("CI wait glance must name CI wait and Live");
   }
   const flyingReview = { name: "WebJam", status: "yellow", ci: { conclusion: "pending" }, open_prs: 2 };
   const waitOnly = { name: "RadDadSite", status: "yellow", ci: { conclusion: "requested" }, open_prs: 0 };
@@ -1238,6 +1262,13 @@ function run() {
   if (html.indexOf('id="type-tabs"') === -1) fail("type tab bar missing from first paint");
   if (html.indexOf('id="board-glance"') === -1) fail("short status missing from first paint");
   if (html.indexOf('aria-label="Next action"') === -1) fail("glance must be the named next action");
+  if (html.indexOf('class="glance-name"') === -1) fail("glance must put the work on its own line");
+  const glanceAt = html.indexOf('id="board-glance"');
+  const glanceTag = glanceAt >= 0 ? html.slice(glanceAt, html.indexOf("</button>", glanceAt) + 9) : "";
+  if (glanceTag.indexOf("needs a look") !== -1) fail("glance must not reuse leftover look copy");
+  if (glanceTag.indexOf('data-tab="') !== -1 && glanceTag.indexOf('class="glance-place"') === -1) {
+    fail("glance with a destination must name the action and type");
+  }
   const typeTabIdsFor = eval(
     "(function () { var TYPE_TAB_IDS = ['controls','live-shipping','apps-utilities'," +
       "'cisco','messaging','private-media','parked']; var TYPE_TAB_LABELS = {" +

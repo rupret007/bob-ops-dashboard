@@ -1031,10 +1031,17 @@ html = f'''<!DOCTYPE html>
   header.pulse h1 .mark {{ color:var(--orange); }}
   .pulse-row {{ display:flex; flex-direction:column; gap:.4rem; margin-top:.45rem; }}
   .board-glance {{
-    display:flex; align-items:center; margin:0 0 .55rem; padding:.1rem 0 .2rem; border:0;
-    background:transparent; color:#fff; font:inherit; font-size:1.55rem;
-    font-weight:800; letter-spacing:-.03em; line-height:1.15; min-height:52px;
+    display:flex; flex-direction:column; align-items:flex-start; justify-content:center;
+    margin:0 0 .4rem; padding:.05rem 0 .1rem; border:0;
+    background:transparent; color:#fff; font:inherit; min-height:52px;
     text-align:left; width:100%; cursor:pointer; touch-action:manipulation;
+  }}
+  .board-glance .glance-name {{
+    font-size:1.35rem; font-weight:800; letter-spacing:-.03em; line-height:1.15;
+  }}
+  .board-glance .glance-place {{
+    margin-top:.1rem; color:var(--muted); font-size:.72rem; font-weight:700;
+    letter-spacing:.05em; text-transform:uppercase; line-height:1.2;
   }}
   .board-glance:not([data-tab]) {{ cursor:default; }}
   .type-tabs {{
@@ -2082,6 +2089,15 @@ function focusKey(kind, raw) {{
     if (st !== "yellow") return 99;
     return glanceProjectIsCiWait(p) ? 3 : 2;
   }}
+  function glancePlace(kind, typeId) {{
+    var key = String(kind || "").replace(/^\s+|\s+$/g, "").toLowerCase();
+    var bases = {{ decide: "Decide", hold: "Owner hold", red: "Red", review: "Review", wait: "CI wait" }};
+    var base = bases.hasOwnProperty(key) ? bases[key] : "";
+    if (!base) return "";
+    var label = (key === "red" || key === "review" || key === "wait") ? tabLabel(typeId) : "";
+    if (label) return base + " \\u00b7 " + label;
+    return base;
+  }}
   function glanceStatus(pending, sections) {{
     var rank = {{ high: 0, medium: 1, low: 2 }};
     var rows = [];
@@ -2097,7 +2113,7 @@ function focusKey(kind, raw) {{
       var title = rows[0] && rows[0].title != null ? String(rows[0].title).replace(/^\s+|\s+$/g, "") : "";
       if (title.length > 28) title = title.slice(0, 28).replace(/\s+$/g, "");
       if (!title) title = "Pending";
-      return {{ text: title, tab: "controls", focus: focusKey("decision", rows[0].id) }};
+      return {{ text: title, place: glancePlace("decide"), tab: "controls", focus: focusKey("decision", rows[0].id) }};
     }}
     var worstRank = 99;
     var worstId = "";
@@ -2120,25 +2136,27 @@ function focusKey(kind, raw) {{
       }});
     }});
     if (worstId) {{
-      var label = worstName || tabLabel(worstId);
-      if (worstRank === 0) return {{ text: label + " is red", tab: worstId, focus: worstFocus }};
-      if (worstRank === 2 || worstRank === 3) return {{ text: label + " needs a look", tab: worstId, focus: worstFocus }};
+      var name = worstName || tabLabel(worstId);
+      if (worstRank === 0) return {{ text: name, place: glancePlace("red", worstId), tab: worstId, focus: worstFocus }};
+      if (worstRank === 2) return {{ text: name, place: glancePlace("review", worstId), tab: worstId, focus: worstFocus }};
+      if (worstRank === 3) return {{ text: name, place: glancePlace("wait", worstId), tab: worstId, focus: worstFocus }};
     }}
     var hold = ownerHoldStatus(pending);
     if (hold) {{
       var holdTitle = hold.title.trim();
       if (holdTitle.length > 28) holdTitle = holdTitle.slice(0, 28).replace(/\s+$/g, "");
-      return {{ text: holdTitle || "Pending", tab: "controls", focus: focusKey("decision", hold.id) }};
+      return {{ text: holdTitle || "Pending", place: glancePlace("hold"), tab: "controls", focus: focusKey("decision", hold.id) }};
     }}
-    return {{ text: "Quiet", tab: "" }};
+    return {{ text: "Quiet", place: "", tab: "" }};
   }}
   function glanceHtml(pending, sections) {{
     var g = glanceStatus(pending, sections);
     var extra = g.tab ? ' data-tab="' + esc(g.tab) + '"' : "";
     var target = g.focus ? ' data-focus-target="' + esc(g.focus) + '"' : "";
     var controls = g.tab ? ' aria-controls="' + esc(g.tab) + '"' : "";
+    var place = g.place ? '<span class="glance-place">' + esc(g.place) + "</span>" : "";
     return '<button type="button" class="board-glance" id="board-glance" aria-label="Next action"' + extra + target + controls + ">" +
-      esc(g.text || "Quiet") + "</button>";
+      '<span class="glance-name">' + esc(g.text || "Quiet") + "</span>" + place + "</button>";
   }}
   function typeTabsHtml(sections, pending, selected) {{
     var want = tabId(selected);

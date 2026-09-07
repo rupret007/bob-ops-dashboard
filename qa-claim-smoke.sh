@@ -1502,6 +1502,12 @@ glance_at = html.find('id="board-glance"')
 glance_tag = html[glance_at:html.find("</button>", glance_at) + 9] if glance_at >= 0 else ""
 if 'aria-label="Next action"' not in glance_tag:
     raise SystemExit("first-screen glance must be the named next action")
+if 'class="glance-name"' not in glance_tag:
+    raise SystemExit("first-screen glance must put the work on its own line")
+if 'data-tab="' in glance_tag and 'class="glance-place"' not in glance_tag:
+    raise SystemExit("first-screen glance with a destination must name the action and type")
+if "needs a look" in glance_tag:
+    raise SystemExit("first-screen glance must not use leftover vague look copy")
 if 'data-focus-target="' not in glance_tag:
     raise SystemExit("first-screen glance must name an exact safe target")
 if re.search(r"\+\s*\d+\s*more", glance_tag):
