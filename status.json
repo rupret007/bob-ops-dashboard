@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-09-06T20:13:40.659320-05:00",
-  "generated_at_display": "Sun Sep 6, 2026 \u00b7 8:13 PM CDT",
+  "generated_at": "2026-09-07T01:10:08.841487-05:00",
+  "generated_at_display": "Mon Sep 7, 2026 \u00b7 1:10 AM CDT",
   "timezone": "America/Chicago",
   "owner": "rupret007",
   "dashboard": "bob-ops-dashboard",
@@ -49,8 +49,8 @@
           "status": "green",
           "chip": "Green",
           "default_branch": "master",
-          "tip_sha": "3f11f9d",
-          "tip_date": "2026-09-06T23:10:43Z",
+          "tip_sha": "159f444",
+          "tip_date": "2026-09-07T05:13:10Z",
           "open_prs": 0,
           "open_pr_url": null,
           "open_pr_number": null,
@@ -62,9 +62,9 @@
             "name": "WebJam CI",
             "conclusion": "success",
             "branch": "master",
-            "sha": "3f11f9d",
-            "created": "2026-09-06T23:10:46Z",
-            "html_url": "https://github.com/rupret007/webjam/actions/runs/34066142747"
+            "sha": "159f444",
+            "created": "2026-09-07T05:13:13Z",
+            "html_url": "https://github.com/rupret007/webjam/actions/runs/34085953841"
           },
           "release": "v0.27.2",
           "release_sha": "9c6ca3d",
@@ -113,8 +113,8 @@
           "status": "green",
           "chip": "Green",
           "default_branch": "main",
-          "tip_sha": "a3c8979",
-          "tip_date": "2026-09-05T04:19:24Z",
+          "tip_sha": "59c1784",
+          "tip_date": "2026-09-07T04:30:14Z",
           "open_prs": 0,
           "open_pr_url": null,
           "open_pr_number": null,
@@ -126,9 +126,9 @@
             "name": "Quality",
             "conclusion": "success",
             "branch": "main",
-            "sha": "a3c8979",
-            "created": "2026-09-05T04:19:27Z",
-            "html_url": "https://github.com/rupret007/StoryBoard/actions/runs/33944239779"
+            "sha": "59c1784",
+            "created": "2026-09-07T04:30:17Z",
+            "html_url": "https://github.com/rupret007/StoryBoard/actions/runs/34083338089"
           },
           "release": null,
           "release_sha": null,
@@ -405,8 +405,8 @@
           "status": "green",
           "chip": "Green",
           "default_branch": "main",
-          "tip_sha": "33ff5a8",
-          "tip_date": "2026-09-07T00:44:34Z",
+          "tip_sha": "93661e7",
+          "tip_date": "2026-09-07T01:13:57Z",
           "open_prs": 0,
           "open_pr_url": null,
           "open_pr_number": null,
@@ -414,14 +414,7 @@
           "open_pr_stack": [],
           "pr_listing_complete": true,
           "agent_url": null,
-          "ci": {
-            "name": "QA claim smoke",
-            "conclusion": "success",
-            "branch": "main",
-            "sha": "33ff5a8",
-            "created": "2026-09-07T00:44:37Z",
-            "html_url": "https://github.com/rupret007/bob-ops-dashboard/actions/runs/34070767198"
-          },
+          "ci": null,
           "release": null,
           "release_sha": null,
           "release_url": null,
@@ -788,7 +781,7 @@
     "Sliding-Glass-Door-PETG-Screw"
   ],
   "publish_notes": "Public board -- no secrets or customer paths. Private repositories stay high-level; AI Music Vault stays private-content-boundary only.",
-  "refresh_started_ms": 1788743594329,
+  "refresh_started_ms": 1788761381916,
   "agents_source": "file:stale->unknown",
   "agents": [
     {
