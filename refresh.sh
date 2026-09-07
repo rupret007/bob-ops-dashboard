@@ -2217,12 +2217,36 @@ function focusKey(kind, raw) {{
     try {{
       document.body.classList.toggle("tab-home", !want);
     }} catch (e2) {{}}
-    try {{
-      if (want) history.replaceState(null, "", "#" + want);
-      else if ((location.hash || "").length > 1) history.replaceState(null, "", location.pathname + location.search);
-    }} catch (e) {{}}
     var stop = setTypeTabStop(focusedId || want);
     if (focused) focusQuietly(stop);
+  }}
+  function navigateTypeTab(id) {{
+    var want = tabId(id);
+    var hash = want ? "#" + want : "";
+    // Only deliberate navigation gets a history entry. Record it before
+    // changing panels so the browser can restore the previous scroll position.
+    try {{
+      if ((location.hash || "") !== hash) {{
+        history.pushState(null, "", location.pathname + location.search + hash);
+      }}
+    }} catch (e) {{}}
+    applyTypeTab(want);
+  }}
+  function restoreTypeTabFromHistory() {{
+    var active = document.activeElement;
+    // Some browsers reset focus to body before dispatching hashchange.
+    var restoreFocus = !active || active === document.body || (boardEl && boardEl.contains(active));
+    var want = tabFromHash();
+    applyTypeTab(want);
+    if (!restoreFocus) return;
+    var next = document.getElementById(want ? "tab-" + want : "board-glance");
+    if (!next && want) {{
+      next = document.getElementById(want);
+      if (next) next.setAttribute("tabindex", "-1");
+    }}
+    // Back must not strand keyboard focus in a panel it just hid. Leave
+    // scrolling to the browser, and never focus a decision action.
+    focusQuietly(next);
   }}
   function handleTypeTabKey(ev) {{
     if (ev.defaultPrevented || ev.altKey || ev.ctrlKey || ev.metaKey || ev.shiftKey) return;
@@ -2306,20 +2330,18 @@ function focusKey(kind, raw) {{
     var fromGlance = btn.id === "board-glance";
     var fromOwnerHolds = btn.id === "owner-holds-link";
     if (fromGlance || fromOwnerHolds) {{
-      applyTypeTab(id);
+      navigateTypeTab(id);
       var focus = btn.getAttribute("data-focus-target") || "";
       var reveal = function () {{ revealGlanceTarget(id, focus); }};
       if (window.requestAnimationFrame) window.requestAnimationFrame(reveal);
       else setTimeout(reveal, 0);
       return;
     }}
-    applyTypeTab(currentTypeTab === id ? "" : id);
+    navigateTypeTab(currentTypeTab === id ? "" : id);
     // Leftover-type links live in the panel that just became hidden.
     focusQuietly(setTypeTabStop(id));
   }});
-  window.addEventListener("hashchange", function () {{
-    applyTypeTab(tabFromHash());
-  }});
+  window.addEventListener("hashchange", restoreTypeTabFromHistory);
   function pendingShell(items) {{
     var rank = {{ high: 0, medium: 1, low: 2 }};
     var rows = (items || []).map(decisionReviewItem).filter(function (it) {{ return !!it; }}).sort(function (a, b) {{
