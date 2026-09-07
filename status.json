@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-09-07T09:55:40.559172-05:00",
-  "generated_at_display": "Mon Sep 7, 2026 \u00b7 9:55 AM CDT",
+  "generated_at": "2026-09-07T10:28:48.875985-05:00",
+  "generated_at_display": "Mon Sep 7, 2026 \u00b7 10:28 AM CDT",
   "timezone": "America/Chicago",
   "owner": "rupret007",
   "dashboard": "bob-ops-dashboard",
@@ -122,11 +122,11 @@
           "url": "https://github.com/rupret007/StoryBoard",
           "repo_url": "https://github.com/rupret007/StoryBoard",
           "private": false,
-          "status": "green",
-          "chip": "Green",
+          "status": "yellow",
+          "chip": "Yellow",
           "default_branch": "main",
-          "tip_sha": "cd4a0b2",
-          "tip_date": "2026-09-07T10:39:57Z",
+          "tip_sha": "23a239d",
+          "tip_date": "2026-09-07T15:26:57Z",
           "open_prs": 0,
           "open_pr_url": null,
           "open_pr_number": null,
@@ -136,11 +136,11 @@
           "agent_url": null,
           "ci": {
             "name": "Quality",
-            "conclusion": "success",
+            "conclusion": "in_progress",
             "branch": "main",
-            "sha": "cd4a0b2",
-            "created": "2026-09-07T10:40:00Z",
-            "html_url": "https://github.com/rupret007/StoryBoard/actions/runs/34112630876"
+            "sha": "23a239d",
+            "created": "2026-09-07T15:27:00Z",
+            "html_url": "https://github.com/rupret007/StoryBoard/actions/runs/34138364444"
           },
           "release": null,
           "release_sha": null,
@@ -149,10 +149,9 @@
           "accessible": true,
           "coord": {
             "repo": "StoryBoard",
-            "agent": "claude",
-            "lease_state": "active",
-            "next": "Claude.app Sonnet Goal on ~/StoryBoard; stop for Karen after DRAFT",
-            "sha": "cd4a0b2"
+            "agent": "none",
+            "lease_state": "none",
+            "next": "idle until next polish leftover"
           }
         },
         {
@@ -437,8 +436,8 @@
           "status": "green",
           "chip": "Green",
           "default_branch": "main",
-          "tip_sha": "dad8c9a",
-          "tip_date": "2026-09-07T14:05:16Z",
+          "tip_sha": "419b8c5",
+          "tip_date": "2026-09-07T14:55:44Z",
           "open_prs": 0,
           "open_pr_url": null,
           "open_pr_number": null,
@@ -450,9 +449,9 @@
             "name": "QA claim smoke",
             "conclusion": "success",
             "branch": "main",
-            "sha": "dad8c9a",
-            "created": "2026-09-07T14:05:20Z",
-            "html_url": "https://github.com/rupret007/bob-ops-dashboard/actions/runs/34131007080"
+            "sha": "419b8c5",
+            "created": "2026-09-07T14:55:48Z",
+            "html_url": "https://github.com/rupret007/bob-ops-dashboard/actions/runs/34135611772"
           },
           "release": null,
           "release_sha": null,
@@ -463,7 +462,8 @@
             "repo": "bob-ops-dashboard",
             "agent": "none",
             "lease_state": "none",
-            "next": "idle until next polish leftover"
+            "next": "idle until next polish leftover",
+            "sha": "419b8c5"
           }
         },
         {
@@ -649,9 +649,9 @@
           "accessible": true,
           "coord": {
             "repo": "Andrea_NanoBot",
-            "agent": "none",
-            "lease_state": "none",
-            "next": "idle / free-lane; fresh claim before next Andrea slice",
+            "agent": "claude",
+            "lease_state": "active",
+            "next": "Claude.app Sonnet 5 High Goal on ~/Andrea_NanoBot; stop for Karen...",
             "sha": "f3eb054"
           }
         },
@@ -849,7 +849,7 @@
   ],
   "inaccessible": [],
   "publish_notes": "Public board -- no secrets or customer paths. Private repositories stay high-level; AI Music Vault stays private-content-boundary only.",
-  "refresh_started_ms": 1788792860103,
+  "refresh_started_ms": 1788794851520,
   "agents_source": "file:stale->unknown",
   "agents": [
     {
