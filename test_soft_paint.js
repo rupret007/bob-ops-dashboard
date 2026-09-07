@@ -827,6 +827,39 @@ function run() {
   if (nav.indexOf("tab-controls") !== -1 || nav.indexOf(">Decisions<") !== -1) {
     fail("first-screen tab bar must not include Decisions chrome");
   }
+  const typeTabIsQuiet = eval("(" + extractFn(src, "typeTabIsQuiet") + ")");
+  if (!typeTabIsQuiet({ projects: [{ status: "jeff-gate" }] })) {
+    fail("owner-gate-only type tab must read as quiet");
+  }
+  if (!typeTabIsQuiet({ projects: [] }) || !typeTabIsQuiet({})) {
+    fail("empty type tab must read as quiet");
+  }
+  if (typeTabIsQuiet({ projects: [{ status: "parked" }, { status: "yellow" }] })) {
+    fail("a live row must keep the type tab out of quiet");
+  }
+  const typeTabsHtml = eval(
+    "(function (typeTabIdsFor, tabId, tabLabel, esc, typeTabIsQuiet) { return " +
+      extractFn(src, "typeTabsHtml") + "; })"
+  )(
+    function () { return ["cisco", "live-shipping"]; },
+    function (r) { return String(r || ""); },
+    function (r) { return String(r || ""); },
+    function (r) { return String(r || ""); },
+    typeTabIsQuiet
+  );
+  const quietNav = typeTabsHtml(
+    [
+      { id: "live-shipping", projects: [{ status: "green" }] },
+      { id: "cisco", projects: [{ status: "parked" }] },
+    ],
+    [],
+    ""
+  );
+  const cisFrag = quietNav.split('data-tab="cisco"')[1].split(">")[0];
+  const liveFrag = quietNav.split('data-tab="live-shipping"')[1].split(">")[0];
+  if (cisFrag.indexOf("is-quiet") === -1 || liveFrag.indexOf("is-quiet") !== -1) {
+    fail("type tab bar must dim quiet types and only quiet types");
+  }
   if (src.indexOf("fromGlance") === -1 || src.indexOf("revealGlanceTarget(id, focus)") === -1) {
     fail("glance must reveal its exact target");
   }

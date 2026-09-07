@@ -51,6 +51,11 @@ TYPE_TAB_LABELS = {
 }
 # Section-type labels -- noisy on phone. Real status chips (Green / Jeff-gate) stay.
 SECTION_TYPE_CHIPS = frozenset({"Ability", "Control", "Feature"})
+# A type tab is "live" when at least one row is real shipping / attention work.
+# Everything else (owner gates, parked leftover drafts, unknown) is quiet: the
+# phone tab bar dims it so live vs parked reads at a glance. Derived only from
+# row statuses already in the data -- it invents no state and hides no tab.
+LIVE_LANE_STATUSES = frozenset({"green", "yellow", "red"})
 ATTENTION_ORDER = {
     "red": 0,
     "jeff-gate": 1,
@@ -847,6 +852,22 @@ def is_type_tab(section_id: Any) -> bool:
     return bool(tab_id(section_id))
 
 
+def type_tab_is_quiet(section: Any) -> bool:
+    """True when a type tab holds no live work -- every row is an owner gate,
+    a parked leftover, or unknown. Live vs parked clarity for the phone tab
+    bar; reorders nothing, hides nothing, and invents no new state.
+    """
+    if not isinstance(section, dict):
+        return False
+    projects = [p for p in (section.get("projects") or []) if isinstance(p, dict)]
+    if not projects:
+        return True
+    return not any(
+        str(p.get("status") or "").strip().lower() in LIVE_LANE_STATUSES
+        for p in projects
+    )
+
+
 def type_tab_ids_for(sections: Any, pending: Any = None) -> list[str]:
     """Project-type tabs only. The glance opens Decisions; it is not a type tab."""
     del pending
@@ -953,11 +974,19 @@ def glance_html(pending: Any, sections: Any) -> str:
 def type_tabs_html(sections: Any, pending: Any, selected: Any = "") -> str:
     """Phone tab bar for types already in the data. First paint selects none."""
     want = tab_id(selected)
+    by_id = {
+        str(sec.get("id") or ""): sec
+        for sec in (sections or [])
+        if isinstance(sec, dict)
+    }
     buttons: list[str] = []
     for sid in type_tab_ids_for(sections, pending):
         label = html_lib.escape(tab_label(sid))
         sid_e = html_lib.escape(sid)
         aria = "true" if sid == want else "false"
+        quiet = ' data-quiet="true" class="is-quiet"' if type_tab_is_quiet(
+            by_id.get(sid)
+        ) else ""
         buttons.append(
             '<button type="button" role="tab" id="tab-'
             + sid_e
@@ -967,7 +996,9 @@ def type_tabs_html(sections: Any, pending: Any, selected: Any = "") -> str:
             + sid_e
             + '" aria-selected="'
             + aria
-            + '">'
+            + '"'
+            + quiet
+            + ">"
             + label
             + "</button>"
         )

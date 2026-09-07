@@ -1024,6 +1024,7 @@ html = f'''<!DOCTYPE html>
     font-size:.72rem; font-weight:600; cursor:pointer; touch-action:manipulation;
   }}
   .type-tabs button[aria-selected="true"] {{ border-color:var(--orange); color:var(--orange); }}
+  .type-tabs button.is-quiet:not([aria-selected="true"]) {{ opacity:.45; border-style:dashed; }}
   .chip {{ display:inline-flex; align-items:center; color:var(--c);
     background:transparent; border:0; padding:0; font-size:.68rem; font-weight:700;
     text-transform:uppercase; letter-spacing:.04em; white-space:nowrap; }}
@@ -1834,13 +1835,29 @@ function focusKey(kind, raw) {{
     return '<button type="button" class="board-glance" id="board-glance" aria-label="Next action"' + extra + target + controls + ">" +
       esc(g.text || "Quiet") + "</button>";
   }}
+  function typeTabIsQuiet(section) {{
+    if (!section || typeof section !== "object") return false;
+    var rows = (section.projects || []).filter(function (p) {{
+      return p && typeof p === "object";
+    }});
+    if (!rows.length) return true;
+    return !rows.some(function (p) {{
+      var s = String(p.status || "").replace(/^\s+|\s+$/g, "").toLowerCase();
+      return s === "green" || s === "yellow" || s === "red";
+    }});
+  }}
   function typeTabsHtml(sections, pending, selected) {{
     var want = tabId(selected);
+    var byId = {{}};
+    (sections || []).forEach(function (sec) {{
+      if (sec && typeof sec === "object" && sec.id != null) byId[String(sec.id)] = sec;
+    }});
     var buttons = "";
     typeTabIdsFor(sections, pending).forEach(function (sid) {{
+      var quiet = typeTabIsQuiet(byId[sid]) ? ' data-quiet="true" class="is-quiet"' : "";
       buttons += '<button type="button" role="tab" id="tab-' + esc(sid) + '" data-tab="' + esc(sid) +
-        '" aria-controls="' + esc(sid) + '" aria-selected="' + (sid === want ? "true" : "false") + '">' +
-        esc(tabLabel(sid)) + "</button>";
+        '" aria-controls="' + esc(sid) + '" aria-selected="' + (sid === want ? "true" : "false") + '"' +
+        quiet + ">" + esc(tabLabel(sid)) + "</button>";
     }});
     return '<nav class="type-tabs" id="type-tabs" role="tablist" aria-label="Project type">' +
       buttons + "</nav>";
