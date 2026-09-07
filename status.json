@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-09-07T14:07:53.476985-05:00",
-  "generated_at_display": "Mon Sep 7, 2026 \u00b7 2:07 PM CDT",
+  "generated_at": "2026-09-07T14:58:00.878060-05:00",
+  "generated_at_display": "Mon Sep 7, 2026 \u00b7 2:58 PM CDT",
   "timezone": "America/Chicago",
   "owner": "rupret007",
   "dashboard": "bob-ops-dashboard",
@@ -75,7 +75,7 @@
             "repo": "webjam",
             "agent": "none",
             "lease_state": "none",
-            "next": "Claude Goal OVERNIGHT_CLAUDE_WEBJAM_20260907_1400 Sonnet 5 High; stop...",
+            "next": "Karen leftover+security+UX; after PASS Bob leftover-squashes tip MATCH...",
             "sha": "433b9e4"
           }
         },
@@ -238,8 +238,8 @@
           "url": "https://github.com/rupret007/rad-dad-show-night",
           "repo_url": "https://github.com/rupret007/rad-dad-show-night",
           "private": false,
-          "status": "yellow",
-          "chip": "Yellow",
+          "status": "green",
+          "chip": "Green",
           "default_branch": "main",
           "tip_sha": "e8925c2",
           "tip_date": "2026-09-07T19:05:58Z",
@@ -252,7 +252,7 @@
           "agent_url": null,
           "ci": {
             "name": "leftover-honesty",
-            "conclusion": "in_progress",
+            "conclusion": "success",
             "branch": "main",
             "sha": "e8925c2",
             "created": "2026-09-07T19:06:01Z",
@@ -437,8 +437,8 @@
           "status": "green",
           "chip": "Green",
           "default_branch": "main",
-          "tip_sha": "2c614a9",
-          "tip_date": "2026-09-07T18:28:27Z",
+          "tip_sha": "053acfc",
+          "tip_date": "2026-09-07T19:07:57Z",
           "open_prs": 0,
           "open_pr_url": null,
           "open_pr_number": null,
@@ -450,9 +450,9 @@
             "name": "QA claim smoke",
             "conclusion": "success",
             "branch": "main",
-            "sha": "2c614a9",
-            "created": "2026-09-07T18:28:29Z",
-            "html_url": "https://github.com/rupret007/bob-ops-dashboard/actions/runs/34151771470"
+            "sha": "053acfc",
+            "created": "2026-09-07T19:08:01Z",
+            "html_url": "https://github.com/rupret007/bob-ops-dashboard/actions/runs/34154394916"
           },
           "release": null,
           "release_sha": null,
@@ -848,7 +848,7 @@
   ],
   "inaccessible": [],
   "publish_notes": "Public board -- no secrets or customer paths. Private repositories stay high-level; AI Music Vault stays private-content-boundary only.",
-  "refresh_started_ms": 1788807998789,
+  "refresh_started_ms": 1788811010585,
   "agents_source": "file:stale->unknown",
   "agents": [
     {
