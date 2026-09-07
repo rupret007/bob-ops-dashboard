@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-09-07T10:52:13.407692-05:00",
-  "generated_at_display": "Mon Sep 7, 2026 \u00b7 10:52 AM CDT",
+  "generated_at": "2026-09-07T11:10:27.143728-05:00",
+  "generated_at_display": "Mon Sep 7, 2026 \u00b7 11:10 AM CDT",
   "timezone": "America/Chicago",
   "owner": "rupret007",
   "dashboard": "bob-ops-dashboard",
@@ -46,25 +46,25 @@
           "url": "https://github.com/rupret007/webjam",
           "repo_url": "https://github.com/rupret007/webjam",
           "private": false,
-          "status": "green",
-          "chip": "Green",
+          "status": "yellow",
+          "chip": "Yellow",
           "default_branch": "master",
-          "tip_sha": "50e035e",
-          "tip_date": "2026-09-07T07:54:37Z",
-          "open_prs": 0,
-          "open_pr_url": null,
-          "open_pr_number": null,
+          "tip_sha": "6484150",
+          "tip_date": "2026-09-07T16:05:22Z",
+          "open_prs": 1,
+          "open_pr_url": "https://github.com/rupret007/webjam/pull/90",
+          "open_pr_number": 90,
           "open_pr_draft": false,
           "open_pr_stack": [],
           "pr_listing_complete": true,
           "agent_url": null,
           "ci": {
             "name": "WebJam CI",
-            "conclusion": "success",
+            "conclusion": "in_progress",
             "branch": "master",
-            "sha": "50e035e",
-            "created": "2026-09-07T07:54:40Z",
-            "html_url": "https://github.com/rupret007/webjam/actions/runs/34097821693"
+            "sha": "6484150",
+            "created": "2026-09-07T16:05:25Z",
+            "html_url": "https://github.com/rupret007/webjam/actions/runs/34141559454"
           },
           "release": "v0.27.2",
           "release_sha": "9c6ca3d",
@@ -75,7 +75,7 @@
             "repo": "webjam",
             "agent": "none",
             "lease_state": "none",
-            "next": "Jeff Allow for #89 and #90 squash after Karen PASS; never merge..."
+            "next": "Claude rebase #90 onto origin/master, resolve conflicts, push, local..."
           }
         },
         {
@@ -422,10 +422,10 @@
           "accessible": true,
           "coord": {
             "repo": "Cursor-OpenClaw-Integration",
-            "agent": "claude",
-            "lease_state": "active",
-            "next": "Claude Goal in flight; draft then WITH_KAREN",
-            "sha": "f8a6abe"
+            "agent": "none",
+            "lease_state": "none",
+            "next": "Karen leftover+security PASS \u2192 leftover-squash; stay DRAFT until then",
+            "sha": "c598ab4"
           }
         },
         {
@@ -437,8 +437,8 @@
           "status": "green",
           "chip": "Green",
           "default_branch": "main",
-          "tip_sha": "df6d6b9",
-          "tip_date": "2026-09-07T15:28:53Z",
+          "tip_sha": "a34362a",
+          "tip_date": "2026-09-07T15:52:17Z",
           "open_prs": 0,
           "open_pr_url": null,
           "open_pr_number": null,
@@ -450,9 +450,9 @@
             "name": "QA claim smoke",
             "conclusion": "success",
             "branch": "main",
-            "sha": "df6d6b9",
-            "created": "2026-09-07T15:28:57Z",
-            "html_url": "https://github.com/rupret007/bob-ops-dashboard/actions/runs/34138527537"
+            "sha": "a34362a",
+            "created": "2026-09-07T15:52:21Z",
+            "html_url": "https://github.com/rupret007/bob-ops-dashboard/actions/runs/34140490468"
           },
           "release": null,
           "release_sha": null,
@@ -464,7 +464,7 @@
             "agent": "none",
             "lease_state": "none",
             "next": "idle until next polish leftover",
-            "sha": "419b8c5"
+            "sha": "a34362a"
           }
         },
         {
@@ -623,11 +623,11 @@
           "url": "https://github.com/rupret007/Andrea_NanoBot",
           "repo_url": "https://github.com/rupret007/Andrea_NanoBot",
           "private": false,
-          "status": "green",
-          "chip": "Green",
+          "status": "yellow",
+          "chip": "Yellow",
           "default_branch": "main",
-          "tip_sha": "f3eb054",
-          "tip_date": "2026-09-07T08:25:19Z",
+          "tip_sha": "f414273",
+          "tip_date": "2026-09-07T16:08:03Z",
           "open_prs": 0,
           "open_pr_url": null,
           "open_pr_number": null,
@@ -636,12 +636,12 @@
           "pr_listing_complete": true,
           "agent_url": null,
           "ci": {
-            "name": "Security",
-            "conclusion": "success",
+            "name": "CI",
+            "conclusion": "in_progress",
             "branch": "main",
-            "sha": "f3eb054",
-            "created": "2026-09-07T13:11:57Z",
-            "html_url": "https://github.com/rupret007/Andrea_NanoBot/actions/runs/34126039457"
+            "sha": "f414273",
+            "created": "2026-09-07T16:08:07Z",
+            "html_url": "https://github.com/rupret007/Andrea_NanoBot/actions/runs/34141783994"
           },
           "release": null,
           "release_sha": null,
@@ -652,8 +652,7 @@
             "repo": "Andrea_NanoBot",
             "agent": "none",
             "lease_state": "none",
-            "next": "Karen leftover+security PASS \u2192 leftover-squash; stay DRAFT until then",
-            "sha": "2e83b2a"
+            "next": "idle until next polish leftover"
           }
         },
         {
@@ -850,7 +849,7 @@
   ],
   "inaccessible": [],
   "publish_notes": "Public board -- no secrets or customer paths. Private repositories stay high-level; AI Music Vault stays private-content-boundary only.",
-  "refresh_started_ms": 1788796256030,
+  "refresh_started_ms": 1788797350998,
   "agents_source": "file:stale->unknown",
   "agents": [
     {
