@@ -42,7 +42,7 @@ function navigationFocusChecks(html, src) {
   const functions = [
     "esc", "focusKey", "tabId", "tabLabel", "projectIsLiveWork", "sectionHasLiveWork",
     "sectionIsLeftoverOnly", "typeTabIdsFor", "typeTabsHtml", "tabFromHash", "focusQuietly",
-    "setTypeTabStop", "applyTypeTab", "handleTypeTabKey", "validFocusKey", "findFocusTarget",
+    "setTypeTabStop", "applyTypeTab", "navigateTypeTab", "restoreTypeTabFromHistory", "handleTypeTabKey", "validFocusKey", "findFocusTarget",
     "snapshotNavigationFocus", "findProjectFocus", "restoreNavigationFocus", "snapshotOpen", "restoreOpen",
   ];
   const constantsStart = src.indexOf("var TYPE_TAB_IDS =");
@@ -57,6 +57,8 @@ function navigationFocusChecks(html, src) {
   function fixture() {
     let document;
     const listeners = {};
+    const windowListeners = {};
+    const reveals = [];
     const decode = value => value.replace(/&quot;/g, '"').replace(/&#39;|&#x27;/g, "'")
       .replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&");
     class Element {
@@ -150,10 +152,35 @@ function navigationFocusChecks(html, src) {
       addEventListener: (name, handler) => { (listeners[name] ||= []).push(handler); },
     };
     const location = { hash: "", pathname: "/fixture.html", search: "" };
-    const history = { replaceState(_state, _title, url) { location.hash = url.startsWith("#") ? url : ""; } };
-    const ctx = vm.createContext({ document, boardEl: board, location, history });
+    const entries = [""];
+    const historyWrites = [];
+    let entry = 0;
+    const history = {
+      get length() { return entries.length; },
+      pushState(state, title, url) {
+        assert.equal(state, null, "History must not contain decision data or review state");
+        historyWrites.push(url);
+        location.hash = new URL(url, "https://fixture.invalid").hash;
+        entries.splice(entry + 1, entries.length, location.hash); entry++;
+      },
+      back() { traverse(-1); },
+      forward() { traverse(1); },
+    };
+    function traverse(delta) {
+      if (entry + delta < 0 || entry + delta >= entries.length) return;
+      entry += delta; location.hash = entries[entry];
+      for (const handler of windowListeners.hashchange || []) handler();
+    }
+    const window = {
+      addEventListener(name, handler) { (windowListeners[name] ||= []).push(handler); },
+      requestAnimationFrame(handler) { handler(); },
+    };
+    const ctx = vm.createContext({ document, boardEl: board, location, history, window,
+      revealGlanceTarget: (...args) => reveals.push(args) });
     vm.runInContext(src.slice(constantsStart, constantsEnd) + functions.map(name => extractFn(src, name)).join("\n"), ctx, { timeout: 1000 });
     vm.runInContext(src.slice(clickStart, clickEnd), ctx, { timeout: 1000 });
+    const historyListener = src.slice(clickEnd, src.indexOf("function pendingShell(", clickEnd));
+    vm.runInContext(historyListener, ctx, { timeout: 1000 });
     const sections = [
       { id: "live-shipping", projects: [{ name: "Fixture live", status: "green" }] },
       { id: "apps-utilities", projects: [{ name: "Fixture app", status: "yellow" }] },
@@ -191,7 +218,7 @@ function navigationFocusChecks(html, src) {
       return ev;
     }
     return {
-      ctx, document, board, outside, install, key, click, Element,
+      ctx, document, board, outside, install, key, click, Element, history, historyWrites, reveals,
       tabs: () => document.querySelectorAll("#type-tabs [data-tab]"),
       tab: id => document.getElementById("tab-" + id),
       panel: id => document.getElementById(id),
@@ -204,6 +231,94 @@ function navigationFocusChecks(html, src) {
   const test = (name, check) => cases.push({ name, check });
   const tabState = tabs => tabs.map(tab => [tab.getAttribute("data-tab"), tab.getAttribute("aria-selected"), tab.getAttribute("tabindex")]);
   const stop = ui => ui.tabs().filter(tab => tab.getAttribute("tabindex") === "0");
+
+  test("Back and Forward traverse deliberate type visits including the home glance", () => {
+    const ui = fixture();
+    ui.ctx.location.search = "?view=phone";
+    const glance = ui.board.appendChild(new ui.Element("button", { id: "board-glance" }));
+    ui.click(ui.tab("live-shipping"));
+    ui.click(ui.tab("apps-utilities"));
+    assert.deepEqual(ui.historyWrites, ["/fixture.html?view=phone#live-shipping", "/fixture.html?view=phone#apps-utilities"]);
+    ui.history.back();
+    assert.equal(ui.ctx.currentTypeTab, "live-shipping");
+    assert.equal(ui.panel("live-shipping").hidden, false);
+    assert.equal(ui.panel("apps-utilities").hidden, true);
+    assert.equal(ui.document.activeElement, ui.tab("live-shipping"));
+    ui.history.back();
+    assert.equal(ui.ctx.currentTypeTab, "");
+    assert.equal(ui.document.activeElement, glance);
+    assert.ok(ui.document.activeElement.focusCalls.at(-1).preventScroll);
+    ui.history.forward();
+    assert.equal(ui.ctx.currentTypeTab, "live-shipping");
+    assert.equal(ui.historyWrites.length, 2, "History traversal must not write new entries");
+  });
+  test("closing the selected type creates a returnable home visit", () => {
+    const ui = fixture(); ui.click(ui.tab("live-shipping")); ui.click(ui.tab("live-shipping"));
+    assert.equal(ui.ctx.currentTypeTab, "");
+    assert.equal(ui.ctx.location.hash, "");
+    ui.history.back();
+    assert.equal(ui.ctx.currentTypeTab, "live-shipping");
+    assert.equal(ui.history.length, 3);
+  });
+  test("startup, deep links, unknown hashes, and repaints leave history untouched", () => {
+    const ui = fixture();
+    ui.ctx.location.hash = "#apps-utilities";
+    ui.ctx.applyTypeTab(ui.ctx.tabFromHash());
+    assert.equal(ui.ctx.currentTypeTab, "apps-utilities");
+    ui.repaint(); ui.repaint();
+    assert.equal(ui.ctx.location.hash, "#apps-utilities");
+    ui.ctx.location.hash = "#unrecognized";
+    ui.ctx.restoreTypeTabFromHistory();
+    assert.equal(ui.ctx.currentTypeTab, "");
+    assert.equal(ui.ctx.location.hash, "#unrecognized", "Unrecognized links must not be rewritten");
+    assert.equal(ui.history.length, 1);
+    assert.deepEqual(ui.historyWrites, []);
+  });
+  test("glance and owner-hold taps create entries only when the destination changes", () => {
+    const ui = fixture();
+    for (const id of ["board-glance", "owner-holds-link"]) {
+      const link = ui.board.appendChild(new ui.Element("button", {
+        id, "data-tab": "live-shipping", "data-focus-target": "project:fixture-live",
+      }));
+      ui.click(link); ui.click(link);
+    }
+    assert.equal(ui.historyWrites.length, 1);
+    assert.equal(ui.reveals.length, 4, "Repeated taps still reveal the target");
+    ui.repaint();
+    assert.equal(ui.historyWrites.length, 1, "A content refresh cannot add a visit");
+    ui.history.back();
+    assert.equal(ui.ctx.currentTypeTab, "");
+  });
+  test("Back removes hidden-row focus and Forward to Decisions focuses the panel, never an action", () => {
+    const ui = fixture();
+    const glance = ui.board.appendChild(new ui.Element("button", { id: "board-glance" }));
+    ui.click(ui.tab("live-shipping")); ui.rows()[0].focus(); ui.history.back();
+    assert.equal(ui.document.activeElement, glance);
+    const controls = ui.board.appendChild(new ui.Element("section", { id: "controls", "data-tab-panel": "controls", hidden: "" }));
+    controls.appendChild(new ui.Element("button", { "data-dec": "APPROVE" }));
+    ui.ctx.navigateTypeTab("controls"); ui.history.back(); ui.history.forward();
+    assert.equal(ui.document.activeElement, controls);
+    assert.equal(controls.getAttribute("tabindex"), "-1");
+    assert.equal(ui.reveals.length, 0, "History navigation cannot execute a review or action");
+  });
+  test("history changes do not take focus from outside the board", () => {
+    const ui = fixture(); ui.click(ui.tab("live-shipping")); ui.outside.focus(); ui.history.back();
+    assert.equal(ui.document.activeElement, ui.outside);
+  });
+  test("history restores visible focus after a browser resets focus to body", () => {
+    const ui = fixture(); ui.click(ui.tab("live-shipping")); ui.click(ui.tab("apps-utilities"));
+    ui.document.activeElement = ui.document.body;
+    ui.history.back();
+    assert.equal(ui.document.activeElement, ui.tab("live-shipping"));
+  });
+  test("a denied history write leaves tab navigation usable", () => {
+    const ui = fixture();
+    ui.history.pushState = () => { throw new Error("History denied"); };
+    ui.click(ui.tab("live-shipping"));
+    assert.equal(ui.ctx.currentTypeTab, "live-shipping");
+    assert.equal(ui.panel("live-shipping").hidden, false);
+    assert.equal(ui.historyWrites.length, 0);
+  });
 
   test("generated first-paint and repaint tabs agree on one home tabstop", () => {
     const ui = fixture();
