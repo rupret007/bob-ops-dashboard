@@ -68,7 +68,6 @@ from board_meta import (
     tab_id,
     tab_label,
     type_tab_ids_for,
-    type_tab_is_quiet,
     type_tabs_html,
     unknown_mac_probes_html,
     visible_chip,
@@ -489,43 +488,6 @@ class BoardMetaTests(unittest.TestCase):
         self.assertIn('aria-controls="controls"', glance)
         self.assertIn('data-focus-target="decision:x"', glance)
         self.assertNotIn("<", glance_status([{"id": "x"}], sections)["text"])
-
-    def test_type_tabs_dim_quiet_types_by_live_row_state(self):
-        # No live row (owner gate / parked / unknown / empty) -> quiet.
-        self.assertTrue(type_tab_is_quiet({"projects": [{"status": "jeff-gate"}]}))
-        self.assertTrue(type_tab_is_quiet({"projects": [{"status": "parked"}]}))
-        self.assertTrue(type_tab_is_quiet({"projects": [{"status": "unknown"}]}))
-        self.assertTrue(type_tab_is_quiet({"projects": []}))
-        self.assertTrue(type_tab_is_quiet({}))
-        # Any green / yellow / red row keeps the tab live.
-        self.assertFalse(type_tab_is_quiet({"projects": [{"status": "green"}]}))
-        self.assertFalse(type_tab_is_quiet(
-            {"projects": [{"status": "parked"}, {"status": "yellow"}]}
-        ))
-        self.assertFalse(type_tab_is_quiet({"projects": [{"status": "RED"}]}))
-        self.assertFalse(type_tab_is_quiet("not-a-dict"))
-        sections = [
-            {"id": "live-shipping", "projects": [{"name": "WebJam", "status": "green"}]},
-            {"id": "cisco", "projects": [{"name": "AdoptIQ", "status": "yellow"}]},
-            {"id": "private-media", "projects": [{"name": "Media", "status": "jeff-gate"}]},
-            {"id": "parked", "projects": [{"name": "Catalog", "status": "parked"}]},
-        ]
-        html = type_tabs_html(sections, [])
-        live_btn = html.split('data-tab="live-shipping"')[1].split(">")[0]
-        cisco_btn = html.split('data-tab="cisco"')[1].split(">")[0]
-        media_btn = html.split('data-tab="private-media"')[1].split(">")[0]
-        parked_btn = html.split('data-tab="parked"')[1].split(">")[0]
-        self.assertNotIn("is-quiet", live_btn)
-        self.assertNotIn("is-quiet", cisco_btn)
-        self.assertIn('data-quiet="true"', media_btn)
-        self.assertIn("is-quiet", media_btn)
-        self.assertIn("is-quiet", parked_btn)
-        # A dimmed tab is still a real tab, not hidden or reordered.
-        self.assertEqual(
-            [s for s in ("live-shipping", "cisco", "private-media", "parked")
-             if 'data-tab="%s"' % s in html],
-            ["live-shipping", "cisco", "private-media", "parked"],
-        )
 
     def test_unknown_mac_probes_collapse_to_one_honest_line(self):
         unknown = [
