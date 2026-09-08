@@ -1797,7 +1797,13 @@ function focusKey(kind, raw) {{
       var title = rows[0] && rows[0].title != null ? String(rows[0].title).replace(/^\s+|\s+$/g, "") : "";
       if (title.length > 28) title = title.slice(0, 28).replace(/\s+$/g, "");
       if (!title) title = "Pending";
-      return {{ text: title, tab: "controls", focus: focusKey("decision", rows[0].id) }};
+      var budget = 22;
+      if (title.length > budget) {{
+        var cut = title.slice(0, budget).replace(/\s+$/g, "");
+        if (cut.indexOf(" ") !== -1) cut = cut.slice(0, cut.lastIndexOf(" ")).replace(/\s+$/g, "");
+        title = cut || title.slice(0, budget).replace(/\s+$/g, "");
+      }}
+      return {{ text: "Decide: " + (title || "Pending"), tab: "controls", focus: focusKey("decision", rows[0].id) }};
     }}
     var worstRank = 99;
     var worstId = "";

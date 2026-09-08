@@ -874,6 +874,27 @@ def glance_pending_title(item: Any) -> str:
     return title
 
 
+GLANCE_DECIDE_PREFIX = "Decide: "
+
+
+def glance_decide_text(title: Any) -> str:
+    """Frame an inbox glance as the action it is, kept to one short hero phrase.
+
+    Red / yellow glances already carry a predicate (``is red`` / ``needs a
+    look``); a bare decision title does not read as a call to act. The prefix
+    plus a word-boundary trim keeps the hero within the existing ~two-line
+    budget. Callers pass an already-escaped-safe plain title.
+    """
+    budget = 30 - len(GLANCE_DECIDE_PREFIX)
+    trimmed = str(title or "").strip()
+    if len(trimmed) > budget:
+        cut = trimmed[:budget].rstrip()
+        if " " in cut:
+            cut = cut[: cut.rfind(" ")].rstrip()
+        trimmed = cut or trimmed[:budget].rstrip()
+    return GLANCE_DECIDE_PREFIX + (trimmed or "Pending")
+
+
 def glance_status(pending: Any, sections: Any) -> dict[str, str]:
     """One exact first-screen action. Never a yes-count or leftover Jeff-yes."""
     rows = [
@@ -883,7 +904,7 @@ def glance_status(pending: Any, sections: Any) -> dict[str, str]:
     if rows:
         title = glance_pending_title(rows[0]) or "Pending"
         return {
-            "text": title,
+            "text": glance_decide_text(title),
             "tab": "controls",
             "focus": focus_key("decision", rows[0].get("id")),
         }

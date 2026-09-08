@@ -307,11 +307,11 @@ class BoardMetaTests(unittest.TestCase):
         ]
         pending = [{"id": "adoptiq-live-cisco", "title": "AdoptIQ", "risk": "high"}]
         g = glance_status(pending, sections)
-        self.assertEqual(g["text"], "AdoptIQ")
+        self.assertEqual(g["text"], "Decide: AdoptIQ")
         self.assertEqual(g["tab"], "controls")
         self.assertEqual(g["focus"], "decision:adoptiq-live-cisco")
         g4 = glance_status(pending * 4, sections)
-        self.assertEqual(g4["text"], "AdoptIQ")
+        self.assertEqual(g4["text"], "Decide: AdoptIQ")
         self.assertNotIn("more", g4["text"])
         quiet_live = glance_status([], sections)
         self.assertEqual(quiet_live["text"], "AdoptIQ is red")
@@ -440,9 +440,10 @@ class BoardMetaTests(unittest.TestCase):
             },
         ]
         g = glance_status(pending, [])
-        # sort_pending puts high-risk first; AdoptIQ title is 28 chars so it fits.
-        # First screen names that one next action -- never a leftover yes-count.
-        self.assertEqual(g["text"], "AdoptIQ live Cisco readiness")
+        # sort_pending puts high-risk first. The inbox glance leads with the
+        # action verb and word-trims the title so the hero stays one short
+        # phrase; the exact row it focuses still carries the full title.
+        self.assertEqual(g["text"], "Decide: AdoptIQ live Cisco")
         self.assertEqual(g["tab"], "controls")
         self.assertEqual(g["focus"], "decision:adoptiq-live-cisco")
         self.assertNotIn("more", g["text"])
