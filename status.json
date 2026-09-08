@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-09-07T23:27:44.345789-05:00",
-  "generated_at_display": "Mon Sep 7, 2026 \u00b7 11:27 PM CDT",
+  "generated_at": "2026-09-07T23:41:53.338524-05:00",
+  "generated_at_display": "Mon Sep 7, 2026 \u00b7 11:41 PM CDT",
   "timezone": "America/Chicago",
   "owner": "rupret007",
   "dashboard": "bob-ops-dashboard",
@@ -46,8 +46,8 @@
           "url": "https://github.com/rupret007/webjam",
           "repo_url": "https://github.com/rupret007/webjam",
           "private": false,
-          "status": "yellow",
-          "chip": "Yellow",
+          "status": "green",
+          "chip": "Green",
           "default_branch": "master",
           "tip_sha": "e35f735",
           "tip_date": "2026-09-08T03:59:46Z",
@@ -60,7 +60,7 @@
           "agent_url": null,
           "ci": {
             "name": "WebJam CI",
-            "conclusion": "in_progress",
+            "conclusion": "success",
             "branch": "master",
             "sha": "e35f735",
             "created": "2026-09-08T03:59:49Z",
@@ -75,7 +75,7 @@
             "repo": "webjam",
             "agent": "none",
             "lease_state": "none",
-            "next": "Art CONTINUE inject; draft PRE_KAREN; no merge",
+            "next": "implement and verify pre-offer guest preparation; draft PRE_KAREN; no...",
             "sha": "e35f735"
           }
         },
@@ -229,8 +229,11 @@
             "repo": "RadDadSite",
             "agent": "none",
             "lease_state": "none",
-            "next": "focused CSS/layout, local and hosted green, draft PRE_KAREN, stop.",
-            "sha": "dd5a8e6"
+            "next": "Karen leftover+security on hosted-green #44; stopped.",
+            "sha": "05f2ff8",
+            "pr": 44,
+            "pr_url": "https://github.com/rupret007/RadDadSite/pull/44",
+            "pr_draft": true
           }
         },
         {
@@ -442,8 +445,8 @@
           "status": "green",
           "chip": "Green",
           "default_branch": "main",
-          "tip_sha": "2c568e4",
-          "tip_date": "2026-09-08T03:54:11Z",
+          "tip_sha": "25c23b1",
+          "tip_date": "2026-09-08T04:27:48Z",
           "open_prs": 0,
           "open_pr_url": null,
           "open_pr_number": null,
@@ -455,9 +458,9 @@
             "name": "QA claim smoke",
             "conclusion": "success",
             "branch": "main",
-            "sha": "2c568e4",
-            "created": "2026-09-08T03:54:15Z",
-            "html_url": "https://github.com/rupret007/bob-ops-dashboard/actions/runs/34185110828"
+            "sha": "25c23b1",
+            "created": "2026-09-08T04:27:52Z",
+            "html_url": "https://github.com/rupret007/bob-ops-dashboard/actions/runs/34187074564"
           },
           "release": null,
           "release_sha": null,
@@ -656,7 +659,8 @@
             "repo": "Andrea_NanoBot",
             "agent": "none",
             "lease_state": "none",
-            "next": "idle until next Andrea leftover"
+            "next": "Claude Goal Sonnet 5 High; draft PRE_KAREN; no merge; Private API OFF",
+            "sha": "4ccf6b9"
           }
         },
         {
@@ -853,7 +857,7 @@
   ],
   "inaccessible": [],
   "publish_notes": "Public board -- no secrets or customer paths. Private repositories stay high-level; AI Music Vault stays private-content-boundary only.",
-  "refresh_started_ms": 1788841591899,
+  "refresh_started_ms": 1788842441449,
   "agents_source": "file:stale->unknown",
   "agents": [
     {
