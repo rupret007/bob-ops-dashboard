@@ -19,16 +19,13 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
+      - name: Test source-only boundary
+        run: python3 -m unittest -v test_pr_source_only
       - name: Enforce source-only feature PRs
         if: github.event_name == 'pull_request'
         env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
-        run: |
-          set -euo pipefail
-          if ! git diff --quiet "$BASE_SHA"...HEAD -- index.html status.json; then
-            echo "Feature PRs must not change scheduler-owned index.html or status.json." >&2
-            exit 1
-          fi
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: bash qa-source-only-pr.sh
       - name: Validate synthetic integration with existing runner tools
         run: |
           set -euo pipefail
