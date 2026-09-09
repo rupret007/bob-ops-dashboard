@@ -63,7 +63,7 @@ def mark_offline_artifacts(generator: Path) -> None:
     index_path.write_text(html.replace(body, body + banner), encoding="utf-8")
 
 
-def run_offline(output: Path | None = None) -> None:
+def run_offline(output: Path | None = None, *, browser: bool = False) -> None:
     print("OFFLINE QA: synthetic fixture collection only; no live GitHub or owner probes.", flush=True)
     before = artifact_hashes()
     try:
@@ -88,6 +88,11 @@ def run_offline(output: Path | None = None) -> None:
                 cwd=ROOT, env=smoke_env, check=True,
             )
             calls = assert_fixture_calls(log_path)
+            if browser:
+                subprocess.run(
+                    ["node", str(ROOT / "test_offline_browser.js"), str(generator)],
+                    cwd=ROOT, env=env, check=True,
+                )
             if output is not None:
                 # Revalidate after QA; never replace a directory populated by a
                 # concurrent process. Preserve no generator, executable, or git data.
@@ -110,12 +115,13 @@ def run_offline(output: Path | None = None) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output-dir", help="Optionally retain marked browser fixtures in an empty temp directory")
+    parser.add_argument("--browser", action="store_true", help="Also run Chromium against the synthetic fixture (requires npm ci and Chromium)")
     args = parser.parse_args()
     try:
         output = validate_output_directory(args.output_dir)
     except ValueError as error:
         parser.error(str(error))
-    run_offline(output)
+    run_offline(output, browser=args.browser)
 
 
 if __name__ == "__main__":

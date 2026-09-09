@@ -1,0 +1,8 @@
+{
+  "name": "bob-ops-dashboard-qa",
+  "private": true,
+  "description": "Browser checks for disposable synthetic dashboard fixtures",
+  "devDependencies": {
+    "playwright": "1.63.0"
+  }
+}
