@@ -9,10 +9,11 @@ That prevented hosted validation under an offline-only scope, even though
 the source already had a safe synthetic generator and full claim smoke.
 
 The QA workflow now runs the existing offline generator, its environment
-allowlist/fake GitHub command checks, and the full claim smoke. Optional
-`--browser` adds a pinned test-only Chromium runner. No GitHub token is
-passed to collection; checkout credentials are not persisted. Dependency
-and browser setup download test tools, not portfolio data.
+allowlist/fake GitHub command checks, and the full claim smoke with tools
+already on the runner. It installs no npm packages or browsers. No GitHub
+token is passed to collection; checkout credentials are not persisted.
+Optional local `--browser` adds a pinned test-only Chromium runner when
+those tools are already available or their installation is authorized.
 
 The browser serves only the marked fixture HTML/JSON on loopback. It checks
 320/390/1280px glance wording, full visible title text and exact destination
@@ -31,6 +32,8 @@ Run `python3 qa-offline.py --browser` after authorized test dependency setup:
 `npx --no-install playwright install chromium`.
 Existing `python3 qa-offline.py` needs no new browser dependencies.
 Exact local/hosted results and final-tip review belong in the PR receipt.
+Hosted checks run the offline claim suite; the browser journey is separate
+local evidence. Do not describe that local browser run as hosted coverage.
 
 The hosted summary records the actual checkout commit, tree and parents,
 including the synthetic integration commit for PR events. It certifies that
