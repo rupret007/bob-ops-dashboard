@@ -18,6 +18,12 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          persist-credentials: false
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
       - name: Enforce source-only feature PRs
         if: github.event_name == 'pull_request'
         env:
@@ -28,21 +34,20 @@ jobs:
             echo "Feature PRs must not change scheduler-owned index.html or status.json." >&2
             exit 1
           fi
-      - name: Generate and validate disposable dashboard artifacts
-        env:
-          GH_TOKEN: ${{ github.token }}
-          OWNER: rupret007
+      - name: Install locked browser test dependency
+        run: npm ci --ignore-scripts
+      - name: Install Chromium
+        run: npx --no-install playwright install --with-deps chromium
+      - name: Validate synthetic integration and phone decision journey
         run: |
           set -euo pipefail
-          scratch="$(mktemp -d)"
-          trap 'rm -rf "$scratch"' EXIT
-          cp README.md board_meta.py index.html refresh.sh status.json "$scratch/"
-          chmod +x "$scratch/refresh.sh" ./qa-claim-smoke.sh
-          (
-            cd "$scratch"
-            ./refresh.sh
-          )
-          REFRESH_SH="$scratch/refresh.sh" \
-            STATUS_JSON="$scratch/status.json" \
-            ./qa-claim-smoke.sh "$scratch/index.html"
+          python3 qa-offline.py --browser
           test -z "$(git status --porcelain)"
+      - name: Record tested checkout
+        run: |
+          {
+            echo 'Synthetic integration passed; no live portfolio or publication verification.'
+            echo "Commit: $(git rev-parse HEAD)"
+            echo "Tree: $(git rev-parse HEAD^{tree})"
+            echo "Parents: $(git show -s --format=%P HEAD)"
+          } >> "$GITHUB_STEP_SUMMARY"

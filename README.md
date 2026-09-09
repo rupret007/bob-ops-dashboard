@@ -78,6 +78,10 @@ Workflow uses default `GITHUB_TOKEN` (`permissions: contents: write`) plus `gh a
 ./refresh.sh --push   # rebuild and push to Pages (main / root)
 ```
 
-QA from a source-only branch: `./qa-source-only.sh`. It rebuilds `index.html` and `status.json` in a disposable directory, runs the full fail-closed claim smoke, and proves the scheduler-owned files in the checkout were not touched. `./qa-claim-smoke.sh` is the lower-level command for an already generated page.
+Offline QA from a source-only branch: `python3 qa-offline.py`. It generates visibly marked synthetic fixtures, runs the full claim smoke and proves scheduler-owned files stayed byte-stable. No live portfolio or owner probes are read.
+
+Hosted PR validation runs `python3 qa-offline.py --browser`, adding Chromium at 320/390/1280px: full visible glance/title text, exact-row focus and no writes, popups or external requests. For a local browser run, first use `npm ci --ignore-scripts` and `npx --no-install playwright install chromium` when test-dependency setup is authorized. The pinned npm dependency is test-only; it is not used by the public page. See the [offline hosted integration handoff](docs/handoffs/2026-09-09-offline-hosted-integration.md).
+
+`./qa-source-only.sh` still performs live portfolio reads and requires separate authorization. `./qa-claim-smoke.sh` is the lower-level command for an already generated page. The scheduled refresh workflow is unchanged; synthetic QA does not verify live publication.
 
 The stale-state smoke covers the exact trust boundary: one failed live poll immediately labels the board historical, an overdue refresh does the same after the 45-minute silence window, and a successful current snapshot clears that warning. **Retry now** reuses the same bounded, no-store poll path; it does not dispatch Actions, refresh GitHub, or publish Pages.
