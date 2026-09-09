@@ -25,6 +25,14 @@ Source-only PR enforcement remains. The runner checks scheduler-owned
 index.html/status.json hashes, and hosted QA requires a clean checkout.
 The separate refresh scheduler and product source are unchanged.
 
+Hosted execution also reproduced a false source-only failure: an old event
+base SHA caused newer scheduled snapshots in the merge checkout to count
+as feature edits. The gate now verifies the expected PR head against the
+two merge parents, rejects feature snapshot edits relative to their merge
+base, and separately requires integrated snapshots to match the base.
+Synthetic git-history tests cover the reproduced failure and actual feature
+or integration snapshot edits, wrong heads and non-merge checkouts.
+
 ## Verification and limits
 
 Run `python3 qa-offline.py --browser` after authorized test dependency setup:
