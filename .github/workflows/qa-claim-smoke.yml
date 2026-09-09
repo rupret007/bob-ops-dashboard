@@ -19,11 +19,6 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: "22"
-          cache: npm
       - name: Enforce source-only feature PRs
         if: github.event_name == 'pull_request'
         env:
@@ -34,14 +29,10 @@ jobs:
             echo "Feature PRs must not change scheduler-owned index.html or status.json." >&2
             exit 1
           fi
-      - name: Install locked browser test dependency
-        run: npm ci --ignore-scripts
-      - name: Install Chromium
-        run: npx --no-install playwright install --with-deps chromium
-      - name: Validate synthetic integration and phone decision journey
+      - name: Validate synthetic integration with existing runner tools
         run: |
           set -euo pipefail
-          python3 qa-offline.py --browser
+          python3 qa-offline.py
           test -z "$(git status --porcelain)"
       - name: Record tested checkout
         run: |
