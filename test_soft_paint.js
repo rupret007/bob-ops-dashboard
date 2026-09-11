@@ -775,15 +775,15 @@ function run() {
       "return " + extractFn(src, "glanceStatus") + "; })"
   )(tabId, attentionRank, focusKey);
   const g = glanceStatus([{ id: "x", title: "AdoptIQ" }], [{ id: "live-shipping", projects: [{ status: "yellow" }] }]);
-  if (g.text !== "AdoptIQ" || g.tab !== "controls" || g.focus !== "decision:x") {
-    fail("pending glance must name and target the gate");
+  if (g.text !== "Decide: AdoptIQ" || g.tab !== "controls" || g.focus !== "decision:x") {
+    fail("pending glance must lead with the action verb and target the gate: " + g.text);
   }
   const g3 = glanceStatus([
     { id: "che-live-pull", title: "Che live pull", risk: "low" },
     { id: "logic-keys-wavs", title: "Logic keys and WAVs", risk: "low" },
     { id: "adoptiq-live-cisco", title: "AdoptIQ live Cisco readiness", risk: "high" },
   ], []);
-  if (g3.text !== "AdoptIQ live Cisco readiness" || g3.tab !== "controls" || g3.focus !== "decision:adoptiq-live-cisco") {
+  if (g3.text !== "Decide: AdoptIQ live Cisco" || g3.tab !== "controls" || g3.focus !== "decision:adoptiq-live-cisco") {
     fail("three-gate glance must name the one next action: " + g3.text);
   }
   if (/\+\s*\d+\s*more/.test(g3.text)) {
