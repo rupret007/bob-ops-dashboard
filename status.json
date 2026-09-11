@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-09-10T22:51:29.431415-05:00",
-  "generated_at_display": "Thu Sep 10, 2026 \u00b7 10:51 PM CDT",
+  "generated_at": "2026-09-10T23:06:32.642318-05:00",
+  "generated_at_display": "Thu Sep 10, 2026 \u00b7 11:06 PM CDT",
   "timezone": "America/Chicago",
   "owner": "rupret007",
   "dashboard": "bob-ops-dashboard",
@@ -122,11 +122,11 @@
           "url": "https://github.com/rupret007/StoryBoard",
           "repo_url": "https://github.com/rupret007/StoryBoard",
           "private": false,
-          "status": "green",
-          "chip": "Green",
+          "status": "yellow",
+          "chip": "Yellow",
           "default_branch": "main",
-          "tip_sha": "fe84f50",
-          "tip_date": "2026-09-11T03:08:39Z",
+          "tip_sha": "337a6b9",
+          "tip_date": "2026-09-11T04:04:32Z",
           "open_prs": 0,
           "open_pr_url": null,
           "open_pr_number": null,
@@ -136,11 +136,11 @@
           "agent_url": null,
           "ci": {
             "name": "Quality",
-            "conclusion": "success",
+            "conclusion": "in_progress",
             "branch": "main",
-            "sha": "fe84f50",
-            "created": "2026-09-11T03:08:41Z",
-            "html_url": "https://github.com/rupret007/StoryBoard/actions/runs/34557320387"
+            "sha": "337a6b9",
+            "created": "2026-09-11T04:04:36Z",
+            "html_url": "https://github.com/rupret007/StoryBoard/actions/runs/34560822943"
           },
           "release": null,
           "release_sha": null,
@@ -151,8 +151,7 @@
             "repo": "StoryBoard",
             "agent": "none",
             "lease_state": "none",
-            "next": "Claude Sonnet5 High phone-first booking/setlist/ops clarity \u2192 draft PR...",
-            "sha": "fe84f50"
+            "next": "idle until next StoryBoard leftover (Show Night Claude lease is..."
           }
         },
         {
@@ -268,7 +267,8 @@
             "repo": "rad-dad-show-night",
             "agent": "none",
             "lease_state": "none",
-            "next": "idle until next Show Night leftover"
+            "next": "idle until next Show Night leftover",
+            "sha": "12cc034"
           }
         },
         {
@@ -439,8 +439,8 @@
           "status": "green",
           "chip": "Green",
           "default_branch": "main",
-          "tip_sha": "68d747a",
-          "tip_date": "2026-09-11T03:24:00Z",
+          "tip_sha": "1e7d348",
+          "tip_date": "2026-09-11T03:51:32Z",
           "open_prs": 0,
           "open_pr_url": null,
           "open_pr_number": null,
@@ -452,9 +452,9 @@
             "name": "QA claim smoke",
             "conclusion": "success",
             "branch": "main",
-            "sha": "68d747a",
-            "created": "2026-09-11T03:24:03Z",
-            "html_url": "https://github.com/rupret007/bob-ops-dashboard/actions/runs/34558290809"
+            "sha": "1e7d348",
+            "created": "2026-09-11T03:51:35Z",
+            "html_url": "https://github.com/rupret007/bob-ops-dashboard/actions/runs/34560025776"
           },
           "release": null,
           "release_sha": null,
@@ -850,7 +850,7 @@
   ],
   "inaccessible": [],
   "publish_notes": "Public board -- no secrets or customer paths. Private repositories stay high-level; AI Music Vault stays private-content-boundary only.",
-  "refresh_started_ms": 1789098642417,
+  "refresh_started_ms": 1789099542951,
   "agents_source": "file:stale->unknown",
   "agents": [
     {
