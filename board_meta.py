@@ -998,6 +998,18 @@ def type_tabs_html(sections: Any, pending: Any, selected: Any = "") -> str:
     )
 
 
+def empty_type_panel_html(section_id: Any) -> str:
+    """Honest note for a real project-type panel with zero current rows.
+
+    A type tab paints whenever its section id is present, even before any
+    project maps to it. Silently rendering an empty ``<div class="lanes">``
+    would read as broken rather than naming the true state; this keeps the
+    same no-invented-content honesty the rest of the board holds to.
+    """
+    label = tab_label(section_id) or "this type"
+    return '<p class="pending-help">Nothing under ' + html_lib.escape(label) + ' right now.</p>'
+
+
 def attention_rank(project: Any) -> int:
     """Lower = needs Jeff sooner. Unknown statuses sort last."""
     if not isinstance(project, dict):

@@ -31,6 +31,7 @@ Bob the Bot is a distinct private application lane, not an alias for Andrea Nano
 - [Batch A portfolio handoff — 2026-08-26](docs/handoffs/2026-08-26-batch-a.md) is an immutable completion snapshot (2026-08-26). Later leftover rounds (#31–#33) landed after it; add a new dated handoff instead of rewriting Batch A.
 - [Bob application registration handoff — 2026-08-26](docs/handoffs/2026-08-26-bob-application-registration.md) records the private application boundary and remaining owner gates.
 - [Agent handoff runbook](docs/AGENT_HANDOFF_RUNBOOK.md) is the reusable checklist and template for Grok Bot, Codex, and future agents.
+- [Honest empty type panel handoff — 2026-09-10](docs/handoffs/2026-09-10-empty-type-panel.md) records the source-only fix so a phone type tab with zero current rows names itself instead of painting blank.
 
 These are sanitized operational-continuity records, not private handoff text. This repository is public: add a new dated handoff for each completed round instead of rewriting an old snapshot, and keep private lanes high-level. Never copy private repository metadata, creative details, customer data, credentials, or local paths into a handoff.
 
