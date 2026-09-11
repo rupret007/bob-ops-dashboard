@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-09-10T22:23:58.122640-05:00",
-  "generated_at_display": "Thu Sep 10, 2026 \u00b7 10:23 PM CDT",
+  "generated_at": "2026-09-10T22:51:29.431415-05:00",
+  "generated_at_display": "Thu Sep 10, 2026 \u00b7 10:51 PM CDT",
   "timezone": "America/Chicago",
   "owner": "rupret007",
   "dashboard": "bob-ops-dashboard",
@@ -151,7 +151,8 @@
             "repo": "StoryBoard",
             "agent": "none",
             "lease_state": "none",
-            "next": "idle until next StoryBoard leftover"
+            "next": "Claude Sonnet5 High phone-first booking/setlist/ops clarity \u2192 draft PR...",
+            "sha": "fe84f50"
           }
         },
         {
@@ -438,8 +439,8 @@
           "status": "green",
           "chip": "Green",
           "default_branch": "main",
-          "tip_sha": "d2b9b21",
-          "tip_date": "2026-09-11T03:15:57Z",
+          "tip_sha": "68d747a",
+          "tip_date": "2026-09-11T03:24:00Z",
           "open_prs": 0,
           "open_pr_url": null,
           "open_pr_number": null,
@@ -451,9 +452,9 @@
             "name": "QA claim smoke",
             "conclusion": "success",
             "branch": "main",
-            "sha": "d2b9b21",
-            "created": "2026-09-11T03:15:59Z",
-            "html_url": "https://github.com/rupret007/bob-ops-dashboard/actions/runs/34557785645"
+            "sha": "68d747a",
+            "created": "2026-09-11T03:24:03Z",
+            "html_url": "https://github.com/rupret007/bob-ops-dashboard/actions/runs/34558290809"
           },
           "release": null,
           "release_sha": null,
@@ -849,7 +850,7 @@
   ],
   "inaccessible": [],
   "publish_notes": "Public board -- no secrets or customer paths. Private repositories stay high-level; AI Music Vault stays private-content-boundary only.",
-  "refresh_started_ms": 1789096991234,
+  "refresh_started_ms": 1789098642417,
   "agents_source": "file:stale->unknown",
   "agents": [
     {
