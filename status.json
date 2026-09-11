@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-09-10T21:53:16.312410-05:00",
-  "generated_at_display": "Thu Sep 10, 2026 \u00b7 9:53 PM CDT",
+  "generated_at": "2026-09-10T22:08:16.554416-05:00",
+  "generated_at_display": "Thu Sep 10, 2026 \u00b7 10:08 PM CDT",
   "timezone": "America/Chicago",
   "owner": "rupret007",
   "dashboard": "bob-ops-dashboard",
@@ -75,7 +75,7 @@
             "repo": "webjam",
             "agent": "none",
             "lease_state": "none",
-            "next": "",
+            "next": "Karen leftover+security on #115; stay draft",
             "sha": "89274f7"
           }
         },
@@ -429,7 +429,8 @@
             "repo": "Cursor-OpenClaw-Integration",
             "agent": "none",
             "lease_state": "none",
-            "next": "idle until next OpenClaw leftover"
+            "next": "Claude Goal Running \u2192 OPEN DRAFT \u2192 PRE_KAREN",
+            "sha": "8d66d49"
           }
         },
         {
@@ -441,8 +442,8 @@
           "status": "green",
           "chip": "Green",
           "default_branch": "main",
-          "tip_sha": "7edad76",
-          "tip_date": "2026-09-10T23:59:18Z",
+          "tip_sha": "b3f2369",
+          "tip_date": "2026-09-11T02:53:19Z",
           "open_prs": 0,
           "open_pr_url": null,
           "open_pr_number": null,
@@ -450,7 +451,14 @@
           "open_pr_stack": [],
           "pr_listing_complete": true,
           "agent_url": null,
-          "ci": null,
+          "ci": {
+            "name": "QA claim smoke",
+            "conclusion": "success",
+            "branch": "main",
+            "sha": "b3f2369",
+            "created": "2026-09-11T02:53:22Z",
+            "html_url": "https://github.com/rupret007/bob-ops-dashboard/actions/runs/34556345456"
+          },
           "release": null,
           "release_sha": null,
           "release_url": null,
@@ -649,8 +657,8 @@
             "repo": "Andrea_NanoBot",
             "agent": "none",
             "lease_state": "none",
-            "next": "Claude Goal Running \u2192 OPEN DRAFT \u2192 PRE_KAREN",
-            "sha": "2f3172c"
+            "next": "Karen leftover+security on #49 after hosted green; stay draft",
+            "sha": "bd7a58a"
           }
         },
         {
@@ -847,7 +855,7 @@
   ],
   "inaccessible": [],
   "publish_notes": "Public board -- no secrets or customer paths. Private repositories stay high-level; AI Music Vault stays private-content-boundary only.",
-  "refresh_started_ms": 1789095142661,
+  "refresh_started_ms": 1789096049332,
   "agents_source": "file:stale->unknown",
   "agents": [
     {
