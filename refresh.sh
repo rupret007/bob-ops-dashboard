@@ -218,7 +218,6 @@ from board_meta import (
     public_coord,
     status_with_coord_review,
     drop_leftover_verify,
-    empty_type_panel_html,
     extract_cloud_agents_from_prs,
     focus_key,
     glance_html,
@@ -971,7 +970,7 @@ for sec in status["sections"]:
         continue
     heading = f'<h2>{h(sec.get("title") or "")}</h2>'
     sort_attn = kind == "primary"
-    body = lanes_html(projects, sort_attention=sort_attn) if projects else empty_type_panel_html(sid_raw)
+    body = lanes_html(projects, sort_attention=sort_attn)
     cls = "primary" if kind == "primary" else "secondary"
     panel = ""
     if is_type_tab(sid_raw):
@@ -2038,10 +2037,6 @@ function focusKey(kind, raw) {{
     rows.forEach(function (p) {{ html += laneHtml(p); }});
     return '<div class="lanes">' + html + "</div>";
   }}
-  function emptyTypePanelHtml(sectionId) {{
-    var label = tabLabel(sectionId) || "this type";
-    return '<p class="pending-help">Nothing under ' + esc(label) + " right now.</p>";
-  }}
 
   function snapshotTrustState(ageMs, failures, silenceLimitMs) {{
     var age = Number(ageMs);
@@ -2376,10 +2371,9 @@ function focusKey(kind, raw) {{
       var panel = isTypeTab(sec.id)
         ? ' data-tab-panel="' + esc(sec.id) + '" hidden role="tabpanel" aria-labelledby="tab-' + esc(sec.id) + '"'
         : "";
-      var secProjects = sec.projects || [];
-      var secBody = secProjects.length ? lanesHtml(secProjects, kind === "primary") : emptyTypePanelHtml(sec.id);
       html += '<section id="' + esc(sec.id || "") + '" class="block ' + cls + '"' + panel + ">" +
-        "<h2>" + esc(sec.title || "") + "</h2>" + secBody + "</section>";
+        "<h2>" + esc(sec.title || "") + "</h2>" +
+        lanesHtml(sec.projects || [], kind === "primary") + "</section>";
     }});
     if (boardEl.getAttribute("data-fp") === html) return;
     var open = snapshotOpen();
