@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-09-10T22:08:16.554416-05:00",
-  "generated_at_display": "Thu Sep 10, 2026 \u00b7 10:08 PM CDT",
+  "generated_at": "2026-09-10T22:23:58.122640-05:00",
+  "generated_at_display": "Thu Sep 10, 2026 \u00b7 10:23 PM CDT",
   "timezone": "America/Chicago",
   "owner": "rupret007",
   "dashboard": "bob-ops-dashboard",
@@ -75,8 +75,7 @@
             "repo": "webjam",
             "agent": "none",
             "lease_state": "none",
-            "next": "Karen leftover+security on #115; stay draft",
-            "sha": "89274f7"
+            "next": "decide stack path for #114 \u2192 master (or next leftover on master)"
           }
         },
         {
@@ -126,8 +125,8 @@
           "status": "green",
           "chip": "Green",
           "default_branch": "main",
-          "tip_sha": "f90b997",
-          "tip_date": "2026-09-08T01:42:19Z",
+          "tip_sha": "fe84f50",
+          "tip_date": "2026-09-11T03:08:39Z",
           "open_prs": 0,
           "open_pr_url": null,
           "open_pr_number": null,
@@ -139,9 +138,9 @@
             "name": "Quality",
             "conclusion": "success",
             "branch": "main",
-            "sha": "f90b997",
-            "created": "2026-09-08T01:42:22Z",
-            "html_url": "https://github.com/rupret007/StoryBoard/actions/runs/34177539009"
+            "sha": "fe84f50",
+            "created": "2026-09-11T03:08:41Z",
+            "html_url": "https://github.com/rupret007/StoryBoard/actions/runs/34557320387"
           },
           "release": null,
           "release_sha": null,
@@ -152,8 +151,7 @@
             "repo": "StoryBoard",
             "agent": "none",
             "lease_state": "none",
-            "next": "Jeff test-install decision; then same PR36 exact integration CI",
-            "sha": "8dc70dd"
+            "next": "idle until next StoryBoard leftover"
           }
         },
         {
@@ -240,11 +238,11 @@
           "url": "https://github.com/rupret007/rad-dad-show-night",
           "repo_url": "https://github.com/rupret007/rad-dad-show-night",
           "private": false,
-          "status": "green",
-          "chip": "Green",
+          "status": "red",
+          "chip": "Red",
           "default_branch": "main",
-          "tip_sha": "0eab8ad",
-          "tip_date": "2026-09-08T03:55:29Z",
+          "tip_sha": "12cc034",
+          "tip_date": "2026-09-11T03:14:52Z",
           "open_prs": 0,
           "open_pr_url": null,
           "open_pr_number": null,
@@ -254,11 +252,11 @@
           "agent_url": null,
           "ci": {
             "name": "leftover-honesty",
-            "conclusion": "success",
+            "conclusion": "failure",
             "branch": "main",
-            "sha": "0eab8ad",
-            "created": "2026-09-08T03:55:32Z",
-            "html_url": "https://github.com/rupret007/rad-dad-show-night/actions/runs/34185183222"
+            "sha": "12cc034",
+            "created": "2026-09-11T03:14:54Z",
+            "html_url": "https://github.com/rupret007/rad-dad-show-night/actions/runs/34557715060"
           },
           "release": null,
           "release_sha": null,
@@ -269,8 +267,7 @@
             "repo": "rad-dad-show-night",
             "agent": "none",
             "lease_state": "none",
-            "next": "Jeff-only exact-tip merge/live gates; OPEN DRAFT/PRE_KAREN",
-            "sha": "2a56476"
+            "next": "idle until next Show Night leftover"
           }
         },
         {
@@ -403,8 +400,8 @@
           "status": "green",
           "chip": "Green",
           "default_branch": "main",
-          "tip_sha": "8d66d49",
-          "tip_date": "2026-09-08T05:46:44Z",
+          "tip_sha": "2348c92",
+          "tip_date": "2026-09-11T03:22:23Z",
           "open_prs": 0,
           "open_pr_url": null,
           "open_pr_number": null,
@@ -416,9 +413,9 @@
             "name": "Pull request integration",
             "conclusion": "success",
             "branch": "main",
-            "sha": "8d66d49",
-            "created": "2026-09-08T05:46:47Z",
-            "html_url": "https://github.com/rupret007/Cursor-OpenClaw-Integration/actions/runs/34191942387"
+            "sha": "2348c92",
+            "created": "2026-09-11T03:22:26Z",
+            "html_url": "https://github.com/rupret007/Cursor-OpenClaw-Integration/actions/runs/34558183689"
           },
           "release": null,
           "release_sha": null,
@@ -429,8 +426,7 @@
             "repo": "Cursor-OpenClaw-Integration",
             "agent": "none",
             "lease_state": "none",
-            "next": "Claude Goal Running \u2192 OPEN DRAFT \u2192 PRE_KAREN",
-            "sha": "8d66d49"
+            "next": "idle until next OpenClaw leftover"
           }
         },
         {
@@ -442,8 +438,8 @@
           "status": "green",
           "chip": "Green",
           "default_branch": "main",
-          "tip_sha": "b3f2369",
-          "tip_date": "2026-09-11T02:53:19Z",
+          "tip_sha": "d2b9b21",
+          "tip_date": "2026-09-11T03:15:57Z",
           "open_prs": 0,
           "open_pr_url": null,
           "open_pr_number": null,
@@ -455,9 +451,9 @@
             "name": "QA claim smoke",
             "conclusion": "success",
             "branch": "main",
-            "sha": "b3f2369",
-            "created": "2026-09-11T02:53:22Z",
-            "html_url": "https://github.com/rupret007/bob-ops-dashboard/actions/runs/34556345456"
+            "sha": "d2b9b21",
+            "created": "2026-09-11T03:15:59Z",
+            "html_url": "https://github.com/rupret007/bob-ops-dashboard/actions/runs/34557785645"
           },
           "release": null,
           "release_sha": null,
@@ -468,8 +464,7 @@
             "repo": "bob-ops-dashboard",
             "agent": "none",
             "lease_state": "none",
-            "next": "Jeff's separate exact-tip merge/publication decision; Codex continues...",
-            "sha": "53d206d"
+            "next": "idle until next dashboard leftover"
           }
         },
         {
@@ -628,11 +623,11 @@
           "url": "https://github.com/rupret007/Andrea_NanoBot",
           "repo_url": "https://github.com/rupret007/Andrea_NanoBot",
           "private": false,
-          "status": "green",
-          "chip": "Green",
+          "status": "red",
+          "chip": "Red",
           "default_branch": "main",
-          "tip_sha": "2f3172c",
-          "tip_date": "2026-09-08T05:36:36Z",
+          "tip_sha": "b2856e7",
+          "tip_date": "2026-09-11T03:17:56Z",
           "open_prs": 0,
           "open_pr_url": null,
           "open_pr_number": null,
@@ -642,11 +637,11 @@
           "agent_url": null,
           "ci": {
             "name": "AGI Layer CI",
-            "conclusion": "success",
+            "conclusion": "failure",
             "branch": "main",
-            "sha": "2f3172c",
-            "created": "2026-09-08T05:36:39Z",
-            "html_url": "https://github.com/rupret007/Andrea_NanoBot/actions/runs/34191279995"
+            "sha": "b2856e7",
+            "created": "2026-09-11T03:17:59Z",
+            "html_url": "https://github.com/rupret007/Andrea_NanoBot/actions/runs/34557908163"
           },
           "release": null,
           "release_sha": null,
@@ -657,8 +652,7 @@
             "repo": "Andrea_NanoBot",
             "agent": "none",
             "lease_state": "none",
-            "next": "Karen leftover+security on #49 after hosted green; stay draft",
-            "sha": "bd7a58a"
+            "next": "idle until next Andrea leftover"
           }
         },
         {
@@ -855,7 +849,7 @@
   ],
   "inaccessible": [],
   "publish_notes": "Public board -- no secrets or customer paths. Private repositories stay high-level; AI Music Vault stays private-content-boundary only.",
-  "refresh_started_ms": 1789096049332,
+  "refresh_started_ms": 1789096991234,
   "agents_source": "file:stale->unknown",
   "agents": [
     {
