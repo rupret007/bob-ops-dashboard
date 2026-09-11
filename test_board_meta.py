@@ -23,6 +23,7 @@ from board_meta import (
     decision_href,
     detect_linear_pr_stack,
     drop_leftover_verify,
+    empty_type_panel_html,
     extract_agent_url,
     extract_cloud_agents_from_prs,
     first_class_sections,
@@ -489,6 +490,19 @@ class BoardMetaTests(unittest.TestCase):
         self.assertIn('aria-controls="controls"', glance)
         self.assertIn('data-focus-target="decision:x"', glance)
         self.assertNotIn("<", glance_status([{"id": "x"}], sections)["text"])
+
+    def test_empty_type_panel_html_names_the_real_type_not_blank(self):
+        for sid, label in TYPE_TAB_LABELS.items():
+            if sid == "controls":
+                continue
+            note = empty_type_panel_html(sid)
+            self.assertIn(label, note)
+            self.assertIn("right now", note)
+            self.assertNotIn("<div class=\"lanes\">", note)
+        # Unknown/invented ids still get an honest, non-blank note -- never a
+        # silent empty panel and never an invented type name.
+        unknown = empty_type_panel_html("not-a-real-type")
+        self.assertIn("this type", unknown)
 
     def test_unknown_mac_probes_collapse_to_one_honest_line(self):
         unknown = [
