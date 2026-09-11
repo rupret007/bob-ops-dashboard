@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-09-10T23:26:12.870462-05:00",
-  "generated_at_display": "Thu Sep 10, 2026 \u00b7 11:26 PM CDT",
+  "generated_at": "2026-09-11T04:03:22.629809-05:00",
+  "generated_at_display": "Fri Sep 11, 2026 \u00b7 4:03 AM CDT",
   "timezone": "America/Chicago",
   "owner": "rupret007",
   "dashboard": "bob-ops-dashboard",
@@ -49,8 +49,8 @@
           "status": "green",
           "chip": "Green",
           "default_branch": "master",
-          "tip_sha": "2aba2f2",
-          "tip_date": "2026-09-08T05:50:52Z",
+          "tip_sha": "02d6b99",
+          "tip_date": "2026-09-11T06:41:28Z",
           "open_prs": 0,
           "open_pr_url": null,
           "open_pr_number": null,
@@ -60,11 +60,11 @@
           "agent_url": null,
           "ci": {
             "name": "WebJam CI",
-            "conclusion": "success",
+            "conclusion": "cancelled",
             "branch": "master",
-            "sha": "2aba2f2",
-            "created": "2026-09-08T05:50:55Z",
-            "html_url": "https://github.com/rupret007/webjam/actions/runs/34192208304"
+            "sha": "02d6b99",
+            "created": "2026-09-11T06:41:31Z",
+            "html_url": "https://github.com/rupret007/webjam/actions/runs/34571010567"
           },
           "release": "v0.27.2",
           "release_sha": "9c6ca3d",
@@ -209,8 +209,8 @@
           "status": "red",
           "chip": "Red",
           "default_branch": "main",
-          "tip_sha": "12cc034",
-          "tip_date": "2026-09-11T03:14:52Z",
+          "tip_sha": "66cea39",
+          "tip_date": "2026-09-11T04:38:42Z",
           "open_prs": 0,
           "open_pr_url": null,
           "open_pr_number": null,
@@ -222,9 +222,9 @@
             "name": "leftover-honesty",
             "conclusion": "failure",
             "branch": "main",
-            "sha": "12cc034",
-            "created": "2026-09-11T03:14:54Z",
-            "html_url": "https://github.com/rupret007/rad-dad-show-night/actions/runs/34557715060"
+            "sha": "66cea39",
+            "created": "2026-09-11T04:38:45Z",
+            "html_url": "https://github.com/rupret007/rad-dad-show-night/actions/runs/34562969809"
           },
           "release": null,
           "release_sha": null,
@@ -405,8 +405,8 @@
           "status": "green",
           "chip": "Green",
           "default_branch": "main",
-          "tip_sha": "c0dbdcf",
-          "tip_date": "2026-09-11T04:06:35Z",
+          "tip_sha": "fa0d3e1",
+          "tip_date": "2026-09-11T04:40:08Z",
           "open_prs": 0,
           "open_pr_url": null,
           "open_pr_number": null,
@@ -418,9 +418,9 @@
             "name": "QA claim smoke",
             "conclusion": "success",
             "branch": "main",
-            "sha": "c0dbdcf",
-            "created": "2026-09-11T04:06:38Z",
-            "html_url": "https://github.com/rupret007/bob-ops-dashboard/actions/runs/34560956188"
+            "sha": "fa0d3e1",
+            "created": "2026-09-11T04:40:10Z",
+            "html_url": "https://github.com/rupret007/bob-ops-dashboard/actions/runs/34563055999"
           },
           "release": null,
           "release_sha": null,
@@ -788,7 +788,7 @@
     "Sliding-Glass-Door-PETG-Screw"
   ],
   "publish_notes": "Public board -- no secrets or customer paths. Private repositories stay high-level; AI Music Vault stays private-content-boundary only.",
-  "refresh_started_ms": 1789100749455,
+  "refresh_started_ms": 1789117371210,
   "agents_source": "file:stale->unknown",
   "agents": [
     {
