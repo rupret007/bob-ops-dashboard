@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-09-18T15:29:43.898565-05:00",
-  "generated_at_display": "Fri Sep 18, 2026 \u00b7 3:29 PM CDT",
+  "generated_at": "2026-09-18T17:17:38.311294-05:00",
+  "generated_at_display": "Fri Sep 18, 2026 \u00b7 5:17 PM CDT",
   "timezone": "America/Chicago",
   "owner": "rupret007",
   "dashboard": "bob-ops-dashboard",
@@ -97,7 +97,14 @@
           "open_pr_stack": [],
           "pr_listing_complete": true,
           "agent_url": null,
-          "ci": null,
+          "ci": {
+            "name": "CI",
+            "conclusion": "success",
+            "branch": "main",
+            "sha": "f1abcc7",
+            "created": "2026-09-07T11:32:00Z",
+            "html_url": "https://github.com/rupret007/StoryLiner/actions/runs/34117103039"
+          },
           "release": null,
           "release_sha": null,
           "release_url": null,
@@ -433,8 +440,8 @@
           "status": "green",
           "chip": "Green",
           "default_branch": "main",
-          "tip_sha": "536d65e",
-          "tip_date": "2026-09-18T19:59:09Z",
+          "tip_sha": "476a3a1",
+          "tip_date": "2026-09-18T20:29:46Z",
           "open_prs": 0,
           "open_pr_url": null,
           "open_pr_number": null,
@@ -442,7 +449,14 @@
           "open_pr_stack": [],
           "pr_listing_complete": true,
           "agent_url": null,
-          "ci": null,
+          "ci": {
+            "name": "QA claim smoke",
+            "conclusion": "success",
+            "branch": "main",
+            "sha": "476a3a1",
+            "created": "2026-09-18T20:29:50Z",
+            "html_url": "https://github.com/rupret007/bob-ops-dashboard/actions/runs/35391762783"
+          },
           "release": null,
           "release_sha": null,
           "release_url": null,
@@ -837,7 +851,7 @@
   ],
   "inaccessible": [],
   "publish_notes": "Public board -- no secrets or customer paths. Private repositories stay high-level; AI Music Vault stays private-content-boundary only.",
-  "refresh_started_ms": 1789763331608,
+  "refresh_started_ms": 1789769805213,
   "agents_source": "file:stale->unknown",
   "agents": [
     {
