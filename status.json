@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-09-21T10:02:44.539023-05:00",
-  "generated_at_display": "Mon Sep 21, 2026 \u00b7 10:02 AM CDT",
+  "generated_at": "2026-09-21T11:51:26.187147-05:00",
+  "generated_at_display": "Mon Sep 21, 2026 \u00b7 11:51 AM CDT",
   "timezone": "America/Chicago",
   "owner": "rupret007",
   "dashboard": "bob-ops-dashboard",
@@ -49,8 +49,8 @@
           "status": "green",
           "chip": "Green",
           "default_branch": "master",
-          "tip_sha": "200cac9",
-          "tip_date": "2026-09-21T13:40:37Z",
+          "tip_sha": "68874a7",
+          "tip_date": "2026-09-21T15:22:04Z",
           "open_prs": 0,
           "open_pr_url": null,
           "open_pr_number": null,
@@ -62,9 +62,9 @@
             "name": "WebJam CI",
             "conclusion": "success",
             "branch": "master",
-            "sha": "200cac9",
-            "created": "2026-09-21T13:40:40Z",
-            "html_url": "https://github.com/rupret007/webjam/actions/runs/35607145395"
+            "sha": "68874a7",
+            "created": "2026-09-21T15:22:07Z",
+            "html_url": "https://github.com/rupret007/webjam/actions/runs/35618453273"
           },
           "release": "v0.28.1",
           "release_sha": "200cac9",
@@ -75,7 +75,7 @@
             "repo": "webjam",
             "agent": "none",
             "lease_state": "none",
-            "next": "Cloud docs honesty PR \u2192 Karen \u2192 land. Jeff testing Latest."
+            "next": "Jeff testing Latest; optional soft residual leftover later."
           }
         },
         {
@@ -439,8 +439,8 @@
           "status": "green",
           "chip": "Green",
           "default_branch": "main",
-          "tip_sha": "c3d8036",
-          "tip_date": "2026-09-21T13:46:08Z",
+          "tip_sha": "6decf92",
+          "tip_date": "2026-09-21T15:02:47Z",
           "open_prs": 0,
           "open_pr_url": null,
           "open_pr_number": null,
@@ -843,7 +843,7 @@
   ],
   "inaccessible": [],
   "publish_notes": "Public board -- no secrets or customer paths. Private repositories stay high-level; AI Music Vault stays private-content-boundary only.",
-  "refresh_started_ms": 1790002906759,
+  "refresh_started_ms": 1790009426080,
   "agents_source": "file:stale->unknown",
   "agents": [
     {
