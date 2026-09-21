@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-09-21T01:53:28.022923-05:00",
-  "generated_at_display": "Mon Sep 21, 2026 \u00b7 1:53 AM CDT",
+  "generated_at": "2026-09-21T08:45:52.382135-05:00",
+  "generated_at_display": "Mon Sep 21, 2026 \u00b7 8:45 AM CDT",
   "timezone": "America/Chicago",
   "owner": "rupret007",
   "dashboard": "bob-ops-dashboard",
@@ -49,8 +49,8 @@
           "status": "yellow",
           "chip": "Yellow",
           "default_branch": "master",
-          "tip_sha": "6151659",
-          "tip_date": "2026-09-21T06:48:04Z",
+          "tip_sha": "200cac9",
+          "tip_date": "2026-09-21T13:40:37Z",
           "open_prs": 0,
           "open_pr_url": null,
           "open_pr_number": null,
@@ -60,11 +60,11 @@
           "agent_url": null,
           "ci": {
             "name": "WebJam CI",
-            "conclusion": "pending",
+            "conclusion": "in_progress",
             "branch": "master",
-            "sha": "6151659",
-            "created": "2026-09-21T06:48:07Z",
-            "html_url": "https://github.com/rupret007/webjam/actions/runs/35570033961"
+            "sha": "200cac9",
+            "created": "2026-09-21T13:40:40Z",
+            "html_url": "https://github.com/rupret007/webjam/actions/runs/35607145395"
           },
           "release": "v0.28.0",
           "release_sha": "8ac08b6",
@@ -405,8 +405,8 @@
           "status": "green",
           "chip": "Green",
           "default_branch": "main",
-          "tip_sha": "a292390",
-          "tip_date": "2026-09-21T01:25:50Z",
+          "tip_sha": "b34c300",
+          "tip_date": "2026-09-21T06:53:43Z",
           "open_prs": 0,
           "open_pr_url": null,
           "open_pr_number": null,
@@ -585,8 +585,8 @@
             "conclusion": "failure",
             "branch": "main",
             "sha": "b2856e7",
-            "created": "2026-09-14T13:32:42Z",
-            "html_url": "https://github.com/rupret007/Andrea_NanoBot/actions/runs/34849895177"
+            "created": "2026-09-21T13:31:35Z",
+            "html_url": "https://github.com/rupret007/Andrea_NanoBot/actions/runs/35606174496"
           },
           "release": null,
           "release_sha": null,
@@ -781,7 +781,7 @@
     "Sliding-Glass-Door-PETG-Screw"
   ],
   "publish_notes": "Public board -- no secrets or customer paths. Private repositories stay high-level; AI Music Vault stays private-content-boundary only.",
-  "refresh_started_ms": 1789973573496,
+  "refresh_started_ms": 1789998314356,
   "agents_source": "file:stale->unknown",
   "agents": [
     {
