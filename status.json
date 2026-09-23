@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-09-23T09:56:51.700872-05:00",
-  "generated_at_display": "Wed Sep 23, 2026 \u00b7 9:56 AM CDT",
+  "generated_at": "2026-09-23T11:49:07.703111-05:00",
+  "generated_at_display": "Wed Sep 23, 2026 \u00b7 11:49 AM CDT",
   "timezone": "America/Chicago",
   "owner": "rupret007",
   "dashboard": "bob-ops-dashboard",
@@ -49,22 +49,22 @@
           "status": "yellow",
           "chip": "Yellow",
           "default_branch": "master",
-          "tip_sha": "1e87be6",
-          "tip_date": "2026-09-23T14:37:41Z",
-          "open_prs": 0,
-          "open_pr_url": null,
-          "open_pr_number": null,
+          "tip_sha": "4095465",
+          "tip_date": "2026-09-23T16:36:07Z",
+          "open_prs": 1,
+          "open_pr_url": "https://github.com/rupret007/webjam/pull/151",
+          "open_pr_number": 151,
           "open_pr_draft": false,
           "open_pr_stack": [],
           "pr_listing_complete": true,
           "agent_url": null,
           "ci": {
             "name": "WebJam CI",
-            "conclusion": "in_progress",
+            "conclusion": "pending",
             "branch": "master",
-            "sha": "1e87be6",
-            "created": "2026-09-23T14:37:44Z",
-            "html_url": "https://github.com/rupret007/webjam/actions/runs/35875577558"
+            "sha": "4095465",
+            "created": "2026-09-23T16:47:42Z",
+            "html_url": "https://github.com/rupret007/webjam/actions/runs/35891206149"
           },
           "release": "v0.28.2",
           "release_sha": "a51154e",
@@ -75,8 +75,8 @@
             "repo": "webjam",
             "agent": "codex",
             "lease_state": "active",
-            "next": "Codex MATCH #145\u2192#146\u2192#147\u2192#148\u2192#150 then unsigned Latest; clear lease...",
-            "sha": "a51154e"
+            "next": "Codex wait for green required CI, merge release-prep #151, verify new...",
+            "sha": "7f5df4e"
           }
         },
         {
@@ -440,8 +440,8 @@
           "status": "green",
           "chip": "Green",
           "default_branch": "main",
-          "tip_sha": "d406b8e",
-          "tip_date": "2026-09-23T12:02:01Z",
+          "tip_sha": "a7c58b8",
+          "tip_date": "2026-09-23T14:56:54Z",
           "open_prs": 0,
           "open_pr_url": null,
           "open_pr_number": null,
@@ -844,7 +844,7 @@
   ],
   "inaccessible": [],
   "publish_notes": "Public board -- no secrets or customer paths. Private repositories stay high-level; AI Music Vault stays private-content-boundary only.",
-  "refresh_started_ms": 1790175350860,
+  "refresh_started_ms": 1790182087712,
   "agents_source": "file:stale->unknown",
   "agents": [
     {
