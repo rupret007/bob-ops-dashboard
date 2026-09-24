@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-09-24T01:35:53.959675-05:00",
-  "generated_at_display": "Thu Sep 24, 2026 \u00b7 1:35 AM CDT",
+  "generated_at": "2026-09-24T07:15:26.831924-05:00",
+  "generated_at_display": "Thu Sep 24, 2026 \u00b7 7:15 AM CDT",
   "timezone": "America/Chicago",
   "owner": "rupret007",
   "dashboard": "bob-ops-dashboard",
@@ -66,9 +66,9 @@
             "created": "2026-09-23T18:35:07Z",
             "html_url": "https://github.com/rupret007/webjam/actions/runs/35903485978"
           },
-          "release": "v0.28.1",
-          "release_sha": "200cac9",
-          "release_url": "https://github.com/rupret007/webjam/releases/tag/v0.28.1",
+          "release": "v0.28.3",
+          "release_sha": "da16749",
+          "release_url": "https://github.com/rupret007/webjam/releases/tag/v0.28.3",
           "notes": "Making room. Latest is the published test candidate; source can be ahead.",
           "accessible": true
         },
@@ -405,8 +405,8 @@
           "status": "green",
           "chip": "Green",
           "default_branch": "main",
-          "tip_sha": "f624709",
-          "tip_date": "2026-09-24T02:21:36Z",
+          "tip_sha": "e2a6639",
+          "tip_date": "2026-09-24T06:36:09Z",
           "open_prs": 0,
           "open_pr_url": null,
           "open_pr_number": null,
@@ -414,14 +414,7 @@
           "open_pr_stack": [],
           "pr_listing_complete": true,
           "agent_url": null,
-          "ci": {
-            "name": "QA claim smoke",
-            "conclusion": "success",
-            "branch": "main",
-            "sha": "f624709",
-            "created": "2026-09-24T02:21:39Z",
-            "html_url": "https://github.com/rupret007/bob-ops-dashboard/actions/runs/35946909326"
-          },
+          "ci": null,
           "release": null,
           "release_sha": null,
           "release_url": null,
@@ -788,7 +781,7 @@
     "Sliding-Glass-Door-PETG-Screw"
   ],
   "publish_notes": "Public board -- no secrets or customer paths. Private repositories stay high-level; AI Music Vault stays private-content-boundary only.",
-  "refresh_started_ms": 1790231727917,
+  "refresh_started_ms": 1790252093929,
   "agents_source": "file:stale->unknown",
   "agents": [
     {
