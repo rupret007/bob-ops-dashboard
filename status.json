@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-09-25T04:05:02.573867-05:00",
-  "generated_at_display": "Fri Sep 25, 2026 \u00b7 4:05 AM CDT",
+  "generated_at": "2026-09-25T04:06:40.033342-05:00",
+  "generated_at_display": "Fri Sep 25, 2026 \u00b7 4:06 AM CDT",
   "timezone": "America/Chicago",
   "owner": "rupret007",
   "dashboard": "bob-ops-dashboard",
@@ -307,7 +307,14 @@
           "open_pr_stack": [],
           "pr_listing_complete": true,
           "agent_url": null,
-          "ci": null,
+          "ci": {
+            "name": "CI",
+            "conclusion": "success",
+            "branch": "main",
+            "sha": "c08c489",
+            "created": "2026-09-08T05:10:56Z",
+            "html_url": "https://github.com/rupret007/Turdanoid/actions/runs/34189652739"
+          },
           "release": null,
           "release_sha": null,
           "release_url": null,
@@ -457,8 +464,8 @@
           "status": "green",
           "chip": "Green",
           "default_branch": "main",
-          "tip_sha": "459321e",
-          "tip_date": "2026-09-25T09:01:51Z",
+          "tip_sha": "913c9d2",
+          "tip_date": "2026-09-25T09:05:05Z",
           "open_prs": 0,
           "open_pr_url": null,
           "open_pr_number": null,
@@ -466,14 +473,7 @@
           "open_pr_stack": [],
           "pr_listing_complete": true,
           "agent_url": null,
-          "ci": {
-            "name": "QA claim smoke",
-            "conclusion": "success",
-            "branch": "main",
-            "sha": "459321e",
-            "created": "2026-09-25T09:01:54Z",
-            "html_url": "https://github.com/rupret007/bob-ops-dashboard/actions/runs/36116156951"
-          },
+          "ci": null,
           "release": null,
           "release_sha": null,
           "release_url": null,
@@ -621,8 +621,8 @@
           "url": "https://github.com/rupret007/Andrea_NanoBot",
           "repo_url": "https://github.com/rupret007/Andrea_NanoBot",
           "private": false,
-          "status": "green",
-          "chip": "Green",
+          "status": "red",
+          "chip": "Red",
           "default_branch": "main",
           "tip_sha": "b2856e7",
           "tip_date": "2026-09-11T03:17:56Z",
@@ -633,7 +633,14 @@
           "open_pr_stack": [],
           "pr_listing_complete": true,
           "agent_url": null,
-          "ci": null,
+          "ci": {
+            "name": "Security",
+            "conclusion": "failure",
+            "branch": "main",
+            "sha": "b2856e7",
+            "created": "2026-09-21T13:31:35Z",
+            "html_url": "https://github.com/rupret007/Andrea_NanoBot/actions/runs/35606174496"
+          },
           "release": null,
           "release_sha": null,
           "release_url": null,
@@ -839,7 +846,7 @@
   ],
   "inaccessible": [],
   "publish_notes": "Public board -- no secrets or customer paths. Private repositories stay high-level; AI Music Vault stays private-content-boundary only.",
-  "refresh_started_ms": 1790327055469,
+  "refresh_started_ms": 1790327153677,
   "agents_source": "file:stale->unknown",
   "agents": [
     {
@@ -995,9 +1002,9 @@
     }
   ],
   "harden_window": {
-    "round": 24,
+    "round": 25,
     "status": "open",
-    "started_at": "2026-09-25T04:04:47-05:00",
+    "started_at": "2026-09-25T04:06:07-05:00",
     "ended_at": "",
     "lanes_fired": [
       "Codex",
@@ -1007,7 +1014,7 @@
       "LocalCursor"
     ],
     "scorecard_line": "",
-    "updated_at": "2026-09-25T04:04:47-05:00",
+    "updated_at": "2026-09-25T04:06:07-05:00",
     "display_status": "open",
     "idle": false
   },
