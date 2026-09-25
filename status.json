@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-25T07:18:19.705334-05:00",
+  "generated_at": "2026-09-25T07:18:47.418556-05:00",
   "generated_at_display": "Fri Sep 25, 2026 \u00b7 7:18 AM CDT",
   "timezone": "America/Chicago",
   "owner": "rupret007",
@@ -132,16 +132,7 @@
           "open_pr_url": "https://github.com/rupret007/StoryBoard/pull/44",
           "open_pr_number": 44,
           "open_pr_draft": false,
-          "open_pr_stack": [
-            {
-              "number": 42,
-              "url": "https://github.com/rupret007/StoryBoard/pull/42"
-            },
-            {
-              "number": 44,
-              "url": "https://github.com/rupret007/StoryBoard/pull/44"
-            }
-          ],
+          "open_pr_stack": [],
           "pr_listing_complete": true,
           "agent_url": "https://cursor.com/agents/bc-239546f7-b243-59c1-bbd8-f0ac905d0159",
           "ci": {
@@ -473,8 +464,8 @@
           "status": "green",
           "chip": "Green",
           "default_branch": "main",
-          "tip_sha": "ca7db77",
-          "tip_date": "2026-09-25T12:13:36Z",
+          "tip_sha": "be50f4e",
+          "tip_date": "2026-09-25T12:18:22Z",
           "open_prs": 0,
           "open_pr_url": null,
           "open_pr_number": null,
@@ -855,7 +846,7 @@
   ],
   "inaccessible": [],
   "publish_notes": "Public board -- no secrets or customer paths. Private repositories stay high-level; AI Music Vault stays private-content-boundary only.",
-  "refresh_started_ms": 1790338651502,
+  "refresh_started_ms": 1790338680528,
   "agents_source": "file:stale->unknown",
   "agents": [
     {
