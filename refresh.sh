@@ -219,6 +219,9 @@ from board_meta import (
     public_coord,
     status_with_coord_review,
     demote_stale_running_llm_work,
+    validate_llm_work_write,
+    STALE_RUNNING_SOURCES,
+    LLM_WORK_PROOF_TS_KEYS,
     drop_leftover_verify,
     extract_cloud_agents_from_prs,
     focus_key,
@@ -636,7 +639,7 @@ def _normalize_work_row(raw):
     status_name = str(raw.get("status") or "").strip().lower()
     if status_name not in {"running", "finished", "blocked", "idle"}:
         status_name = "idle"
-    return {
+    row = {
         "id": lane,
         "name": next((n for i, n in LANE_ORDER if i == lane), lane.title()),
         "task_title": _clean_line(raw.get("task_title") or raw.get("title"), 120),
@@ -652,6 +655,12 @@ def _normalize_work_row(raw):
         "last_task": _clean_line(raw.get("last_task"), 120),
         "source": _clean_line(raw.get("source"), 48),
     }
+    # Preserve proof timestamps — dropping them made honest heartbeats vanish on ingest.
+    for key in LLM_WORK_PROOF_TS_KEYS:
+        val = raw.get(key)
+        if val is not None and str(val).strip():
+            row[key] = str(val).strip()
+    return validate_llm_work_write(row)
 
 work_blob = None
 for work_path in (root / "llm-work-now.json", Path("/workspace/bob-ops-dashboard/llm-work-now.json")):
@@ -702,6 +711,8 @@ for cloud in trusted_cloud:
         "note": _clean_line(cloud.get("detail"), 160),
         "last_task": "",
         "source": "cloud_agents",
+        # Receiver-clock heartbeat: trusted Cloud poll this refresh = proof of life.
+        "heartbeat_at": datetime.now(tz=ZoneInfo("UTC")).isoformat(),
     }
 
 prev_work = prev_early.get("llm_work") if isinstance(prev_early, dict) else []
@@ -730,13 +741,21 @@ for lane_id, lane_name in LANE_ORDER:
 
 status["llm_work"] = llm_work
 
-# Fail-closed honesty: never paint Running for idle-source lanes without a live Cloud Agent match.
+# Fail-closed honesty: never paint Running for idle-source / stale / future-skew proofs.
+# Live Cloud poll stamps receiver heartbeat (non-stale sources only); demote still runs TTL+source.
 # Stale assignment blobs with status=running + source=idle were lying to Jeff (PR#56 WashOps/etc.).
 _live_cloud_lanes = set()
 for cloud in trusted_cloud:
     lid = _lane_id("", cloud.get("name"))
     if lid:
         _live_cloud_lanes.add(lid)
+_now_iso = datetime.now(tz=ZoneInfo("UTC")).isoformat()
+for row in llm_work:
+    lid = str(row.get("id") or "").strip().lower()
+    src = str(row.get("source") or "").strip().lower()
+    if lid in _live_cloud_lanes and src not in STALE_RUNNING_SOURCES:
+        row["heartbeat_at"] = _now_iso
+llm_work = [validate_llm_work_write(r) for r in llm_work]
 llm_work = demote_stale_running_llm_work(llm_work, _live_cloud_lanes)
 status["llm_work"] = llm_work
 

@@ -764,10 +764,12 @@ def visible_chip(project: Any) -> str | None:
 
 
 
-# Sources that must NEVER paint Running unless a live Cloud Agent matches the lane.
+# Sources that must NEVER paint Running (even if lane appears in live Cloud set).
 STALE_RUNNING_SOURCES = frozenset({"", "idle", "byok_oneshot", "mini_paste", "spend_wall"})
 # Running without a fresh proof heartbeat is demoted (Actions ~15m cadence).
 LLM_WORK_RUNNING_HEARTBEAT_TTL_SEC = 15 * 60
+# Mirror agent_is_fresh: far-future proof stamps fail closed (~5m clock skew OK).
+LLM_WORK_PROOF_FUTURE_SKEW_SEC = 5 * 60
 LLM_WORK_PROOF_TS_KEYS = ("heartbeat_at", "proof_at", "checked_at", "updated_at")
 
 
@@ -780,6 +782,61 @@ def llm_work_proof_timestamp(row: Any) -> float | None:
         if ts is not None:
             return ts
     return None
+
+
+def llm_work_proof_is_fresh(
+    proof: float | None,
+    now: float,
+    ttl_sec: int = LLM_WORK_RUNNING_HEARTBEAT_TTL_SEC,
+    *,
+    future_skew_sec: int = LLM_WORK_PROOF_FUTURE_SKEW_SEC,
+) -> bool:
+    """True only when proof exists, is not far in the future, and age <= TTL."""
+    if proof is None:
+        return False
+    clock = float(now)
+    # Invented future stamps fail closed (same class as agent_is_fresh skew).
+    if proof - clock > future_skew_sec:
+        return False
+    if (clock - proof) > ttl_sec:
+        return False
+    return True
+
+
+def llm_work_running_reject_reasons(
+    row: Any,
+    *,
+    now: float | None = None,
+    ttl_sec: int = LLM_WORK_RUNNING_HEARTBEAT_TTL_SEC,
+) -> list[str]:
+    """Reasons a Running row is dishonest (empty = keep Running)."""
+    if not isinstance(row, dict):
+        return ["row is not an object"]
+    st = str(row.get("status") or "idle").strip().lower()
+    if st != "running":
+        return []
+    lid = str(row.get("id") or "").strip().lower() or "?"
+    src = str(row.get("source") or "").strip().lower()
+    clock = time.time() if now is None else float(now)
+    reasons: list[str] = []
+    if src in STALE_RUNNING_SOURCES:
+        reasons.append(f"{lid}: running with idle-class source={src or 'empty'}")
+        return reasons
+    proof = llm_work_proof_timestamp(row)
+    if proof is None:
+        reasons.append(f"{lid}: running without proof timestamp")
+        return reasons
+    if proof - clock > LLM_WORK_PROOF_FUTURE_SKEW_SEC:
+        skew = int(proof - clock)
+        reasons.append(
+            f"{lid}: running proof {skew}s in the future (skew > "
+            f"{LLM_WORK_PROOF_FUTURE_SKEW_SEC}s)"
+        )
+        return reasons
+    if (clock - proof) > ttl_sec:
+        age = int(clock - proof)
+        reasons.append(f"{lid}: running proof age {age}s > TTL {ttl_sec}s")
+    return reasons
 
 
 def _demote_running_llm_work_row(row: dict[str, Any]) -> dict[str, Any]:
@@ -804,6 +861,29 @@ def _demote_running_llm_work_row(row: dict[str, Any]) -> dict[str, Any]:
     return row
 
 
+def validate_llm_work_write(
+    row: Any,
+    *,
+    now: float | None = None,
+    ttl_sec: int = LLM_WORK_RUNNING_HEARTBEAT_TTL_SEC,
+    demote: bool = True,
+) -> dict[str, Any]:
+    """Write-time honesty: reject/auto-demote invalid Running before persistence.
+
+    Callers that write llm-work-now.json (conductor / refresh ingest) should run
+    this before disk. Default auto-demotes; demote=False raises ValueError.
+    """
+    if not isinstance(row, dict):
+        raise TypeError("llm_work row must be a dict")
+    out = dict(row)
+    reasons = llm_work_running_reject_reasons(out, now=now, ttl_sec=ttl_sec)
+    if not reasons:
+        return out
+    if demote:
+        return _demote_running_llm_work_row(out)
+    raise ValueError("; ".join(reasons))
+
+
 def demote_stale_running_llm_work(
     rows: Any,
     live_cloud_lane_ids: Any = None,
@@ -815,14 +895,17 @@ def demote_stale_running_llm_work(
 
     Stale assignment blobs with status=running + source=idle were painting
     Gemini/MiniMax/etc as Running for Jeff after one-shots finished (PR#56 era).
-    Keep Running only when:
-      - lane id is in live_cloud_lane_ids (trusted open Cloud Agent = heartbeat), OR
-      - source is not idle-class AND a proof ts (heartbeat_at/proof_at/checked_at/
-        updated_at) is present and younger than TTL (default 15m).
-    Missing proof or age>TTL demotes (source-aware). Refresh + tests call this
-    single module — no duplicated inline demotion.
+    Keep Running only when source is not idle-class AND a proof ts
+    (heartbeat_at/proof_at/checked_at/updated_at) is present, not far in the
+    future (~5m skew), and younger than TTL (default 15m).
+
+    live_cloud_lane_ids is retained for API compat / refresh stamping hints but
+    does NOT skip TTL or STALE_RUNNING_SOURCES (hung/spend_wall Cloud must not
+    paint Running forever). Refresh should stamp receiver-side heartbeat_at when
+    a live Cloud poll proves life, then still call this demote.
     """
-    live = {
+    # live set unused for bypass — kept so callers keep passing it without break.
+    _ = {
         str(x).strip().lower()
         for x in (live_cloud_lane_ids or [])
         if str(x).strip()
@@ -834,19 +917,10 @@ def demote_stale_running_llm_work(
             continue
         row = dict(raw)
         st = str(row.get("status") or "idle").strip().lower()
-        src = str(row.get("source") or "").strip().lower()
-        lid = str(row.get("id") or "").strip().lower()
         if st != "running":
             out.append(row)
             continue
-        if lid in live:
-            out.append(row)
-            continue
-        if src in STALE_RUNNING_SOURCES:
-            out.append(_demote_running_llm_work_row(row))
-            continue
-        proof = llm_work_proof_timestamp(row)
-        if proof is None or (clock - proof) > ttl_sec:
+        if llm_work_running_reject_reasons(row, now=clock, ttl_sec=ttl_sec):
             out.append(_demote_running_llm_work_row(row))
             continue
         out.append(row)
@@ -861,7 +935,8 @@ def llm_work_stale_running_violations(
     ttl_sec: int = LLM_WORK_RUNNING_HEARTBEAT_TTL_SEC,
 ) -> list[str]:
     """QA/smoke helper: Running rows that fail idle-source or heartbeat TTL gates."""
-    live = {
+    # live_cloud_lane_ids no longer exempts — hung Cloud must still violate.
+    _ = {
         str(x).strip().lower()
         for x in (live_cloud_lane_ids or [])
         if str(x).strip()
@@ -871,26 +946,9 @@ def llm_work_stale_running_violations(
     for raw in rows or []:
         if not isinstance(raw, dict):
             continue
-        st = str(raw.get("status") or "idle").strip().lower()
-        if st != "running":
-            continue
-        lid = str(raw.get("id") or "").strip().lower() or "?"
-        src = str(raw.get("source") or "").strip().lower()
-        if lid in live:
-            continue
-        if src in STALE_RUNNING_SOURCES:
-            violations.append(
-                f"{lid}: running with idle-class source={src or 'empty'}"
-            )
-            continue
-        proof = llm_work_proof_timestamp(raw)
-        if proof is None:
-            violations.append(f"{lid}: running without proof timestamp")
-        elif (clock - proof) > ttl_sec:
-            age = int(clock - proof)
-            violations.append(
-                f"{lid}: running proof age {age}s > TTL {ttl_sec}s"
-            )
+        violations.extend(
+            llm_work_running_reject_reasons(raw, now=clock, ttl_sec=ttl_sec)
+        )
     return violations
 
 

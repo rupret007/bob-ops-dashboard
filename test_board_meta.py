@@ -24,7 +24,10 @@ from board_meta import (
     detect_linear_pr_stack,
     demote_stale_running_llm_work,
     llm_work_stale_running_violations,
+    validate_llm_work_write,
+    llm_work_proof_is_fresh,
     LLM_WORK_RUNNING_HEARTBEAT_TTL_SEC,
+    LLM_WORK_PROOF_FUTURE_SKEW_SEC,
     drop_leftover_verify,
     extract_agent_url,
     extract_cloud_agents_from_prs,
@@ -2248,14 +2251,63 @@ class LlmWorkHonestyTests(unittest.TestCase):
         self.assertTrue(any("idle-class source" in v for v in viol))
         self.assertEqual(llm_work_stale_running_violations(list(out.values())), [])
 
-    def test_demote_keeps_running_when_live_cloud_lane(self):
+    def test_demote_live_cloud_idle_source_still_demotes(self):
+        """live_cloud no longer bypasses STALE_RUNNING_SOURCES."""
         rows = [
             {"id": "cursor-cloud", "status": "running", "source": "idle", "task_title": "live BA"},
         ]
         out = demote_stale_running_llm_work(rows, {"cursor-cloud"})
+        self.assertEqual(out[0]["status"], "idle")
+        viol = llm_work_stale_running_violations(rows, {"cursor-cloud"})
+        self.assertTrue(any("idle-class source" in v for v in viol))
+
+    def test_demote_live_cloud_lane_with_stale_proof_demotes(self):
+        now = datetime(2026, 9, 25, 10, 0, tzinfo=timezone.utc).timestamp()
+        stale = datetime(2026, 9, 25, 8, 0, tzinfo=timezone.utc).isoformat()
+        rows = [
+            {
+                "id": "cursor-cloud",
+                "status": "running",
+                "source": "cloud_agents",
+                "task_title": "hung BA",
+                "updated_at": stale,
+            },
+        ]
+        out = demote_stale_running_llm_work(rows, {"cursor-cloud"}, now=now)
+        self.assertEqual(out[0]["status"], "idle")
+        viol = llm_work_stale_running_violations(rows, {"cursor-cloud"}, now=now)
+        self.assertTrue(any("proof age" in v and "TTL" in v for v in viol))
+
+    def test_demote_live_cloud_lane_with_spend_wall_blocked(self):
+        rows = [
+            {
+                "id": "cursor-cloud",
+                "status": "running",
+                "source": "spend_wall",
+                "task_title": "BA spend wall",
+            },
+        ]
+        out = demote_stale_running_llm_work(rows, {"cursor-cloud"})
+        self.assertEqual(out[0]["status"], "blocked")
+        viol = llm_work_stale_running_violations(rows, {"cursor-cloud"})
+        self.assertTrue(any("idle-class source" in v for v in viol))
+
+    def test_demote_live_cloud_lane_with_fresh_proof_keeps(self):
+        now = datetime(2026, 9, 25, 7, 30, tzinfo=timezone.utc).timestamp()
+        fresh = datetime(2026, 9, 25, 7, 25, tzinfo=timezone.utc).isoformat()
+        rows = [
+            {
+                "id": "cursor-cloud",
+                "status": "running",
+                "source": "cloud_agents",
+                "task_title": "live BA",
+                "heartbeat_at": fresh,
+            },
+        ]
+        out = demote_stale_running_llm_work(rows, {"cursor-cloud"}, now=now)
         self.assertEqual(out[0]["status"], "running")
         self.assertEqual(
-            llm_work_stale_running_violations(rows, {"cursor-cloud"}),
+            llm_work_stale_running_violations(rows, {"cursor-cloud"}, now=now),
             [],
         )
 
@@ -2310,6 +2362,34 @@ class LlmWorkHonestyTests(unittest.TestCase):
         viol = llm_work_stale_running_violations(rows, now=now)
         self.assertTrue(any("proof age" in v and "TTL" in v for v in viol))
 
+    def test_demote_ttl_future_proof_demotes(self):
+        """Far-future proof must not paint Running (fail-closed; cf. agent_is_fresh)."""
+        now = datetime(2026, 9, 25, 8, 0, tzinfo=timezone.utc).timestamp()
+        future = datetime(2026, 9, 25, 12, 0, tzinfo=timezone.utc).isoformat()
+        rows = [
+            {
+                "id": "codex",
+                "status": "running",
+                "source": "cloud_agents",
+                "task_title": "bogus heartbeat",
+                "heartbeat_at": future,
+            },
+        ]
+        out = demote_stale_running_llm_work(rows, now=now)
+        self.assertEqual(out[0]["status"], "idle")
+        viol = llm_work_stale_running_violations(rows, now=now)
+        self.assertTrue(any("future" in v for v in viol))
+        self.assertFalse(
+            llm_work_proof_is_fresh(
+                datetime(2026, 9, 25, 12, 0, tzinfo=timezone.utc).timestamp(),
+                now,
+            )
+        )
+        self.assertGreater(
+            datetime(2026, 9, 25, 12, 0, tzinfo=timezone.utc).timestamp() - now,
+            LLM_WORK_PROOF_FUTURE_SKEW_SEC,
+        )
+
     def test_demote_ttl_fresh_proof_at_keys(self):
         now = datetime(2026, 9, 25, 7, 40, tzinfo=timezone.utc).timestamp()
         for key in ("heartbeat_at", "proof_at", "checked_at", "updated_at"):
@@ -2325,6 +2405,61 @@ class LlmWorkHonestyTests(unittest.TestCase):
             ]
             out = demote_stale_running_llm_work(rows, now=now)
             self.assertEqual(out[0]["status"], "running", key)
+
+    def test_validate_llm_work_write_idle_source_demotes(self):
+        row = validate_llm_work_write(
+            {"id": "gemini", "status": "running", "source": "idle", "task_title": "lie"}
+        )
+        self.assertEqual(row["status"], "idle")
+
+    def test_validate_llm_work_write_missing_proof_demotes(self):
+        row = validate_llm_work_write(
+            {
+                "id": "codex",
+                "status": "running",
+                "source": "cloud_agents",
+                "task_title": "no proof",
+            },
+            now=1_000_000.0,
+        )
+        self.assertEqual(row["status"], "idle")
+
+    def test_validate_llm_work_write_future_skew_demotes(self):
+        now = datetime(2026, 9, 25, 8, 0, tzinfo=timezone.utc).timestamp()
+        future = datetime(2026, 9, 25, 12, 0, tzinfo=timezone.utc).isoformat()
+        row = validate_llm_work_write(
+            {
+                "id": "claude",
+                "status": "running",
+                "source": "cloud_agents",
+                "task_title": "skew",
+                "heartbeat_at": future,
+            },
+            now=now,
+        )
+        self.assertEqual(row["status"], "idle")
+
+    def test_validate_llm_work_write_reject_raises(self):
+        with self.assertRaises(ValueError):
+            validate_llm_work_write(
+                {"id": "grok", "status": "running", "source": "idle"},
+                demote=False,
+            )
+
+    def test_validate_llm_work_write_keeps_fresh_running(self):
+        now = datetime(2026, 9, 25, 7, 30, tzinfo=timezone.utc).timestamp()
+        fresh = datetime(2026, 9, 25, 7, 25, tzinfo=timezone.utc).isoformat()
+        row = validate_llm_work_write(
+            {
+                "id": "codex",
+                "status": "running",
+                "source": "cloud_agents",
+                "task_title": "ok",
+                "heartbeat_at": fresh,
+            },
+            now=now,
+        )
+        self.assertEqual(row["status"], "running")
 
 
 if __name__ == "__main__":
