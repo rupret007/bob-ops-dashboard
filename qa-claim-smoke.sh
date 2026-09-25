@@ -573,6 +573,7 @@ private_not_tap = (
     "0xc0re/barker",
     "AI Music Vault",
     "Bob the Bot",
+    "StoryDesk",
     "Barker",
 )
 missing_public = [name for name in public_tap_lanes if name not in backed.group(0)]

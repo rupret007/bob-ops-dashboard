@@ -19,7 +19,7 @@ REPOS=(
   webjam StoryLiner StoryBoard Rad-Dad-Merch RadDadSite Turdanoid
   AdoptIQ TACTrack AI-Music-Vault rad-dad-show-night Andrea_NanoBot Bob-the-Bot
   StoryOps-AI ballbeacon CSS_Conductor 0xc0re/barker bob-ops-dashboard
-  Cursor-OpenClaw-Integration
+  Cursor-OpenClaw-Integration StoryDesk
 )
 PUSH=0
 [[ "${1:-}" == "--push" ]] && PUSH=1
@@ -426,8 +426,8 @@ status = {
                 notes="Integration utility. Never restart gateways or alter credentials automatically."),
         project("bob-ops-dashboard",
                 notes="Source-only feature PRs; the scheduled refresh owns generated index.html and status.json."),
-        {"name": "StoryDesk", "status": "parked", "chip": "Local-only",
-         "notes": "No authoritative GitHub remote. Local code can be verified, but hosted or merged status cannot be claimed."},
+        project("StoryDesk", high_level_only=True,
+                notes="Private macOS virtual-display / Cast prototype. Software validation only; Screen Recording and device steps stay owner-only."),
         {"name": "OpenClaw Runtime", "status": "parked", "chip": "Local-only",
          "notes": "Local runtime lane. No gateway restart, credential change, or live operation from this board."},
       ],

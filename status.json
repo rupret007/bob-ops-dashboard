@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-09-24T23:10:44.028359-05:00",
-  "generated_at_display": "Thu Sep 24, 2026 \u00b7 11:10 PM CDT",
+  "generated_at": "2026-09-24T23:14:22.058069-05:00",
+  "generated_at_display": "Thu Sep 24, 2026 \u00b7 11:14 PM CDT",
   "timezone": "America/Chicago",
   "owner": "rupret007",
   "dashboard": "bob-ops-dashboard",
@@ -66,9 +66,9 @@
             "created": "2026-09-24T22:18:07Z",
             "html_url": "https://github.com/rupret007/webjam/actions/runs/36066646056"
           },
-          "release": "v0.28.3",
-          "release_sha": "da16749",
-          "release_url": "https://github.com/rupret007/webjam/releases/tag/v0.28.3",
+          "release": "v0.28.2",
+          "release_sha": "a51154e",
+          "release_url": "https://github.com/rupret007/webjam/releases/tag/untagged-4e0b8f08bc532f21605f",
           "notes": "Making room. Latest is the published test candidate; source can be ahead.",
           "accessible": true,
           "coord": {
@@ -373,43 +373,26 @@
         },
         {
           "name": "Ball Beacon",
-          "repo": "rupret007/ballbeacon",
-          "url": null,
-          "repo_url": null,
-          "private": null,
-          "status": "parked",
-          "chip": "Parked",
-          "default_branch": null,
-          "tip_sha": null,
-          "tip_date": null,
-          "open_prs": null,
-          "open_pr_url": null,
-          "open_pr_number": null,
-          "open_pr_draft": false,
-          "open_pr_stack": [],
-          "pr_listing_complete": null,
-          "agent_url": null,
-          "ci": null,
-          "release": null,
-          "release_sha": null,
-          "release_url": null,
+          "private": true,
+          "status": "yellow",
+          "chip": "Yellow",
           "notes": "Private iOS utility. Software validation only; device and signing steps stay owner-only.",
-          "accessible": false,
+          "accessible": true,
+          "ci": {},
           "coord": {
             "repo": "ballbeacon",
             "agent": "none",
             "lease_state": "none",
-            "next": "Jeff installs/selects full Xcode with iOS Simulator plus XcodeGen...",
-            "sha": "3f05fdc"
+            "next": "Jeff installs/selects full Xcode with iOS Simulator plus XcodeGen..."
           }
         },
         {
           "name": "CSS Conductor",
           "private": true,
-          "status": "parked",
-          "chip": "Parked",
+          "status": "yellow",
+          "chip": "Yellow",
           "notes": "Private developer utility. High-level only; hosted-job cause stays unconfirmed.",
-          "accessible": false,
+          "accessible": true,
           "ci": {},
           "coord": {
             "repo": "CSS_Conductor",
@@ -420,34 +403,17 @@
         },
         {
           "name": "Barker",
-          "repo": "0xc0re/barker",
-          "url": null,
-          "repo_url": null,
-          "private": null,
-          "status": "parked",
-          "chip": "Parked",
-          "default_branch": null,
-          "tip_sha": null,
-          "tip_date": null,
-          "open_prs": null,
-          "open_pr_url": null,
-          "open_pr_number": null,
-          "open_pr_draft": false,
-          "open_pr_stack": [],
-          "pr_listing_complete": null,
-          "agent_url": null,
-          "ci": null,
-          "release": null,
-          "release_sha": null,
-          "release_url": null,
+          "private": true,
+          "status": "yellow",
+          "chip": "Yellow",
           "notes": "Private app. No live sends, production changes, or credential operations from this board.",
-          "accessible": false,
+          "accessible": true,
+          "ci": {},
           "coord": {
             "repo": "barker",
             "agent": "none",
             "lease_state": "none",
-            "next": "PARKED until Jeff unparks; FREE otherwise for later",
-            "sha": "f8baefa"
+            "next": "PARKED until Jeff unparks; FREE otherwise for later"
           }
         },
         {
@@ -497,8 +463,8 @@
           "status": "green",
           "chip": "Green",
           "default_branch": "main",
-          "tip_sha": "228fdcd",
-          "tip_date": "2026-09-25T04:07:24Z",
+          "tip_sha": "1d2f3ca",
+          "tip_date": "2026-09-25T04:10:58Z",
           "open_prs": 0,
           "open_pr_url": null,
           "open_pr_number": null,
@@ -506,14 +472,7 @@
           "open_pr_stack": [],
           "pr_listing_complete": true,
           "agent_url": null,
-          "ci": {
-            "name": "QA claim smoke",
-            "conclusion": "success",
-            "branch": "main",
-            "sha": "228fdcd",
-            "created": "2026-09-25T04:07:26Z",
-            "html_url": "https://github.com/rupret007/bob-ops-dashboard/actions/runs/36093146132"
-          },
+          "ci": null,
           "release": null,
           "release_sha": null,
           "release_url": null,
@@ -528,9 +487,12 @@
         },
         {
           "name": "StoryDesk",
-          "status": "parked",
-          "chip": "Local-only",
-          "notes": "No authoritative GitHub remote. Local code can be verified, but hosted or merged status cannot be claimed."
+          "private": true,
+          "status": "yellow",
+          "chip": "Yellow",
+          "notes": "Private macOS virtual-display / Cast prototype. Software validation only; Screen Recording and device steps stay owner-only.",
+          "accessible": true,
+          "ci": {}
         },
         {
           "name": "OpenClaw Runtime",
@@ -545,32 +507,32 @@
       "title": "Active agents NOW",
       "projects": [
         {
-          "name": "Codex",
-          "status": "parked",
-          "chip": "Unknown",
-          "notes": "No Mac probe in this clone \u00b7 probe stale (>45m)",
+          "name": "Codex (ChatGPT)",
+          "status": "green",
+          "chip": "Running",
+          "notes": "PID 70926 \u00b7 70926 /Applications/ChatGPT.app/Contents/Resources/codex -c features.code_mode_host=true app-server --analytics-default- \u00b7 codex-local :3210 down \u00b7 checked 2026-09-24T23:13:38.339233-05:00",
           "agent_id": "codex",
-          "agent_state": "unknown",
+          "agent_state": "running",
           "url": null,
           "pr_url": null
         },
         {
           "name": "Cursor",
           "status": "parked",
-          "chip": "Unknown",
-          "notes": "No Mac probe in this clone \u00b7 probe stale (>45m)",
+          "chip": "Installed",
+          "notes": "Cursor.app installed \u00b7 v3.17.21, not running \u00b7 checked 2026-09-24T23:13:38.339233-05:00",
           "agent_id": "cursor",
-          "agent_state": "unknown",
+          "agent_state": "installed",
           "url": null,
           "pr_url": null
         },
         {
           "name": "Claude",
-          "status": "parked",
-          "chip": "Unknown",
-          "notes": "No Mac probe in this clone \u00b7 probe stale (>45m)",
+          "status": "green",
+          "chip": "Running",
+          "notes": "Claude.app running \u00b7 2.1.216 (Claude Code) \u00b7 checked 2026-09-24T23:13:38.339233-05:00",
           "agent_id": "claude",
-          "agent_state": "unknown",
+          "agent_state": "running",
           "url": null,
           "pr_url": null
         }
@@ -598,10 +560,10 @@
         {
           "name": "TACTrack",
           "private": true,
-          "status": "parked",
-          "chip": "Parked",
+          "status": "yellow",
+          "chip": "Yellow",
           "notes": "Private. High-level only. No live-repo, CI, or PR taps on this board.",
-          "accessible": false,
+          "accessible": true,
           "ci": {},
           "coord": {
             "repo": "TACTrack",
@@ -838,44 +800,44 @@
     "RadDadSite",
     "Turdanoid",
     "AdoptIQ",
+    "TACTrack",
     "AI-Music-Vault",
     "rad-dad-show-night",
     "Andrea_NanoBot",
     "Bob-the-Bot",
     "StoryOps-AI",
-    "bob-ops-dashboard",
-    "Cursor-OpenClaw-Integration"
-  ],
-  "inaccessible": [
-    "TACTrack",
     "ballbeacon",
     "CSS_Conductor",
-    "barker"
+    "barker",
+    "bob-ops-dashboard",
+    "Cursor-OpenClaw-Integration",
+    "StoryDesk"
   ],
+  "inaccessible": [],
   "publish_notes": "Public board -- no secrets or customer paths. Private repositories stay high-level; AI Music Vault stays private-content-boundary only.",
-  "refresh_started_ms": 1790309412460,
-  "agents_source": "file:stale->unknown",
+  "refresh_started_ms": 1790309619017,
+  "agents_source": "file",
   "agents": [
     {
       "id": "codex",
-      "name": "Codex",
-      "state": "unknown",
-      "detail": "No Mac probe in this clone \u00b7 probe stale (>45m)",
-      "checked_at": null
+      "name": "Codex (ChatGPT)",
+      "state": "running",
+      "detail": "PID 70926 \u00b7 70926 /Applications/ChatGPT.app/Contents/Resources/codex -c features.code_mode_host=true app-server --analytics-default- \u00b7 codex-local :3210 down",
+      "checked_at": "2026-09-24T23:13:38.339233-05:00"
     },
     {
       "id": "cursor",
       "name": "Cursor",
-      "state": "unknown",
-      "detail": "No Mac probe in this clone \u00b7 probe stale (>45m)",
-      "checked_at": null
+      "state": "installed",
+      "detail": "Cursor.app installed \u00b7 v3.17.21, not running",
+      "checked_at": "2026-09-24T23:13:38.339233-05:00"
     },
     {
       "id": "claude",
       "name": "Claude",
-      "state": "unknown",
-      "detail": "No Mac probe in this clone \u00b7 probe stale (>45m)",
-      "checked_at": null
+      "state": "running",
+      "detail": "Claude.app running \u00b7 2.1.216 (Claude Code)",
+      "checked_at": "2026-09-24T23:13:38.339233-05:00"
     }
   ],
   "cloud_agents": [],
