@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-09-25T05:56:57.151500-05:00",
-  "generated_at_display": "Fri Sep 25, 2026 \u00b7 5:56 AM CDT",
+  "generated_at": "2026-09-25T06:06:49.324400-05:00",
+  "generated_at_display": "Fri Sep 25, 2026 \u00b7 6:06 AM CDT",
   "timezone": "America/Chicago",
   "owner": "rupret007",
   "dashboard": "bob-ops-dashboard",
@@ -307,14 +307,7 @@
           "open_pr_stack": [],
           "pr_listing_complete": true,
           "agent_url": null,
-          "ci": {
-            "name": "CI",
-            "conclusion": "success",
-            "branch": "main",
-            "sha": "c08c489",
-            "created": "2026-09-08T05:10:56Z",
-            "html_url": "https://github.com/rupret007/Turdanoid/actions/runs/34189652739"
-          },
+          "ci": null,
           "release": null,
           "release_sha": null,
           "release_url": null,
@@ -464,8 +457,8 @@
           "status": "green",
           "chip": "Green",
           "default_branch": "main",
-          "tip_sha": "627d525",
-          "tip_date": "2026-09-25T10:50:26Z",
+          "tip_sha": "ec08166",
+          "tip_date": "2026-09-25T10:56:59Z",
           "open_prs": 0,
           "open_pr_url": null,
           "open_pr_number": null,
@@ -477,9 +470,9 @@
             "name": "QA claim smoke",
             "conclusion": "success",
             "branch": "main",
-            "sha": "627d525",
-            "created": "2026-09-25T10:50:29Z",
-            "html_url": "https://github.com/rupret007/bob-ops-dashboard/actions/runs/36126141975"
+            "sha": "ec08166",
+            "created": "2026-09-25T10:57:03Z",
+            "html_url": "https://github.com/rupret007/bob-ops-dashboard/actions/runs/36126731272"
           },
           "release": null,
           "release_sha": null,
@@ -853,7 +846,7 @@
   ],
   "inaccessible": [],
   "publish_notes": "Public board -- no secrets or customer paths. Private repositories stay high-level; AI Music Vault stays private-content-boundary only.",
-  "refresh_started_ms": 1790333772751,
+  "refresh_started_ms": 1790334362034,
   "agents_source": "file:stale->unknown",
   "agents": [
     {
@@ -1009,10 +1002,10 @@
     }
   ],
   "harden_window": {
-    "round": 121,
-    "status": "open",
-    "started_at": "2026-09-25T05:56:32-05:00",
-    "ended_at": "",
+    "round": 125,
+    "status": "closed",
+    "started_at": "2026-09-25T06:04:21-05:00",
+    "ended_at": "2026-09-25T06:06:01-05:00",
     "lanes_fired": [
       "Codex",
       "Claude",
@@ -1020,10 +1013,10 @@
       "MiniMax",
       "LocalCursor"
     ],
-    "scorecard_line": "",
-    "updated_at": "2026-09-25T05:56:32-05:00",
-    "display_status": "open",
-    "idle": false
+    "scorecard_line": "Stress PASS | Eff PASS | CQ PASS",
+    "updated_at": "2026-09-25T06:06:01-05:00",
+    "display_status": "closed",
+    "idle": true
   },
   "pending": [
     {
