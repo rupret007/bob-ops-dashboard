@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-25T04:11:02.178886-05:00",
+  "generated_at": "2026-09-25T04:11:49.028753-05:00",
   "generated_at_display": "Fri Sep 25, 2026 \u00b7 4:11 AM CDT",
   "timezone": "America/Chicago",
   "owner": "rupret007",
@@ -58,14 +58,7 @@
           "open_pr_stack": [],
           "pr_listing_complete": true,
           "agent_url": null,
-          "ci": {
-            "name": "WebJam CI",
-            "conclusion": "success",
-            "branch": "master",
-            "sha": "a6f59cc",
-            "created": "2026-09-25T06:39:52Z",
-            "html_url": "https://github.com/rupret007/webjam/actions/runs/36103879896"
-          },
+          "ci": null,
           "release": "v0.28.2",
           "release_sha": "a51154e",
           "release_url": "https://github.com/rupret007/webjam/releases/tag/untagged-4e0b8f08bc532f21605f",
@@ -464,8 +457,8 @@
           "status": "green",
           "chip": "Green",
           "default_branch": "main",
-          "tip_sha": "f027151",
-          "tip_date": "2026-09-25T09:10:33Z",
+          "tip_sha": "b671199",
+          "tip_date": "2026-09-25T09:11:05Z",
           "open_prs": 0,
           "open_pr_url": null,
           "open_pr_number": null,
@@ -473,7 +466,14 @@
           "open_pr_stack": [],
           "pr_listing_complete": true,
           "agent_url": null,
-          "ci": null,
+          "ci": {
+            "name": "QA claim smoke",
+            "conclusion": "success",
+            "branch": "main",
+            "sha": "b671199",
+            "created": "2026-09-25T09:11:07Z",
+            "html_url": "https://github.com/rupret007/bob-ops-dashboard/actions/runs/36117015284"
+          },
           "release": null,
           "release_sha": null,
           "release_url": null,
@@ -598,8 +598,8 @@
           "ci": {},
           "coord": {
             "repo": "TACTrack",
-            "agent": "codex",
-            "lease_state": "active",
+            "agent": "none",
+            "lease_state": "expired",
             "next": "gpt-5.3-codex DRAFT-only"
           }
         },
@@ -846,7 +846,7 @@
   ],
   "inaccessible": [],
   "publish_notes": "Public board -- no secrets or customer paths. Private repositories stay high-level; AI Music Vault stays private-content-boundary only.",
-  "refresh_started_ms": 1790327417200,
+  "refresh_started_ms": 1790327462156,
   "agents_source": "file:stale->unknown",
   "agents": [
     {
@@ -1002,9 +1002,9 @@
     }
   ],
   "harden_window": {
-    "round": 30,
+    "round": 31,
     "status": "open",
-    "started_at": "2026-09-25T04:11:02-05:00",
+    "started_at": "2026-09-25T04:11:47-05:00",
     "ended_at": "",
     "lanes_fired": [
       "Codex",
@@ -1014,7 +1014,7 @@
       "LocalCursor"
     ],
     "scorecard_line": "",
-    "updated_at": "2026-09-25T04:11:02-05:00",
+    "updated_at": "2026-09-25T04:11:47-05:00",
     "display_status": "open",
     "idle": false
   },
