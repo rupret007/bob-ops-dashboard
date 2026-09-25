@@ -20,6 +20,14 @@ Implement one cohesive, phone-first in-board detail experience so tapping a lane
   - Opening the sheet pushes history state.
   - Browser Back closes the sheet first.
   - Close button, scrim tap, and Escape close the sheet.
+- Expanded **Work now resource-type details** so Jeff can read assignment state without leaving board:
+  - full task + full goal text
+  - repo + branch + PR field (number/URL when present)
+  - cloud agent id and Open agent link when available
+  - status plus last update (cloud checked_at when present, snapshot timestamp otherwise)
+  - tip SHA + CI signal from matched public repo lane when available
+  - lease state / next action notes from coordination fields when present
+  - recent public-safe snippets from llm work + cloud/detail context (fail-closed filters)
 - Added phone-safe sheet controls (44px dismiss target) and link chips with existing safe URL plumbing.
 
 ### Public-board safety

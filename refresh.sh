@@ -1457,6 +1457,12 @@ html = f'''<!DOCTYPE html>
   .detail-close:hover {{ border-color:var(--orange); color:var(--orange); }}
   .detail-meta, .detail-note, .detail-time {{ margin:0 0 .55rem; color:var(--muted); font-size:.82rem; line-height:1.4; }}
   .detail-note {{ color:var(--text); white-space:pre-wrap; }}
+  .detail-task, .detail-goal {{ margin:0 0 .55rem; font-size:.83rem; line-height:1.4; color:#fff; white-space:pre-wrap; }}
+  .detail-facts {{
+    margin:0 0 .7rem; padding:0; display:grid; grid-template-columns:auto 1fr; gap:.26rem .6rem;
+  }}
+  .detail-facts dt {{ margin:0; color:var(--muted); font-size:.74rem; }}
+  .detail-facts dd {{ margin:0; color:#fff; font-size:.78rem; overflow-wrap:anywhere; }}
   .detail-links {{ display:flex; flex-wrap:wrap; gap:.42rem; margin:0 0 .72rem; }}
   .detail-links a {{
     min-height:44px; display:inline-flex; align-items:center; justify-content:center;
@@ -1515,6 +1521,9 @@ html = f'''<!DOCTYPE html>
     </div>
     <p id="detail-meta" class="detail-meta"></p>
     <p id="detail-time" class="detail-time"></p>
+    <p id="detail-task" class="detail-task"></p>
+    <p id="detail-goal" class="detail-goal"></p>
+    <dl id="detail-facts" class="detail-facts"></dl>
     <p id="detail-note" class="detail-note"></p>
     <div id="detail-links" class="detail-links"></div>
     <h3 id="detail-events-title" class="detail-events-title" hidden>Recent events</h3>
@@ -1832,6 +1841,9 @@ function focusKey(kind, raw) {{
   var detailTitleEl = document.getElementById("detail-title");
   var detailMetaEl = document.getElementById("detail-meta");
   var detailTimeEl = document.getElementById("detail-time");
+  var detailTaskEl = document.getElementById("detail-task");
+  var detailGoalEl = document.getElementById("detail-goal");
+  var detailFactsEl = document.getElementById("detail-facts");
   var detailNoteEl = document.getElementById("detail-note");
   var detailLinksEl = document.getElementById("detail-links");
   var detailEventsEl = document.getElementById("detail-events");
@@ -1983,6 +1995,61 @@ function focusKey(kind, raw) {{
     if (status === "jeff-gate") return "After yes";
     return status ? status.charAt(0).toUpperCase() + status.slice(1) : "Unknown";
   }}
+  function parseCheckedAt(value) {{
+    var ms = Date.parse(String(value || ""));
+    return isFinite(ms) ? ms : 0;
+  }}
+  function sinceLabel(iso) {{
+    var ms = parseCheckedAt(iso);
+    if (!ms) return "";
+    var diff = Date.now() - ms;
+    if (diff < 0) return "";
+    var s = Math.floor(diff / 1000);
+    if (s < 60) return s + "s ago";
+    var m = Math.floor(s / 60);
+    if (m < 60) return m + "m ago";
+    var h = Math.floor(m / 60);
+    return h + "h ago";
+  }}
+  function shortSha(raw) {{
+    var sha = String(raw || "").trim().toLowerCase();
+    return /^[0-9a-f]{7,40}$/.test(sha) ? sha.slice(0, 7) : "";
+  }}
+  function safeSnippetText(value) {{
+    var text = String(value || "").replace(/\\s+/g, " ").trim();
+    if (!text) return "";
+    if (text.length > 220) text = text.slice(0, 220);
+    var low = text.toLowerCase();
+    if (low.indexOf("/users/") !== -1 || low.indexOf("/home/") !== -1 || low.indexOf("c:\\\\") !== -1) return "";
+    if (low.indexOf("token") !== -1 || low.indexOf("apikey") !== -1 || low.indexOf("secret") !== -1) return "";
+    return text;
+  }}
+  function repoFromAny(raw) {{
+    var text = String(raw || "").trim();
+    if (!text) return "";
+    if (/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(text)) return text.toLowerCase();
+    var safe = safeRepoUrl(text);
+    if (!safe) return "";
+    var m = safe.match(/^https:\/\/github\.com\/([A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+)$/i);
+    return m ? m[1].toLowerCase() : "";
+  }}
+  function matchProjectForWork(row, data) {{
+    var repo = repoFromAny(row && row.repo);
+    var pr = safePrUrl(row && row.pr_url || "");
+    if (!repo && !pr) return null;
+    var best = null;
+    (data && data.sections || []).forEach(function (sec) {{
+      (sec && sec.projects || []).forEach(function (p) {{
+        if (!p || typeof p !== "object") return;
+        var prep = repoFromAny(p.repo || p.repo_url || p.url || "");
+        if (repo && prep && prep === repo) {{
+          if (pr && safePrUrl(p.open_pr_url || "") === pr) best = p;
+          else if (!best) best = p;
+        }}
+      }});
+    }});
+    return best;
+  }}
   function noteText(item) {{
     if (!item || typeof item !== "object") return "";
     if (item.notes) return String(item.notes).trim();
@@ -2062,6 +2129,20 @@ function focusKey(kind, raw) {{
     }}
     return out.filter(Boolean).slice(0, 4);
   }}
+  function workHistory(row, project, cloud) {{
+    var out = [];
+    function add(text) {{
+      var clean = safeSnippetText(text);
+      if (!clean) return;
+      out.push({{ text: clean, href: "" }});
+    }}
+    add(row && row.why);
+    add(row && row.note);
+    add(row && row.last_task);
+    add(project && project.coord && project.coord.next);
+    add(cloud && cloud.detail);
+    return out.slice(0, 5);
+  }}
   function detailLinks(item, kind) {{
     var links = [];
     if (kind === "project") {{
@@ -2081,6 +2162,13 @@ function focusKey(kind, raw) {{
     }}
     return links;
   }}
+  function addFact(meta, label, value, href) {{
+    var text = String(value || "").trim();
+    if (!text) return;
+    var row = {{ label: String(label || "").trim(), value: text, href: workHref(href || "") }};
+    if (!row.label) return;
+    meta.facts.push(row);
+  }}
   function detailLookup(token, data) {{
     if (!token) return null;
     if (token.indexOf("work:") === 0) {{
@@ -2088,16 +2176,65 @@ function focusKey(kind, raw) {{
       var rows = normalizeLlmWork((data && data.llm_work) || []);
       for (var i = 0; i < rows.length; i += 1) {{
         if (String(rows[i].id || "") === workId) {{
-          return {{
+          var row = rows[i];
+          var project = matchProjectForWork(row, data);
+          var cloud = null;
+          var clouds = (data && data.cloud_agents) || [];
+          for (var c = 0; c < clouds.length; c += 1) {{
+            var candidate = clouds[c];
+            if (!candidate) continue;
+            var cUrl = safeAgentUrl(candidate.url || "");
+            if (!cUrl) continue;
+            if (row.agent_url && cUrl === safeAgentUrl(row.agent_url || "")) {{ cloud = candidate; break; }}
+            if (row.pr_url && safePrUrl(candidate.pr_url || "") === safePrUrl(row.pr_url || "")) {{ cloud = candidate; }}
+          }}
+          var meta = {{
             token: token,
             kind: "work",
-            title: rows[i].name || laneName(workId),
-            status: detailStatusLabel(rows[i].status || "idle"),
-            note: noteText(rows[i]),
-            links: detailLinks(rows[i], "work"),
-            events: workEvents(rows[i], data),
-            generated: (data && data.generated_at_display) || ""
+            title: row.name || laneName(workId),
+            status: detailStatusLabel(row.status || "idle"),
+            generated: (data && data.generated_at_display) || "",
+            task: String(row.task_full || row.task_title || "").trim(),
+            goal: String(row.goal_full || row.goal || "").trim(),
+            note: safeSnippetText(row.note_full || row.note || row.why || row.last_task_full || row.last_task) || "",
+            links: detailLinks(row, "work"),
+            events: workEvents(row, data),
+            history: workHistory(row, project, cloud),
+            facts: []
           }};
+          if (project) {{
+            var ci = project.ci && typeof project.ci === "object" ? project.ci : {{}};
+            var ciConcl = String(ci.conclusion || "").trim().toLowerCase();
+            if (ciConcl && ciConcl !== "skipped" && ciConcl !== "cancelled") {{
+              var ciHref = safeActionsUrl(ci.html_url || "");
+              meta.links.push({{ label: "Open CI", href: ciHref }});
+              var ciLabel = (safePrUrl(project.open_pr_url || "") && safePrUrl(project.open_pr_url || "") === safePrUrl(row.pr_url || ""))
+                ? "CI (linked PR)" : "CI (repo)";
+              addFact(meta, ciLabel, ciConcl + (ci.sha ? " (" + shortSha(ci.sha) + ")" : ""), ciHref);
+            }}
+            addFact(meta, "Tip SHA", shortSha(project.tip_sha), "");
+            var coord = project.coord && typeof project.coord === "object" ? project.coord : {{}};
+            if (coord.lease_state) addFact(meta, "Lease", String(coord.lease_state), "");
+            if (coord.next) addFact(meta, "Next action", safeSnippetText(coord.next), "");
+          }}
+          addFact(meta, "Repo", row.repo || "", row.repo ? "https://github.com/" + row.repo : "");
+          addFact(meta, "Branch", row.branch || "", "");
+          if (row.pr_number || row.pr_url) addFact(meta, "PR", row.pr_number ? ("#" + row.pr_number) : "Open PR", row.pr_url || "");
+          var agentUrl = safeAgentUrl(row.agent_url || (cloud && cloud.url) || "");
+          var agentId = agentUrl ? agentUrl.split("/").pop() : "";
+          if (agentUrl && meta.links.filter(function (entry) {{ return entry && entry.label === "Open agent"; }}).length === 0) {{
+            meta.links.push({{ label: "Open agent", href: agentUrl }});
+          }}
+          addFact(meta, "Cloud agent", agentId, agentUrl);
+          var checked = (cloud && cloud.checked_at) || "";
+          if (checked) {{
+            var age = sinceLabel(checked);
+            addFact(meta, "Last update", age ? (checked + " (" + age + ")") : checked, "");
+          }} else if (meta.generated) {{
+            addFact(meta, "Last update", meta.generated, "");
+          }}
+          if (!meta.note && row.last_task) meta.note = safeSnippetText(row.last_task);
+          return meta;
         }}
       }}
       return null;
@@ -2111,9 +2248,13 @@ function focusKey(kind, raw) {{
         kind: "project",
         title: String(project.name || "Project"),
         status: detailStatusLabel(project.chip || project.status || ""),
+        task: "",
+        goal: "",
         note: noteText(project),
         links: detailLinks(project, "project"),
         events: projectEvents(project),
+        history: [],
+        facts: [],
         generated: (data && data.generated_at_display) || ""
       }};
     }}
@@ -2124,6 +2265,28 @@ function focusKey(kind, raw) {{
     detailTitleEl.textContent = meta.title || "Details";
     detailMetaEl.textContent = "Status: " + (meta.status || "Unknown");
     detailTimeEl.textContent = meta.generated ? ("Snapshot: " + meta.generated) : "";
+    detailTaskEl.textContent = meta.task ? ("Task: " + meta.task) : "";
+    detailGoalEl.textContent = meta.goal ? ("Goal: " + meta.goal) : "";
+    detailFactsEl.innerHTML = "";
+    (meta.facts || []).forEach(function (fact) {{
+      if (!fact || !fact.label || !fact.value) return;
+      var dt = document.createElement("dt");
+      dt.textContent = fact.label;
+      var dd = document.createElement("dd");
+      if (fact.href) {{
+        var a = document.createElement("a");
+        a.href = fact.href;
+        a.target = "_blank";
+        a.rel = "noopener noreferrer";
+        a.setAttribute("data-open", "work");
+        a.textContent = fact.value;
+        dd.appendChild(a);
+      }} else {{
+        dd.textContent = fact.value;
+      }}
+      detailFactsEl.appendChild(dt);
+      detailFactsEl.appendChild(dd);
+    }});
     detailNoteEl.textContent = meta.note || "No additional notes.";
     detailLinksEl.innerHTML = "";
     (meta.links || []).forEach(function (entry) {{
@@ -2138,7 +2301,7 @@ function focusKey(kind, raw) {{
       detailLinksEl.appendChild(a);
     }});
     detailEventsEl.innerHTML = "";
-    var events = meta.events || [];
+    var events = (meta.events || []).concat(meta.history || []);
     detailEventsTitleEl.hidden = events.length === 0;
     events.forEach(function (entry) {{
       if (!entry || !entry.text) return;
@@ -2759,16 +2922,20 @@ function focusKey(kind, raw) {{
       id: id,
       name: laneName(id),
       task_title: compactText(raw.task_title || raw.title, 120),
+      task_full: compactText(raw.task_title || raw.title, 600),
       repo: compactText(raw.repo || repoFromPrUrl(pr), 96),
       pr_url: pr,
       pr_number: String(raw.pr_number || prNumber(pr)),
       branch: safeBranch(raw.branch),
       goal: compactText(raw.goal || raw.notes, 220),
+      goal_full: compactText(raw.goal || raw.notes, 1200),
       status: status,
       agent_url: safeAgentUrl(raw.agent_url || raw.url),
       why: compactText(raw.why || raw.lane_why, 120),
       note: compactText(raw.note || raw.detail, 160),
+      note_full: compactText(raw.note || raw.detail, 900),
       last_task: compactText(raw.last_task, 120),
+      last_task_full: compactText(raw.last_task, 900),
       source: compactText(raw.source, 48)
     }};
   }}
@@ -2785,16 +2952,20 @@ function focusKey(kind, raw) {{
         id: id,
         name: laneName(id),
         task_title: row.task_title || "idle - needs assignment",
+        task_full: row.task_full || row.task_title || "idle - needs assignment",
         repo: row.repo || "",
         pr_url: row.pr_url || "",
         pr_number: row.pr_number || "",
         branch: row.branch || "",
         goal: row.goal || "",
+        goal_full: row.goal_full || row.goal || "",
         status: row.status || "idle",
         agent_url: row.agent_url || "",
         why: row.why || "",
         note: row.note || "",
+        note_full: row.note_full || row.note || "",
         last_task: row.last_task || "",
+        last_task_full: row.last_task_full || row.last_task || "",
         source: row.source || "idle"
       }};
     }});
