@@ -53,6 +53,26 @@ function run() {
   if (refresh.indexOf('project("StoryOps-AI"') === -1 || refresh.indexOf("WashOps") === -1) {
     fail("WashOps display rename mapping missing");
   }
+
+  // Honesty slice: meta links and tab-home visibility (PR #56 next slice).
+  if (src.indexOf("function workMetaHtml") === -1) fail("workMetaHtml missing from page JS");
+  if (refresh.indexOf("def _work_meta_html") === -1) fail("_work_meta_html missing from refresh.sh");
+  if (refresh.indexOf("meta-link") === -1) fail("meta-link anchor class missing from refresh.sh");
+  // meta and goal must NOT be suppressed on tab-home (honesty requirement).
+  if (refresh.indexOf("body.tab-home .agent-row .meta,") !== -1 ||
+      refresh.indexOf("body.tab-home .agent-row .goal,") !== -1) {
+    fail("meta/goal must not be hidden on tab-home — honesty slice regression");
+  }
+  // note and last-task may remain condensed on phone home.
+  if (refresh.indexOf("body.tab-home .agent-row .note") === -1) {
+    fail("note suppression on tab-home should still exist");
+  }
+  // Barker must be rupret007, never 0xc0re.
+  if (refresh.indexOf("0xc0re") !== -1) fail("0xc0re/barker reference must not appear in refresh.sh");
+  // StoryDesk must be in offline fixture allowlist.
+  const fixtureJs = fs.readFileSync(path.join(ROOT, "offline_qa_fixtures.py"), "utf8");
+  if (fixtureJs.indexOf('"StoryDesk"') === -1) fail("StoryDesk missing from offline_qa_fixtures.py");
+
   console.log("soft-paint / llm-work-now smoke ok");
   return;
 

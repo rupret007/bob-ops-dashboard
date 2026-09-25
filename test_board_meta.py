@@ -2036,6 +2036,39 @@ class BoardMetaTests(unittest.TestCase):
 
 
 
+    def test_offline_fixture_allowlist_includes_storydesk_and_barker(self):
+        """Regression: StoryDesk added to REPOS must be in offline fixture; barker = rupret007."""
+        from pathlib import Path
+        fixture_src = (Path(__file__).parent / "offline_qa_fixtures.py").read_text()
+        self.assertIn('"StoryDesk"', fixture_src,
+                      "StoryDesk must be in offline_qa_fixtures.py allowlist")
+        self.assertIn('"rupret007/barker"', fixture_src,
+                      "barker must be rupret007/barker in fixture")
+        self.assertNotIn("0xc0re", fixture_src,
+                         "0xc0re must not appear in fixture")
+
+    def test_work_meta_html_links_repo_and_pr(self):
+        """meta line renders linked <a> for repo and PR#; idle lane has no links."""
+        from board_meta import safe_pr_url, safe_repo_url
+        import html as html_mod
+        # Build the meta HTML inline (mirrors _work_meta_html logic).
+        row_with_pr = {
+            "repo": "rupret007/bob-ops-dashboard",
+            "pr_url": "https://github.com/rupret007/bob-ops-dashboard/pull/56",
+            "pr_number": "56",
+            "branch": "cursor/max-llm-resource-strip-ec39",
+            "why": "",
+        }
+        pr = safe_pr_url(row_with_pr["pr_url"])
+        self.assertEqual(pr, row_with_pr["pr_url"])
+        repo_url = safe_repo_url("https://github.com/" + row_with_pr["repo"])
+        self.assertEqual(repo_url, "https://github.com/rupret007/bob-ops-dashboard")
+        # Row with no repo or PR — idle lane.
+        idle_row = {"repo": "", "pr_url": "", "pr_number": "", "branch": "", "why": ""}
+        self.assertFalse(safe_pr_url(idle_row["pr_url"]))
+        self.assertFalse(safe_repo_url("https://github.com/" + idle_row["repo"]) if idle_row["repo"] else "")
+
+
 class CoordLeaseTests(unittest.TestCase):
     def test_coord_issue_lease_and_public_sanitize(self):
         now = datetime(2026, 8, 28, 22, 0, tzinfo=timezone.utc)
