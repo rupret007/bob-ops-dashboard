@@ -86,4 +86,4 @@ Hosted PR validation runs `python3 qa-offline.py` using existing runner tools; n
 
 `./qa-source-only.sh` still performs live portfolio reads and requires separate authorization. `./qa-claim-smoke.sh` is the lower-level command for an already generated page. The scheduled refresh workflow is unchanged; synthetic QA does not verify live publication.
 
-The stale-state smoke covers the exact trust boundary: one failed live poll immediately labels the board historical, an overdue refresh does the same after the 45-minute silence window, and a successful current snapshot clears that warning. **Retry now** reuses the same bounded, no-store poll path; it does not dispatch Actions, refresh GitHub, or publish Pages.
+The stale-state smoke covers the exact trust boundary: one failed live poll immediately labels the board historical, an overdue refresh does the same after the 15-minute silence window, and a successful current snapshot clears that warning. **Retry now** reuses the same bounded, no-store poll path; it does not dispatch Actions, refresh GitHub, or publish Pages.
