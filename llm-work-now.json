@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-09-25 02:29 CT",
-  "honest_note": "2026-09-25 ~02:29 CT honesty: prior R3 one-shots idle/finished; Cloud BA spend-walled; Barker parked; R4 heavy lanes starting as BYOK one-shots (not standing workers). Pages must not paint Running for idle/finished.",
+  "generated_at": "2026-09-25 02:37 CT",
+  "honest_note": "2026-09-25 ~02:37 CT: Work-now honesty \u2014 Running requires live Cloud lane match OR non-idle source with proof heartbeat (heartbeat_at/proof_at/checked_at/updated_at) younger than LLM_WORK_RUNNING_HEARTBEAT_TTL_SEC=900 (15m). Else demote (spend_wall\u2192blocked, mini_paste\u2192finished, else idle). STALE_RUNNING_SOURCES never paint Running without live Cloud. board_meta.demote_stale_running_llm_work is the single module; Refresh calls it. Current chips: idle/finished/blocked only \u2014 no Running lies.",
   "work": [
     {
       "id": "codex",
@@ -32,25 +32,25 @@
     {
       "id": "gemini",
       "name": "Gemini",
-      "task_title": "IDLE \u2014 R3 BYOK assess/probe finished (~02:00\u201302:02 CT)",
+      "task_title": "IDLE \u2014 R4 BYOK board-honesty assess finished (~02:30 CT)",
       "repo": "rupret007/bob-ops-dashboard",
-      "goal": "Short Gemini API one-shots during harden Round 3. No background Gemini worker.",
+      "goal": "Short Gemini API one-shots during harden Round 4. No background Gemini worker.",
       "status": "idle",
-      "why": "Prior one-shot done; R4 BYOK starting separately \u2014 not Work-now Running",
-      "note": "artifacts: gemini-direct-assess-20260925-0200.md; ASSESS_OK",
-      "last_task": "WashOps exterior-services copy verification",
+      "why": "Done one-shot ASSESS_BLOCKED; not Work-now Running",
+      "note": "artifact gemini-assess-board-honesty-fail-closed.md; light LIGHT_FAIL",
+      "last_task": "R4 board-honesty fail-closed deep assess",
       "source": "byok_oneshot"
     },
     {
       "id": "minimax",
       "name": "MiniMax",
-      "task_title": "IDLE \u2014 R3 BYOK tip/probe finished (~02:00\u201302:03 CT)",
+      "task_title": "IDLE \u2014 R4 BYOK tip#57 d3f5ddc finished (~02:30 CT)",
       "repo": "rupret007/bob-ops-dashboard",
-      "goal": "Short MiniMax-M2.7 tip-style probes + prior tip critiques. Silent capped; no standing Runner job.",
+      "goal": "Short MiniMax-M2.7 tip critique. Silent capped; no standing Runner job.",
       "status": "idle",
-      "why": "Prior one-shot done; R4 BYOK starting separately \u2014 not Work-now Running",
-      "note": "last tip sha 68b220e Bob#30; probe VERDICT FAIL on honesty sample",
-      "last_task": "Mobile readability pass for work-now rows",
+      "why": "Done one-shot tip critique; not Work-now Running",
+      "note": "artifact minimax-pr57-tip-d3f5ddc.md VERDICT PASS (light disagrees on claim honesty)",
+      "last_task": "R4 tip critique PR#57 tip d3f5ddc",
       "source": "byok_oneshot"
     },
     {

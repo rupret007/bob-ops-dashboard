@@ -23,6 +23,8 @@ from board_meta import (
     decision_href,
     detect_linear_pr_stack,
     demote_stale_running_llm_work,
+    llm_work_stale_running_violations,
+    LLM_WORK_RUNNING_HEARTBEAT_TTL_SEC,
     drop_leftover_verify,
     extract_agent_url,
     extract_cloud_agents_from_prs,
@@ -2242,6 +2244,9 @@ class LlmWorkHonestyTests(unittest.TestCase):
         self.assertEqual(out["codex"]["status"], "finished")
         self.assertEqual(out["cursor-cloud"]["status"], "blocked")
         self.assertEqual(out["grok"]["status"], "idle")
+        viol = llm_work_stale_running_violations(rows)
+        self.assertTrue(any("idle-class source" in v for v in viol))
+        self.assertEqual(llm_work_stale_running_violations(list(out.values())), [])
 
     def test_demote_keeps_running_when_live_cloud_lane(self):
         rows = [
@@ -2249,13 +2254,77 @@ class LlmWorkHonestyTests(unittest.TestCase):
         ]
         out = demote_stale_running_llm_work(rows, {"cursor-cloud"})
         self.assertEqual(out[0]["status"], "running")
+        self.assertEqual(
+            llm_work_stale_running_violations(rows, {"cursor-cloud"}),
+            [],
+        )
 
-    def test_demote_keeps_explicit_cloud_agents_source(self):
+    def test_demote_keeps_explicit_cloud_agents_source_with_fresh_proof(self):
+        now = datetime(2026, 9, 25, 7, 30, tzinfo=timezone.utc).timestamp()
+        fresh = datetime(2026, 9, 25, 7, 25, tzinfo=timezone.utc).isoformat()
         rows = [
-            {"id": "codex", "status": "running", "source": "cloud_agents", "task_title": "open PR agent"},
+            {
+                "id": "codex",
+                "status": "running",
+                "source": "cloud_agents",
+                "task_title": "open PR agent",
+                "heartbeat_at": fresh,
+            },
         ]
-        out = demote_stale_running_llm_work(rows)
+        out = demote_stale_running_llm_work(rows, now=now)
         self.assertEqual(out[0]["status"], "running")
+        self.assertEqual(llm_work_stale_running_violations(rows, now=now), [])
+
+    def test_demote_ttl_missing_proof_demotes_cloud_agents(self):
+        rows = [
+            {
+                "id": "codex",
+                "status": "running",
+                "source": "cloud_agents",
+                "task_title": "open PR agent",
+            },
+        ]
+        out = demote_stale_running_llm_work(rows, now=1_000_000.0)
+        self.assertEqual(out[0]["status"], "idle")
+        viol = llm_work_stale_running_violations(rows, now=1_000_000.0)
+        self.assertTrue(any("without proof timestamp" in v for v in viol))
+
+    def test_demote_ttl_stale_proof_demotes(self):
+        now = datetime(2026, 9, 25, 8, 0, tzinfo=timezone.utc).timestamp()
+        stale = datetime(2026, 9, 25, 7, 0, tzinfo=timezone.utc).isoformat()
+        rows = [
+            {
+                "id": "claude",
+                "status": "running",
+                "source": "cloud_agents",
+                "task_title": "old worker",
+                "updated_at": stale,
+            },
+        ]
+        self.assertGreater(
+            now - datetime(2026, 9, 25, 7, 0, tzinfo=timezone.utc).timestamp(),
+            LLM_WORK_RUNNING_HEARTBEAT_TTL_SEC,
+        )
+        out = demote_stale_running_llm_work(rows, now=now)
+        self.assertEqual(out[0]["status"], "idle")
+        viol = llm_work_stale_running_violations(rows, now=now)
+        self.assertTrue(any("proof age" in v and "TTL" in v for v in viol))
+
+    def test_demote_ttl_fresh_proof_at_keys(self):
+        now = datetime(2026, 9, 25, 7, 40, tzinfo=timezone.utc).timestamp()
+        for key in ("heartbeat_at", "proof_at", "checked_at", "updated_at"):
+            fresh = datetime(2026, 9, 25, 7, 35, tzinfo=timezone.utc).isoformat()
+            rows = [
+                {
+                    "id": "gemini",
+                    "status": "running",
+                    "source": "cloud_agents",
+                    "task_title": "worker",
+                    key: fresh,
+                }
+            ]
+            out = demote_stale_running_llm_work(rows, now=now)
+            self.assertEqual(out[0]["status"], "running", key)
 
 
 if __name__ == "__main__":

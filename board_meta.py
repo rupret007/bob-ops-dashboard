@@ -766,23 +766,68 @@ def visible_chip(project: Any) -> str | None:
 
 # Sources that must NEVER paint Running unless a live Cloud Agent matches the lane.
 STALE_RUNNING_SOURCES = frozenset({"", "idle", "byok_oneshot", "mini_paste", "spend_wall"})
+# Running without a fresh proof heartbeat is demoted (Actions ~15m cadence).
+LLM_WORK_RUNNING_HEARTBEAT_TTL_SEC = 15 * 60
+LLM_WORK_PROOF_TS_KEYS = ("heartbeat_at", "proof_at", "checked_at", "updated_at")
+
+
+def llm_work_proof_timestamp(row: Any) -> float | None:
+    """First parseable proof timestamp on an llm_work row (fail-closed)."""
+    if not isinstance(row, dict):
+        return None
+    for key in LLM_WORK_PROOF_TS_KEYS:
+        ts = parse_checked_at(row.get(key))
+        if ts is not None:
+            return ts
+    return None
+
+
+def _demote_running_llm_work_row(row: dict[str, Any]) -> dict[str, Any]:
+    """Source-aware demotion: spend_wall→blocked, mini_paste→finished, else idle."""
+    src = str(row.get("source") or "").strip().lower()
+    if row.get("task_title") and row.get("task_title") != "idle - needs assignment":
+        if not row.get("last_task"):
+            row["last_task"] = row.get("task_title")
+    if src == "spend_wall":
+        row["status"] = "blocked"
+    elif src == "mini_paste":
+        row["status"] = "finished"
+    elif src == "byok_oneshot":
+        row["status"] = "idle"
+    else:
+        row["status"] = "idle"
+        title = str(row.get("task_title") or "")
+        if not title or "running" in title.lower():
+            row["task_title"] = "idle - needs assignment"
+    if not row.get("source"):
+        row["source"] = "idle"
+    return row
 
 
 def demote_stale_running_llm_work(
-    rows: Any, live_cloud_lane_ids: Any = None
+    rows: Any,
+    live_cloud_lane_ids: Any = None,
+    *,
+    now: float | None = None,
+    ttl_sec: int = LLM_WORK_RUNNING_HEARTBEAT_TTL_SEC,
 ) -> list[dict[str, Any]]:
-    """Fail-closed: demote status=running when source cannot prove a live worker.
+    """Fail-closed: demote status=running when source/TTL cannot prove a live worker.
 
     Stale assignment blobs with status=running + source=idle were painting
     Gemini/MiniMax/etc as Running for Jeff after one-shots finished (PR#56 era).
-    Only keep Running when the lane id is in live_cloud_lane_ids (trusted open
-    Cloud Agent attribution) or source is an explicit live worker class.
+    Keep Running only when:
+      - lane id is in live_cloud_lane_ids (trusted open Cloud Agent = heartbeat), OR
+      - source is not idle-class AND a proof ts (heartbeat_at/proof_at/checked_at/
+        updated_at) is present and younger than TTL (default 15m).
+    Missing proof or age>TTL demotes (source-aware). Refresh + tests call this
+    single module — no duplicated inline demotion.
     """
     live = {
         str(x).strip().lower()
         for x in (live_cloud_lane_ids or [])
         if str(x).strip()
     }
+    clock = time.time() if now is None else float(now)
     out: list[dict[str, Any]] = []
     for raw in rows or []:
         if not isinstance(raw, dict):
@@ -791,25 +836,62 @@ def demote_stale_running_llm_work(
         st = str(row.get("status") or "idle").strip().lower()
         src = str(row.get("source") or "").strip().lower()
         lid = str(row.get("id") or "").strip().lower()
-        if st == "running" and src in STALE_RUNNING_SOURCES and lid not in live:
-            if row.get("task_title") and row.get("task_title") != "idle - needs assignment":
-                if not row.get("last_task"):
-                    row["last_task"] = row.get("task_title")
-            if src == "spend_wall":
-                row["status"] = "blocked"
-            elif src == "mini_paste":
-                row["status"] = "finished"
-            elif src == "byok_oneshot":
-                row["status"] = "idle"
-            else:
-                row["status"] = "idle"
-                title = str(row.get("task_title") or "")
-                if not title or "running" in title.lower():
-                    row["task_title"] = "idle - needs assignment"
-            if not row.get("source"):
-                row["source"] = "idle"
+        if st != "running":
+            out.append(row)
+            continue
+        if lid in live:
+            out.append(row)
+            continue
+        if src in STALE_RUNNING_SOURCES:
+            out.append(_demote_running_llm_work_row(row))
+            continue
+        proof = llm_work_proof_timestamp(row)
+        if proof is None or (clock - proof) > ttl_sec:
+            out.append(_demote_running_llm_work_row(row))
+            continue
         out.append(row)
     return out
+
+
+def llm_work_stale_running_violations(
+    rows: Any,
+    live_cloud_lane_ids: Any = None,
+    *,
+    now: float | None = None,
+    ttl_sec: int = LLM_WORK_RUNNING_HEARTBEAT_TTL_SEC,
+) -> list[str]:
+    """QA/smoke helper: Running rows that fail idle-source or heartbeat TTL gates."""
+    live = {
+        str(x).strip().lower()
+        for x in (live_cloud_lane_ids or [])
+        if str(x).strip()
+    }
+    clock = time.time() if now is None else float(now)
+    violations: list[str] = []
+    for raw in rows or []:
+        if not isinstance(raw, dict):
+            continue
+        st = str(raw.get("status") or "idle").strip().lower()
+        if st != "running":
+            continue
+        lid = str(raw.get("id") or "").strip().lower() or "?"
+        src = str(raw.get("source") or "").strip().lower()
+        if lid in live:
+            continue
+        if src in STALE_RUNNING_SOURCES:
+            violations.append(
+                f"{lid}: running with idle-class source={src or 'empty'}"
+            )
+            continue
+        proof = llm_work_proof_timestamp(raw)
+        if proof is None:
+            violations.append(f"{lid}: running without proof timestamp")
+        elif (clock - proof) > ttl_sec:
+            age = int(clock - proof)
+            violations.append(
+                f"{lid}: running proof age {age}s > TTL {ttl_sec}s"
+            )
+    return violations
 
 
 def mac_probe_known(agent: Any) -> bool:
