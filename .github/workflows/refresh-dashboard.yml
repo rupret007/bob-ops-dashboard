@@ -63,4 +63,21 @@ jobs:
             exit 0
           fi
           git commit -m "chore: refresh ops dashboard $(date -u +%Y-%m-%dT%H:%MZ)"
-          git push origin HEAD:main
+          # Race-safe vs concurrent ./refresh.sh --push from conductors.
+          # concurrency group cancels sibling workflow runs, not local pushes.
+          for attempt in 1 2 3 4 5; do
+            if git push origin HEAD:main; then
+              echo "Pushed on attempt ${attempt}."
+              exit 0
+            fi
+            echo "Push rejected (attempt ${attempt}); rebase onto origin/main and retry."
+            git fetch origin main
+            if ! git rebase origin/main; then
+              # Prefer this job's freshly rebuilt artifacts over the tip's older pages.
+              git checkout --theirs -- index.html status.json
+              git add index.html status.json
+              GIT_EDITOR=true git rebase --continue
+            fi
+          done
+          echo "Exhausted push retries."
+          exit 1
