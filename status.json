@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-09-25T04:11:49.028753-05:00",
-  "generated_at_display": "Fri Sep 25, 2026 \u00b7 4:11 AM CDT",
+  "generated_at": "2026-09-25T04:12:32.685703-05:00",
+  "generated_at_display": "Fri Sep 25, 2026 \u00b7 4:12 AM CDT",
   "timezone": "America/Chicago",
   "owner": "rupret007",
   "dashboard": "bob-ops-dashboard",
@@ -58,7 +58,14 @@
           "open_pr_stack": [],
           "pr_listing_complete": true,
           "agent_url": null,
-          "ci": null,
+          "ci": {
+            "name": "WebJam CI",
+            "conclusion": "success",
+            "branch": "master",
+            "sha": "a6f59cc",
+            "created": "2026-09-25T06:39:52Z",
+            "html_url": "https://github.com/rupret007/webjam/actions/runs/36103879896"
+          },
           "release": "v0.28.2",
           "release_sha": "a51154e",
           "release_url": "https://github.com/rupret007/webjam/releases/tag/untagged-4e0b8f08bc532f21605f",
@@ -457,8 +464,8 @@
           "status": "green",
           "chip": "Green",
           "default_branch": "main",
-          "tip_sha": "b671199",
-          "tip_date": "2026-09-25T09:11:05Z",
+          "tip_sha": "677301a",
+          "tip_date": "2026-09-25T09:11:51Z",
           "open_prs": 0,
           "open_pr_url": null,
           "open_pr_number": null,
@@ -470,9 +477,9 @@
             "name": "QA claim smoke",
             "conclusion": "success",
             "branch": "main",
-            "sha": "b671199",
-            "created": "2026-09-25T09:11:07Z",
-            "html_url": "https://github.com/rupret007/bob-ops-dashboard/actions/runs/36117015284"
+            "sha": "677301a",
+            "created": "2026-09-25T09:11:54Z",
+            "html_url": "https://github.com/rupret007/bob-ops-dashboard/actions/runs/36117085372"
           },
           "release": null,
           "release_sha": null,
@@ -846,7 +853,7 @@
   ],
   "inaccessible": [],
   "publish_notes": "Public board -- no secrets or customer paths. Private repositories stay high-level; AI Music Vault stays private-content-boundary only.",
-  "refresh_started_ms": 1790327462156,
+  "refresh_started_ms": 1790327507591,
   "agents_source": "file:stale->unknown",
   "agents": [
     {
