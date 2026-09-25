@@ -54,14 +54,10 @@ jobs:
       # K2: dual-SoT assert on the about-to-commit working tree (not remote Pages).
       # FAIL if status.llm_work_now_freshness.generated_at diverges from
       # llm-work-now.json by >60s, or freshness.ok while blob age > TTL (1200s).
-      - name: Dual-SoT assert (status ↔ llm-work-now)
+      - name: Dual-SoT assert (status vs llm-work-now)
         run: |
           set -euo pipefail
-          python3 - <<'PY'
-          from board_meta import assert_dual_sot_files
-          assert_dual_sot_files("status.json", "llm-work-now.json")
-          print("dual-SoT PASS: paired artifacts match before commit")
-          PY
+          python3 -c "from board_meta import assert_dual_sot_files; assert_dual_sot_files('status.json', 'llm-work-now.json'); print('dual-SoT PASS: paired artifacts match before commit')"
 
       - name: QA claim smoke (generated page)
         run: |
@@ -94,11 +90,8 @@ jobs:
             if git push origin HEAD:main; then
               echo "Pushed on attempt ${attempt}."
               # K2 post-push: re-assert working-tree pair (same commit content).
-              python3 - <<'DUALSOT'
-from board_meta import assert_dual_sot_files
-assert_dual_sot_files("status.json", "llm-work-now.json")
-print("dual-SoT PASS post-push")
-DUALSOT
+              # (python -c avoids unindented heredoc breaking YAML run:| block)
+              python3 -c "from board_meta import assert_dual_sot_files; assert_dual_sot_files('status.json', 'llm-work-now.json'); print('dual-SoT PASS post-push')"
               exit 0
             fi
             echo "Push rejected (attempt ${attempt}); stash dirt, rebase onto origin/main, retry."

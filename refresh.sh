@@ -3190,12 +3190,7 @@ if [[ $PUSH -eq 1 ]]; then
     fi
     # K2 post-push dual-SoT: re-check the paired artifacts that just pushed
     # (working tree / HEAD content — not remote Pages CDN lag).
-    python3 - <<'DUALSOT'
-from pathlib import Path
-from board_meta import assert_dual_sot_files
-assert_dual_sot_files(Path("status.json"), Path("llm-work-now.json"))
-print("dual-SoT PASS post-push (working-tree pair)")
-DUALSOT
+    python3 -c "from pathlib import Path; from board_meta import assert_dual_sot_files; assert_dual_sot_files(Path('status.json'), Path('llm-work-now.json')); print('dual-SoT PASS post-push (working-tree pair)')"
     echo "Pushed. Pages: https://${OWNER}.github.io/bob-ops-dashboard/"
   fi
   rm -rf "$WORK"
