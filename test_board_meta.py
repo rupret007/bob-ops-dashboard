@@ -26,6 +26,8 @@ from board_meta import (
     llm_work_stale_running_violations,
     validate_llm_work_write,
     llm_work_proof_is_fresh,
+    stamp_live_llm_work_heartbeats,
+    finalize_llm_work_after_live_poll,
     LLM_WORK_RUNNING_HEARTBEAT_TTL_SEC,
     LLM_WORK_PROOF_FUTURE_SKEW_SEC,
     drop_leftover_verify,
@@ -2460,6 +2462,60 @@ class LlmWorkHonestyTests(unittest.TestCase):
             now=now,
         )
         self.assertEqual(row["status"], "running")
+
+    def test_stale_prior_proof_live_poll_stays_running_after_full_path(self):
+        """R1: stamp-before-validate — live poll must not false-Idle aged prior proof."""
+        now = datetime(2026, 9, 25, 10, 0, tzinfo=timezone.utc).timestamp()
+        now_iso = datetime(2026, 9, 25, 10, 0, tzinfo=timezone.utc).isoformat()
+        stale = datetime(2026, 9, 25, 8, 0, tzinfo=timezone.utc).isoformat()
+        rows = [
+            {
+                "id": "cursor-cloud",
+                "status": "running",
+                "source": "cloud_agents",
+                "task_title": "live BA",
+                "heartbeat_at": stale,
+            },
+        ]
+        # Validate alone (old normalize order) would demote:
+        early = validate_llm_work_write(dict(rows[0]), now=now)
+        self.assertEqual(early["status"], "idle")
+        # Full refresh path stamps first → stays Running:
+        out = finalize_llm_work_after_live_poll(
+            rows, {"cursor-cloud"}, now=now, now_iso=now_iso
+        )
+        self.assertEqual(out[0]["status"], "running")
+        self.assertEqual(out[0]["heartbeat_at"], now_iso)
+
+    def test_live_poll_never_stamps_spend_wall_or_idle_class(self):
+        """AC: spend_wall/idle-class never stamped into Running."""
+        now = datetime(2026, 9, 25, 10, 0, tzinfo=timezone.utc).timestamp()
+        now_iso = datetime(2026, 9, 25, 10, 0, tzinfo=timezone.utc).isoformat()
+        rows = [
+            {
+                "id": "cursor-cloud",
+                "status": "running",
+                "source": "spend_wall",
+                "task_title": "BA spend wall",
+            },
+            {
+                "id": "gemini",
+                "status": "running",
+                "source": "idle",
+                "task_title": "stale blob",
+            },
+        ]
+        stamped = stamp_live_llm_work_heartbeats(
+            rows, {"cursor-cloud", "gemini"}, now_iso=now_iso
+        )
+        self.assertNotEqual(stamped[0].get("heartbeat_at"), now_iso)
+        self.assertNotEqual(stamped[1].get("heartbeat_at"), now_iso)
+        out = finalize_llm_work_after_live_poll(
+            rows, {"cursor-cloud", "gemini"}, now=now, now_iso=now_iso
+        )
+        by_id = {r["id"]: r for r in out}
+        self.assertEqual(by_id["cursor-cloud"]["status"], "blocked")
+        self.assertEqual(by_id["gemini"]["status"], "idle")
 
 
 if __name__ == "__main__":

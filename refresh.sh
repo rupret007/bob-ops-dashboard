@@ -220,6 +220,7 @@ from board_meta import (
     status_with_coord_review,
     demote_stale_running_llm_work,
     validate_llm_work_write,
+    finalize_llm_work_after_live_poll,
     STALE_RUNNING_SOURCES,
     LLM_WORK_PROOF_TS_KEYS,
     drop_leftover_verify,
@@ -656,11 +657,12 @@ def _normalize_work_row(raw):
         "source": _clean_line(raw.get("source"), 48),
     }
     # Preserve proof timestamps — dropping them made honest heartbeats vanish on ingest.
+    # Do NOT validate/demote here: live Cloud stamp must run first (R1 stamp-before-validate).
     for key in LLM_WORK_PROOF_TS_KEYS:
         val = raw.get(key)
         if val is not None and str(val).strip():
             row[key] = str(val).strip()
-    return validate_llm_work_write(row)
+    return row
 
 work_blob = None
 for work_path in (root / "llm-work-now.json", Path("/workspace/bob-ops-dashboard/llm-work-now.json")):
@@ -741,22 +743,18 @@ for lane_id, lane_name in LANE_ORDER:
 
 status["llm_work"] = llm_work
 
-# Fail-closed honesty: never paint Running for idle-source / stale / future-skew proofs.
-# Live Cloud poll stamps receiver heartbeat (non-stale sources only); demote still runs TTL+source.
-# Stale assignment blobs with status=running + source=idle were lying to Jeff (PR#56 WashOps/etc.).
+# Fail-closed honesty (R1 order): live heartbeat stamp FIRST, then validate + demote.
+# Validate-before-stamp demoted live Running with aged prior proof and never re-promoted.
+# Never stamp spend_wall/idle-class into Running (STALE_RUNNING_SOURCES).
 _live_cloud_lanes = set()
 for cloud in trusted_cloud:
     lid = _lane_id("", cloud.get("name"))
     if lid:
         _live_cloud_lanes.add(lid)
 _now_iso = datetime.now(tz=ZoneInfo("UTC")).isoformat()
-for row in llm_work:
-    lid = str(row.get("id") or "").strip().lower()
-    src = str(row.get("source") or "").strip().lower()
-    if lid in _live_cloud_lanes and src not in STALE_RUNNING_SOURCES:
-        row["heartbeat_at"] = _now_iso
-llm_work = [validate_llm_work_write(r) for r in llm_work]
-llm_work = demote_stale_running_llm_work(llm_work, _live_cloud_lanes)
+llm_work = finalize_llm_work_after_live_poll(
+    llm_work, _live_cloud_lanes, now_iso=_now_iso
+)
 status["llm_work"] = llm_work
 
 # Pulse data only -- this section now reflects current work attribution.

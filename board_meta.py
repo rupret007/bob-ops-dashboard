@@ -6,7 +6,7 @@ import html as html_lib
 import json
 import re
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 from urllib.parse import urlencode
 from zoneinfo import ZoneInfo
@@ -822,18 +822,19 @@ def llm_work_running_reject_reasons(
     if src in STALE_RUNNING_SOURCES:
         reasons.append(f"{lid}: running with idle-class source={src or 'empty'}")
         return reasons
+    # Single freshness call site (R4) — reason strings stay specific for QA/smoke.
     proof = llm_work_proof_timestamp(row)
-    if proof is None:
-        reasons.append(f"{lid}: running without proof timestamp")
-        return reasons
-    if proof - clock > LLM_WORK_PROOF_FUTURE_SKEW_SEC:
-        skew = int(proof - clock)
-        reasons.append(
-            f"{lid}: running proof {skew}s in the future (skew > "
-            f"{LLM_WORK_PROOF_FUTURE_SKEW_SEC}s)"
-        )
-        return reasons
-    if (clock - proof) > ttl_sec:
+    if not llm_work_proof_is_fresh(proof, clock, ttl_sec):
+        if proof is None:
+            reasons.append(f"{lid}: running without proof timestamp")
+            return reasons
+        if proof - clock > LLM_WORK_PROOF_FUTURE_SKEW_SEC:
+            skew = int(proof - clock)
+            reasons.append(
+                f"{lid}: running proof {skew}s in the future (skew > "
+                f"{LLM_WORK_PROOF_FUTURE_SKEW_SEC}s)"
+            )
+            return reasons
         age = int(clock - proof)
         reasons.append(f"{lid}: running proof age {age}s > TTL {ttl_sec}s")
     return reasons
@@ -925,6 +926,63 @@ def demote_stale_running_llm_work(
             continue
         out.append(row)
     return out
+
+
+
+def stamp_live_llm_work_heartbeats(
+    rows: Any,
+    live_cloud_lane_ids: Any = None,
+    *,
+    now_iso: str | None = None,
+) -> list[dict[str, Any]]:
+    """Stamp receiver heartbeat_at for live non-stale-source lanes.
+
+    Never stamps spend_wall / idle-class sources into a heartbeat that could
+    paint Running. Call BEFORE validate_llm_work_write / demote on a refresh.
+    """
+    live = {
+        str(x).strip().lower()
+        for x in (live_cloud_lane_ids or [])
+        if str(x).strip()
+    }
+    stamp = now_iso
+    if stamp is None:
+        stamp = datetime.now(tz=timezone.utc).isoformat()
+    out: list[dict[str, Any]] = []
+    for raw in rows or []:
+        if not isinstance(raw, dict):
+            continue
+        row = dict(raw)
+        lid = str(row.get("id") or "").strip().lower()
+        src = str(row.get("source") or "").strip().lower()
+        if lid in live and src not in STALE_RUNNING_SOURCES:
+            row["heartbeat_at"] = stamp
+        out.append(row)
+    return out
+
+
+def finalize_llm_work_after_live_poll(
+    rows: Any,
+    live_cloud_lane_ids: Any = None,
+    *,
+    now: float | None = None,
+    now_iso: str | None = None,
+    ttl_sec: int = LLM_WORK_RUNNING_HEARTBEAT_TTL_SEC,
+) -> list[dict[str, Any]]:
+    """Refresh honesty path: live stamp FIRST, then validate, then demote.
+
+    Order is load-bearing. Validate-before-stamp demoted live Running rows that
+    still had an aged prior proof; a later heartbeat stamp did not re-promote.
+    """
+    stamped = stamp_live_llm_work_heartbeats(
+        rows, live_cloud_lane_ids, now_iso=now_iso
+    )
+    validated = [
+        validate_llm_work_write(r, now=now, ttl_sec=ttl_sec) for r in stamped
+    ]
+    return demote_stale_running_llm_work(
+        validated, live_cloud_lane_ids, now=now, ttl_sec=ttl_sec
+    )
 
 
 def llm_work_stale_running_violations(

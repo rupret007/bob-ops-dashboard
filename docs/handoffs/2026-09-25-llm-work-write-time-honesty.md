@@ -21,3 +21,8 @@ After harden loop: finish WebJam including #156 Latest/publish (not blocked on C
 - Reintroduce live_cloud TTL bypass.
 - Dual-write Mini `bob-ops-dashboard-harden-r5`.
 - Open Cloud BA / Barker / spend under hard gates this slice.
+
+## Post-R6 (2026-09-25 ~02:56 CT)
+- **R1 order:** `finalize_llm_work_after_live_poll` — stamp live heartbeat **before** validate/demote.
+- `_normalize_work_row` preserves proof keys only (no early validate).
+- External writers: see `2026-09-25-llm-work-external-writer-validate.md`.
