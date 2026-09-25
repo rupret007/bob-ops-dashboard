@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-09-25T07:24:51.473150-05:00",
-  "generated_at_display": "Fri Sep 25, 2026 \u00b7 7:24 AM CDT",
+  "generated_at": "2026-09-25T07:33:38.163578-05:00",
+  "generated_at_display": "Fri Sep 25, 2026 \u00b7 7:33 AM CDT",
   "timezone": "America/Chicago",
   "owner": "rupret007",
   "dashboard": "bob-ops-dashboard",
@@ -66,9 +66,9 @@
             "created": "2026-09-25T12:10:49Z",
             "html_url": "https://github.com/rupret007/webjam/actions/runs/36133456644"
           },
-          "release": "v0.28.2",
-          "release_sha": "a51154e",
-          "release_url": "https://github.com/rupret007/webjam/releases/tag/untagged-4e0b8f08bc532f21605f",
+          "release": "v0.28.3",
+          "release_sha": "da16749",
+          "release_url": "https://github.com/rupret007/webjam/releases/tag/v0.28.3",
           "notes": "Making room. Latest is the published test candidate; source can be ahead.",
           "accessible": true,
           "coord": {
@@ -126,25 +126,23 @@
           "status": "yellow",
           "chip": "Yellow",
           "default_branch": "main",
-          "tip_sha": "51abb4b",
-          "tip_date": "2026-09-14T03:03:32Z",
-          "open_prs": 2,
-          "open_pr_url": "https://github.com/rupret007/StoryBoard/pull/42",
-          "open_pr_number": 42,
+          "tip_sha": "1f75ca2",
+          "tip_date": "2026-09-25T12:29:00Z",
+          "open_prs": 0,
+          "open_pr_url": null,
+          "open_pr_number": null,
           "open_pr_draft": false,
-          "open_pr_stack": [
-            {
-              "number": 42,
-              "url": "https://github.com/rupret007/StoryBoard/pull/42"
-            },
-            {
-              "number": 43,
-              "url": "https://github.com/rupret007/StoryBoard/pull/43"
-            }
-          ],
+          "open_pr_stack": [],
           "pr_listing_complete": true,
           "agent_url": null,
-          "ci": null,
+          "ci": {
+            "name": "Quality",
+            "conclusion": "in_progress",
+            "branch": "main",
+            "sha": "1f75ca2",
+            "created": "2026-09-25T12:29:03Z",
+            "html_url": "https://github.com/rupret007/StoryBoard/actions/runs/36135172359"
+          },
           "release": null,
           "release_sha": null,
           "release_url": null,
@@ -154,10 +152,7 @@
             "repo": "StoryBoard",
             "agent": "none",
             "lease_state": "expired",
-            "next": "",
-            "pr": 44,
-            "pr_url": "https://github.com/rupret007/StoryBoard/pull/44",
-            "pr_draft": true
+            "next": ""
           }
         },
         {
@@ -376,26 +371,43 @@
         },
         {
           "name": "Ball Beacon",
-          "private": true,
-          "status": "yellow",
-          "chip": "Yellow",
+          "repo": "rupret007/ballbeacon",
+          "url": null,
+          "repo_url": null,
+          "private": null,
+          "status": "parked",
+          "chip": "Parked",
+          "default_branch": null,
+          "tip_sha": null,
+          "tip_date": null,
+          "open_prs": null,
+          "open_pr_url": null,
+          "open_pr_number": null,
+          "open_pr_draft": false,
+          "open_pr_stack": [],
+          "pr_listing_complete": null,
+          "agent_url": null,
+          "ci": null,
+          "release": null,
+          "release_sha": null,
+          "release_url": null,
           "notes": "Private iOS utility. Software validation only; device and signing steps stay owner-only.",
-          "accessible": true,
-          "ci": {},
+          "accessible": false,
           "coord": {
             "repo": "ballbeacon",
             "agent": "none",
             "lease_state": "none",
-            "next": "Jeff installs/selects full Xcode with iOS Simulator plus XcodeGen..."
+            "next": "Jeff installs/selects full Xcode with iOS Simulator plus XcodeGen...",
+            "sha": "3f05fdc"
           }
         },
         {
           "name": "CSS Conductor",
           "private": true,
-          "status": "yellow",
-          "chip": "Yellow",
+          "status": "parked",
+          "chip": "Parked",
           "notes": "Private developer utility. High-level only; hosted-job cause stays unconfirmed.",
-          "accessible": true,
+          "accessible": false,
           "ci": {},
           "coord": {
             "repo": "CSS_Conductor",
@@ -406,12 +418,28 @@
         },
         {
           "name": "Barker",
-          "private": true,
-          "status": "yellow",
-          "chip": "Yellow",
+          "repo": "rupret007/barker",
+          "url": null,
+          "repo_url": null,
+          "private": null,
+          "status": "parked",
+          "chip": "Parked",
+          "default_branch": null,
+          "tip_sha": null,
+          "tip_date": null,
+          "open_prs": null,
+          "open_pr_url": null,
+          "open_pr_number": null,
+          "open_pr_draft": false,
+          "open_pr_stack": [],
+          "pr_listing_complete": null,
+          "agent_url": null,
+          "ci": null,
+          "release": null,
+          "release_sha": null,
+          "release_url": null,
           "notes": "Private app. No live sends, production changes, or credential operations from this board.",
-          "accessible": true,
-          "ci": {},
+          "accessible": false,
           "coord": {
             "repo": "barker",
             "agent": "none",
@@ -466,8 +494,8 @@
           "status": "green",
           "chip": "Green",
           "default_branch": "main",
-          "tip_sha": "7de582c",
-          "tip_date": "2026-09-25T12:22:26Z",
+          "tip_sha": "a1b931f",
+          "tip_date": "2026-09-25T12:24:54Z",
           "open_prs": 0,
           "open_pr_url": null,
           "open_pr_number": null,
@@ -479,9 +507,9 @@
             "name": "QA claim smoke",
             "conclusion": "success",
             "branch": "main",
-            "sha": "7de582c",
-            "created": "2026-09-25T12:22:30Z",
-            "html_url": "https://github.com/rupret007/bob-ops-dashboard/actions/runs/36134553611"
+            "sha": "a1b931f",
+            "created": "2026-09-25T12:24:57Z",
+            "html_url": "https://github.com/rupret007/bob-ops-dashboard/actions/runs/36134784701"
           },
           "release": null,
           "release_sha": null,
@@ -600,10 +628,10 @@
         {
           "name": "TACTrack",
           "private": true,
-          "status": "yellow",
-          "chip": "Yellow",
+          "status": "parked",
+          "chip": "Parked",
           "notes": "Private. High-level only. No live-repo, CI, or PR taps on this board.",
-          "accessible": true,
+          "accessible": false,
           "ci": {},
           "coord": {
             "repo": "TACTrack",
@@ -840,22 +868,23 @@
     "RadDadSite",
     "Turdanoid",
     "AdoptIQ",
-    "TACTrack",
     "AI-Music-Vault",
     "rad-dad-show-night",
     "Andrea_NanoBot",
     "Bob-the-Bot",
     "StoryOps-AI",
-    "ballbeacon",
-    "CSS_Conductor",
-    "barker",
     "bob-ops-dashboard",
     "Cursor-OpenClaw-Integration",
     "StoryDesk"
   ],
-  "inaccessible": [],
+  "inaccessible": [
+    "TACTrack",
+    "ballbeacon",
+    "CSS_Conductor",
+    "barker"
+  ],
   "publish_notes": "Public board -- no secrets or customer paths. Private repositories stay high-level; AI Music Vault stays private-content-boundary only.",
-  "refresh_started_ms": 1790339042702,
+  "refresh_started_ms": 1790339584068,
   "agents_source": "file:stale->unknown",
   "agents": [
     {
@@ -1011,7 +1040,7 @@
     }
   ],
   "llm_work_now_freshness": {
-    "generated_at": "2026-09-25 07:24 CT",
+    "generated_at": "2026-09-25 07:33 CT",
     "warn_ttl_sec": 1200,
     "warnings": [],
     "ok": true
