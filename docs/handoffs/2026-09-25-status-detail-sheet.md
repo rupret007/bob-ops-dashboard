@@ -31,6 +31,13 @@ Implement one cohesive, phone-first in-board detail experience so tapping a lane
   - recent public-safe snippets from llm work + cloud/detail context (fail-closed filters)
 - Added phone-safe sheet controls (44px dismiss target) and link chips with existing safe URL plumbing.
 
+### Deep-detail P0 (history + click-into)
+- Lane taps now get a structured **Detail** fact list (type, repo, branch, tip SHA/date, CI, signal, review/release, lease/next) instead of note+links only.
+- Work and lane sheets keep a separate **History** timeline (newest first, public snapshot fields only) instead of stuffing snippets into Recent events.
+- In-sheet **Related** chips click into the matched public lane or work row; in-sheet Back restores the previous row. Browser Back / Close / Escape still dismiss the whole sheet.
+- Private / inaccessible lanes stay fail-closed: `Visibility: High-level only`, no repo/SHA/CI/PR dump, no related chips.
+- History and related hrefs reuse the existing allowlisted URL filters.
+
 ### Spend visibility (polished in PR #57)
 - Added **spend_session** and **spend_day** fields to work rows for resource consumption tracking
 - Work-now belly now displays spend when available (yellow warning color for visibility)
@@ -57,10 +64,14 @@ Implement one cohesive, phone-first in-board detail experience so tapping a lane
 - Change is source-only (`refresh.sh` + tests + docs), with no direct scheduler snapshot edits.
 
 ### QA additions
+- `test_detail_sheet.js` covers fail-closed high-level detection, history sort/cap, and source markers.
 - Updated `test_offline_browser.js` to verify:
   - in-board sheet opens from a lane tap
   - full note text appears in sheet
   - snapshot stamp appears
+  - work sheet related chip click-into a matched public lane and in-sheet Back
+  - public lane facts include repo + tip SHA plus a History list
+  - private lane shows High-level only and hides tip SHA / related
   - close button dismisses
   - browser Back dismisses sheet
 

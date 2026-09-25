@@ -1559,12 +1559,14 @@ html = f'''<!DOCTYPE html>
   .detail-head {{
     display:flex; align-items:flex-start; justify-content:space-between; gap:.6rem; margin:0 0 .65rem;
   }}
+  .detail-head-copy {{ min-width:0; flex:1; }}
   .detail-head h2 {{ margin:0; font-size:1.05rem; line-height:1.25; }}
-  .detail-close {{
+  .detail-back, .detail-close {{
     min-height:44px; min-width:44px; border:1px solid var(--border); border-radius:8px;
     background:transparent; color:var(--text); font-size:1rem; font-weight:700; cursor:pointer;
   }}
-  .detail-close:hover {{ border-color:var(--orange); color:var(--orange); }}
+  .detail-back {{ margin:0 0 .35rem; padding:0 .7rem; font-size:.82rem; }}
+  .detail-back:hover, .detail-close:hover {{ border-color:var(--orange); color:var(--orange); }}
   .detail-meta, .detail-note, .detail-time {{ margin:0 0 .55rem; color:var(--muted); font-size:.82rem; line-height:1.4; }}
   .detail-note {{ color:var(--text); white-space:pre-wrap; }}
   .detail-task, .detail-goal {{ margin:0 0 .55rem; font-size:.83rem; line-height:1.4; color:#fff; white-space:pre-wrap; }}
@@ -1580,10 +1582,18 @@ html = f'''<!DOCTYPE html>
     text-decoration:none;
   }}
   .detail-links a:hover {{ border-color:var(--orange); color:var(--orange); }}
-  .detail-events-title {{ margin:0 0 .35rem; font-size:.76rem; letter-spacing:.05em; text-transform:uppercase; color:var(--muted); }}
-  .detail-events {{ margin:0; padding:0 0 0 1rem; display:grid; gap:.36rem; }}
-  .detail-events li {{ color:var(--muted); font-size:.78rem; line-height:1.35; }}
-  .detail-events a {{ color:var(--link); }}
+  .detail-events-title {{ margin:.15rem 0 .35rem; font-size:.76rem; letter-spacing:.05em; text-transform:uppercase; color:var(--muted); }}
+  .detail-events, .detail-history {{ margin:0 0 .72rem; padding:0 0 0 1rem; display:grid; gap:.36rem; }}
+  .detail-events li, .detail-history li {{ color:var(--muted); font-size:.78rem; line-height:1.35; }}
+  .detail-events a, .detail-history a {{ color:var(--link); }}
+  .detail-when {{ color:var(--muted); font-size:.7rem; letter-spacing:.02em; }}
+  .detail-related {{ display:flex; flex-wrap:wrap; gap:.42rem; margin:0 0 .72rem; }}
+  .detail-related button, .detail-history button {{
+    min-height:44px; display:inline-flex; align-items:center; justify-content:center;
+    border:1px solid var(--border); border-radius:8px; padding:.35rem .6rem; font-size:.78rem;
+    background:transparent; color:var(--link); cursor:pointer;
+  }}
+  .detail-related button:hover, .detail-history button:hover {{ border-color:var(--orange); color:var(--orange); }}
   @media (prefers-reduced-motion: reduce) {{
     .live-dot {{ animation:none; box-shadow:none; }}
     .detail-scrim, .detail-sheet {{ transition:none; }}
@@ -1626,7 +1636,10 @@ html = f'''<!DOCTYPE html>
   <div id="detail-scrim" class="detail-scrim" hidden></div>
   <aside id="detail-sheet" class="detail-sheet" hidden role="dialog" aria-modal="true" aria-labelledby="detail-title">
     <div class="detail-head">
-      <h2 id="detail-title">Details</h2>
+      <div class="detail-head-copy">
+        <button id="detail-back" class="detail-back" type="button" hidden>Back</button>
+        <h2 id="detail-title">Details</h2>
+      </div>
       <button id="detail-close" class="detail-close" type="button" aria-label="Close details">Close</button>
     </div>
     <p id="detail-meta" class="detail-meta"></p>
@@ -1636,8 +1649,12 @@ html = f'''<!DOCTYPE html>
     <dl id="detail-facts" class="detail-facts"></dl>
     <p id="detail-note" class="detail-note"></p>
     <div id="detail-links" class="detail-links"></div>
-    <h3 id="detail-events-title" class="detail-events-title" hidden>Recent events</h3>
+    <h3 id="detail-related-title" class="detail-events-title" hidden>Related</h3>
+    <div id="detail-related" class="detail-related"></div>
+    <h3 id="detail-events-title" class="detail-events-title" hidden>Now</h3>
     <ul id="detail-events" class="detail-events"></ul>
+    <h3 id="detail-history-title" class="detail-events-title" hidden>History</h3>
+    <ol id="detail-history" class="detail-history"></ol>
   </aside>
   <footer>
     <p><a href="https://github.com/rupret007/bob-ops-dashboard">rupret007/bob-ops-dashboard</a>
@@ -1660,6 +1677,24 @@ function focusKey(kind, raw) {{
     return "";
   }}
   return prefix + ":" + token;
+}}
+function laneIsHighLevel(p) {{
+  if (!p || typeof p !== "object") return true;
+  if (p.private === true) return true;
+  if (p.accessible === false) return true;
+  return false;
+}}
+function sortHistoryEntries(rows, limit) {{
+  var out = [];
+  var i;
+  for (i = 0; i < (rows || []).length; i += 1) {{
+    if (rows[i]) out.push(rows[i]);
+  }}
+  out.sort(function (a, b) {{
+    return (Number(b && b.at) || 0) - (Number(a && a.at) || 0);
+  }});
+  var cap = (typeof limit === "number" && isFinite(limit) && limit > 0) ? Math.floor(limit) : 8;
+  return out.slice(0, cap);
 }}
 (function () {{
   // Public board: URL is enough. Real yes is a GitHub issue from rupret007.
@@ -1958,10 +1993,16 @@ function focusKey(kind, raw) {{
   var detailLinksEl = document.getElementById("detail-links");
   var detailEventsEl = document.getElementById("detail-events");
   var detailEventsTitleEl = document.getElementById("detail-events-title");
+  var detailHistoryEl = document.getElementById("detail-history");
+  var detailHistoryTitleEl = document.getElementById("detail-history-title");
+  var detailRelatedEl = document.getElementById("detail-related");
+  var detailRelatedTitleEl = document.getElementById("detail-related-title");
   var detailCloseEl = document.getElementById("detail-close");
+  var detailBackEl = document.getElementById("detail-back");
   var pollFailStreak = 0;
   var detailOpen = false;
   var detailToken = "";
+  var detailTrail = [];
   var detailHistoryDepth = 0;
   var lastStatusData = null;
 
@@ -2123,7 +2164,7 @@ function focusKey(kind, raw) {{
   }}
   function shortSha(raw) {{
     var sha = String(raw || "").trim().toLowerCase();
-    return /^[0-9a-f]{7,40}$/.test(sha) ? sha.slice(0, 7) : "";
+    return /^[0-9a-f]{{7,40}}$/.test(sha) ? sha.slice(0, 7) : "";
   }}
   function safeSnippetText(value) {{
     var text = String(value || "").replace(/\\s+/g, " ").trim();
@@ -2149,8 +2190,11 @@ function focusKey(kind, raw) {{
     if (!repo && !pr) return null;
     var best = null;
     (data && data.sections || []).forEach(function (sec) {{
+      var sid = String(sec && sec.id || "");
+      if (sid === "controls" || sid === "features" || sid === "abilities") return;
       (sec && sec.projects || []).forEach(function (p) {{
         if (!p || typeof p !== "object") return;
+        if (p.control_action) return;
         var prep = repoFromAny(p.repo || p.repo_url || p.url || "");
         if (repo && prep && prep === repo) {{
           if (pr && safePrUrl(p.open_pr_url || "") === pr) best = p;
@@ -2178,6 +2222,7 @@ function focusKey(kind, raw) {{
         out.push({{
           token: key,
           section: sid,
+          sectionTitle: String(sec.title || sid),
           item: p
         }});
       }});
@@ -2190,36 +2235,128 @@ function focusKey(kind, raw) {{
     var safe = workHref(href || "");
     return safe ? {{ text: msg, href: safe }} : {{ text: msg, href: "" }};
   }}
+  function historyItem(text, href, at) {{
+    var row = eventRow(text, href);
+    if (!row) return null;
+    row.at = parseCheckedAt(at);
+    if (row.at) row.when = sinceLabel(at);
+    return row;
+  }}
+  function stackLabel(p) {{
+    var stack = p && p.open_pr_stack;
+    if (!Array.isArray(stack) || stack.length < 2 || p.open_prs !== stack.length) return "";
+    var numbers = [];
+    var seen = {{}};
+    for (var i = 0; i < stack.length; i += 1) {{
+      var row = stack[i];
+      var number = row && row.number;
+      if (typeof number !== "number" || !isFinite(number) || number <= 0 || Math.floor(number) !== number || seen[number]) return "";
+      var url = String(row.url || "");
+      var match = url.match(/^https:\/\/github\.com\/rupret007\/[A-Za-z0-9._-]+\/pull\/([1-9][0-9]*)$/i);
+      if (!match || Number(match[1]) !== number) return "";
+      seen[number] = true;
+      numbers.push("#" + number);
+    }}
+    return numbers.length <= 4 ? ("Stack " + numbers.join(" -> ")) : (numbers.length + "-PR stack");
+  }}
   function projectEvents(p) {{
-    if (!p || typeof p !== "object") return [];
+    if (!p || typeof p !== "object" || laneIsHighLevel(p)) return [];
+    var out = [];
+    var signal = compactSignal(p);
+    if (signal) out.push(eventRow("Signal: " + signal, signalHref(p)));
+    var lease = coordSignal(p);
+    if (lease && signal !== lease) out.push(eventRow("Coordination: " + lease, coordPrUrl(p)));
+    return out.filter(Boolean).slice(0, 3);
+  }}
+  function projectHistory(p) {{
+    if (!p || typeof p !== "object" || laneIsHighLevel(p)) return [];
     var out = [];
     var ci = p.ci && typeof p.ci === "object" ? p.ci : {{}};
-    var ciState = String(ci.conclusion || "").trim().toLowerCase();
-    if (ciState) out.push(eventRow("CI: " + ciState, ci.html_url || p.ci_url));
-    var prs = (typeof p.open_prs === "number" && isFinite(p.open_prs)) ? p.open_prs : 0;
-    if (prs > 0) {{
-      var label = prs === 1 ? "1 open PR" : prs + " open PRs";
-      out.push(eventRow("Review: " + label, prs === 1 ? p.open_pr_url : pullsUrlFromRepo(p.repo_url || p.url || "")));
+    var concl = String(ci.conclusion || "").trim().toLowerCase();
+    if (concl && concl !== "skipped" && concl !== "cancelled") {{
+      var ciName = String(ci.name || "CI").trim() || "CI";
+      out.push(historyItem(ciName + ": " + concl + (ci.sha ? " (" + shortSha(ci.sha) + ")" : ""), ci.html_url || p.ci_url, ci.created));
     }}
-    var lease = coordSignal(p);
-    if (lease) out.push(eventRow("Coordination: " + lease, ""));
+    if (shortSha(p.tip_sha)) {{
+      out.push(historyItem("Tip " + shortSha(p.tip_sha), p.repo_url || p.url, p.tip_date));
+    }}
     var rel = String(p.release || "").trim();
     if (rel) {{
       var relHref = latestReleaseUrlFromRepo(p.repo_url || p.url || "") || safeReleaseUrl(p.release_url || "");
-      out.push(eventRow("Latest release: " + rel, relHref));
+      var relText = releaseMatchesTip(p) === false ? ("Latest " + rel + " != source") : ("Latest " + rel);
+      out.push(historyItem(relText, relHref, ""));
     }}
-    if (p.agent_url) out.push(eventRow("Agent attached", p.agent_url));
-    return out.filter(Boolean).slice(0, 4);
+    var prs = (typeof p.open_prs === "number" && isFinite(p.open_prs)) ? p.open_prs : 0;
+    if (prs > 0) {{
+      var review = stackLabel(p) || (prs === 1 ? "1 open PR" : prs + " open PRs");
+      out.push(historyItem("Review: " + review, prs === 1 ? p.open_pr_url : pullsUrlFromRepo(p.repo_url || p.url || ""), ""));
+    }}
+    var lease = coordSignal(p);
+    if (lease) out.push(historyItem("Coordination: " + lease, coordPrUrl(p), ""));
+    if (p.agent_url) out.push(historyItem("Agent attached", p.agent_url, ""));
+    return sortHistoryEntries(out, 8);
+  }}
+  function addProjectFacts(meta, project, sectionTitle) {{
+    if (laneIsHighLevel(project)) {{
+      addFact(meta, "Visibility", "High-level only", "");
+      addFact(meta, "Type", sectionTitle, "");
+      return;
+    }}
+    addFact(meta, "Type", sectionTitle, "");
+    var repo = String(project.repo || "").trim();
+    addFact(meta, "Repo", repo, project.repo_url || project.url || "");
+    addFact(meta, "Default branch", project.default_branch, "");
+    addFact(meta, "Tip SHA", shortSha(project.tip_sha), "");
+    if (project.tip_date) {{
+      var tipAge = sinceLabel(project.tip_date);
+      addFact(meta, "Tip date", tipAge ? (project.tip_date + " (" + tipAge + ")") : String(project.tip_date), "");
+    }}
+    var ci = project.ci && typeof project.ci === "object" ? project.ci : {{}};
+    var concl = String(ci.conclusion || "").trim().toLowerCase();
+    if (concl && concl !== "skipped" && concl !== "cancelled") {{
+      var ciLabel = (ci.name ? String(ci.name) + ": " : "") + concl + (ci.sha ? " (" + shortSha(ci.sha) + ")" : "");
+      addFact(meta, "CI", ciLabel, safeActionsUrl(ci.html_url || project.ci_url || ""));
+    }}
+    var signal = compactSignal(project);
+    if (signal) addFact(meta, "Signal", signal, signalHref(project));
+    var prs = (typeof project.open_prs === "number" && isFinite(project.open_prs)) ? project.open_prs : 0;
+    var review = stackLabel(project);
+    if (review) addFact(meta, "Review", review, pullsUrlFromRepo(project.repo_url || project.url || ""));
+    else if (prs > 0) addFact(meta, "Open PRs", String(prs), prs === 1 ? project.open_pr_url : pullsUrlFromRepo(project.repo_url || project.url || ""));
+    var rel = String(project.release || "").trim();
+    if (rel) addFact(meta, "Release", rel, latestReleaseUrlFromRepo(project.repo_url || project.url || "") || project.release_url || "");
+    if (releaseMatchesTip(project) === false) {{
+      addFact(meta, "Latest vs source", "Latest != source", latestReleaseUrlFromRepo(project.repo_url || project.url || ""));
+    }}
+    var coord = project.coord && typeof project.coord === "object" ? project.coord : {{}};
+    var leaseState = String(coord.lease_state || "").trim();
+    if (leaseState && leaseState.toLowerCase() !== "none") addFact(meta, "Lease", leaseState, "");
+    if (coord.next) addFact(meta, "Next action", safeSnippetText(coord.next), "");
+  }}
+  function relatedForWork(row, data) {{
+    var project = matchProjectForWork(row, data);
+    if (!project || laneIsHighLevel(project)) return [];
+    var key = focusKey("project", project.name);
+    if (!key) return [];
+    return [{{ token: key, label: String(project.name || "Lane"), kind: "project" }}];
+  }}
+  function relatedForProject(project, data) {{
+    if (!project || laneIsHighLevel(project)) return [];
+    var out = [];
+    var rows = normalizeLlmWork((data && data.llm_work) || []);
+    for (var i = 0; i < rows.length; i += 1) {{
+      var row = rows[i];
+      var matched = matchProjectForWork(row, data);
+      if (!matched || String(matched.name || "") !== String(project.name || "")) continue;
+      var id = String(row.id || "").trim().toLowerCase();
+      if (!/^[a-z0-9-]{{1,64}}$/.test(id)) continue;
+      out.push({{ token: "work:" + id, label: String(row.name || id), kind: "work" }});
+    }}
+    return out.slice(0, 6);
   }}
   function workEvents(row, data) {{
     if (!row || typeof row !== "object") return [];
     var out = [];
-    if (row.repo) {{
-      var repoHref = safeRepoUrl("https://github.com/" + row.repo);
-      out.push(eventRow("Repo: " + row.repo, repoHref));
-    }}
-    if (row.pr_url) out.push(eventRow("Tracking PR", row.pr_url));
-    if (row.branch) out.push(eventRow("Branch: " + row.branch, ""));
     var probes = (data && data.agents) || [];
     for (var i = 0; i < probes.length; i += 1) {{
       var probe = probes[i];
@@ -2241,17 +2378,24 @@ function focusKey(kind, raw) {{
   }}
   function workHistory(row, project, cloud) {{
     var out = [];
-    function add(text) {{
+    function add(text, href, at) {{
       var clean = safeSnippetText(text);
       if (!clean) return;
-      out.push({{ text: clean, href: "" }});
+      var item = historyItem(clean, href, at);
+      if (item) out.push(item);
     }}
     add(row && row.why);
     add(row && row.note);
     add(row && row.last_task);
-    add(project && project.coord && project.coord.next);
-    add(cloud && cloud.detail);
-    return out.slice(0, 5);
+    if (project && !laneIsHighLevel(project) && project.coord && project.coord.next) {{
+      add(project.coord.next);
+    }}
+    add(cloud && cloud.detail, cloud && cloud.url, cloud && cloud.checked_at);
+    if (project && !laneIsHighLevel(project)) {{
+      var more = projectHistory(project);
+      for (var k = 0; k < more.length; k += 1) out.push(more[k]);
+    }}
+    return sortHistoryEntries(out, 8);
   }}
   function detailLinks(item, kind) {{
     var links = [];
@@ -2310,6 +2454,7 @@ function focusKey(kind, raw) {{
             links: detailLinks(row, "work"),
             events: workEvents(row, data),
             history: workHistory(row, project, cloud),
+            related: relatedForWork(row, data),
             facts: []
           }};
           addFact(meta, "Model", safeModelId(row.model) || "Unknown", "");
@@ -2317,19 +2462,25 @@ function focusKey(kind, raw) {{
           var spendDay = String(row.spend_day || "").trim();
           if (spendSession) addFact(meta, "Session spend", spendSession, "");
           if (spendDay) addFact(meta, "Today spend", spendDay, "");
-          if (project) {{
+          var source = String(row.source || "").trim().toLowerCase();
+          if (/^[a-z0-9._-]{{1,32}}$/.test(source)) addFact(meta, "Source", source, "");
+          if (project && !laneIsHighLevel(project)) {{
             var ci = project.ci && typeof project.ci === "object" ? project.ci : {{}};
             var ciConcl = String(ci.conclusion || "").trim().toLowerCase();
             if (ciConcl && ciConcl !== "skipped" && ciConcl !== "cancelled") {{
               var ciHref = safeActionsUrl(ci.html_url || "");
-              meta.links.push({{ label: "Open CI", href: ciHref }});
+              if (ciHref && meta.links.filter(function (entry) {{ return entry && entry.label === "Open CI"; }}).length === 0) {{
+                meta.links.push({{ label: "Open CI", href: ciHref }});
+              }}
               var ciLabel = (safePrUrl(project.open_pr_url || "") && safePrUrl(project.open_pr_url || "") === safePrUrl(row.pr_url || ""))
                 ? "CI (linked PR)" : "CI (repo)";
               addFact(meta, ciLabel, ciConcl + (ci.sha ? " (" + shortSha(ci.sha) + ")" : ""), ciHref);
             }}
             addFact(meta, "Tip SHA", shortSha(project.tip_sha), "");
             var coord = project.coord && typeof project.coord === "object" ? project.coord : {{}};
-            if (coord.lease_state) addFact(meta, "Lease", String(coord.lease_state), "");
+            if (coord.lease_state && String(coord.lease_state).toLowerCase() !== "none") {{
+              addFact(meta, "Lease", String(coord.lease_state), "");
+            }}
             if (coord.next) addFact(meta, "Next action", safeSnippetText(coord.next), "");
           }}
           addFact(meta, "Repo", row.repo || "", row.repo ? "https://github.com/" + row.repo : "");
@@ -2358,7 +2509,7 @@ function focusKey(kind, raw) {{
     for (var j = 0; j < sections.length; j += 1) {{
       if (sections[j].token !== token) continue;
       var project = sections[j].item || {{}};
-      return {{
+      var meta = {{
         token: token,
         kind: "project",
         title: String(project.name || "Project"),
@@ -2366,22 +2517,65 @@ function focusKey(kind, raw) {{
         task: "",
         goal: "",
         note: noteText(project),
-        links: detailLinks(project, "project"),
+        links: laneIsHighLevel(project) ? [] : detailLinks(project, "project"),
         events: projectEvents(project),
-        history: [],
+        history: projectHistory(project),
+        related: relatedForProject(project, data),
         facts: [],
         generated: (data && data.generated_at_display) || ""
       }};
+      addProjectFacts(meta, project, sections[j].sectionTitle || sections[j].section || "");
+      return meta;
     }}
     return null;
+  }}
+  function paintEntryList(el, titleEl, rows) {{
+    if (!el || !titleEl) return;
+    el.innerHTML = "";
+    var list = rows || [];
+    var shown = 0;
+    list.forEach(function (entry) {{
+      if (!entry || !entry.text) return;
+      var li = document.createElement("li");
+      if (entry.when) {{
+        var when = document.createElement("span");
+        when.className = "detail-when";
+        when.textContent = entry.when;
+        li.appendChild(when);
+        li.appendChild(document.createTextNode(" "));
+      }}
+      var href = workHref(entry.href || "");
+      if (href) {{
+        var a = document.createElement("a");
+        a.href = href;
+        a.target = "_blank";
+        a.rel = "noopener noreferrer";
+        a.setAttribute("data-open", "work");
+        a.textContent = entry.text;
+        li.appendChild(a);
+      }} else if (entry.nav) {{
+        var nav = document.createElement("button");
+        nav.type = "button";
+        nav.setAttribute("data-detail-nav", entry.nav);
+        nav.textContent = entry.text;
+        li.appendChild(nav);
+      }} else {{
+        li.appendChild(document.createTextNode(entry.text));
+      }}
+      el.appendChild(li);
+      shown += 1;
+    }});
+    titleEl.hidden = shown === 0;
   }}
   function paintDetail(meta) {{
     if (!meta || !detailSheet) return;
     detailTitleEl.textContent = meta.title || "Details";
-    detailMetaEl.textContent = "Status: " + (meta.status || "Unknown");
+    var kindLabel = meta.kind === "work" ? "Work now" : "Lane";
+    detailMetaEl.textContent = kindLabel + " \\u00b7 Status: " + (meta.status || "Unknown");
     detailTimeEl.textContent = meta.generated ? ("Snapshot: " + meta.generated) : "";
     detailTaskEl.textContent = meta.task ? ("Task: " + meta.task) : "";
     detailGoalEl.textContent = meta.goal ? ("Goal: " + meta.goal) : "";
+    if (detailBackEl) detailBackEl.hidden = detailTrail.length === 0;
     detailFactsEl.innerHTML = "";
     (meta.facts || []).forEach(function (fact) {{
       if (!fact || !fact.label || !fact.value) return;
@@ -2415,25 +2609,21 @@ function focusKey(kind, raw) {{
       a.textContent = String(entry.label || "Open");
       detailLinksEl.appendChild(a);
     }});
-    detailEventsEl.innerHTML = "";
-    var events = (meta.events || []).concat(meta.history || []);
-    detailEventsTitleEl.hidden = events.length === 0;
-    events.forEach(function (entry) {{
-      if (!entry || !entry.text) return;
-      var li = document.createElement("li");
-      if (entry.href) {{
-        var a = document.createElement("a");
-        a.href = entry.href;
-        a.target = "_blank";
-        a.rel = "noopener noreferrer";
-        a.setAttribute("data-open", "work");
-        a.textContent = entry.text;
-        li.appendChild(a);
-      }} else {{
-        li.textContent = entry.text;
-      }}
-      detailEventsEl.appendChild(li);
-    }});
+    if (detailRelatedEl && detailRelatedTitleEl) {{
+      detailRelatedEl.innerHTML = "";
+      var related = meta.related || [];
+      related.forEach(function (entry) {{
+        if (!entry || !entry.token || !entry.label) return;
+        var btn = document.createElement("button");
+        btn.type = "button";
+        btn.setAttribute("data-detail-nav", entry.token);
+        btn.textContent = (entry.kind === "work" ? "Work: " : "Lane: ") + entry.label;
+        detailRelatedEl.appendChild(btn);
+      }});
+      detailRelatedTitleEl.hidden = detailRelatedEl.childNodes.length === 0;
+    }}
+    paintEntryList(detailEventsEl, detailEventsTitleEl, meta.events || []);
+    paintEntryList(detailHistoryEl, detailHistoryTitleEl, meta.history || []);
   }}
   function setDetailVisibility(open) {{
     if (!detailSheet || !detailScrim) return;
@@ -2459,6 +2649,7 @@ function focusKey(kind, raw) {{
       return true;
     }}
     detailToken = "";
+    detailTrail = [];
     setDetailVisibility(false);
     return true;
   }}
@@ -2466,15 +2657,30 @@ function focusKey(kind, raw) {{
     var data = lastStatusData || bootstrapStatus();
     var meta = detailLookup(token, data);
     if (!meta) return false;
+    var already = detailOpen;
+    if (already && detailToken && detailToken !== token) {{
+      detailTrail.push(detailToken);
+    }} else if (!already) {{
+      detailTrail = [];
+    }}
     detailToken = token;
     paintDetail(meta);
     setDetailVisibility(true);
-    if (pushHistory) {{
+    if (pushHistory && !already) {{
       try {{
         history.pushState({{ detailSheet: token }}, "", location.href);
         detailHistoryDepth += 1;
       }} catch (e) {{}}
     }}
+    return true;
+  }}
+  function backDetail() {{
+    var prev = detailTrail.pop();
+    if (!prev) return closeDetail(true);
+    var meta = detailLookup(prev, lastStatusData || bootstrapStatus());
+    if (!meta) return closeDetail(true);
+    detailToken = prev;
+    paintDetail(meta);
     return true;
   }}
   function refreshOpenDetail() {{
@@ -3017,8 +3223,17 @@ function focusKey(kind, raw) {{
   function safeModelId(value) {{
     var model = String(value || "").trim();
     if (!model || model.length > 80) return "";
-    if (!/^[A-Za-z0-9][A-Za-z0-9._:-]{1,79}$/.test(model)) return "";
+    if (!/^[A-Za-z0-9][A-Za-z0-9._:-]{{1,79}}$/.test(model)) return "";
     return model;
+  }}
+  function safeSpend(value) {{
+    if (typeof value === "number" && isFinite(value) && value >= 0) {{
+      return value < 1000 ? ("$" + value.toFixed(2)) : ("$" + String(Math.round(value)));
+    }}
+    var text = String(value == null ? "" : value).trim();
+    if (!text || text.length > 20) return "";
+    if (!/^\$?[0-9,.]+$/.test(text)) return "";
+    return text.charAt(0) === "$" ? text : ("$" + text);
   }}
   function repoFromPrUrl(url) {{
     var safe = safePrUrl(url);
@@ -3053,6 +3268,8 @@ function focusKey(kind, raw) {{
       goal_full: compactText(raw.goal || raw.notes, 1200),
       status: status,
       model: model,
+      spend_session: safeSpend(raw.spend_session),
+      spend_day: safeSpend(raw.spend_day),
       agent_url: safeAgentUrl(raw.agent_url || raw.url),
       why: compactText(raw.why || raw.lane_why, 120),
       note: compactText(raw.note || raw.detail, 160),
@@ -3084,8 +3301,8 @@ function focusKey(kind, raw) {{
         goal_full: row.goal_full || row.goal || "",
         status: row.status || "idle",
         model: safeModelId(row.model),
-        spend_session: String(row.spend_session || "").trim(),
-        spend_day: String(row.spend_day || "").trim(),
+        spend_session: safeSpend(row.spend_session),
+        spend_day: safeSpend(row.spend_day),
         agent_url: row.agent_url || "",
         why: row.why || "",
         note: row.note || "",
@@ -3415,7 +3632,7 @@ function focusKey(kind, raw) {{
     if (ev.metaKey || ev.ctrlKey || ev.shiftKey || ev.altKey) return false;
     var target = ev.target;
     if (!target || !target.closest) return false;
-    if (target.closest("a,button,summary,[data-dec],[data-action],[data-tab]")) return false;
+    if (target.closest("a,button,summary,[data-dec],[data-action],[data-tab],[data-detail-nav]")) return false;
     var row = target.closest("[data-detail-key]");
     if (!row) return false;
     var token = detailTokenForRow(row);
@@ -3423,12 +3640,30 @@ function focusKey(kind, raw) {{
     if (ev.preventDefault) ev.preventDefault();
     return openDetail(token, true);
   }}
+  function handleDetailNav(ev) {{
+    if (!ev || ev.defaultPrevented) return false;
+    if (ev.metaKey || ev.ctrlKey || ev.shiftKey || ev.altKey) return false;
+    var target = ev.target;
+    if (!target || !target.closest) return false;
+    var nav = target.closest("[data-detail-nav]");
+    if (!nav || (detailSheet && !detailSheet.contains(nav))) return false;
+    var token = String(nav.getAttribute("data-detail-nav") || "");
+    if (!token) return false;
+    if (ev.preventDefault) ev.preventDefault();
+    return openDetail(token, false);
+  }}
   document.addEventListener("click", handleDetailTap);
+  document.addEventListener("click", handleDetailNav);
   document.addEventListener("keydown", function (ev) {{
     if (!ev) return;
     if (ev.key !== "Escape") return;
     if (detailOpen) closeDetail(true);
   }});
+  if (detailBackEl) {{
+    detailBackEl.addEventListener("click", function () {{
+      backDetail();
+    }});
+  }}
   if (detailCloseEl) {{
     detailCloseEl.addEventListener("click", function () {{
       closeDetail(true);
