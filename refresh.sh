@@ -17,9 +17,9 @@ export REFRESH_STARTED_MS
 OWNER="${OWNER:-rupret007}"
 REPOS=(
   webjam StoryLiner StoryBoard Rad-Dad-Merch RadDadSite Turdanoid
-  AdoptIQ TACTrack AI-Music-Vault rad-dad-show-night Andrea_NanoBot Bob-the-Bot story-corner-shelf
+  AdoptIQ TACTrack AI-Music-Vault rad-dad-show-night Andrea_NanoBot Bob-the-Bot
   StoryOps-AI ballbeacon CSS_Conductor 0xc0re/barker bob-ops-dashboard
-  Cursor-OpenClaw-Integration Sliding-Glass-Door-PETG-Screw
+  Cursor-OpenClaw-Integration
 )
 PUSH=0
 [[ "${1:-}" == "--push" ]] && PUSH=1
@@ -379,8 +379,6 @@ def project(
         "AI-Music-Vault": "AI Music Vault",
         "Andrea_NanoBot": "Andrea NanoBot",
         "Bob-the-Bot": "Bob the Bot",
-        "Sliding-Glass-Door-PETG-Screw": "Sliding Glass Door Screw",
-        "story-corner-shelf": "Story Shelf",
     }
     p["name"] = rename.get(name, p["name"])
     return p
@@ -428,10 +426,6 @@ status = {
                 notes="Integration utility. Never restart gateways or alter credentials automatically."),
         project("bob-ops-dashboard",
                 notes="Source-only feature PRs; the scheduled refresh owns generated index.html and status.json."),
-        project("Sliding-Glass-Door-PETG-Screw",
-                notes="Software/design artifact only. Printing, installation, and physical fit stay owner-only."),
-        project("story-corner-shelf",
-                notes="Story Shelf utility. Software and documentation work only; physical installation stays owner-only."),
         {"name": "StoryDesk", "status": "parked", "chip": "Local-only",
          "notes": "No authoritative GitHub remote. Local code can be verified, but hosted or merged status cannot be claimed."},
         {"name": "OpenClaw Runtime", "status": "parked", "chip": "Local-only",

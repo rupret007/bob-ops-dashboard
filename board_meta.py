@@ -136,7 +136,6 @@ REQUIRED_PUBLIC_REPOS = (
     "rupret007/Turdanoid",
     "rupret007/rad-dad-show-night",
     "rupret007/Andrea_NanoBot",
-    "rupret007/story-corner-shelf",
     "rupret007/bob-ops-dashboard",
     "rupret007/Cursor-OpenClaw-Integration",
 )

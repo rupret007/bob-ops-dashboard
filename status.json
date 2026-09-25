@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-09-24T23:03:27.559662-05:00",
-  "generated_at_display": "Thu Sep 24, 2026 \u00b7 11:03 PM CDT",
+  "generated_at": "2026-09-24T23:05:44.408363-05:00",
+  "generated_at_display": "Thu Sep 24, 2026 \u00b7 11:05 PM CDT",
   "timezone": "America/Chicago",
   "owner": "rupret007",
   "dashboard": "bob-ops-dashboard",
@@ -463,8 +463,8 @@
           "status": "green",
           "chip": "Green",
           "default_branch": "main",
-          "tip_sha": "0ccda9e",
-          "tip_date": "2026-09-25T02:12:24Z",
+          "tip_sha": "409c87c",
+          "tip_date": "2026-09-25T04:03:30Z",
           "open_prs": 0,
           "open_pr_url": null,
           "open_pr_number": null,
@@ -476,9 +476,9 @@
             "name": "QA claim smoke",
             "conclusion": "success",
             "branch": "main",
-            "sha": "0ccda9e",
-            "created": "2026-09-25T02:12:27Z",
-            "html_url": "https://github.com/rupret007/bob-ops-dashboard/actions/runs/36085294496"
+            "sha": "409c87c",
+            "created": "2026-09-25T04:03:33Z",
+            "html_url": "https://github.com/rupret007/bob-ops-dashboard/actions/runs/36092873662"
           },
           "release": null,
           "release_sha": null,
@@ -490,60 +490,6 @@
             "agent": "none",
             "lease_state": "none",
             "next": "idle \u2014 Jeff priority is WebJam/AdoptIQ/TACTrack not more dashboard..."
-          }
-        },
-        {
-          "name": "Sliding Glass Door Screw",
-          "private": true,
-          "status": "yellow",
-          "chip": "Yellow",
-          "notes": "Software/design artifact only. Printing, installation, and physical fit stay owner-only.",
-          "accessible": true,
-          "ci": {},
-          "coord": {
-            "repo": "Sliding-Glass-Door-PETG-Screw",
-            "agent": "none",
-            "lease_state": "none",
-            "next": "FREE for next Extra High / Codex from origin/main; physical first..."
-          }
-        },
-        {
-          "name": "Story Shelf",
-          "repo": "rupret007/story-corner-shelf",
-          "url": "https://github.com/rupret007/story-corner-shelf",
-          "repo_url": "https://github.com/rupret007/story-corner-shelf",
-          "private": false,
-          "status": "yellow",
-          "chip": "Yellow",
-          "default_branch": "main",
-          "tip_sha": "cc25e73",
-          "tip_date": "2026-08-25T03:14:50Z",
-          "open_prs": 3,
-          "open_pr_url": "https://github.com/rupret007/story-corner-shelf/pull/9",
-          "open_pr_number": 9,
-          "open_pr_draft": false,
-          "open_pr_stack": [],
-          "pr_listing_complete": true,
-          "agent_url": null,
-          "ci": {
-            "name": "github_actions in /. - Update #1550710283",
-            "conclusion": "success",
-            "branch": "main",
-            "sha": "cc25e73",
-            "created": "2026-09-01T23:18:15Z",
-            "html_url": "https://github.com/rupret007/story-corner-shelf/actions/runs/33570401169"
-          },
-          "release": null,
-          "release_sha": null,
-          "release_url": null,
-          "notes": "Story Shelf utility. Software and documentation work only; physical installation stays owner-only.",
-          "accessible": true,
-          "coord": {
-            "repo": "story-corner-shelf",
-            "agent": "none",
-            "lease_state": "none",
-            "next": "intentional hold \u2014 do not start corner shelf work unless Jeff...",
-            "sha": "cc25e73"
           }
         },
         {
@@ -863,18 +809,16 @@
     "rad-dad-show-night",
     "Andrea_NanoBot",
     "Bob-the-Bot",
-    "story-corner-shelf",
     "StoryOps-AI",
     "ballbeacon",
     "CSS_Conductor",
     "barker",
     "bob-ops-dashboard",
-    "Cursor-OpenClaw-Integration",
-    "Sliding-Glass-Door-PETG-Screw"
+    "Cursor-OpenClaw-Integration"
   ],
   "inaccessible": [],
   "publish_notes": "Public board -- no secrets or customer paths. Private repositories stay high-level; AI Music Vault stays private-content-boundary only.",
-  "refresh_started_ms": 1790308952982,
+  "refresh_started_ms": 1790309102067,
   "agents_source": "file:stale->unknown",
   "agents": [
     {

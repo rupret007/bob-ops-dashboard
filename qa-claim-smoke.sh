@@ -313,12 +313,12 @@ if "unlock" in str(ctrl).lower() or "verified ui" in str(ctrl).lower():
 if ctrl.get("jeff_github") != "rupret007":
     raise SystemExit("control.jeff_github must stay rupret007")
 required_lanes = {
-    "WebJam", "Story Shelf", "AdoptIQ", "StoryOps-AI", "Ball Beacon",
+    "WebJam", "AdoptIQ", "StoryOps-AI", "Ball Beacon",
     "CSS Conductor", "TACTrack", "Barker", "StoryBoard", "StoryDesk",
     "Andrea NanoBot", "Bob the Bot", "OpenClaw Runtime", "StoryLiner",
     "AI Music Vault", "Bob Ops Dashboard", "RadDadSite", "Rad Dad Merch",
     "Cursor-OpenClaw Integration", "Show Night",
-    "Sliding Glass Door Screw", "Turdanoid", "Private media",
+    "Turdanoid", "Private media",
 }
 projects = [
     p
@@ -556,7 +556,6 @@ public_tap_lanes = (
     "WebJam",
     "Turdanoid",
     "Show Night",
-    "Story Shelf",
     "StoryBoard",
     "Andrea NanoBot",
     "StoryLiner",
@@ -573,7 +572,6 @@ private_not_tap = (
     "TACTrack",
     "0xc0re/barker",
     "AI Music Vault",
-    "Sliding Glass Door Screw",
     "Bob the Bot",
     "Barker",
 )
