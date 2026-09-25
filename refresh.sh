@@ -223,6 +223,10 @@ from board_meta import (
     finalize_llm_work_after_live_poll,
     STALE_RUNNING_SOURCES,
     LLM_WORK_PROOF_TS_KEYS,
+    load_harden_window,
+    harden_window_html,
+    normalize_harden_window,
+    closed_harden_window,
     drop_leftover_verify,
     extract_cloud_agents_from_prs,
     focus_key,
@@ -756,6 +760,29 @@ llm_work = finalize_llm_work_after_live_poll(
     llm_work, _live_cloud_lanes, now_iso=_now_iso
 )
 status["llm_work"] = llm_work
+
+# Harden stress window strip (separate from llm_work — never invents Running chips).
+_hw_blob = None
+for _hw_path in (
+    root / "harden-window.json",
+    Path("/workspace/bob-ops-dashboard/harden-window.json"),
+    Path("/home/box/conductor/llm-work-now/harden-window.json"),
+):
+    if _hw_path.is_file():
+        try:
+            _hw_blob = json.loads(_hw_path.read_text(encoding="utf-8"))
+            break
+        except Exception:
+            _hw_blob = None
+            continue
+if _hw_blob is None:
+    _env_hw = os.environ.get("HARDEN_WINDOW_JSON")
+    if _env_hw:
+        try:
+            _hw_blob = json.loads(_env_hw)
+        except Exception:
+            _hw_blob = None
+status["harden_window"] = normalize_harden_window(_hw_blob)
 
 # Pulse data only -- this section now reflects current work attribution.
 agent_projects = []
@@ -1415,6 +1442,34 @@ html = f'''<!DOCTYPE html>
     margin:0 0 .15rem; font-size:.86rem; font-weight:800; letter-spacing:.02em;
     text-transform:uppercase; color:var(--muted);
   }}
+  #harden-window {{ margin:0 0 .4rem; }}
+  .harden-strip {{
+    display:flex; flex-wrap:wrap; gap:.35rem .55rem; align-items:center;
+    border:1px solid var(--border); border-radius:10px;
+    padding:.42rem .58rem; background:rgba(217,119,87,.07);
+    font-size:.78rem; line-height:1.25;
+  }}
+  .harden-strip[data-status="closed"] {{
+    background:rgba(255,255,255,.02); opacity:.9;
+  }}
+  .harden-strip .hw-round {{
+    font-weight:800; color:var(--orange); letter-spacing:.02em;
+  }}
+  .harden-strip .hw-state {{ font-weight:700; }}
+  .harden-strip .hw-state.open {{ color:#86efac; }}
+  .harden-strip .hw-state.closed {{ color:var(--muted); }}
+  .harden-strip .hw-lanes {{ display:flex; flex-wrap:wrap; gap:.22rem; }}
+  .harden-strip .hw-lane {{
+    font-size:.68rem; padding:.08rem .34rem; border-radius:999px;
+    border:1px solid var(--border); color:var(--muted); font-weight:600;
+  }}
+  .harden-strip .hw-lane.fired {{
+    border-color:rgba(217,119,87,.55); color:#f5c4b3;
+    background:rgba(217,119,87,.14);
+  }}
+  .harden-strip .hw-score {{
+    color:var(--muted); flex:1 1 12rem; font-size:.74rem;
+  }}
   .agent-row {{
     border:1px solid var(--border); border-radius:10px;
     padding:.58rem .62rem; background:rgba(255,255,255,.02);
@@ -1480,6 +1535,7 @@ html = f'''<!DOCTYPE html>
     <h1><span class="mark">Bob</span> Ops</h1>
     <div class="pulse-row">
       <div class="live-stamp" id="live-stamp" data-generated-at="{h(updated_iso)}" data-display="{h(updated_ct)}"><span class="live-dot" id="live-dot" aria-hidden="true"></span><span id="freshness">Live - starting</span><span class="when"> · <strong id="updated-display">{h(updated_ct)}</strong></span></div>
+      <div id="harden-window">{harden_window_html(status.get("harden_window"))}</div>
       <div id="active-agents">{agents_strip_html(status.get("llm_work"))}</div>
     </div>
     <div class="status hint" id="panel-status"></div>
@@ -1762,6 +1818,7 @@ function focusKey(kind, raw) {{
   var knownMs = Date.parse(known) || Date.now();
   var lastPollOk = Date.now();
   var lastAgents = [];
+  var lastHarden = null;
   var lastCloud = [];
   var lastFp = null;
 
@@ -1787,6 +1844,7 @@ function focusKey(kind, raw) {{
       dot.classList.toggle("stale", stale || pollFailStreak > 0);
     }}
     if (lastAgents && lastAgents.length) paintAgents(lastAgents);
+    if (lastHarden) paintHardenWindow(lastHarden);
     if (typeof updateSilence === "function") updateSilence();
   }}
 
@@ -2548,6 +2606,59 @@ function focusKey(kind, raw) {{
     var html = rows.map(workRowHtml).join("");
     return '<section class="agents-strip" id="agents-strip" aria-label="LLM work now"><h2 class="llm-work-title">Work now</h2>' + html + "</section>";
   }}
+  var HARDEN_LANE_IDS = ["Codex","Claude","Gemini","MiniMax","LocalCursor","CloudBA"];
+  function normalizeHardenWindow(raw) {{
+    var closed = {{
+      round: null, status: "closed", started_at: "", ended_at: "",
+      lanes_fired: [], scorecard_line: "", updated_at: "",
+      display_status: "closed", idle: true
+    }};
+    if (!raw || typeof raw !== "object") return closed;
+    var display = String(raw.display_status || raw.status || "closed").toLowerCase();
+    if (display !== "open") display = "closed";
+    var idle = raw.idle === true || display === "closed";
+    if (idle) display = "closed";
+    var lanes = Array.isArray(raw.lanes_fired) ? raw.lanes_fired : [];
+    return {{
+      round: (typeof raw.round === "number" && raw.round > 0) ? raw.round : null,
+      status: display,
+      started_at: raw.started_at || "",
+      ended_at: raw.ended_at || "",
+      lanes_fired: lanes,
+      scorecard_line: raw.scorecard_line || "",
+      updated_at: raw.updated_at || "",
+      display_status: display,
+      idle: idle
+    }};
+  }}
+  function hardenWindowHtml(raw) {{
+    var hw = normalizeHardenWindow(raw);
+    var display = hw.display_status === "open" ? "open" : "closed";
+    var roundLabel = hw.round ? ("R" + hw.round) : "R—";
+    var stateLabel = display === "open" ? "Open" : "Closed · Idle";
+    var fired = {{}};
+    (hw.lanes_fired || []).forEach(function (x) {{ fired[String(x)] = 1; }});
+    var laneHtml = HARDEN_LANE_IDS.map(function (lid) {{
+      return '<span class="hw-lane' + (fired[lid] ? " fired" : "") + '">' + esc(lid) + "</span>";
+    }}).join("");
+    var score = hw.scorecard_line
+      ? '<span class="hw-score">' + esc(hw.scorecard_line) + "</span>"
+      : "";
+    return '<aside class="harden-strip" id="harden-strip" data-status="' + display +
+      '" data-idle="' + (hw.idle ? "1" : "0") +
+      '" aria-label="Harden window">' +
+      '<span class="hw-round">' + esc(roundLabel) + "</span>" +
+      '<span class="hw-state ' + display + '">' + stateLabel + "</span>" +
+      '<span class="hw-lanes" aria-label="Lanes fired this round">' + laneHtml + "</span>" +
+      score + "</aside>";
+  }}
+  function paintHardenWindow(hw) {{
+    var host = document.getElementById("harden-window");
+    if (!host) return;
+    var html = hardenWindowHtml(hw);
+    if (host.innerHTML === html) return;
+    host.innerHTML = html;
+  }}
   function fetchedLineHtml(repos) {{
     var names = [];
     (repos || []).forEach(function (x) {{
@@ -2591,12 +2702,21 @@ function focusKey(kind, raw) {{
       if (!sec) return [];
       return [sec.id, sec.title, (sec.projects || []).map(projectKey)];
     }});
+    var hw = (data.harden_window && typeof data.harden_window === "object")
+      ? data.harden_window : {{}};
     return JSON.stringify({{
       pending: (data.pending || []).map(pendingKey),
       agents: (data.agents || []).map(agentKey),
       cloud: (data.cloud_agents || []).map(agentKey),
       sections: sections,
-      fetched: data.fetched_repos || []
+      fetched: data.fetched_repos || [],
+      harden_window: [
+        hw.round || null,
+        hw.display_status || hw.status || "",
+        hw.lanes_fired || [],
+        hw.scorecard_line || "",
+        hw.updated_at || ""
+      ]
     }});
   }}
   function snapshotOpen() {{
@@ -2648,6 +2768,7 @@ function focusKey(kind, raw) {{
     if (!boardEl || !data || !Array.isArray(data.sections)) return;
     lastCloud = sanitizeCloudAgents((data && data.cloud_agents) || lastCloud);
     paintAgents((data && data.llm_work) || []);
+    paintHardenWindow((data && data.harden_window) || lastHarden || {{}});
     var controlProjects = [];
     var html = glanceHtml(data.pending, data.sections) + typeTabsHtml(data.sections, data.pending, "");
     data.sections.forEach(function (sec) {{
@@ -2826,8 +2947,10 @@ function focusKey(kind, raw) {{
           setTimeout(function () {{ dot.classList.remove("poll"); }}, 600);
         }}
         lastAgents = (data && data.llm_work) || lastAgents;
+        lastHarden = (data && data.harden_window) || lastHarden;
         lastCloud = sanitizeCloudAgents((data && data.cloud_agents) || lastCloud);
         paintAgents(lastAgents);
+        paintHardenWindow(lastHarden || {{}});
         applyStamp(data);
         if (decision === "paint") {{
           // Soft-paint from JSON -- skip timestamp-only Actions refreshes (no flash).
@@ -2938,6 +3061,8 @@ if [[ $PUSH -eq 1 ]]; then
   mkdir -p "$WORK/.github/workflows"
   cp "$ROOT/index.html" "$ROOT/status.json" "$ROOT/README.md" "$ROOT/refresh.sh" "$WORK/"
   [[ -f "$ROOT/llm-work-now.json" ]] && cp "$ROOT/llm-work-now.json" "$WORK/"
+  [[ -f "$ROOT/harden-window.json" ]] && cp "$ROOT/harden-window.json" "$WORK/"
+  [[ -f "$ROOT/write_harden_window.py" ]] && cp "$ROOT/write_harden_window.py" "$WORK/"
   [[ -f "$ROOT/board_meta.py" ]] && cp "$ROOT/board_meta.py" "$WORK/"
   [[ -f "$ROOT/probe-agents-status.sh" ]] && cp "$ROOT/probe-agents-status.sh" "$WORK/"
   [[ -f "$ROOT/qa-claim-smoke.sh" ]] && cp "$ROOT/qa-claim-smoke.sh" "$WORK/"
@@ -2961,6 +3086,8 @@ if [[ $PUSH -eq 1 ]]; then
   cd "$WORK"
   git add index.html status.json README.md refresh.sh
   [[ -f llm-work-now.json ]] && git add llm-work-now.json
+  [[ -f harden-window.json ]] && git add harden-window.json
+  [[ -f write_harden_window.py ]] && git add write_harden_window.py
   [[ -f board_meta.py ]] && git add board_meta.py
   [[ -f probe-agents-status.sh ]] && git add probe-agents-status.sh
   [[ -f qa-claim-smoke.sh ]] && git add qa-claim-smoke.sh

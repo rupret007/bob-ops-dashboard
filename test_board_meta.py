@@ -30,6 +30,13 @@ from board_meta import (
     finalize_llm_work_after_live_poll,
     LLM_WORK_RUNNING_HEARTBEAT_TTL_SEC,
     LLM_WORK_PROOF_FUTURE_SKEW_SEC,
+    HARDEN_WINDOW_STALE_SEC,
+    canonicalize_harden_lane,
+    closed_harden_window,
+    harden_window_html,
+    load_harden_window,
+    normalize_harden_window,
+    build_harden_window_payload,
     drop_leftover_verify,
     extract_agent_url,
     extract_cloud_agents_from_prs,
@@ -2516,6 +2523,152 @@ class LlmWorkHonestyTests(unittest.TestCase):
         by_id = {r["id"]: r for r in out}
         self.assertEqual(by_id["cursor-cloud"]["status"], "blocked")
         self.assertEqual(by_id["gemini"]["status"], "idle")
+
+
+
+class HardenWindowStripTests(unittest.TestCase):
+    """Harden strip is separate from llm_work — fail-closed, never invents Running."""
+
+    def test_missing_file_is_closed_idle(self):
+        missing = Path("/tmp/no-such-harden-window-jeff-20260925.json")
+        hw = load_harden_window(missing)
+        self.assertEqual(hw["display_status"], "closed")
+        self.assertTrue(hw["idle"])
+        self.assertEqual(hw["lanes_fired"], [])
+
+    def test_none_and_invalid_fail_closed(self):
+        for blob in (None, "", "{", [], "not-json", {"status": "open"}):
+            hw = normalize_harden_window(blob, now=1_000_000.0)
+            self.assertEqual(hw["display_status"], "closed")
+            self.assertTrue(hw["idle"])
+
+    def test_open_fresh_shows_open_and_lanes(self):
+        now = datetime(2026, 9, 25, 8, 5, tzinfo=timezone.utc).timestamp()
+        blob = {
+            "round": 7,
+            "status": "open",
+            "started_at": "2026-09-25T02:58:58-05:00",
+            "lanes_fired": ["Gemini", "MiniMax", "bogus"],
+            "updated_at": "2026-09-25T03:04:00-05:00",
+            "scorecard_line": "",
+        }
+        hw = normalize_harden_window(blob, now=now)
+        self.assertEqual(hw["display_status"], "open")
+        self.assertFalse(hw["idle"])
+        self.assertEqual(hw["round"], 7)
+        self.assertEqual(hw["lanes_fired"], ["Gemini", "MiniMax"])
+
+    def test_stale_updated_at_forces_closed(self):
+        now = datetime(2026, 9, 25, 10, 0, tzinfo=timezone.utc).timestamp()
+        # updated_at ~2h earlier → stale (>45m)
+        blob = {
+            "round": 7,
+            "status": "open",
+            "started_at": "2026-09-25T02:58:58-05:00",
+            "lanes_fired": ["Gemini"],
+            "updated_at": "2026-09-25T03:00:00-05:00",
+        }
+        hw = normalize_harden_window(blob, now=now, stale_sec=HARDEN_WINDOW_STALE_SEC)
+        self.assertEqual(hw["display_status"], "closed")
+        self.assertTrue(hw["idle"])
+        self.assertEqual(hw["round"], 7)  # keep round context
+        self.assertEqual(hw["lanes_fired"], ["Gemini"])
+
+    def test_explicit_closed_with_scorecard(self):
+        now = datetime(2026, 9, 25, 8, 10, tzinfo=timezone.utc).timestamp()
+        blob = {
+            "round": 6,
+            "status": "closed",
+            "lanes_fired": ["Codex", "Claude", "Gemini"],
+            "scorecard_line": "Stress FAIL · Eff FAIL · MiniMax E1",
+            "updated_at": "2026-09-25T02:55:00-05:00",
+        }
+        hw = normalize_harden_window(blob, now=now)
+        self.assertEqual(hw["display_status"], "closed")
+        self.assertIn("Stress FAIL", hw["scorecard_line"])
+
+    def test_html_marks_fired_lanes_and_closed_idle(self):
+        html = harden_window_html(
+            {
+                "round": 7,
+                "status": "open",
+                "lanes_fired": ["Gemini"],
+                "updated_at": "2099-01-01T00:00:00Z",  # future → fail-closed
+            }
+        )
+        self.assertIn('data-status="closed"', html)
+        self.assertIn("Closed", html)
+        self.assertIn("Idle", html)
+        # Still lists allowlisted lanes; Gemini not forced "fired" on stale? 
+        # closed_harden_window keeps lanes_fired from input when stale-forced.
+        self.assertIn("Gemini", html)
+
+    def test_html_open_fresh(self):
+        now_iso = datetime.now(tz=timezone.utc).isoformat()
+        html = harden_window_html(
+            normalize_harden_window(
+                {
+                    "round": 7,
+                    "status": "open",
+                    "lanes_fired": ["LocalCursor", "Codex"],
+                    "updated_at": now_iso,
+                    "scorecard_line": "mid — awaiting scorecard",
+                }
+            )
+        )
+        self.assertIn('data-status="open"', html)
+        self.assertIn("R7", html)
+        self.assertIn('hw-lane fired">LocalCursor', html)
+        self.assertIn('hw-lane fired">Codex', html)
+        self.assertIn("mid — awaiting scorecard", html)
+        self.assertNotIn("Running", html)
+
+    def test_never_overrides_llm_work_statuses(self):
+        """Harden normalize must not mutate llm_work rows."""
+        rows = [
+            {"id": "gemini", "status": "idle", "source": "byok_oneshot"},
+            {"id": "codex", "status": "finished", "source": "mini_paste"},
+        ]
+        before = json.dumps(rows, sort_keys=True)
+        _ = normalize_harden_window(
+            {
+                "round": 7,
+                "status": "open",
+                "lanes_fired": ["Gemini", "Codex"],
+                "updated_at": datetime.now(tz=timezone.utc).isoformat(),
+            }
+        )
+        after = json.dumps(rows, sort_keys=True)
+        self.assertEqual(before, after)
+        # Demote path still independent:
+        out = demote_stale_running_llm_work(
+            [
+                {
+                    "id": "gemini",
+                    "status": "running",
+                    "source": "byok_oneshot",
+                    "task_title": "should demote",
+                }
+            ]
+        )
+        self.assertEqual(out[0]["status"], "idle")
+
+    def test_canonicalize_and_payload_writer(self):
+        self.assertEqual(canonicalize_harden_lane("gemini heavy"), "Gemini")
+        self.assertEqual(canonicalize_harden_lane("CloudBA"), "CloudBA")
+        payload = build_harden_window_payload(
+            round="R7",
+            status="open",
+            lanes_fired=["MiniMax tip", "local-cursor"],
+            scorecard_line="Stress PASS",
+            updated_at="2026-09-25T03:04:00-05:00",
+        )
+        self.assertEqual(payload["round"], 7)
+        self.assertEqual(payload["lanes_fired"], ["MiniMax", "LocalCursor"])
+        closed = closed_harden_window(round=3)
+        self.assertEqual(closed["round"], 3)
+        self.assertTrue(closed["idle"])
+
 
 
 if __name__ == "__main__":

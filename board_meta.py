@@ -1010,6 +1010,307 @@ def llm_work_stale_running_violations(
     return violations
 
 
+
+# Harden stress window (separate from llm_work chips — never invents Running).
+# Stress runners write harden-window.json; refresh ingests into status.harden_window.
+HARDEN_WINDOW_STALE_SEC = 45 * 60  # midpoint of 30–60m fail-closed window
+HARDEN_WINDOW_LANE_IDS = (
+    "Codex",
+    "Claude",
+    "Gemini",
+    "MiniMax",
+    "LocalCursor",
+    "CloudBA",
+)
+_HARDEN_LANE_ALIASES = {
+    "codex": "Codex",
+    "chatgpt": "Codex",
+    "claude": "Claude",
+    "gemini": "Gemini",
+    "minimax": "MiniMax",
+    "mini-max": "MiniMax",
+    "localcursor": "LocalCursor",
+    "local-cursor": "LocalCursor",
+    "local_cursor": "LocalCursor",
+    "cursor": "LocalCursor",
+    "cloudb": "CloudBA",
+    "cloudba": "CloudBA",
+    "cloud-ba": "CloudBA",
+    "cloud_ba": "CloudBA",
+    "cursor-cloud": "CloudBA",
+    "cursor_cloud": "CloudBA",
+}
+
+
+def closed_harden_window(**overrides: Any) -> dict[str, Any]:
+    """Canonical Closed / Idle harden strip payload (fail-closed default)."""
+    out: dict[str, Any] = {
+        "round": None,
+        "status": "closed",
+        "started_at": "",
+        "ended_at": "",
+        "lanes_fired": [],
+        "scorecard_line": "",
+        "updated_at": "",
+        "display_status": "closed",
+        "idle": True,
+    }
+    for key, val in overrides.items():
+        if key in out:
+            out[key] = val
+    out["status"] = "closed"
+    out["display_status"] = "closed"
+    out["idle"] = True
+    return out
+
+
+def canonicalize_harden_lane(raw: Any) -> str:
+    """Map free-form lane labels onto the allowlisted harden strip ids."""
+    s = str(raw or "").strip()
+    if not s:
+        return ""
+    if s in HARDEN_WINDOW_LANE_IDS:
+        return s
+    key = s.lower().replace(" ", "").replace("_", "-")
+    # Direct alias table (already normalized forms).
+    hit = _HARDEN_LANE_ALIASES.get(key) or _HARDEN_LANE_ALIASES.get(
+        key.replace("-", "")
+    )
+    if hit:
+        return hit
+    # Loose contains for "Gemini heavy" / "MiniMax tip".
+    low = s.lower()
+    for canon in HARDEN_WINDOW_LANE_IDS:
+        if canon.lower() in low:
+            return canon
+    return ""
+
+
+def _clean_harden_line(raw: Any, limit: int = 160) -> str:
+    text = " ".join(str(raw or "").split())
+    if len(text) <= limit:
+        return text
+    cut = text[: limit - 1].rsplit(" ", 1)[0].rstrip(".,;:")
+    if len(cut) < 24:
+        cut = text[: limit - 1]
+    return cut + "…"
+
+
+def _parse_harden_round(raw: Any) -> int | None:
+    if raw is None or raw is False:
+        return None
+    if isinstance(raw, bool):
+        return None
+    if isinstance(raw, int):
+        return raw if raw > 0 else None
+    s = str(raw).strip()
+    if not s:
+        return None
+    m = re.search(r"(\d+)", s)
+    if not m:
+        return None
+    try:
+        n = int(m.group(1))
+    except ValueError:
+        return None
+    return n if n > 0 else None
+
+
+def normalize_harden_window(
+    blob: Any,
+    *,
+    now: float | None = None,
+    stale_sec: int = HARDEN_WINDOW_STALE_SEC,
+) -> dict[str, Any]:
+    """Fail-closed harden strip. Missing/invalid/stale → Closed / Idle.
+
+    Never mutates llm_work. Open only when status=open AND updated_at is fresh.
+    """
+    if blob is None:
+        return closed_harden_window()
+    if isinstance(blob, (bytes, bytearray)):
+        try:
+            blob = blob.decode("utf-8")
+        except Exception:
+            return closed_harden_window()
+    if isinstance(blob, str):
+        s = blob.strip()
+        if not s:
+            return closed_harden_window()
+        try:
+            blob = json.loads(s)
+        except Exception:
+            return closed_harden_window()
+    if not isinstance(blob, dict):
+        return closed_harden_window()
+
+    clock = time.time() if now is None else float(now)
+    round_n = _parse_harden_round(blob.get("round"))
+    raw_status = str(blob.get("status") or "").strip().lower()
+    status = "open" if raw_status == "open" else "closed"
+    started_at = str(blob.get("started_at") or "").strip()
+    ended_at = str(blob.get("ended_at") or "").strip()
+    scorecard_line = _clean_harden_line(blob.get("scorecard_line"), 160)
+    updated_at = str(blob.get("updated_at") or "").strip()
+
+    lanes: list[str] = []
+    seen: set[str] = set()
+    raw_lanes = blob.get("lanes_fired") or blob.get("lanes") or []
+    if isinstance(raw_lanes, str):
+        raw_lanes = [x for x in re.split(r"[,|;]+", raw_lanes) if x.strip()]
+    if isinstance(raw_lanes, (list, tuple)):
+        for item in raw_lanes:
+            canon = canonicalize_harden_lane(item)
+            if canon and canon not in seen:
+                seen.add(canon)
+                lanes.append(canon)
+
+    # Freshness from updated_at (preferred) else started_at when open.
+    proof = parse_checked_at(updated_at) or (
+        parse_checked_at(started_at) if status == "open" else None
+    )
+    stale = True
+    if proof is not None:
+        # Far-future stamps fail closed (same class as llm_work proof skew).
+        if proof - clock <= LLM_WORK_PROOF_FUTURE_SKEW_SEC and (clock - proof) <= stale_sec:
+            stale = False
+
+    if status != "open" or stale or proof is None:
+        return closed_harden_window(
+            round=round_n,
+            started_at=started_at,
+            ended_at=ended_at or (updated_at if status == "closed" else ""),
+            lanes_fired=lanes,
+            scorecard_line=scorecard_line,
+            updated_at=updated_at,
+        )
+
+    return {
+        "round": round_n,
+        "status": "open",
+        "started_at": started_at,
+        "ended_at": ended_at,
+        "lanes_fired": lanes,
+        "scorecard_line": scorecard_line,
+        "updated_at": updated_at,
+        "display_status": "open",
+        "idle": False,
+    }
+
+
+def load_harden_window(
+    source: Any = None,
+    *,
+    now: float | None = None,
+    stale_sec: int = HARDEN_WINDOW_STALE_SEC,
+) -> dict[str, Any]:
+    """Load from path/Path/dict/JSON string; missing file → closed."""
+    if source is None:
+        return closed_harden_window()
+    if hasattr(source, "read_text"):
+        try:
+            if not source.is_file():
+                return closed_harden_window()
+            return normalize_harden_window(
+                source.read_text(encoding="utf-8"), now=now, stale_sec=stale_sec
+            )
+        except Exception:
+            return closed_harden_window()
+    if isinstance(source, (str, bytes, bytearray)) and not (
+        isinstance(source, str)
+        and (source.strip().startswith("{") or source.strip().startswith("["))
+    ):
+        # Treat non-JSON strings as filesystem paths.
+        try:
+            from pathlib import Path as _Path
+
+            p = _Path(str(source))
+            if p.suffix.lower() == ".json" or p.exists() or "/" in str(source):
+                if not p.is_file():
+                    return closed_harden_window()
+                return normalize_harden_window(
+                    p.read_text(encoding="utf-8"), now=now, stale_sec=stale_sec
+                )
+        except Exception:
+            pass
+    return normalize_harden_window(source, now=now, stale_sec=stale_sec)
+
+
+def harden_window_html(hw: Any) -> str:
+    """Compact top-of-board harden strip (XSS-safe). Separate from llm chips."""
+    data = normalize_harden_window(hw) if not (
+        isinstance(hw, dict) and "display_status" in hw and "idle" in hw
+    ) else hw
+    if not isinstance(data, dict):
+        data = closed_harden_window()
+    display = str(data.get("display_status") or data.get("status") or "closed").lower()
+    if display not in ("open", "closed"):
+        display = "closed"
+    idle = bool(data.get("idle", display != "open"))
+    if idle:
+        display = "closed"
+    round_n = data.get("round")
+    round_label = f"R{round_n}" if isinstance(round_n, int) and round_n > 0 else "R—"
+    state_label = "Open" if display == "open" else "Closed"
+    idle_bit = " · Idle" if display == "closed" else ""
+    lanes = data.get("lanes_fired") if isinstance(data.get("lanes_fired"), list) else []
+    fired = {str(x) for x in lanes}
+    lane_bits: list[str] = []
+    for lid in HARDEN_WINDOW_LANE_IDS:
+        cls = "hw-lane fired" if lid in fired else "hw-lane"
+        lane_bits.append(
+            f'<span class="{cls}">{html_lib.escape(lid)}</span>'
+        )
+    score = _clean_harden_line(data.get("scorecard_line"), 160)
+    score_html = (
+        f'<span class="hw-score">{html_lib.escape(score)}</span>' if score else ""
+    )
+    return (
+        f'<aside class="harden-strip" id="harden-strip" data-status="{display}" '
+        f'data-idle="{"1" if idle else "0"}" aria-label="Harden window">'
+        f'<span class="hw-round">{html_lib.escape(round_label)}</span>'
+        f'<span class="hw-state {display}">{state_label}{idle_bit}</span>'
+        f'<span class="hw-lanes" aria-label="Lanes fired this round">'
+        + "".join(lane_bits)
+        + "</span>"
+        + score_html
+        + "</aside>"
+    )
+
+
+def build_harden_window_payload(
+    *,
+    round: Any = None,
+    status: str = "closed",
+    started_at: str = "",
+    ended_at: str = "",
+    lanes_fired: Any = None,
+    scorecard_line: str = "",
+    updated_at: str | None = None,
+) -> dict[str, Any]:
+    """Writer helper payload (before normalize). Stress runners call this."""
+    lanes: list[str] = []
+    seen: set[str] = set()
+    for item in lanes_fired or []:
+        canon = canonicalize_harden_lane(item)
+        if canon and canon not in seen:
+            seen.add(canon)
+            lanes.append(canon)
+    st = "open" if str(status or "").strip().lower() == "open" else "closed"
+    ts = updated_at
+    if not ts:
+        ts = datetime.now(tz=ZoneInfo(BOARD_TZ)).isoformat(timespec="seconds")
+    return {
+        "round": _parse_harden_round(round),
+        "status": st,
+        "started_at": str(started_at or "").strip(),
+        "ended_at": str(ended_at or "").strip(),
+        "lanes_fired": lanes,
+        "scorecard_line": _clean_harden_line(scorecard_line, 160),
+        "updated_at": str(ts).strip(),
+    }
+
+
 def mac_probe_known(agent: Any) -> bool:
     """True when a Codex/Cursor/Claude pill has a live non-unknown state."""
     if not isinstance(agent, dict):
@@ -2036,12 +2337,20 @@ def board_content_fingerprint(data: Any) -> str:
                 [project_key(p) for p in (sec.get("projects") or [])],
             ]
         )
+    hw = data.get("harden_window") if isinstance(data.get("harden_window"), dict) else {}
     payload = {
         "pending": [pending_key(it) for it in (data.get("pending") or [])],
         "agents": [agent_key(a) for a in (data.get("agents") or [])],
         "cloud": [agent_key(a) for a in (data.get("cloud_agents") or [])],
         "sections": sections,
         "fetched": data.get("fetched_repos") or [],
+        "harden_window": [
+            hw.get("round"),
+            hw.get("display_status") or hw.get("status"),
+            hw.get("lanes_fired") or [],
+            hw.get("scorecard_line") or "",
+            hw.get("updated_at") or "",
+        ],
     }
     return json.dumps(payload, sort_keys=True, separators=(",", ":"))
 

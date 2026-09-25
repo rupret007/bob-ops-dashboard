@@ -1,0 +1,12 @@
+{
+  "round": 7,
+  "status": "open",
+  "started_at": "2026-09-25T02:58:58-05:00",
+  "ended_at": "",
+  "lanes_fired": [
+    "Gemini",
+    "MiniMax"
+  ],
+  "scorecard_line": "",
+  "updated_at": "2026-09-25T03:05:17-05:00"
+}
