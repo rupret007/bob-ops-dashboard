@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-09-25T07:33:38.163578-05:00",
-  "generated_at_display": "Fri Sep 25, 2026 \u00b7 7:33 AM CDT",
+  "generated_at": "2026-09-25T07:44:04.322853-05:00",
+  "generated_at_display": "Fri Sep 25, 2026 \u00b7 7:44 AM CDT",
   "timezone": "America/Chicago",
   "owner": "rupret007",
   "dashboard": "bob-ops-dashboard",
@@ -123,8 +123,8 @@
           "url": "https://github.com/rupret007/StoryBoard",
           "repo_url": "https://github.com/rupret007/StoryBoard",
           "private": false,
-          "status": "yellow",
-          "chip": "Yellow",
+          "status": "green",
+          "chip": "Green",
           "default_branch": "main",
           "tip_sha": "1f75ca2",
           "tip_date": "2026-09-25T12:29:00Z",
@@ -137,7 +137,7 @@
           "agent_url": null,
           "ci": {
             "name": "Quality",
-            "conclusion": "in_progress",
+            "conclusion": "success",
             "branch": "main",
             "sha": "1f75ca2",
             "created": "2026-09-25T12:29:03Z",
@@ -337,11 +337,11 @@
           "url": "https://github.com/rupret007/StoryOps-AI",
           "repo_url": "https://github.com/rupret007/StoryOps-AI",
           "private": false,
-          "status": "red",
-          "chip": "Red",
+          "status": "yellow",
+          "chip": "Yellow",
           "default_branch": "main",
-          "tip_sha": "02b0630",
-          "tip_date": "2026-09-05T08:33:24Z",
+          "tip_sha": "5c9aa49",
+          "tip_date": "2026-09-25T12:42:52Z",
           "open_prs": 0,
           "open_pr_url": null,
           "open_pr_number": null,
@@ -351,11 +351,11 @@
           "agent_url": null,
           "ci": {
             "name": "StoryOps CI",
-            "conclusion": "failure",
+            "conclusion": "in_progress",
             "branch": "main",
-            "sha": "02b0630",
-            "created": "2026-09-05T08:33:27Z",
-            "html_url": "https://github.com/rupret007/StoryOps-AI/actions/runs/33955586738"
+            "sha": "5c9aa49",
+            "created": "2026-09-25T12:42:56Z",
+            "html_url": "https://github.com/rupret007/StoryOps-AI/actions/runs/36136526269"
           },
           "release": null,
           "release_sha": null,
@@ -494,8 +494,8 @@
           "status": "green",
           "chip": "Green",
           "default_branch": "main",
-          "tip_sha": "a1b931f",
-          "tip_date": "2026-09-25T12:24:54Z",
+          "tip_sha": "eb52266",
+          "tip_date": "2026-09-25T12:33:52Z",
           "open_prs": 0,
           "open_pr_url": null,
           "open_pr_number": null,
@@ -503,14 +503,7 @@
           "open_pr_stack": [],
           "pr_listing_complete": true,
           "agent_url": null,
-          "ci": {
-            "name": "QA claim smoke",
-            "conclusion": "success",
-            "branch": "main",
-            "sha": "a1b931f",
-            "created": "2026-09-25T12:24:57Z",
-            "html_url": "https://github.com/rupret007/bob-ops-dashboard/actions/runs/36134784701"
-          },
+          "ci": null,
           "release": null,
           "release_sha": null,
           "release_url": null,
@@ -884,7 +877,7 @@
     "barker"
   ],
   "publish_notes": "Public board -- no secrets or customer paths. Private repositories stay high-level; AI Music Vault stays private-content-boundary only.",
-  "refresh_started_ms": 1790339584068,
+  "refresh_started_ms": 1790340208051,
   "agents_source": "file:stale->unknown",
   "agents": [
     {
@@ -1040,7 +1033,7 @@
     }
   ],
   "llm_work_now_freshness": {
-    "generated_at": "2026-09-25 07:33 CT",
+    "generated_at": "2026-09-25 07:44 CT",
     "warn_ttl_sec": 1200,
     "warnings": [],
     "ok": true
