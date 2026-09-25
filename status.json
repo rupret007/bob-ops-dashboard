@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-09-25T03:59:34.317527-05:00",
-  "generated_at_display": "Fri Sep 25, 2026 \u00b7 3:59 AM CDT",
+  "generated_at": "2026-09-25T04:01:48.987635-05:00",
+  "generated_at_display": "Fri Sep 25, 2026 \u00b7 4:01 AM CDT",
   "timezone": "America/Chicago",
   "owner": "rupret007",
   "dashboard": "bob-ops-dashboard",
@@ -464,8 +464,8 @@
           "status": "green",
           "chip": "Green",
           "default_branch": "main",
-          "tip_sha": "260319c",
-          "tip_date": "2026-09-25T08:54:48Z",
+          "tip_sha": "c35d220",
+          "tip_date": "2026-09-25T08:59:37Z",
           "open_prs": 0,
           "open_pr_url": null,
           "open_pr_number": null,
@@ -477,9 +477,9 @@
             "name": "QA claim smoke",
             "conclusion": "success",
             "branch": "main",
-            "sha": "260319c",
-            "created": "2026-09-25T08:54:51Z",
-            "html_url": "https://github.com/rupret007/bob-ops-dashboard/actions/runs/36115506093"
+            "sha": "c35d220",
+            "created": "2026-09-25T08:59:40Z",
+            "html_url": "https://github.com/rupret007/bob-ops-dashboard/actions/runs/36115937109"
           },
           "release": null,
           "release_sha": null,
@@ -672,8 +672,8 @@
           },
           "coord": {
             "repo": "Bob-the-Bot",
-            "agent": "grok",
-            "lease_state": "active",
+            "agent": "none",
+            "lease_state": "expired",
             "next": "Cloud grok-* DRAFT-only"
           }
         },
@@ -853,7 +853,7 @@
   ],
   "inaccessible": [],
   "publish_notes": "Public board -- no secrets or customer paths. Private repositories stay high-level; AI Music Vault stays private-content-boundary only.",
-  "refresh_started_ms": 1790326728496,
+  "refresh_started_ms": 1790326863720,
   "agents_source": "file:stale->unknown",
   "agents": [
     {
@@ -1009,10 +1009,10 @@
     }
   ],
   "harden_window": {
-    "round": 21,
-    "status": "closed",
-    "started_at": "2026-09-25T03:55:33-05:00",
-    "ended_at": "2026-09-25T03:58:48-05:00",
+    "round": 23,
+    "status": "open",
+    "started_at": "2026-09-25T04:01:18-05:00",
+    "ended_at": "",
     "lanes_fired": [
       "Codex",
       "Claude",
@@ -1020,10 +1020,10 @@
       "MiniMax",
       "LocalCursor"
     ],
-    "scorecard_line": "Stress PASS | Eff PASS | CQ PASS",
-    "updated_at": "2026-09-25T03:58:48-05:00",
-    "display_status": "closed",
-    "idle": true
+    "scorecard_line": "",
+    "updated_at": "2026-09-25T04:01:18-05:00",
+    "display_status": "open",
+    "idle": false
   },
   "pending": [
     {
