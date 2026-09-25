@@ -42,13 +42,15 @@ Pending **Approve / Hold / Deny** opens a GitHub issue titled `BOB-APPROVE: <id>
 
 `status.json` must not contain a `verify` block. Refresh drops leftover OTP hashes fail-closed.
 
-## Near-realtime refresh cadence
+## Refresh cadence (fast, not real-time)
 
 | Layer | Cadence | What it does |
 |-------|---------|--------------|
 | GitHub Actions | every **5 minutes** (+ manual `workflow_dispatch`) | runs `./refresh.sh`, commits `index.html` + `status.json` to `main` |
 | Browser client | every **10 seconds** (pauses when tab hidden) | fetches `./status.json`; hide / iOS-return abort is not a failed poll; stale cached JSON cannot rewind freshness or the board; soft-paints only when board content changes (not on every 5m timestamp) and preserve the selected type tab; freshness says `Live` only inside the ~5m Actions window. A failed poll or >15m refresh silence changes the page to an explicit **last verified snapshot** state with one **Retry now** action. |
 | Manual | on demand | `./refresh.sh` or `./refresh.sh --push` from a box with `gh`; decision issues are read-only by default |
+
+This board is fast-refreshing, but still bounded by the 5-minute Actions cadence and 10-second client poll loop.
 
 Optional: a Bob / Grok routine can also call `./refresh.sh --push` on meaningful events (merge, release, CI red). That is additive -- Actions remains the baseline; do not block shipping on the routine.
 

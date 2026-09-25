@@ -1721,7 +1721,7 @@ function focusKey(kind, raw) {{
 }})();
 
 (function () {{
-  // Near-realtime: poll status.json every 10s; paint board when content changes (no full reload).
+  // Fast-refresh: poll status.json every 10s; paint board when content changes (no full reload).
   // Hide / iOS-return abort is not a fail. Stale cached JSON cannot rewind the board.
   var POLL_MS = 10000;
   var stamp = document.getElementById("live-stamp");
