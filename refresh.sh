@@ -1058,8 +1058,9 @@ def lane_html(p):
     links_html = ('<div class="lane-links">' + "".join(links) + "</div>") if links else ""
     focus = focus_key("project", p.get("name"))
     focus_attr = f' data-focus-key="{h(focus)}" tabindex="-1"' if focus else ""
+    detail_attr = f' data-detail-kind="project" data-detail-key="{h(focus)}"' if focus else ""
     return (
-        f'<article class="lane{quiet}"{focus_attr}>'
+        f'<article class="lane{quiet}"{focus_attr}{detail_attr}>'
         f'<h3>{title_html}</h3>'
         f'<div class="lane-end">{chip}{signal_html}</div>'
         f'{links_html}{notes_html}</article>'
@@ -1110,7 +1111,11 @@ def _work_meta_html(row):
 
 def work_row_html(row):
     lane = row if isinstance(row, dict) else {}
-    lane_id = h(lane.get("id") or "lane")
+    lane_id_raw = str(lane.get("id") or "lane").strip().lower()
+    if not re.match(r"^[a-z0-9-]{1,64}$", lane_id_raw):
+        lane_id_raw = "lane"
+    lane_id = h(lane_id_raw)
+    detail_key = "work:" + lane_id_raw
     name = h(lane.get("name") or lane.get("id") or "LLM")
     task = h(lane.get("task_title") or "idle - needs assignment")
     meta_html = _work_meta_html(lane)
@@ -1133,7 +1138,8 @@ def work_row_html(row):
     note_html = f'<p class="note">{note}</p>' if note else ""
     last_html = f'<p class="last-task">Last: {last_task}</p>' if last_task else ""
     return (
-        f'<article class="agent-row" data-lane-id="{lane_id}" data-lane-status="{h(lane.get("status") or "idle")}">'
+        f'<article class="agent-row" data-lane-id="{lane_id}" data-lane-status="{h(lane.get("status") or "idle")}" '
+        f'data-detail-kind="work" data-detail-key="{h(detail_key)}">'
         f'<div class="agent-head"><h3>{name}</h3>{_work_chip(lane.get("status"))}</div>'
         f'<p class="task">{task}</p>'
         f'<p class="meta">{meta_html}</p>'
@@ -1277,6 +1283,7 @@ html = f'''<!DOCTYPE html>
     display:grid; grid-template-columns:minmax(0,1fr) auto; column-gap:.75rem; row-gap:.15rem;
     padding:.78rem 0; border:0; border-bottom:1px solid var(--hair); background:transparent; border-radius:0;
   }}
+  .lane[data-detail-key], .agent-row[data-detail-key] {{ cursor:pointer; touch-action:manipulation; }}
   .lane:last-child {{ border-bottom:0; }}
   .lane h3 {{ margin:0; font-size:.95rem; font-weight:600; letter-spacing:-.01em; }}
   .lane-end {{ display:flex; align-items:center; gap:.45rem; justify-self:end; }}
@@ -1426,8 +1433,44 @@ html = f'''<!DOCTYPE html>
     list-style:outside disclosure-closed;
   }}
   .pending-more[open] > summary {{ color:var(--orange); }}
+  .detail-scrim {{
+    position:fixed; inset:0; background:rgba(0,0,0,.68); z-index:40;
+    display:none; opacity:0; transition:opacity .15s ease-out;
+  }}
+  .detail-scrim.show {{ display:block; opacity:1; }}
+  .detail-sheet {{
+    position:fixed; left:0; right:0; bottom:0; max-height:85vh; overflow:auto;
+    border-top:1px solid var(--border); border-radius:14px 14px 0 0;
+    background:var(--panel); z-index:41; padding:.9rem 1rem calc(1rem + env(safe-area-inset-bottom, 0px));
+    transform:translateY(104%); transition:transform .17s ease-out;
+    box-shadow:0 -14px 32px rgba(0,0,0,.42);
+  }}
+  .detail-sheet.show {{ transform:translateY(0); }}
+  .detail-head {{
+    display:flex; align-items:flex-start; justify-content:space-between; gap:.6rem; margin:0 0 .65rem;
+  }}
+  .detail-head h2 {{ margin:0; font-size:1.05rem; line-height:1.25; }}
+  .detail-close {{
+    min-height:44px; min-width:44px; border:1px solid var(--border); border-radius:8px;
+    background:transparent; color:var(--text); font-size:1rem; font-weight:700; cursor:pointer;
+  }}
+  .detail-close:hover {{ border-color:var(--orange); color:var(--orange); }}
+  .detail-meta, .detail-note, .detail-time {{ margin:0 0 .55rem; color:var(--muted); font-size:.82rem; line-height:1.4; }}
+  .detail-note {{ color:var(--text); white-space:pre-wrap; }}
+  .detail-links {{ display:flex; flex-wrap:wrap; gap:.42rem; margin:0 0 .72rem; }}
+  .detail-links a {{
+    min-height:44px; display:inline-flex; align-items:center; justify-content:center;
+    border:1px solid var(--border); border-radius:8px; padding:.35rem .6rem; font-size:.78rem;
+    text-decoration:none;
+  }}
+  .detail-links a:hover {{ border-color:var(--orange); color:var(--orange); }}
+  .detail-events-title {{ margin:0 0 .35rem; font-size:.76rem; letter-spacing:.05em; text-transform:uppercase; color:var(--muted); }}
+  .detail-events {{ margin:0; padding:0 0 0 1rem; display:grid; gap:.36rem; }}
+  .detail-events li {{ color:var(--muted); font-size:.78rem; line-height:1.35; }}
+  .detail-events a {{ color:var(--link); }}
   @media (prefers-reduced-motion: reduce) {{
     .live-dot {{ animation:none; box-shadow:none; }}
+    .detail-scrim, .detail-sheet {{ transition:none; }}
   }}
   @media (min-width:720px) {{
     .wrap {{ padding:1.5rem 1.25rem 3.75rem; }}
@@ -1464,11 +1507,25 @@ html = f'''<!DOCTYPE html>
   {glance_html(status.get("pending"), status.get("sections"))}{type_tabs_html(status.get("sections"), status.get("pending"))}
   {''.join(sections_html)}
   </div>
+  <div id="detail-scrim" class="detail-scrim" hidden></div>
+  <aside id="detail-sheet" class="detail-sheet" hidden role="dialog" aria-modal="true" aria-labelledby="detail-title">
+    <div class="detail-head">
+      <h2 id="detail-title">Details</h2>
+      <button id="detail-close" class="detail-close" type="button" aria-label="Close details">Close</button>
+    </div>
+    <p id="detail-meta" class="detail-meta"></p>
+    <p id="detail-time" class="detail-time"></p>
+    <p id="detail-note" class="detail-note"></p>
+    <div id="detail-links" class="detail-links"></div>
+    <h3 id="detail-events-title" class="detail-events-title" hidden>Recent events</h3>
+    <ul id="detail-events" class="detail-events"></ul>
+  </aside>
   <footer>
     <p><a href="https://github.com/rupret007/bob-ops-dashboard">rupret007/bob-ops-dashboard</a>
     · <a href="./status.json">status.json</a></p>
   </footer>
 </div>
+<script id="status-bootstrap" type="application/json">{json.dumps(status, ensure_ascii=True).replace("<", "\\u003c")}</script>
 <script>
 function focusKey(kind, raw) {{
   var prefix = String(kind || "").replace(/^\s+|\s+$/g, "").toLowerCase();
@@ -1770,7 +1827,34 @@ function focusKey(kind, raw) {{
   var silenceDetailEl = document.getElementById("silence-detail");
   var retryStatus = document.getElementById("retry-status");
   var boardEl = document.getElementById("board");
+  var detailScrim = document.getElementById("detail-scrim");
+  var detailSheet = document.getElementById("detail-sheet");
+  var detailTitleEl = document.getElementById("detail-title");
+  var detailMetaEl = document.getElementById("detail-meta");
+  var detailTimeEl = document.getElementById("detail-time");
+  var detailNoteEl = document.getElementById("detail-note");
+  var detailLinksEl = document.getElementById("detail-links");
+  var detailEventsEl = document.getElementById("detail-events");
+  var detailEventsTitleEl = document.getElementById("detail-events-title");
+  var detailCloseEl = document.getElementById("detail-close");
   var pollFailStreak = 0;
+  var detailOpen = false;
+  var detailToken = "";
+  var detailHistoryDepth = 0;
+  var lastStatusData = null;
+
+  function bootstrapStatus() {{
+    var el = document.getElementById("status-bootstrap");
+    if (!el) return null;
+    var raw = el.textContent || "";
+    if (!raw) return null;
+    try {{
+      var parsed = JSON.parse(raw);
+      return parsed && typeof parsed === "object" ? parsed : null;
+    }} catch (e) {{
+      return null;
+    }}
+  }}
 
   var CHIP_COLORS = {{
     "green": ["#16a34a", "#052e16", "#bbf7d0"],
@@ -1885,6 +1969,241 @@ function focusKey(kind, raw) {{
     if (actions) out.ci = actions;
     if (game) out.game = game;
     return out;
+  }}
+  function detailStatusLabel(raw) {{
+    var status = String(raw || "").trim().toLowerCase();
+    if (status === "red") return "Red";
+    if (status === "yellow") return "Yellow";
+    if (status === "green") return "Green";
+    if (status === "parked") return "Parked";
+    if (status === "running") return "Running";
+    if (status === "blocked") return "Blocked";
+    if (status === "finished") return "Finished";
+    if (status === "idle") return "Idle";
+    if (status === "jeff-gate") return "After yes";
+    return status ? status.charAt(0).toUpperCase() + status.slice(1) : "Unknown";
+  }}
+  function noteText(item) {{
+    if (!item || typeof item !== "object") return "";
+    if (item.notes) return String(item.notes).trim();
+    if (item.goal) return String(item.goal).trim();
+    return "";
+  }}
+  function statusSections(data) {{
+    var out = [];
+    (data && data.sections || []).forEach(function (sec) {{
+      if (!sec || typeof sec !== "object") return;
+      var sid = String(sec.id || "");
+      (sec.projects || []).forEach(function (p) {{
+        if (!p || typeof p !== "object") return;
+        var key = focusKey("project", p.name);
+        if (!key) return;
+        out.push({{
+          token: key,
+          section: sid,
+          item: p
+        }});
+      }});
+    }});
+    return out;
+  }}
+  function eventRow(text, href) {{
+    var msg = String(text || "").trim();
+    if (!msg) return null;
+    var safe = workHref(href || "");
+    return safe ? {{ text: msg, href: safe }} : {{ text: msg, href: "" }};
+  }}
+  function projectEvents(p) {{
+    if (!p || typeof p !== "object") return [];
+    var out = [];
+    var ci = p.ci && typeof p.ci === "object" ? p.ci : {{}};
+    var ciState = String(ci.conclusion || "").trim().toLowerCase();
+    if (ciState) out.push(eventRow("CI: " + ciState, ci.html_url || p.ci_url));
+    var prs = (typeof p.open_prs === "number" && isFinite(p.open_prs)) ? p.open_prs : 0;
+    if (prs > 0) {{
+      var label = prs === 1 ? "1 open PR" : prs + " open PRs";
+      out.push(eventRow("Review: " + label, prs === 1 ? p.open_pr_url : pullsUrlFromRepo(p.repo_url || p.url || "")));
+    }}
+    var lease = coordSignal(p);
+    if (lease) out.push(eventRow("Coordination: " + lease, ""));
+    var rel = String(p.release || "").trim();
+    if (rel) {{
+      var relHref = latestReleaseUrlFromRepo(p.repo_url || p.url || "") || safeReleaseUrl(p.release_url || "");
+      out.push(eventRow("Latest release: " + rel, relHref));
+    }}
+    if (p.agent_url) out.push(eventRow("Agent attached", p.agent_url));
+    return out.filter(Boolean).slice(0, 4);
+  }}
+  function workEvents(row, data) {{
+    if (!row || typeof row !== "object") return [];
+    var out = [];
+    if (row.repo) {{
+      var repoHref = safeRepoUrl("https://github.com/" + row.repo);
+      out.push(eventRow("Repo: " + row.repo, repoHref));
+    }}
+    if (row.pr_url) out.push(eventRow("Tracking PR", row.pr_url));
+    if (row.branch) out.push(eventRow("Branch: " + row.branch, ""));
+    var probes = (data && data.agents) || [];
+    for (var i = 0; i < probes.length; i += 1) {{
+      var probe = probes[i];
+      if (!probe || String(probe.id || "") !== String(row.id || "")) continue;
+      var state = detailStatusLabel(probe.state || "unknown");
+      out.push(eventRow("Probe state: " + state, ""));
+      break;
+    }}
+    var clouds = (data && data.cloud_agents) || [];
+    for (var j = 0; j < clouds.length; j += 1) {{
+      var cloud = clouds[j];
+      if (!cloud || !safeAgentUrl(cloud.url)) continue;
+      if (row.pr_url && safePrUrl(cloud.pr_url || "") === safePrUrl(row.pr_url || "")) {{
+        out.push(eventRow("Cloud handoff: " + String(cloud.name || "Agent"), cloud.url));
+        break;
+      }}
+    }}
+    return out.filter(Boolean).slice(0, 4);
+  }}
+  function detailLinks(item, kind) {{
+    var links = [];
+    if (kind === "project") {{
+      var hrefs = laneHrefs(item);
+      if (hrefs.pr) links.push({{ label: "Open PR", href: hrefs.pr }});
+      if (hrefs.ci) links.push({{ label: "Open CI", href: hrefs.ci }});
+      if (hrefs.agent) links.push({{ label: "Open agent", href: hrefs.agent }});
+      if (hrefs.repo) links.push({{ label: "Open repo", href: hrefs.repo }});
+      if (hrefs.game) links.push({{ label: "Play game", href: hrefs.game }});
+    }} else {{
+      var agent = safeAgentUrl(item.agent_url || "");
+      var pr = safePrUrl(item.pr_url || "");
+      var repo = item.repo ? safeRepoUrl("https://github.com/" + item.repo) : "";
+      if (agent) links.push({{ label: "Open agent", href: agent }});
+      if (pr) links.push({{ label: "Open PR", href: pr }});
+      if (repo) links.push({{ label: "Open repo", href: repo }});
+    }}
+    return links;
+  }}
+  function detailLookup(token, data) {{
+    if (!token) return null;
+    if (token.indexOf("work:") === 0) {{
+      var workId = token.slice(5);
+      var rows = normalizeLlmWork((data && data.llm_work) || []);
+      for (var i = 0; i < rows.length; i += 1) {{
+        if (String(rows[i].id || "") === workId) {{
+          return {{
+            token: token,
+            kind: "work",
+            title: rows[i].name || laneName(workId),
+            status: detailStatusLabel(rows[i].status || "idle"),
+            note: noteText(rows[i]),
+            links: detailLinks(rows[i], "work"),
+            events: workEvents(rows[i], data),
+            generated: (data && data.generated_at_display) || ""
+          }};
+        }}
+      }}
+      return null;
+    }}
+    var sections = statusSections(data);
+    for (var j = 0; j < sections.length; j += 1) {{
+      if (sections[j].token !== token) continue;
+      var project = sections[j].item || {{}};
+      return {{
+        token: token,
+        kind: "project",
+        title: String(project.name || "Project"),
+        status: detailStatusLabel(project.chip || project.status || ""),
+        note: noteText(project),
+        links: detailLinks(project, "project"),
+        events: projectEvents(project),
+        generated: (data && data.generated_at_display) || ""
+      }};
+    }}
+    return null;
+  }}
+  function paintDetail(meta) {{
+    if (!meta || !detailSheet) return;
+    detailTitleEl.textContent = meta.title || "Details";
+    detailMetaEl.textContent = "Status: " + (meta.status || "Unknown");
+    detailTimeEl.textContent = meta.generated ? ("Snapshot: " + meta.generated) : "";
+    detailNoteEl.textContent = meta.note || "No additional notes.";
+    detailLinksEl.innerHTML = "";
+    (meta.links || []).forEach(function (entry) {{
+      var href = workHref(entry && entry.href || "");
+      if (!href) return;
+      var a = document.createElement("a");
+      a.href = href;
+      a.target = "_blank";
+      a.rel = "noopener noreferrer";
+      a.setAttribute("data-open", "work");
+      a.textContent = String(entry.label || "Open");
+      detailLinksEl.appendChild(a);
+    }});
+    detailEventsEl.innerHTML = "";
+    var events = meta.events || [];
+    detailEventsTitleEl.hidden = events.length === 0;
+    events.forEach(function (entry) {{
+      if (!entry || !entry.text) return;
+      var li = document.createElement("li");
+      if (entry.href) {{
+        var a = document.createElement("a");
+        a.href = entry.href;
+        a.target = "_blank";
+        a.rel = "noopener noreferrer";
+        a.setAttribute("data-open", "work");
+        a.textContent = entry.text;
+        li.appendChild(a);
+      }} else {{
+        li.textContent = entry.text;
+      }}
+      detailEventsEl.appendChild(li);
+    }});
+  }}
+  function setDetailVisibility(open) {{
+    if (!detailSheet || !detailScrim) return;
+    detailOpen = !!open;
+    if (detailOpen) {{
+      detailScrim.hidden = false;
+      detailSheet.hidden = false;
+      detailScrim.classList.add("show");
+      detailSheet.classList.add("show");
+      try {{ document.body.classList.add("detail-open"); }} catch (e) {{}}
+      return;
+    }}
+    detailScrim.classList.remove("show");
+    detailSheet.classList.remove("show");
+    detailScrim.hidden = true;
+    detailSheet.hidden = true;
+    try {{ document.body.classList.remove("detail-open"); }} catch (e2) {{}}
+  }}
+  function closeDetail(fromHistory) {{
+    if (!detailOpen) return false;
+    if (fromHistory && detailHistoryDepth > 0) {{
+      history.back();
+      return true;
+    }}
+    detailToken = "";
+    setDetailVisibility(false);
+    return true;
+  }}
+  function openDetail(token, pushHistory) {{
+    var data = lastStatusData || bootstrapStatus();
+    var meta = detailLookup(token, data);
+    if (!meta) return false;
+    detailToken = token;
+    paintDetail(meta);
+    setDetailVisibility(true);
+    if (pushHistory) {{
+      try {{
+        history.pushState({{ detailSheet: token }}, "", location.href);
+        detailHistoryDepth += 1;
+      }} catch (e) {{}}
+    }}
+    return true;
+  }}
+  function refreshOpenDetail() {{
+    if (!detailOpen || !detailToken) return;
+    var meta = detailLookup(detailToken, lastStatusData || bootstrapStatus());
+    if (!meta) return;
+    paintDetail(meta);
   }}
   function tapLink(href, label) {{
     if (!href) return "";
@@ -2125,6 +2444,7 @@ function focusKey(kind, raw) {{
       if (want) history.replaceState(null, "", "#" + want);
       else if ((location.hash || "").length > 1) history.replaceState(null, "", location.pathname + location.search);
     }} catch (e) {{}}
+    if (detailOpen) closeDetail(false);
   }}
   var glanceTargetTimer = null;
   function validFocusKey(raw) {{
@@ -2205,6 +2525,14 @@ function focusKey(kind, raw) {{
   window.addEventListener("hashchange", function () {{
     applyTypeTab(tabFromHash());
   }});
+  window.addEventListener("popstate", function () {{
+    if (detailOpen) {{
+      if (detailHistoryDepth > 0) detailHistoryDepth -= 1;
+      closeDetail(false);
+      return;
+    }}
+    applyTypeTab(tabFromHash());
+  }});
   function pendingShell(items) {{
     var rank = {{ high: 0, medium: 1, low: 2 }};
     var rows = (items || []).filter(function (it) {{
@@ -2280,7 +2608,8 @@ function focusKey(kind, raw) {{
     var linksHtml = links ? '<div class="lane-links">' + links + "</div>" : "";
     var focus = focusKey("project", p.name);
     var focusAttr = focus ? ' data-focus-key="' + esc(focus) + '" tabindex="-1"' : "";
-    return '<article class="lane' + quiet + '"' + focusAttr + '><h3>' + titleHtml + '</h3><div class="lane-end">' +
+    var detailAttr = focus ? ' data-detail-kind="project" data-detail-key="' + esc(focus) + '"' : "";
+    return '<article class="lane' + quiet + '"' + focusAttr + detailAttr + '><h3>' + titleHtml + '</h3><div class="lane-end">' +
       chip + signalHtml + "</div>" + linksHtml + notesHtml + "</article>";
   }}
   function lanesHtml(projects, sortAttn) {{
@@ -2507,7 +2836,9 @@ function focusKey(kind, raw) {{
     var goal = lane.goal ? '<p class="goal">' + esc(lane.goal) + "</p>" : "";
     var note = lane.note ? '<p class="note">' + esc(lane.note) + "</p>" : "";
     var lastTask = lane.last_task ? '<p class="last-task">Last: ' + esc(lane.last_task) + "</p>" : "";
-    return '<article class="agent-row" data-lane-id="' + esc(lane.id || "") + '" data-lane-status="' + esc(lane.status || "idle") + '">' +
+    var detailKey = lane.id ? "work:" + lane.id : "";
+    var detailAttr = detailKey ? ' data-detail-kind="work" data-detail-key="' + esc(detailKey) + '"' : "";
+    return '<article class="agent-row" data-lane-id="' + esc(lane.id || "") + '" data-lane-status="' + esc(lane.status || "idle") + '"' + detailAttr + '>' +
       '<div class="agent-head"><h3>' + esc(name) + '</h3>' + workChip(lane.status) + "</div>" +
       '<p class="task">' + esc(task) + "</p>" +
       '<p class="meta">' + metaHtml + "</p>" +
@@ -2618,6 +2949,7 @@ function focusKey(kind, raw) {{
 
   function renderBoard(data) {{
     if (!boardEl || !data || !Array.isArray(data.sections)) return;
+    lastStatusData = data;
     lastCloud = sanitizeCloudAgents((data && data.cloud_agents) || lastCloud);
     paintAgents((data && data.llm_work) || []);
     var controlProjects = [];
@@ -2661,6 +2993,7 @@ function focusKey(kind, raw) {{
     boardEl.setAttribute("data-fp", html);
     restoreOpen(open);
     applyTypeTab(currentTypeTab);
+    refreshOpenDetail();
     window.dispatchEvent(new CustomEvent("bob-ops-painted"));
   }}
 
@@ -2710,6 +3043,7 @@ function focusKey(kind, raw) {{
   }}
   lastAgents = readDomLlmWork();
   lastCloud = [];
+  lastStatusData = bootstrapStatus();
   function signalHref(p) {{
     var signal = compactSignal(p);
     if (!signal) return "";
@@ -2762,6 +3096,42 @@ function focusKey(kind, raw) {{
   window.workHref = workHref;
   window.openWorkLink = openWorkLink;
   document.addEventListener("click", handleWorkClick);
+  function detailTokenForRow(row) {{
+    if (!row) return "";
+    var kind = String(row.getAttribute("data-detail-kind") || "");
+    var token = String(row.getAttribute("data-detail-key") || "");
+    if ((kind !== "project" && kind !== "work") || !token) return "";
+    return token;
+  }}
+  function handleDetailTap(ev) {{
+    if (!ev || ev.defaultPrevented) return false;
+    if (ev.metaKey || ev.ctrlKey || ev.shiftKey || ev.altKey) return false;
+    var target = ev.target;
+    if (!target || !target.closest) return false;
+    if (target.closest("a,button,summary,[data-dec],[data-action],[data-tab]")) return false;
+    var row = target.closest("[data-detail-key]");
+    if (!row) return false;
+    var token = detailTokenForRow(row);
+    if (!token) return false;
+    if (ev.preventDefault) ev.preventDefault();
+    return openDetail(token, true);
+  }}
+  document.addEventListener("click", handleDetailTap);
+  document.addEventListener("keydown", function (ev) {{
+    if (!ev) return;
+    if (ev.key !== "Escape") return;
+    if (detailOpen) closeDetail(true);
+  }});
+  if (detailCloseEl) {{
+    detailCloseEl.addEventListener("click", function () {{
+      closeDetail(true);
+    }});
+  }}
+  if (detailScrim) {{
+    detailScrim.addEventListener("click", function () {{
+      closeDetail(true);
+    }});
+  }}
   function poll() {{
     var seq = ++pollSeq;
     setRetryBusy(true);
@@ -2781,6 +3151,7 @@ function focusKey(kind, raw) {{
       }})
       .then(function (data) {{
         if (!pollFailureCounts(seq, pollSeq)) return;
+        lastStatusData = data;
         var fp = boardFingerprint(data);
         var decision = pollPaintDecision(data && data.generated_at, known, lastFp, fp);
         if (decision === "ignore") {{

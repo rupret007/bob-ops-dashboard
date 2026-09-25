@@ -120,6 +120,21 @@ async function main() {
       await rejectsClippedText(title);
       assert(await row.evaluate(el => el === document.activeElement));
       assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
+      await page.click('#tab-live-shipping');
+      const lane = page.locator('[data-focus-key="project:storyliner"]');
+      await lane.waitFor({ state: 'visible' });
+      await lane.locator('.notes').click();
+      const sheet = page.locator('#detail-sheet');
+      await sheet.waitFor({ state: 'visible' });
+      assert.equal(await page.locator('#detail-title').innerText(), 'StoryLiner');
+      assert((await page.locator('#detail-note').innerText()).includes('Current review stack and default-branch CI come from the live refresh.'));
+      assert((await page.locator('#detail-time').innerText()).includes('Snapshot:'));
+      await page.locator('#detail-close').click();
+      await expectHidden(page.locator('#detail-sheet'));
+      await lane.locator('.notes').click();
+      await sheet.waitFor({ state: 'visible' });
+      await page.goBack();
+      await expectHidden(page.locator('#detail-sheet'));
       assert.deepEqual(errors, [], 'Browser script errors');
       assert.deepEqual(blocked, [], 'Unexpected external request or write');
       assert.deepEqual(popups, [], 'Navigation must not open an issue composer');
@@ -130,6 +145,10 @@ async function main() {
     if (browser) await browser.close();
     if (server.listening) await new Promise(resolve => server.close(resolve));
   }
+}
+
+async function expectHidden(locator) {
+  await locator.waitFor({ state: 'hidden' });
 }
 
 main().catch(error => { console.error(error); process.exitCode = 1; });
