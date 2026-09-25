@@ -218,6 +218,7 @@ from board_meta import (
     parse_coord_issue,
     public_coord,
     status_with_coord_review,
+    demote_stale_running_llm_work,
     drop_leftover_verify,
     extract_cloud_agents_from_prs,
     focus_key,
@@ -727,6 +728,16 @@ for lane_id, lane_name in LANE_ORDER:
         row["source"] = "idle"
     llm_work.append(row)
 
+status["llm_work"] = llm_work
+
+# Fail-closed honesty: never paint Running for idle-source lanes without a live Cloud Agent match.
+# Stale assignment blobs with status=running + source=idle were lying to Jeff (PR#56 WashOps/etc.).
+_live_cloud_lanes = set()
+for cloud in trusted_cloud:
+    lid = _lane_id("", cloud.get("name"))
+    if lid:
+        _live_cloud_lanes.add(lid)
+llm_work = demote_stale_running_llm_work(llm_work, _live_cloud_lanes)
 status["llm_work"] = llm_work
 
 # Pulse data only -- this section now reflects current work attribution.
@@ -2909,6 +2920,7 @@ if [[ $PUSH -eq 1 ]]; then
   gh repo clone "$OWNER/bob-ops-dashboard" "$WORK" -- --quiet
   mkdir -p "$WORK/.github/workflows"
   cp "$ROOT/index.html" "$ROOT/status.json" "$ROOT/README.md" "$ROOT/refresh.sh" "$WORK/"
+  [[ -f "$ROOT/llm-work-now.json" ]] && cp "$ROOT/llm-work-now.json" "$WORK/"
   [[ -f "$ROOT/board_meta.py" ]] && cp "$ROOT/board_meta.py" "$WORK/"
   [[ -f "$ROOT/probe-agents-status.sh" ]] && cp "$ROOT/probe-agents-status.sh" "$WORK/"
   [[ -f "$ROOT/qa-claim-smoke.sh" ]] && cp "$ROOT/qa-claim-smoke.sh" "$WORK/"
@@ -2931,6 +2943,7 @@ if [[ $PUSH -eq 1 ]]; then
   [[ -f "$WORK/qa-source-only.sh" ]] && chmod +x "$WORK/qa-source-only.sh"
   cd "$WORK"
   git add index.html status.json README.md refresh.sh
+  [[ -f llm-work-now.json ]] && git add llm-work-now.json
   [[ -f board_meta.py ]] && git add board_meta.py
   [[ -f probe-agents-status.sh ]] && git add probe-agents-status.sh
   [[ -f qa-claim-smoke.sh ]] && git add qa-claim-smoke.sh

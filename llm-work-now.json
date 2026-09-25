@@ -1,70 +1,81 @@
 {
+  "generated_at": "2026-09-25 02:29 CT",
+  "honest_note": "2026-09-25 ~02:29 CT honesty: prior R3 one-shots idle/finished; Cloud BA spend-walled; Barker parked; R4 heavy lanes starting as BYOK one-shots (not standing workers). Pages must not paint Running for idle/finished.",
   "work": [
     {
       "id": "codex",
       "name": "Codex (ChatGPT)",
-      "task_title": "Pivot PR #56 to LLM work-now attribution board",
+      "task_title": "R3 Mini native ChatGPT paste sent \u2014 pending reply audit",
       "repo": "rupret007/bob-ops-dashboard",
-      "pr_url": "https://github.com/rupret007/bob-ops-dashboard/pull/56",
-      "pr_number": "56",
-      "branch": "cursor/max-llm-resource-strip-ec39",
-      "goal": "Replace process-state pills with detailed assignment rows and keep public-board safety filters fail-closed.",
-      "status": "running",
-      "why": "Primary build lane for this dashboard PR"
+      "pr_url": "",
+      "pr_number": "",
+      "branch": "",
+      "goal": "One-shot Mini native paste (~02:21 CT). Not a long-running Codex worker. Prior PR#56 attribution board MERGED.",
+      "status": "finished",
+      "why": "Paste sent; awaiting reply evidence \u2014 not Work-now Running",
+      "note": "last tip: PR#56 merged 2026-09-25; native chatgpt-04-after-send.png",
+      "last_task": "Pivot PR #56 to LLM work-now attribution board",
+      "source": "mini_paste"
     },
     {
       "id": "claude",
       "name": "Claude",
-      "task_title": "QA and safety sweep for attribution fields",
+      "task_title": "R3 Mini native Claude paste sent \u2014 pending reply audit",
       "repo": "rupret007/bob-ops-dashboard",
-      "pr_url": "https://github.com/rupret007/bob-ops-dashboard/pull/56",
-      "pr_number": "56",
-      "branch": "cursor/max-llm-resource-strip-ec39",
-      "goal": "Verify links, branch text, and notes stay public-safe with no secrets or customer paths.",
-      "status": "running",
-      "why": "Review lane for board safety"
+      "goal": "One-shot Mini native paste (~02:22 CT). Not a standing Claude worker.",
+      "status": "finished",
+      "why": "Paste sent; awaiting reply evidence \u2014 not Work-now Running",
+      "note": "native claude-04-after-send.png",
+      "last_task": "QA and safety sweep for attribution fields",
+      "source": "mini_paste"
     },
     {
       "id": "gemini",
       "name": "Gemini",
-      "task_title": "WashOps exterior-services copy verification",
-      "repo": "rupret007/StoryOps-AI",
-      "goal": "Confirm StoryOps-AI display rename to WashOps and keep high-level/non-customer wording.",
-      "status": "running",
-      "why": "Product naming and content lane"
+      "task_title": "IDLE \u2014 R3 BYOK assess/probe finished (~02:00\u201302:02 CT)",
+      "repo": "rupret007/bob-ops-dashboard",
+      "goal": "Short Gemini API one-shots during harden Round 3. No background Gemini worker.",
+      "status": "idle",
+      "why": "Prior one-shot done; R4 BYOK starting separately \u2014 not Work-now Running",
+      "note": "artifacts: gemini-direct-assess-20260925-0200.md; ASSESS_OK",
+      "last_task": "WashOps exterior-services copy verification",
+      "source": "byok_oneshot"
     },
     {
       "id": "minimax",
       "name": "MiniMax",
-      "task_title": "Mobile readability pass for work-now rows",
+      "task_title": "IDLE \u2014 R3 BYOK tip/probe finished (~02:00\u201302:03 CT)",
       "repo": "rupret007/bob-ops-dashboard",
-      "pr_url": "https://github.com/rupret007/bob-ops-dashboard/pull/56",
-      "pr_number": "56",
-      "branch": "cursor/max-llm-resource-strip-ec39",
-      "goal": "Keep multi-row layout readable on dark theme while preserving first-screen signal hierarchy.",
-      "status": "running",
-      "why": "UI density and wrap lane"
+      "goal": "Short MiniMax-M2.7 tip-style probes + prior tip critiques. Silent capped; no standing Runner job.",
+      "status": "idle",
+      "why": "Prior one-shot done; R4 BYOK starting separately \u2014 not Work-now Running",
+      "note": "last tip sha 68b220e Bob#30; probe VERDICT FAIL on honesty sample",
+      "last_task": "Mobile readability pass for work-now rows",
+      "source": "byok_oneshot"
     },
     {
       "id": "grok",
       "name": "Grok",
-      "task_title": "Conductor assignment routing notes",
-      "repo": "rupret007/barker",
-      "goal": "Track high-level conductor coordination for Cloud Agent usage without exposing private internals.",
-      "status": "running",
-      "why": "Conductor context lane"
+      "task_title": "IDLE \u2014 no active assignment (Barker PARKED)",
+      "repo": "",
+      "goal": "No Grok/Barker work tonight. Do not invent conductor routing as live work.",
+      "status": "idle",
+      "why": "Parked / no assignment",
+      "note": "Barker lease FREE_PARKED_BILLING \u2014 no touch",
+      "last_task": "Conductor assignment routing notes",
+      "source": "idle"
     },
     {
       "id": "cursor-cloud",
       "name": "Cursor Cloud",
-      "task_title": "Draft PR #56 handoff and cloud agent attribution",
+      "task_title": "BLOCKED_SPEND_WALL \u2014 zero new Cloud BA",
       "repo": "rupret007/bob-ops-dashboard",
-      "pr_url": "https://github.com/rupret007/bob-ops-dashboard/pull/56",
-      "pr_number": "56",
-      "branch": "cursor/max-llm-resource-strip-ec39",
-      "goal": "Keep attribution source grounded in cloud_agents and explicit assignment blob.",
-      "status": "running",
-      "why": "Cloud execution lane"
+      "goal": "Other Models / on-demand spend wall. No Cloud Background Agent relaunch until Jeff opens headroom.",
+      "status": "blocked",
+      "why": "Spend wall \u2014 honest blocked, not Running",
+      "note": "PR#56 merged; open drafts #57/#58 held under wall",
+      "last_task": "Draft PR #56 handoff and cloud agent attribution",
+      "source": "spend_wall"
     }
   ]
 }

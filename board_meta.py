@@ -763,6 +763,55 @@ def visible_chip(project: Any) -> str | None:
     return label
 
 
+
+# Sources that must NEVER paint Running unless a live Cloud Agent matches the lane.
+STALE_RUNNING_SOURCES = frozenset({"", "idle", "byok_oneshot", "mini_paste", "spend_wall"})
+
+
+def demote_stale_running_llm_work(
+    rows: Any, live_cloud_lane_ids: Any = None
+) -> list[dict[str, Any]]:
+    """Fail-closed: demote status=running when source cannot prove a live worker.
+
+    Stale assignment blobs with status=running + source=idle were painting
+    Gemini/MiniMax/etc as Running for Jeff after one-shots finished (PR#56 era).
+    Only keep Running when the lane id is in live_cloud_lane_ids (trusted open
+    Cloud Agent attribution) or source is an explicit live worker class.
+    """
+    live = {
+        str(x).strip().lower()
+        for x in (live_cloud_lane_ids or [])
+        if str(x).strip()
+    }
+    out: list[dict[str, Any]] = []
+    for raw in rows or []:
+        if not isinstance(raw, dict):
+            continue
+        row = dict(raw)
+        st = str(row.get("status") or "idle").strip().lower()
+        src = str(row.get("source") or "").strip().lower()
+        lid = str(row.get("id") or "").strip().lower()
+        if st == "running" and src in STALE_RUNNING_SOURCES and lid not in live:
+            if row.get("task_title") and row.get("task_title") != "idle - needs assignment":
+                if not row.get("last_task"):
+                    row["last_task"] = row.get("task_title")
+            if src == "spend_wall":
+                row["status"] = "blocked"
+            elif src == "mini_paste":
+                row["status"] = "finished"
+            elif src == "byok_oneshot":
+                row["status"] = "idle"
+            else:
+                row["status"] = "idle"
+                title = str(row.get("task_title") or "")
+                if not title or "running" in title.lower():
+                    row["task_title"] = "idle - needs assignment"
+            if not row.get("source"):
+                row["source"] = "idle"
+        out.append(row)
+    return out
+
+
 def mac_probe_known(agent: Any) -> bool:
     """True when a Codex/Cursor/Claude pill has a live non-unknown state."""
     if not isinstance(agent, dict):

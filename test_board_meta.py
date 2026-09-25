@@ -22,6 +22,7 @@ from board_meta import (
     compact_unknown_mac_probes,
     decision_href,
     detect_linear_pr_stack,
+    demote_stale_running_llm_work,
     drop_leftover_verify,
     extract_agent_url,
     extract_cloud_agents_from_prs,
@@ -2222,6 +2223,39 @@ class CoordLeaseTests(unittest.TestCase):
         tampered = dict(project, coord=dict(ready_public, pr_url="https://github.com/rupret007/webjam/pull/23"))
         self.assertEqual(coord_pr_url(tampered), "")
         self.assertIsNone(coord_review_signal(tampered))
+
+
+
+class LlmWorkHonestyTests(unittest.TestCase):
+    def test_demote_stale_running_llm_work_idle_source(self):
+        rows = [
+            {"id": "gemini", "status": "running", "source": "idle", "task_title": "WashOps copy"},
+            {"id": "minimax", "status": "running", "source": "byok_oneshot", "task_title": "tip probe"},
+            {"id": "codex", "status": "running", "source": "mini_paste", "task_title": "paste sent"},
+            {"id": "cursor-cloud", "status": "running", "source": "spend_wall", "task_title": "BA"},
+            {"id": "grok", "status": "running", "source": "idle", "task_title": "routing"},
+        ]
+        out = {r["id"]: r for r in demote_stale_running_llm_work(rows)}
+        self.assertEqual(out["gemini"]["status"], "idle")
+        self.assertEqual(out["gemini"]["last_task"], "WashOps copy")
+        self.assertEqual(out["minimax"]["status"], "idle")
+        self.assertEqual(out["codex"]["status"], "finished")
+        self.assertEqual(out["cursor-cloud"]["status"], "blocked")
+        self.assertEqual(out["grok"]["status"], "idle")
+
+    def test_demote_keeps_running_when_live_cloud_lane(self):
+        rows = [
+            {"id": "cursor-cloud", "status": "running", "source": "idle", "task_title": "live BA"},
+        ]
+        out = demote_stale_running_llm_work(rows, {"cursor-cloud"})
+        self.assertEqual(out[0]["status"], "running")
+
+    def test_demote_keeps_explicit_cloud_agents_source(self):
+        rows = [
+            {"id": "codex", "status": "running", "source": "cloud_agents", "task_title": "open PR agent"},
+        ]
+        out = demote_stale_running_llm_work(rows)
+        self.assertEqual(out[0]["status"], "running")
 
 
 if __name__ == "__main__":
