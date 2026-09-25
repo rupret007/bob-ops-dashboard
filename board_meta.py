@@ -1054,6 +1054,88 @@ def write_llm_work_now_json(
     return target
 
 
+
+# Pages SoT freshness (R126): warn when llm-work-now.json stamp lags refresh.
+LLM_WORK_NOW_STALE_WARN_SEC = 20 * 60  # ~Actions cadence + slack
+
+
+def parse_llm_work_now_generated_at(value: Any) -> float | None:
+    """Parse llm-work-now generated_at ('YYYY-MM-DD HH:MM CT' or ISO) → epoch."""
+    if value is None:
+        return None
+    s = str(value).strip()
+    if not s:
+        return None
+    # Prefer ISO / checked_at parser first.
+    ts = parse_checked_at(s)
+    if ts is not None:
+        return ts
+    # Display form written by refresh: "2026-09-25 07:18 CT"
+    m = re.match(
+        r"^(\d{4}-\d{2}-\d{2})\s+(\d{1,2}):(\d{2})\s*CT\s*$",
+        s,
+        re.I,
+    )
+    if not m:
+        return None
+    try:
+        dt = datetime(
+            int(m.group(1)[0:4]),
+            int(m.group(1)[5:7]),
+            int(m.group(1)[8:10]),
+            int(m.group(2)),
+            int(m.group(3)),
+            tzinfo=ZoneInfo(BOARD_TZ),
+        )
+        return dt.timestamp()
+    except Exception:
+        return None
+
+
+def llm_work_now_stamp_age_sec(
+    blob: Any,
+    *,
+    now: float | None = None,
+) -> float | None:
+    """Age in seconds of llm-work-now generated_at; None if unparseable."""
+    if not isinstance(blob, dict):
+        return None
+    ts = parse_llm_work_now_generated_at(blob.get("generated_at"))
+    if ts is None:
+        return None
+    clock = time.time() if now is None else float(now)
+    return max(0.0, clock - ts)
+
+
+def llm_work_now_freshness_warnings(
+    blob: Any,
+    *,
+    now: float | None = None,
+    max_age_sec: int = LLM_WORK_NOW_STALE_WARN_SEC,
+) -> list[str]:
+    """WARN strings when Pages SoT stamp is missing/unparseable/stale.
+
+    Does not change chip statuses — refresh should still rewrite the file.
+    Used for Actions logs + status.llm_work_now_freshness meta.
+    """
+    warns: list[str] = []
+    if not isinstance(blob, dict):
+        return ["llm-work-now: missing or not an object"]
+    raw = blob.get("generated_at")
+    if raw is None or not str(raw).strip():
+        return ["llm-work-now: generated_at missing"]
+    age = llm_work_now_stamp_age_sec(blob, now=now)
+    if age is None:
+        return [f"llm-work-now: generated_at unparseable ({raw!r})"]
+    if age > max_age_sec:
+        warns.append(
+            f"llm-work-now: STALE generated_at={raw!s} age={int(age)}s "
+            f"> WARN_TTL={max_age_sec}s (refresh must rewrite via "
+            f"write_llm_work_now_json)"
+        )
+    return warns
+
+
 def llm_work_stale_running_violations(
     rows: Any,
     live_cloud_lane_ids: Any = None,

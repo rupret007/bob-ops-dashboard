@@ -223,6 +223,8 @@ from board_meta import (
     finalize_llm_work_after_live_poll,
     build_llm_work_now_payload,
     write_llm_work_now_json,
+    llm_work_now_freshness_warnings,
+    LLM_WORK_NOW_STALE_WARN_SEC,
     STALE_RUNNING_SOURCES,
     LLM_WORK_PROOF_TS_KEYS,
     load_harden_window,
@@ -772,6 +774,19 @@ write_llm_work_now_json(
     generated_at_ct=_ct_stamp,
 )
 print(f"Wrote llm-work-now.json generated_at={_ct_stamp}")
+try:
+    _pub = json.loads((root / "llm-work-now.json").read_text(encoding="utf-8"))
+except Exception:
+    _pub = None
+_fresh_warns = llm_work_now_freshness_warnings(_pub)
+status["llm_work_now_freshness"] = {
+    "generated_at": (_pub or {}).get("generated_at") if isinstance(_pub, dict) else None,
+    "warn_ttl_sec": LLM_WORK_NOW_STALE_WARN_SEC,
+    "warnings": _fresh_warns,
+    "ok": not _fresh_warns,
+}
+for _w in _fresh_warns:
+    print(f"WARN {_w}")
 
 # Harden stress window strip (separate from llm_work — never invents Running chips).
 _hw_blob = None

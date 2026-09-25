@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import unittest
 from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 from pathlib import Path
 
 from board_meta import (
@@ -30,6 +31,9 @@ from board_meta import (
     finalize_llm_work_after_live_poll,
     build_llm_work_now_payload,
     write_llm_work_now_json,
+    llm_work_now_freshness_warnings,
+    parse_llm_work_now_generated_at,
+    LLM_WORK_NOW_STALE_WARN_SEC,
     LLM_WORK_RUNNING_HEARTBEAT_TTL_SEC,
     LLM_WORK_PROOF_FUTURE_SKEW_SEC,
     HARDEN_WINDOW_STALE_SEC,
@@ -2569,6 +2573,19 @@ class LlmWorkNowPublishTests(unittest.TestCase):
             blob = json.loads(path.read_text(encoding="utf-8"))
             self.assertEqual(blob["generated_at"], "2026-09-25 07:21 CT")
             self.assertEqual(blob["work"][0]["status"], "blocked")
+
+
+
+    def test_llm_work_now_freshness_warns_on_stale_ct_stamp(self):
+        now = datetime(2026, 9, 25, 12, 0, tzinfo=ZoneInfo("America/Chicago")).timestamp()
+        stale = {"generated_at": "2026-09-25 02:37 CT", "work": []}
+        warns = llm_work_now_freshness_warnings(stale, now=now)
+        self.assertTrue(warns)
+        self.assertIn("STALE", warns[0])
+        fresh = {"generated_at": "2026-09-25 11:50 CT", "work": []}
+        self.assertEqual(llm_work_now_freshness_warnings(fresh, now=now), [])
+        self.assertIsNotNone(parse_llm_work_now_generated_at("2026-09-25 07:18 CT"))
+        self.assertGreater(LLM_WORK_NOW_STALE_WARN_SEC, 0)
 
 
 class HardenWindowStripTests(unittest.TestCase):

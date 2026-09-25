@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-09-25T07:22:23.429703-05:00",
-  "generated_at_display": "Fri Sep 25, 2026 \u00b7 7:22 AM CDT",
+  "generated_at": "2026-09-25T07:24:51.473150-05:00",
+  "generated_at_display": "Fri Sep 25, 2026 \u00b7 7:24 AM CDT",
   "timezone": "America/Chicago",
   "owner": "rupret007",
   "dashboard": "bob-ops-dashboard",
@@ -46,8 +46,8 @@
           "url": "https://github.com/rupret007/webjam",
           "repo_url": "https://github.com/rupret007/webjam",
           "private": false,
-          "status": "green",
-          "chip": "Green",
+          "status": "yellow",
+          "chip": "Yellow",
           "default_branch": "master",
           "tip_sha": "ce52e9c",
           "tip_date": "2026-09-25T12:10:46Z",
@@ -58,7 +58,14 @@
           "open_pr_stack": [],
           "pr_listing_complete": true,
           "agent_url": null,
-          "ci": null,
+          "ci": {
+            "name": "WebJam CI",
+            "conclusion": "in_progress",
+            "branch": "master",
+            "sha": "ce52e9c",
+            "created": "2026-09-25T12:10:49Z",
+            "html_url": "https://github.com/rupret007/webjam/actions/runs/36133456644"
+          },
           "release": "v0.28.2",
           "release_sha": "a51154e",
           "release_url": "https://github.com/rupret007/webjam/releases/tag/untagged-4e0b8f08bc532f21605f",
@@ -122,8 +129,8 @@
           "tip_sha": "51abb4b",
           "tip_date": "2026-09-14T03:03:32Z",
           "open_prs": 2,
-          "open_pr_url": "https://github.com/rupret007/StoryBoard/pull/43",
-          "open_pr_number": 43,
+          "open_pr_url": "https://github.com/rupret007/StoryBoard/pull/42",
+          "open_pr_number": 42,
           "open_pr_draft": false,
           "open_pr_stack": [
             {
@@ -137,14 +144,7 @@
           ],
           "pr_listing_complete": true,
           "agent_url": null,
-          "ci": {
-            "name": "Quality",
-            "conclusion": "success",
-            "branch": "main",
-            "sha": "51abb4b",
-            "created": "2026-09-14T03:03:35Z",
-            "html_url": "https://github.com/rupret007/StoryBoard/actions/runs/34801265178"
-          },
+          "ci": null,
           "release": null,
           "release_sha": null,
           "release_url": null,
@@ -466,8 +466,8 @@
           "status": "green",
           "chip": "Green",
           "default_branch": "main",
-          "tip_sha": "211e04d",
-          "tip_date": "2026-09-25T12:18:50Z",
+          "tip_sha": "7de582c",
+          "tip_date": "2026-09-25T12:22:26Z",
           "open_prs": 0,
           "open_pr_url": null,
           "open_pr_number": null,
@@ -479,9 +479,9 @@
             "name": "QA claim smoke",
             "conclusion": "success",
             "branch": "main",
-            "sha": "211e04d",
-            "created": "2026-09-25T12:18:53Z",
-            "html_url": "https://github.com/rupret007/bob-ops-dashboard/actions/runs/36134212195"
+            "sha": "7de582c",
+            "created": "2026-09-25T12:22:30Z",
+            "html_url": "https://github.com/rupret007/bob-ops-dashboard/actions/runs/36134553611"
           },
           "release": null,
           "release_sha": null,
@@ -855,7 +855,7 @@
   ],
   "inaccessible": [],
   "publish_notes": "Public board -- no secrets or customer paths. Private repositories stay high-level; AI Music Vault stays private-content-boundary only.",
-  "refresh_started_ms": 1790338895676,
+  "refresh_started_ms": 1790339042702,
   "agents_source": "file:stale->unknown",
   "agents": [
     {
@@ -1010,11 +1010,17 @@
       "source": "spend_wall"
     }
   ],
+  "llm_work_now_freshness": {
+    "generated_at": "2026-09-25 07:24 CT",
+    "warn_ttl_sec": 1200,
+    "warnings": [],
+    "ok": true
+  },
   "harden_window": {
     "round": 126,
     "status": "closed",
     "started_at": "2026-09-25T07:17:59-05:00",
-    "ended_at": "2026-09-25T07:21:35-05:00",
+    "ended_at": "2026-09-25T07:24:02-05:00",
     "lanes_fired": [
       "LocalCursor",
       "Gemini",
@@ -1022,8 +1028,8 @@
       "Codex",
       "Claude"
     ],
-    "scorecard_line": "Assess PASS | Research PASS | Implement PASS | live stamp 07:18 CT",
-    "updated_at": "2026-09-25T07:21:35-05:00",
+    "scorecard_line": "Assess PASS | Research PASS | Implement PASS | stamp WARN+wrappers | live 07:22+",
+    "updated_at": "2026-09-25T07:24:02-05:00",
     "display_status": "closed",
     "idle": true
   },
