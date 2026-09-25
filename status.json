@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-09-25T01:43:48.559817-05:00",
-  "generated_at_display": "Fri Sep 25, 2026 \u00b7 1:43 AM CDT",
+  "generated_at": "2026-09-25T01:54:13.551722-05:00",
+  "generated_at_display": "Fri Sep 25, 2026 \u00b7 1:54 AM CDT",
   "timezone": "America/Chicago",
   "owner": "rupret007",
   "dashboard": "bob-ops-dashboard",
@@ -51,9 +51,9 @@
           "default_branch": "master",
           "tip_sha": "a6f59cc",
           "tip_date": "2026-09-25T06:39:49Z",
-          "open_prs": 0,
-          "open_pr_url": null,
-          "open_pr_number": null,
+          "open_prs": 1,
+          "open_pr_url": "https://github.com/rupret007/webjam/pull/156",
+          "open_pr_number": 156,
           "open_pr_draft": false,
           "open_pr_stack": [],
           "pr_listing_complete": true,
@@ -497,8 +497,8 @@
           "status": "green",
           "chip": "Green",
           "default_branch": "main",
-          "tip_sha": "7eaa391",
-          "tip_date": "2026-09-25T06:36:07Z",
+          "tip_sha": "fb2062f",
+          "tip_date": "2026-09-25T06:44:02Z",
           "open_prs": 0,
           "open_pr_url": null,
           "open_pr_number": null,
@@ -880,7 +880,7 @@
     "barker"
   ],
   "publish_notes": "Public board -- no secrets or customer paths. Private repositories stay high-level; AI Music Vault stays private-content-boundary only.",
-  "refresh_started_ms": 1790318601639,
+  "refresh_started_ms": 1790319214014,
   "agents_source": "file:stale->unknown",
   "agents": [
     {
