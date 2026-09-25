@@ -239,6 +239,7 @@ from board_meta import (
     safe_game_url,
     safe_pr_url,
     safe_release_url,
+    safe_repo_url,
     short_note,
     split_pending,
     status_from_fetch,
@@ -1084,20 +1085,27 @@ def _work_chip(status):
     color, label = mapping.get(st, mapping["idle"])
     return chip_html(color, label)
 
-def _work_secondary(row):
-    bits = []
-    repo = _clean_line(row.get("repo"), 96)
-    if repo:
-        bits.append(repo)
+def _work_meta_html(row):
+    """Return the meta line as safe HTML with linked repo and PR number."""
+    pr = safe_pr_url(row.get("pr_url"))
+    repo_display = _clean_line(row.get("repo"), 96)
+    repo_url = safe_repo_url("https://github.com/" + repo_display) if repo_display else ""
     pr_number = str(row.get("pr_number") or "").strip()
-    if pr_number:
-        bits.append("PR #" + pr_number)
     branch = _safe_branch(row.get("branch"))
-    if branch:
-        bits.append(branch)
     why = _clean_line(row.get("why"), 120)
+    bits = []
+    if repo_url:
+        bits.append(f'<a href="{h(repo_url)}" class="meta-link" target="_blank" rel="noopener">{h(repo_display)}</a>')
+    elif repo_display:
+        bits.append(h(repo_display))
+    if pr and pr_number:
+        bits.append(f'<a href="{h(pr)}" class="meta-link" target="_blank" rel="noopener">PR #{h(pr_number)}</a>')
+    elif pr_number:
+        bits.append(f'PR #{h(pr_number)}')
+    if branch:
+        bits.append(h(branch))
     if why:
-        bits.append(why)
+        bits.append(h(why))
     return " - ".join(bits)
 
 def work_row_html(row):
@@ -1105,7 +1113,7 @@ def work_row_html(row):
     lane_id = h(lane.get("id") or "lane")
     name = h(lane.get("name") or lane.get("id") or "LLM")
     task = h(lane.get("task_title") or "idle - needs assignment")
-    secondary = h(_work_secondary(lane))
+    meta_html = _work_meta_html(lane)
     goal = h(_clean_line(lane.get("goal"), 260))
     note = h(_clean_line(lane.get("note"), 200))
     last_task = h(_clean_line(lane.get("last_task"), 160))
@@ -1128,7 +1136,7 @@ def work_row_html(row):
         f'<article class="agent-row" data-lane-id="{lane_id}" data-lane-status="{h(lane.get("status") or "idle")}">'
         f'<div class="agent-head"><h3>{name}</h3>{_work_chip(lane.get("status"))}</div>'
         f'<p class="task">{task}</p>'
-        f'<p class="meta">{secondary}</p>'
+        f'<p class="meta">{meta_html}</p>'
         f'{goal_html}{note_html}{last_html}{links_html}</article>'
     )
 
@@ -1390,16 +1398,17 @@ html = f'''<!DOCTYPE html>
   .agent-row h3 {{ margin:0; font-size:.9rem; font-weight:700; letter-spacing:-.01em; }}
   .agent-row p {{ margin:0; }}
   .agent-row .task {{ font-size:.82rem; font-weight:650; color:#fff; }}
-  .agent-row .meta {{ font-size:.74rem; color:var(--muted); }}
-  .agent-row .goal, .agent-row .note, .agent-row .last-task {{
+  .agent-row .meta {{ font-size:.74rem; color:var(--muted); line-height:1.3; }}
+  .agent-row .meta .meta-link {{ color:var(--link); text-decoration:none; }}
+  .agent-row .meta .meta-link:hover {{ text-decoration:underline; }}
+  .agent-row .goal {{ font-size:.75rem; color:var(--muted); line-height:1.32; }}
+  .agent-row .note, .agent-row .last-task {{
     font-size:.75rem; color:var(--muted); line-height:1.32;
   }}
   body.tab-home section.block.foot {{ display:none; }}
   body.tab-home footer {{ display:none; }}
   body.tab-home .live-stamp .when {{ display:none; }}
   body.tab-home .agent-links {{ display:none; }}
-  body.tab-home .agent-row .meta,
-  body.tab-home .agent-row .goal,
   body.tab-home .agent-row .note,
   body.tab-home .agent-row .last-task {{ display:none; }}
   .agent-links {{ display:flex; flex-wrap:wrap; gap:.35rem; }}
@@ -1432,8 +1441,6 @@ html = f'''<!DOCTYPE html>
     .type-tabs {{ flex-wrap:wrap; overflow:visible; }}
     .type-tabs button {{ flex:0 0 auto; padding:.4rem .85rem; font-size:.8rem; }}
     .agents-strip {{ grid-template-columns:repeat(auto-fit,minmax(17.5rem,1fr)); }}
-    body.tab-home .agent-row .meta,
-    body.tab-home .agent-row .goal,
     body.tab-home .agent-row .note,
     body.tab-home .agent-row .last-task {{ display:block; }}
   }}
@@ -2463,19 +2470,33 @@ function focusKey(kind, raw) {{
       }};
     }});
   }}
-  function workSecondary(row) {{
+  function workMetaHtml(row) {{
+    var pr = safePrUrl(row.pr_url || "");
+    var repoDisplay = row.repo || "";
+    var repoUrl = repoDisplay ? safeRepoUrl("https://github.com/" + repoDisplay) : "";
+    var prNumber = String(row.pr_number || "").trim();
+    var branch = row.branch || "";
+    var why = row.why || "";
     var bits = [];
-    if (row.repo) bits.push(row.repo);
-    if (row.pr_number) bits.push("PR #" + row.pr_number);
-    if (row.branch) bits.push(row.branch);
-    if (row.why) bits.push(row.why);
+    if (repoUrl) {{
+      bits.push('<a href="' + esc(repoUrl) + '" class="meta-link" target="_blank" rel="noopener">' + esc(repoDisplay) + "</a>");
+    }} else if (repoDisplay) {{
+      bits.push(esc(repoDisplay));
+    }}
+    if (pr && prNumber) {{
+      bits.push('<a href="' + esc(pr) + '" class="meta-link" target="_blank" rel="noopener">PR #' + esc(prNumber) + "</a>");
+    }} else if (prNumber) {{
+      bits.push("PR #" + esc(prNumber));
+    }}
+    if (branch) bits.push(esc(branch));
+    if (why) bits.push(esc(why));
     return bits.join(" - ");
   }}
   function workRowHtml(row) {{
     var lane = row || {{}};
     var name = lane.name || laneName(lane.id || "");
     var task = lane.task_title || "idle - needs assignment";
-    var secondary = workSecondary(lane);
+    var metaHtml = workMetaHtml(lane);
     var links = "";
     if (lane.agent_url) links += tapLink(lane.agent_url, "Open agent");
     if (lane.pr_url) links += tapLink(lane.pr_url, "Open PR");
@@ -2489,7 +2510,7 @@ function focusKey(kind, raw) {{
     return '<article class="agent-row" data-lane-id="' + esc(lane.id || "") + '" data-lane-status="' + esc(lane.status || "idle") + '">' +
       '<div class="agent-head"><h3>' + esc(name) + '</h3>' + workChip(lane.status) + "</div>" +
       '<p class="task">' + esc(task) + "</p>" +
-      '<p class="meta">' + esc(secondary) + "</p>" +
+      '<p class="meta">' + metaHtml + "</p>" +
       goal + note + lastTask +
       (links ? '<div class="agent-links">' + links + "</div>" : "") +
       "</article>";
