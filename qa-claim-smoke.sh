@@ -313,7 +313,7 @@ if "unlock" in str(ctrl).lower() or "verified ui" in str(ctrl).lower():
 if ctrl.get("jeff_github") != "rupret007":
     raise SystemExit("control.jeff_github must stay rupret007")
 required_lanes = {
-    "WebJam", "AdoptIQ", "StoryOps-AI", "Ball Beacon",
+    "WebJam", "AdoptIQ", "WashOps", "Ball Beacon",
     "CSS Conductor", "TACTrack", "Barker", "StoryBoard", "StoryDesk",
     "Andrea NanoBot", "Bob the Bot", "OpenClaw Runtime", "StoryLiner",
     "AI Music Vault", "Bob Ops Dashboard", "RadDadSite", "Rad Dad Merch",
@@ -566,7 +566,7 @@ public_tap_lanes = (
 )
 private_not_tap = (
     "AdoptIQ",
-    "StoryOps-AI",
+    "WashOps",
     "Ball Beacon",
     "CSS Conductor",
     "TACTrack",
@@ -650,11 +650,11 @@ if missing_pins:
         + "; ".join(missing_pins)
     )
 if "Live CI and review state only" in refresh_text:
-    raise SystemExit("StoryOps-AI note still claims live CI / review state")
+    raise SystemExit("WashOps note still claims live CI / review state")
 if "CI / open PRs from live fetch" in refresh_text:
     raise SystemExit("TACTrack note still claims live CI / open-PR fetch")
-if "High-level only; no customer data on this board." not in refresh_text:
-    raise SystemExit("StoryOps-AI must stay a high-level private utility note")
+if "Exterior wash/services OS (WashOps). High-level only; no customer data on this board." not in refresh_text:
+    raise SystemExit("WashOps must stay a high-level exterior-services utility note")
 if "No live-repo, CI, or PR taps on this board." not in refresh_text:
     raise SystemExit("TACTrack must stay a high-level private note with no tap claim")
 if "No CI is OK" in refresh_text:

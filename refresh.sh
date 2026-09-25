@@ -417,7 +417,8 @@ status = {
       "title": "Apps & utilities",
       "projects": [
         project("StoryOps-AI",
-                notes="WashOps (formerly StoryOps AI) — exterior wash ops OS. High-level only; no customer data on this board."),
+                notes="Exterior wash/services OS (WashOps). High-level only; no customer data on this board.",
+                extra={"name": "WashOps"}),
         project("ballbeacon",
                 notes="Private iOS utility. Software validation only; device and signing steps stay owner-only."),
         project("CSS_Conductor", high_level_only=True,
@@ -2168,8 +2169,8 @@ function focusKey(kind, raw) {{
     var state = String(a.state || "unknown").trim().toLowerCase();
     var detail = String(a.detail || "").replace(/^\s+|\s+$/g, "");
     if (id === "codex") {{
-      if (state === "running") return "running · ChatGPT app";
-      if (state === "installed") return "installed · ChatGPT tools";
+      if (state === "running") return "running - ChatGPT app";
+      if (state === "installed") return "installed - ChatGPT tools";
     }}
     if (id === "cursor") return "Cursor.app desktop";
     if (id === "claude") return "Anthropic desktop/CLI";
