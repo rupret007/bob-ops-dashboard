@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-09-25T03:50:25.891923-05:00",
-  "generated_at_display": "Fri Sep 25, 2026 \u00b7 3:50 AM CDT",
+  "generated_at": "2026-09-25T03:52:50.185929-05:00",
+  "generated_at_display": "Fri Sep 25, 2026 \u00b7 3:52 AM CDT",
   "timezone": "America/Chicago",
   "owner": "rupret007",
   "dashboard": "bob-ops-dashboard",
@@ -464,8 +464,8 @@
           "status": "green",
           "chip": "Green",
           "default_branch": "main",
-          "tip_sha": "b49b3be",
-          "tip_date": "2026-09-25T08:44:04Z",
+          "tip_sha": "a9b4cec",
+          "tip_date": "2026-09-25T08:50:28Z",
           "open_prs": 0,
           "open_pr_url": null,
           "open_pr_number": null,
@@ -473,14 +473,7 @@
           "open_pr_stack": [],
           "pr_listing_complete": true,
           "agent_url": null,
-          "ci": {
-            "name": "QA claim smoke",
-            "conclusion": "success",
-            "branch": "main",
-            "sha": "b49b3be",
-            "created": "2026-09-25T08:44:07Z",
-            "html_url": "https://github.com/rupret007/bob-ops-dashboard/actions/runs/36114530508"
-          },
+          "ci": null,
           "release": null,
           "release_sha": null,
           "release_url": null,
@@ -853,7 +846,7 @@
   ],
   "inaccessible": [],
   "publish_notes": "Public board -- no secrets or customer paths. Private repositories stay high-level; AI Music Vault stays private-content-boundary only.",
-  "refresh_started_ms": 1790326175920,
+  "refresh_started_ms": 1790326323603,
   "agents_source": "file:stale->unknown",
   "agents": [
     {
@@ -1009,10 +1002,10 @@
     }
   ],
   "harden_window": {
-    "round": 18,
+    "round": 19,
     "status": "closed",
-    "started_at": "2026-09-25T03:46:53-05:00",
-    "ended_at": "2026-09-25T03:49:35-05:00",
+    "started_at": "2026-09-25T03:50:41-05:00",
+    "ended_at": "2026-09-25T03:52:03-05:00",
     "lanes_fired": [
       "Codex",
       "Claude",
@@ -1021,7 +1014,7 @@
       "LocalCursor"
     ],
     "scorecard_line": "Stress PASS | Eff PASS | CQ PASS",
-    "updated_at": "2026-09-25T03:49:35-05:00",
+    "updated_at": "2026-09-25T03:52:03-05:00",
     "display_status": "closed",
     "idle": true
   },
