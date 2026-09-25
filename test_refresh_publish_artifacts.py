@@ -84,5 +84,36 @@ class RefreshPublishArtifactsTests(unittest.TestCase):
         self.assertIn("drop_leftover_verify", sh)
 
 
+
+    def test_k5_dispatch_script_and_docs(self):
+        script = ROOT / "scripts" / "dispatch-board-refresh.sh"
+        docs = ROOT / "docs" / "k5-release-refresh.md"
+        self.assertTrue(script.is_file(), "K5 dispatch script missing")
+        body = script.read_text(encoding="utf-8")
+        self.assertIn("repository_dispatch", body)
+        self.assertIn("release-published", body)
+        self.assertIn("/dispatches", body)
+        self.assertIn("Does NOT invent Actions", body)
+        doc = docs.read_text(encoding="utf-8")
+        self.assertIn("BOB_OPS_DISPATCH_TOKEN", doc)
+        self.assertIn("BLOCKED until PAT secret exists", doc)
+        yml = WORKFLOW.read_text(encoding="utf-8")
+        self.assertIn("Log K5 dispatch context", yml)
+        self.assertIn("github.event_name == 'repository_dispatch'", yml)
+
+    def test_k6_finish_out_card_artifacts(self):
+        tmpl = ROOT / "docs" / "finish-out-card.md"
+        script = ROOT / "scripts" / "finish-out-card.sh"
+        self.assertTrue(tmpl.is_file())
+        self.assertTrue(script.is_file())
+        t = tmpl.read_text(encoding="utf-8")
+        self.assertIn("Blank Release URL after green CI = hole", t)
+        self.assertIn("Release URL", t)
+        self.assertIn("Latest flag", t)
+        self.assertIn("Board stamp", t)
+        s = script.read_text(encoding="utf-8")
+        self.assertIn("HOLE: CI green but Release URL blank", s)
+        self.assertIn("dispatch-board-refresh.sh", s)
+
 if __name__ == "__main__":
     unittest.main()

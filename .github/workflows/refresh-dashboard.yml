@@ -7,9 +7,11 @@ on:
   schedule:
     - cron: "*/15 * * * *"
   workflow_dispatch:
-  # K5 stub: external release/finish-out can nudge refresh without waiting for cron.
-  # Wire webjam (or other) release.published → repository_dispatch type refresh /
-  # release-published. Cadence cron remains reconciliation fallback.
+  # K5: external release/finish-out nudges refresh without waiting for cron.
+  # Paths: workflow_dispatch (manual) | scripts/dispatch-board-refresh.sh (box gh)
+  # | repository_dispatch types below. WebJam Actions→here needs PAT secret
+  # BOB_OPS_DISPATCH_TOKEN (not present — see docs/k5-release-refresh.md).
+  # Cadence cron remains reconciliation fallback.
   repository_dispatch:
     types: [refresh, release-published]
 
@@ -26,6 +28,16 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Log K5 dispatch context
+        if: github.event_name == 'repository_dispatch'
+        env:
+          CLIENT_PAYLOAD: ${{ toJson(github.event.client_payload) }}
+          EVENT_ACTION: ${{ github.event.action }}
+        run: |
+          set -euo pipefail
+          echo "K5 repository_dispatch action=${EVENT_ACTION}"
+          echo "client_payload=${CLIENT_PAYLOAD}"
 
       - name: Setup gh auth
         env:
