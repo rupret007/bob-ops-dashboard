@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-09-25T13:52:10.817414-05:00",
-  "generated_at_display": "Fri Sep 25, 2026 \u00b7 1:52 PM CDT",
+  "generated_at": "2026-09-25T14:05:54.990977-05:00",
+  "generated_at_display": "Fri Sep 25, 2026 \u00b7 2:05 PM CDT",
   "timezone": "America/Chicago",
   "owner": "rupret007",
   "dashboard": "bob-ops-dashboard",
@@ -304,7 +304,14 @@
           "open_pr_stack": [],
           "pr_listing_complete": true,
           "agent_url": null,
-          "ci": null,
+          "ci": {
+            "name": "CI",
+            "conclusion": "success",
+            "branch": "main",
+            "sha": "c08c489",
+            "created": "2026-09-08T05:10:56Z",
+            "html_url": "https://github.com/rupret007/Turdanoid/actions/runs/34189652739"
+          },
           "release": null,
           "release_sha": null,
           "release_url": null,
@@ -487,8 +494,8 @@
           "status": "green",
           "chip": "Green",
           "default_branch": "main",
-          "tip_sha": "1b1dd05",
-          "tip_date": "2026-09-25T18:44:45Z",
+          "tip_sha": "83a8326",
+          "tip_date": "2026-09-25T18:52:24Z",
           "open_prs": 0,
           "open_pr_url": null,
           "open_pr_number": null,
@@ -870,7 +877,7 @@
     "barker"
   ],
   "publish_notes": "Public board -- no secrets or customer paths. Private repositories stay high-level; AI Music Vault stays private-content-boundary only.",
-  "refresh_started_ms": 1790362294418,
+  "refresh_started_ms": 1790363126892,
   "agents_source": "file:stale->unknown",
   "agents": [
     {
@@ -1026,7 +1033,7 @@
     }
   ],
   "llm_work_now_freshness": {
-    "generated_at": "2026-09-25 13:52 CT",
+    "generated_at": "2026-09-25 14:05 CT",
     "warn_ttl_sec": 1200,
     "warnings": [],
     "ok": true
