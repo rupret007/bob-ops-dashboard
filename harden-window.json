@@ -1,12 +1,15 @@
 {
   "round": 7,
-  "status": "open",
+  "status": "closed",
   "started_at": "2026-09-25T02:58:58-05:00",
-  "ended_at": "",
+  "ended_at": "2026-09-25T03:06:03-05:00",
   "lanes_fired": [
     "Gemini",
-    "MiniMax"
+    "MiniMax",
+    "Codex",
+    "Claude",
+    "LocalCursor"
   ],
-  "scorecard_line": "",
-  "updated_at": "2026-09-25T03:05:17-05:00"
+  "scorecard_line": "Stress PASS \u00b7 Eff PASS \u00b7 CQ PASS (exit-bar 1/2)",
+  "updated_at": "2026-09-25T03:06:03-05:00"
 }
