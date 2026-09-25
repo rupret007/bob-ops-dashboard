@@ -1,8 +1,8 @@
 {
-  "round": 66,
-  "status": "open",
-  "started_at": "2026-09-25T04:43:27-05:00",
-  "ended_at": "",
+  "round": 73,
+  "status": "closed",
+  "started_at": "2026-09-25T04:46:27-05:00",
+  "ended_at": "2026-09-25T04:46:39-05:00",
   "lanes_fired": [
     "Codex",
     "Claude",
@@ -10,6 +10,6 @@
     "MiniMax",
     "LocalCursor"
   ],
-  "scorecard_line": "",
-  "updated_at": "2026-09-25T04:43:27-05:00"
+  "scorecard_line": "Stress PASS | Eff PASS | CQ PASS",
+  "updated_at": "2026-09-25T04:46:39-05:00"
 }
