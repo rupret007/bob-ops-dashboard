@@ -33,7 +33,11 @@ from board_meta import (
     write_llm_work_now_json,
     llm_work_now_freshness_warnings,
     parse_llm_work_now_generated_at,
+    build_llm_work_now_freshness_meta,
+    dual_sot_assert_errors,
+    assert_dual_sot_files,
     LLM_WORK_NOW_STALE_WARN_SEC,
+    DUAL_SOT_MAX_STAMP_SKEW_SEC,
     LLM_WORK_RUNNING_HEARTBEAT_TTL_SEC,
     LLM_WORK_PROOF_FUTURE_SKEW_SEC,
     HARDEN_WINDOW_STALE_SEC,
@@ -2586,6 +2590,92 @@ class LlmWorkNowPublishTests(unittest.TestCase):
         self.assertEqual(llm_work_now_freshness_warnings(fresh, now=now), [])
         self.assertIsNotNone(parse_llm_work_now_generated_at("2026-09-25 07:18 CT"))
         self.assertGreater(LLM_WORK_NOW_STALE_WARN_SEC, 0)
+
+    def test_build_freshness_meta_never_ok_on_stale_blob(self):
+        now = datetime(2026, 9, 25, 12, 0, tzinfo=ZoneInfo("America/Chicago")).timestamp()
+        stale = {"generated_at": "2026-09-25 07:24 CT", "work": []}
+        meta = build_llm_work_now_freshness_meta(stale, now=now)
+        self.assertEqual(meta["generated_at"], "2026-09-25 07:24 CT")
+        self.assertFalse(meta["ok"])
+        self.assertTrue(meta["warnings"])
+        fresh = {"generated_at": "2026-09-25 11:50 CT", "work": []}
+        meta_ok = build_llm_work_now_freshness_meta(fresh, now=now)
+        self.assertTrue(meta_ok["ok"])
+        self.assertEqual(meta_ok["warnings"], [])
+
+    def test_dual_sot_assert_pass_on_matching_stamps(self):
+        now = datetime(2026, 9, 25, 12, 0, tzinfo=ZoneInfo("America/Chicago")).timestamp()
+        blob = {"generated_at": "2026-09-25 11:50 CT", "work": []}
+        status = {
+            "llm_work_now_freshness": build_llm_work_now_freshness_meta(blob, now=now)
+        }
+        self.assertEqual(dual_sot_assert_errors(status, blob, now=now), [])
+
+    def test_dual_sot_assert_fail_on_diverge_over_60s(self):
+        now = datetime(2026, 9, 25, 12, 0, tzinfo=ZoneInfo("America/Chicago")).timestamp()
+        # Measured hole shape: status freshness stamp from in-process write,
+        # blob left at older commit (07:24 vs 11:50 ≈ 4h > 60s).
+        status = {
+            "llm_work_now_freshness": {
+                "generated_at": "2026-09-25 11:50 CT",
+                "ok": True,
+                "warnings": [],
+                "warn_ttl_sec": 1200,
+            }
+        }
+        blob = {"generated_at": "2026-09-25 07:24 CT", "work": []}
+        errs = dual_sot_assert_errors(status, blob, now=now)
+        self.assertTrue(errs)
+        self.assertTrue(any("diverge" in e for e in errs))
+        self.assertGreater(DUAL_SOT_MAX_STAMP_SKEW_SEC, 0)
+
+    def test_dual_sot_assert_fail_ok_true_while_blob_stale(self):
+        now = datetime(2026, 9, 25, 12, 0, tzinfo=ZoneInfo("America/Chicago")).timestamp()
+        # False-negative: matching stamps but ok lied while age > TTL.
+        stamp = "2026-09-25 07:24 CT"
+        status = {
+            "llm_work_now_freshness": {
+                "generated_at": stamp,
+                "ok": True,
+                "warnings": [],
+                "warn_ttl_sec": 1200,
+            }
+        }
+        blob = {"generated_at": stamp, "work": []}
+        errs = dual_sot_assert_errors(status, blob, now=now)
+        self.assertTrue(errs)
+        self.assertTrue(any("false-negative" in e or "ok=true" in e for e in errs))
+
+    def test_assert_dual_sot_files_roundtrip(self):
+        import tempfile
+        now = datetime(2026, 9, 25, 12, 0, tzinfo=ZoneInfo("America/Chicago")).timestamp()
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            blob = {"generated_at": "2026-09-25 11:50 CT", "work": []}
+            status = {
+                "llm_work_now_freshness": build_llm_work_now_freshness_meta(
+                    blob, now=now
+                )
+            }
+            (root / "status.json").write_text(
+                json.dumps(status, indent=2) + "\n", encoding="utf-8"
+            )
+            (root / "llm-work-now.json").write_text(
+                json.dumps(blob, indent=2) + "\n", encoding="utf-8"
+            )
+            assert_dual_sot_files(
+                root / "status.json", root / "llm-work-now.json", now=now
+            )
+            # Diverge → SystemExit
+            bad = {"generated_at": "2026-09-25 07:24 CT", "work": []}
+            (root / "llm-work-now.json").write_text(
+                json.dumps(bad, indent=2) + "\n", encoding="utf-8"
+            )
+            with self.assertRaises(SystemExit) as ctx:
+                assert_dual_sot_files(
+                    root / "status.json", root / "llm-work-now.json", now=now
+                )
+            self.assertIn("dual-SoT FAIL", str(ctx.exception))
 
 
 class HardenWindowStripTests(unittest.TestCase):

@@ -7,6 +7,11 @@ on:
   schedule:
     - cron: "*/15 * * * *"
   workflow_dispatch:
+  # K5 stub: external release/finish-out can nudge refresh without waiting for cron.
+  # Wire webjam (or other) release.published → repository_dispatch type refresh /
+  # release-published. Cadence cron remains reconciliation fallback.
+  repository_dispatch:
+    types: [refresh, release-published]
 
 concurrency:
   group: bob-ops-dashboard-refresh
@@ -46,6 +51,18 @@ jobs:
           print("public board: no verify block")
           PY
 
+      # K2: dual-SoT assert on the about-to-commit working tree (not remote Pages).
+      # FAIL if status.llm_work_now_freshness.generated_at diverges from
+      # llm-work-now.json by >60s, or freshness.ok while blob age > TTL (1200s).
+      - name: Dual-SoT assert (status ↔ llm-work-now)
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from board_meta import assert_dual_sot_files
+          assert_dual_sot_files("status.json", "llm-work-now.json")
+          print("dual-SoT PASS: paired artifacts match before commit")
+          PY
+
       - name: QA claim smoke (generated page)
         run: |
           set -euo pipefail
@@ -76,6 +93,12 @@ jobs:
           for attempt in 1 2 3 4 5; do
             if git push origin HEAD:main; then
               echo "Pushed on attempt ${attempt}."
+              # K2 post-push: re-assert working-tree pair (same commit content).
+              python3 - <<'DUALSOT'
+from board_meta import assert_dual_sot_files
+assert_dual_sot_files("status.json", "llm-work-now.json")
+print("dual-SoT PASS post-push")
+DUALSOT
               exit 0
             fi
             echo "Push rejected (attempt ${attempt}); stash dirt, rebase onto origin/main, retry."

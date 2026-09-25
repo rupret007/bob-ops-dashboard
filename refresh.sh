@@ -10,6 +10,9 @@
 # R126 rewrites llm-work-now.json every rebuild — it must publish with status.json.
 # Unstaged llm-work-now must never block rebase on a concurrent tip move
 # (measured fail: actions run 36137598706). Do not commit agents-status.json.
+# K2/K3: after write (and before --push PASS) assert dual-SoT — status
+# llm_work_now_freshness.generated_at must match llm-work-now.json; never
+# freshness.ok while blob age > WARN TTL. Matching stamps = the publish bar.
 set -euo pipefail
 if [[ -n "${GH_TOKEN:-}" || -n "${GITHUB_TOKEN:-}" ]]; then
   export GH_TOKEN="${GH_TOKEN:-${GITHUB_TOKEN}}"
@@ -230,7 +233,10 @@ from board_meta import (
     build_llm_work_now_payload,
     write_llm_work_now_json,
     llm_work_now_freshness_warnings,
+    build_llm_work_now_freshness_meta,
+    assert_dual_sot_files,
     LLM_WORK_NOW_STALE_WARN_SEC,
+    DUAL_SOT_MAX_STAMP_SKEW_SEC,
     STALE_RUNNING_SOURCES,
     LLM_WORK_PROOF_TS_KEYS,
     load_harden_window,
@@ -780,17 +786,14 @@ write_llm_work_now_json(
     generated_at_ct=_ct_stamp,
 )
 print(f"Wrote llm-work-now.json generated_at={_ct_stamp}")
+# K3: freshness meta ALWAYS from the llm-work-now blob just written (same
+# write path / about-to-commit pair). Never claim ok on a stale paired artifact.
 try:
     _pub = json.loads((root / "llm-work-now.json").read_text(encoding="utf-8"))
 except Exception:
     _pub = None
-_fresh_warns = llm_work_now_freshness_warnings(_pub)
-status["llm_work_now_freshness"] = {
-    "generated_at": (_pub or {}).get("generated_at") if isinstance(_pub, dict) else None,
-    "warn_ttl_sec": LLM_WORK_NOW_STALE_WARN_SEC,
-    "warnings": _fresh_warns,
-    "ok": not _fresh_warns,
-}
+status["llm_work_now_freshness"] = build_llm_work_now_freshness_meta(_pub)
+_fresh_warns = status["llm_work_now_freshness"].get("warnings") or []
 for _w in _fresh_warns:
     print(f"WARN {_w}")
 
@@ -3072,6 +3075,13 @@ _html_tmp = root / "index.html.tmp"
 _html_tmp.write_text(html)
 _html_tmp.replace(root / "index.html")
 print(f"Wrote {root/'index.html'} and {root/'status.json'} (atomic)")
+# K2: dual-SoT assert on the paired artifacts about to publish (working tree).
+# Prefer local files over remote Pages — Pages lag is a separate concern.
+assert_dual_sot_files(root / "status.json", root / "llm-work-now.json")
+print(
+    f"dual-SoT PASS: status.freshness.generated_at matches llm-work-now "
+    f"(skew≤{DUAL_SOT_MAX_STAMP_SKEW_SEC}s; ok never with age>{LLM_WORK_NOW_STALE_WARN_SEC}s)"
+)
 print(f"Updated: {updated_ct}")
 print(f"Fetched OK: {status['fetched_repos']}")
 if status.get("inaccessible"):
@@ -3178,6 +3188,14 @@ if [[ $PUSH -eq 1 ]]; then
       echo "Exhausted push retries." >&2
       exit 1
     fi
+    # K2 post-push dual-SoT: re-check the paired artifacts that just pushed
+    # (working tree / HEAD content — not remote Pages CDN lag).
+    python3 - <<'DUALSOT'
+from pathlib import Path
+from board_meta import assert_dual_sot_files
+assert_dual_sot_files(Path("status.json"), Path("llm-work-now.json"))
+print("dual-SoT PASS post-push (working-tree pair)")
+DUALSOT
     echo "Pushed. Pages: https://${OWNER}.github.io/bob-ops-dashboard/"
   fi
   rm -rf "$WORK"

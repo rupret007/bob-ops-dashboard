@@ -1136,6 +1136,148 @@ def llm_work_now_freshness_warnings(
     return warns
 
 
+# Dual-SoT (K2/K3): status.llm_work_now_freshness must match the llm-work-now
+# blob about to publish. In-process write alone ≠ PASS — pairing is the bar.
+DUAL_SOT_MAX_STAMP_SKEW_SEC = 60
+
+
+def build_llm_work_now_freshness_meta(
+    blob: Any,
+    *,
+    now: float | None = None,
+    max_age_sec: int = LLM_WORK_NOW_STALE_WARN_SEC,
+) -> dict[str, Any]:
+    """Freshness meta for status.json — ALWAYS derived from the paired blob.
+
+    Never claim ok=True when the blob age exceeds WARN TTL (K3). Callers must
+    pass the llm-work-now object that will be committed, not a stale prior.
+    """
+    warns = llm_work_now_freshness_warnings(
+        blob, now=now, max_age_sec=max_age_sec
+    )
+    gen = None
+    if isinstance(blob, dict):
+        raw = blob.get("generated_at")
+        if raw is not None and str(raw).strip():
+            gen = raw
+    return {
+        "generated_at": gen,
+        "warn_ttl_sec": int(max_age_sec),
+        "warnings": list(warns),
+        "ok": not warns,
+    }
+
+
+def dual_sot_assert_errors(
+    status: Any,
+    work_now: Any,
+    *,
+    now: float | None = None,
+    max_skew_sec: int = DUAL_SOT_MAX_STAMP_SKEW_SEC,
+    stale_ttl_sec: int = LLM_WORK_NOW_STALE_WARN_SEC,
+) -> list[str]:
+    """FAIL messages when status freshness and llm-work-now diverge (K2).
+
+    Empty list = PASS. Prefer exact generated_at string match; allow parsed
+    epoch skew ≤ max_skew_sec. Also FAIL when freshness.ok while blob age
+    exceeds stale_ttl_sec (false-negative guard).
+    """
+    errs: list[str] = []
+    if not isinstance(status, dict):
+        return ["dual-SoT: status missing or not an object"]
+    if not isinstance(work_now, dict):
+        return ["dual-SoT: llm-work-now missing or not an object"]
+
+    fresh = status.get("llm_work_now_freshness")
+    if not isinstance(fresh, dict):
+        errs.append("dual-SoT: status.llm_work_now_freshness missing")
+        fresh = {}
+
+    status_gen = fresh.get("generated_at")
+    blob_gen = work_now.get("generated_at")
+    if status_gen is None or not str(status_gen).strip():
+        errs.append("dual-SoT: status.llm_work_now_freshness.generated_at missing")
+    if blob_gen is None or not str(blob_gen).strip():
+        errs.append("dual-SoT: llm-work-now.generated_at missing")
+
+    if (
+        status_gen is not None
+        and blob_gen is not None
+        and str(status_gen).strip()
+        and str(blob_gen).strip()
+    ):
+        if str(status_gen).strip() != str(blob_gen).strip():
+            ts_a = parse_llm_work_now_generated_at(status_gen)
+            ts_b = parse_llm_work_now_generated_at(blob_gen)
+            if ts_a is None or ts_b is None:
+                errs.append(
+                    f"dual-SoT: generated_at mismatch "
+                    f"status={status_gen!r} blob={blob_gen!r} "
+                    f"(unparseable; require exact match or ≤{max_skew_sec}s skew)"
+                )
+            else:
+                skew = abs(ts_a - ts_b)
+                if skew > max_skew_sec:
+                    errs.append(
+                        f"dual-SoT: generated_at diverge {int(skew)}s "
+                        f"> max_skew={max_skew_sec}s "
+                        f"status={status_gen!r} blob={blob_gen!r}"
+                    )
+
+    age = llm_work_now_stamp_age_sec(work_now, now=now)
+    ok_flag = bool(fresh.get("ok"))
+    if age is not None and age > stale_ttl_sec and ok_flag:
+        errs.append(
+            f"dual-SoT: freshness.ok=true while llm-work-now age="
+            f"{int(age)}s > TTL={stale_ttl_sec}s (false-negative; "
+            f"recompute freshness from the blob being published)"
+        )
+    # Also surface bare stale when meta.ok lied by omission (no ok key but age bad)
+    if age is not None and age > stale_ttl_sec and "ok" not in fresh:
+        errs.append(
+            f"dual-SoT: llm-work-now age={int(age)}s > TTL={stale_ttl_sec}s "
+            f"and freshness.ok absent"
+        )
+    return errs
+
+
+def assert_dual_sot_files(
+    status_path: Any,
+    work_now_path: Any,
+    *,
+    now: float | None = None,
+    max_skew_sec: int = DUAL_SOT_MAX_STAMP_SKEW_SEC,
+    stale_ttl_sec: int = LLM_WORK_NOW_STALE_WARN_SEC,
+) -> None:
+    """Load paired artifacts from disk; raise SystemExit with clear message on FAIL.
+
+    Prefer the working-tree / about-to-commit files — not remote Pages (lag is
+    a separate concern). Used by refresh.sh and the Actions refresh workflow.
+    """
+    sp = Path(status_path)
+    wp = Path(work_now_path)
+    try:
+        status = json.loads(sp.read_text(encoding="utf-8"))
+    except Exception as exc:
+        raise SystemExit(f"dual-SoT FAIL: cannot read {sp}: {exc}") from exc
+    try:
+        work_now = json.loads(wp.read_text(encoding="utf-8"))
+    except Exception as exc:
+        raise SystemExit(f"dual-SoT FAIL: cannot read {wp}: {exc}") from exc
+    errs = dual_sot_assert_errors(
+        status,
+        work_now,
+        now=now,
+        max_skew_sec=max_skew_sec,
+        stale_ttl_sec=stale_ttl_sec,
+    )
+    if errs:
+        msg = "dual-SoT FAIL: status.json ↔ llm-work-now.json dishonest\n  - " + "\n  - ".join(
+            errs
+        )
+        raise SystemExit(msg)
+
+
 def llm_work_stale_running_violations(
     rows: Any,
     live_cloud_lane_ids: Any = None,
