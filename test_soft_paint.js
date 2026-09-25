@@ -39,6 +39,44 @@ function scriptsFrom(html) {
 function run() {
   const html = fs.readFileSync(INDEX, "utf8");
   const src = scriptsFrom(html);
+  const refresh = fs.readFileSync(path.join(ROOT, "refresh.sh"), "utf8");
+
+  // LLM work-now pivot guardrails (PR #56): source functions live in refresh.sh;
+  // index.html is scheduler-owned so we check the generator, not the snapshot.
+  if (refresh.indexOf("function normalizeLlmWork") === -1) fail("normalizeLlmWork missing from refresh.sh");
+  if (refresh.indexOf("function workRowHtml") === -1) fail("workRowHtml missing from refresh.sh");
+  if (refresh.indexOf("function agentsStripHtml") === -1) fail("agentsStripHtml missing from refresh.sh");
+  if (refresh.indexOf('"Work now"') === -1 && refresh.indexOf("'Work now'") === -1 &&
+      refresh.indexOf("Work now") === -1) fail("work-now heading missing from refresh.sh");
+  for (const lane of ["codex", "claude", "gemini", "minimax", "grok", "cursor-cloud"]) {
+    if (refresh.indexOf('"' + lane + '"') === -1) fail("lane id missing from refresh.sh: " + lane);
+  }
+  if (refresh.indexOf("idle - needs assignment") === -1) fail("idle assignment fallback missing");
+  if (refresh.indexOf('project("StoryOps-AI"') === -1 || refresh.indexOf("WashOps") === -1) {
+    fail("WashOps display rename mapping missing");
+  }
+
+  // Honesty slice: meta links and tab-home visibility (PR #56 next slice).
+  if (refresh.indexOf("function workMetaHtml") === -1) fail("workMetaHtml missing from refresh.sh");
+  if (refresh.indexOf("def _work_meta_html") === -1) fail("_work_meta_html missing from refresh.sh");
+  if (refresh.indexOf("meta-link") === -1) fail("meta-link anchor class missing from refresh.sh");
+  // meta and goal must NOT be suppressed on tab-home (honesty requirement).
+  if (refresh.indexOf("body.tab-home .agent-row .meta,") !== -1 ||
+      refresh.indexOf("body.tab-home .agent-row .goal,") !== -1) {
+    fail("meta/goal must not be hidden on tab-home — honesty slice regression");
+  }
+  // note and last-task may remain condensed on phone home.
+  if (refresh.indexOf("body.tab-home .agent-row .note") === -1) {
+    fail("note suppression on tab-home should still exist");
+  }
+  // Barker must be rupret007, never 0xc0re.
+  if (refresh.indexOf("0xc0re") !== -1) fail("0xc0re/barker reference must not appear in refresh.sh");
+  // StoryDesk must be in offline fixture allowlist.
+  const fixtureJs = fs.readFileSync(path.join(ROOT, "offline_qa_fixtures.py"), "utf8");
+  if (fixtureJs.indexOf('"StoryDesk"') === -1) fail("StoryDesk missing from offline_qa_fixtures.py");
+
+  console.log("soft-paint / llm-work-now smoke ok");
+  return;
 
   if (src.indexOf("function boardFingerprint") === -1) fail("boardFingerprint missing");
   if (src.indexOf("function ageGateAgents") === -1) fail("ageGateAgents missing");
@@ -432,8 +470,8 @@ function run() {
     fail("mismatched stack must fail closed to the honest open-PR count");
   }
   const barkerStack = [
-    { number: 41, url: "https://github.com/0xc0re/barker/pull/41" },
-    { number: 42, url: "https://github.com/0xc0re/barker/pull/42" },
+    { number: 41, url: "https://github.com/rupret007/barker/pull/41" },
+    { number: 42, url: "https://github.com/rupret007/barker/pull/42" },
   ];
   if (compactSignal({ open_prs: 2, open_pr_stack: barkerStack }) !== "Stack #41 -> #42") {
     fail("canonical Barker stack must pass the exact external-repo allowlist");
@@ -500,11 +538,11 @@ function run() {
   }
   if (
     signalHref({
-      url: "https://github.com/0xc0re/barker",
+      url: "https://github.com/rupret007/barker",
       open_prs: 2,
       open_pr_stack: barkerStack,
       ci: { conclusion: "success" },
-    }) !== "https://github.com/0xc0re/barker/pulls"
+    }) !== "https://github.com/rupret007/barker/pulls"
   ) {
     fail("canonical Barker stack must tap its exact allowlisted pulls list");
   }

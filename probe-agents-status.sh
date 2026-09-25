@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Mac probe for Bob ops dashboard agent strip (Codex / Cursor / Claude).
+# Probe for Bob ops dashboard LLM resources.
 # Safe public fields only — no tokens, secrets, CSOne, or customer paths.
 # Run on Jeff's Mac (Bob via ExternalShell or locally). Prints JSON to stdout.
 #
@@ -79,28 +79,28 @@ fi
 
 if [[ -n "$local_bit" ]]; then
   if [[ "$codex_state" == "running" ]]; then
-    codex_detail="${codex_detail} · ${local_bit}"
+    codex_detail="running · ChatGPT app"
   elif [[ "$local_bit" == *ready* || "$local_bit" == *auth* ]]; then
     codex_state="idle"
-    codex_detail="$local_bit"
+    codex_detail="idle · codex-local ready"
   else
     if [[ "$codex_state" == "unknown" ]]; then
       if command -v codex >/dev/null 2>&1 || [[ -x "$HOME/bin/codex" ]]; then
         codex_state="installed"
-        codex_detail="codex CLI present · ${local_bit}"
+        codex_detail="installed · ChatGPT tools"
       else
         codex_state="down"
-        codex_detail="$local_bit"
+        codex_detail="down · codex-local unavailable"
       fi
     fi
   fi
 elif [[ "$codex_state" == "unknown" ]]; then
   if command -v codex >/dev/null 2>&1 || [[ -x "$HOME/bin/codex" ]]; then
     codex_state="installed"
-    codex_detail="codex CLI present; no live PID / :3210"
+    codex_detail="installed · ChatGPT tools"
   else
     codex_state="down"
-    codex_detail="codex CLI not found"
+    codex_detail="down · ChatGPT tools missing"
   fi
 fi
 
@@ -120,14 +120,14 @@ if [[ -d "/Applications/Cursor.app" ]]; then
   fi
   if [[ $running -eq 1 ]]; then
     cursor_state="running"
-    cursor_detail="Cursor.app running${ver:+ · v$ver}"
+    cursor_detail="running · Cursor.app${ver:+ v$ver}"
   else
     cursor_state="installed"
-    cursor_detail="Cursor.app installed${ver:+ · v$ver}, not running"
+    cursor_detail="installed · Cursor.app${ver:+ v$ver}"
   fi
 else
   cursor_state="down"
-  cursor_detail="Cursor.app not in /Applications"
+  cursor_detail="down · Cursor.app missing"
 fi
 
 # --- Claude.app + claude CLI ---
@@ -148,30 +148,66 @@ fi
 
 if [[ $app_running -eq 1 ]]; then
   claude_state="running"
-  claude_detail="Claude.app running${claude_ver:+ · $claude_ver}"
+  claude_detail="running · Claude app"
 elif [[ $app_present -eq 1 && -n "$claude_ver" ]]; then
   claude_state="installed"
-  claude_detail="Claude.app + ${claude_ver}"
+  claude_detail="installed · Claude app + CLI"
 elif [[ $app_present -eq 1 ]]; then
   claude_state="installed"
-  claude_detail="Claude.app installed"
+  claude_detail="installed · Claude app"
 elif [[ -n "$claude_ver" ]]; then
   claude_state="installed"
-  claude_detail="$claude_ver"
+  claude_detail="installed · Claude CLI"
 else
   claude_state="down"
-  claude_detail="Claude.app / claude CLI not found"
+  claude_detail="down · Claude app/CLI missing"
 fi
 
+# --- Gemini / MiniMax BYOK presence-only ---
+gemini_state="down"
+gemini_detail="BYOK key missing"
+if [[ -n "${GEMINI_API_KEY:-}" || -n "${GOOGLE_API_KEY:-}" ]]; then
+  gemini_state="ready"
+  gemini_detail="BYOK key present"
+fi
+
+minimax_state="down"
+minimax_detail="BYOK key missing"
+if [[ -n "${MINIMAX_API_KEY:-}" ]]; then
+  minimax_state="ready"
+  minimax_detail="BYOK key present"
+fi
+
+# --- Grok (conductor capability, no PID claim) ---
+grok_state="installed"
+grok_detail="Grok Bot conductor + Cloud Agents"
+
 # Emit JSON object with agents array (refresh.sh merges this).
-python3 - "$CHECKED_AT" "$codex_state" "$codex_detail" "$cursor_state" "$cursor_detail" "$claude_state" "$claude_detail" <<'PY'
+python3 - "$CHECKED_AT" \
+  "$codex_state" "$codex_detail" \
+  "$cursor_state" "$cursor_detail" \
+  "$claude_state" "$claude_detail" \
+  "$gemini_state" "$gemini_detail" \
+  "$minimax_state" "$minimax_detail" \
+  "$grok_state" "$grok_detail" <<'PY'
 import json, os, re, sys
-checked_at, cs, cd, us, ud, ls, ld = sys.argv[1:8]
+(
+    checked_at,
+    cs, cd,
+    us, ud,
+    ls, ld,
+    gs, gd,
+    ms, md,
+    xs, xd,
+) = sys.argv[1:14]
 out = {
   "agents": [
-    {"id": "codex", "name": "Codex", "state": cs, "detail": cd[:200], "checked_at": checked_at},
+    {"id": "codex", "name": "Codex (ChatGPT)", "state": cs, "detail": cd[:200], "checked_at": checked_at},
     {"id": "cursor", "name": "Cursor", "state": us, "detail": ud[:200], "checked_at": checked_at},
     {"id": "claude", "name": "Claude", "state": ls, "detail": ld[:200], "checked_at": checked_at},
+    {"id": "gemini", "name": "Gemini", "state": gs, "detail": gd[:200], "checked_at": checked_at},
+    {"id": "minimax", "name": "MiniMax", "state": ms, "detail": md[:200], "checked_at": checked_at},
+    {"id": "grok", "name": "Grok", "state": xs, "detail": xd[:200], "checked_at": checked_at},
   ],
   "source": "probe-agents-status.sh",
   "checked_at": checked_at,

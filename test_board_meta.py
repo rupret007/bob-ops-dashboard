@@ -1382,9 +1382,12 @@ class BoardMetaTests(unittest.TestCase):
             }
         )
         gated = age_gate_agents(stale, now=now)
-        self.assertEqual([a["state"] for a in gated], ["unknown", "unknown", "unknown"])
+        self.assertEqual(
+            [a["state"] for a in gated],
+            ["unknown", "unknown", "unknown", "unknown", "unknown", "unknown"],
+        )
         self.assertTrue(all("probe stale" in a["detail"] for a in gated))
-        self.assertEqual(len(gated), 3)
+        self.assertEqual(len(gated), 6)
 
         untimestamped = age_gate_agents(
             [{"id": "codex", "state": "running", "detail": "PID 9", "checked_at": None}],
@@ -1400,7 +1403,10 @@ class BoardMetaTests(unittest.TestCase):
             ],
             now=now,
         )
-        self.assertEqual([a["state"] for a in fresh], ["running", "idle", "installed"])
+        self.assertEqual(
+            [a["state"] for a in fresh],
+            ["running", "idle", "installed", "unknown", "unknown", "unknown"],
+        )
 
     def test_future_checked_at_is_not_treated_as_live(self):
         now = datetime(2026, 8, 23, 5, 26, tzinfo=timezone.utc).timestamp()
@@ -1437,7 +1443,10 @@ class BoardMetaTests(unittest.TestCase):
             now=now,
         )
         self.assertEqual(src, "file:stale->unknown")
-        self.assertEqual([a["state"] for a in agents], ["unknown", "unknown", "unknown"])
+        self.assertEqual(
+            [a["state"] for a in agents],
+            ["unknown", "unknown", "unknown", "unknown", "unknown", "unknown"],
+        )
         self.assertNotIn("running", [a["state"] for a in agents])
 
         _, local_src = resolve_agents(
@@ -1457,7 +1466,10 @@ class BoardMetaTests(unittest.TestCase):
         )
         self.assertIsNotNone(parsed)
         assert parsed is not None
-        self.assertEqual([a["id"] for a in parsed], ["codex", "cursor", "claude"])
+        self.assertEqual(
+            [a["id"] for a in parsed],
+            ["codex", "cursor", "claude", "gemini", "minimax", "grok"],
+        )
         self.assertEqual(parsed[0]["detail"], "detail redacted")
         path_parsed = parse_agents_blob(
             {
@@ -1641,20 +1653,20 @@ class BoardMetaTests(unittest.TestCase):
         self.assertEqual(safe_repo_url("https://github.com/rupret007/webjam/"), "https://github.com/rupret007/webjam")
         self.assertEqual(safe_repo_url("https://github.com/rupret007/webjam/issues"), "")
         self.assertEqual(
-            safe_pr_url("https://github.com/0xc0re/barker/pull/41"),
-            "https://github.com/0xc0re/barker/pull/41",
+            safe_pr_url("https://github.com/rupret007/barker/pull/41"),
+            "https://github.com/rupret007/barker/pull/41",
         )
         self.assertEqual(
-            safe_actions_url("https://github.com/0xc0re/barker/actions/runs/9"),
-            "https://github.com/0xc0re/barker/actions/runs/9",
+            safe_actions_url("https://github.com/rupret007/barker/actions/runs/9"),
+            "https://github.com/rupret007/barker/actions/runs/9",
         )
         self.assertEqual(
-            safe_repo_url("https://github.com/0xc0re/barker"),
-            "https://github.com/0xc0re/barker",
+            safe_repo_url("https://github.com/rupret007/barker"),
+            "https://github.com/rupret007/barker",
         )
         self.assertEqual(
-            safe_pulls_url("https://github.com/0xc0re/barker/pulls"),
-            "https://github.com/0xc0re/barker/pulls",
+            safe_pulls_url("https://github.com/rupret007/barker/pulls"),
+            "https://github.com/rupret007/barker/pulls",
         )
         self.assertEqual(safe_repo_url("https://github.com/0xc0re/other"), "")
         self.assertEqual(
@@ -1826,17 +1838,17 @@ class BoardMetaTests(unittest.TestCase):
         self.assertEqual(detect_linear_pr_stack([missing, row(11, "a", "b")], "main"), [])
         self.assertEqual(detect_linear_pr_stack([row(10, "main", "a")], "main"), [])
         self.assertEqual(detect_linear_pr_stack(None, "main"), [])
-        barker_repo = {"full_name": "0xc0re/barker"}
+        barker_repo = {"full_name": "rupret007/barker"}
         barker = [
             {
                 "number": 42,
-                "html_url": "https://github.com/0xc0re/barker/pull/42",
+                "html_url": "https://github.com/rupret007/barker/pull/42",
                 "base": {"ref": "feature-41", "repo": barker_repo},
                 "head": {"ref": "feature-42", "repo": barker_repo},
             },
             {
                 "number": 41,
-                "html_url": "https://github.com/0xc0re/barker/pull/41",
+                "html_url": "https://github.com/rupret007/barker/pull/41",
                 "base": {"ref": "main", "repo": barker_repo},
                 "head": {"ref": "feature-41", "repo": barker_repo},
             },
@@ -1844,8 +1856,8 @@ class BoardMetaTests(unittest.TestCase):
         self.assertEqual(
             detect_linear_pr_stack(barker, "main"),
             [
-                {"number": 41, "url": "https://github.com/0xc0re/barker/pull/41"},
-                {"number": 42, "url": "https://github.com/0xc0re/barker/pull/42"},
+                {"number": 41, "url": "https://github.com/rupret007/barker/pull/41"},
+                {"number": 42, "url": "https://github.com/rupret007/barker/pull/42"},
             ],
         )
 
@@ -1874,7 +1886,10 @@ class BoardMetaTests(unittest.TestCase):
         mac = parse_agents_blob(blob)
         self.assertIsNotNone(mac)
         assert mac is not None
-        self.assertEqual([a["id"] for a in mac], ["codex", "cursor", "claude"])
+        self.assertEqual(
+            [a["id"] for a in mac],
+            ["codex", "cursor", "claude", "gemini", "minimax", "grok"],
+        )
         cloud = parse_cloud_agents(blob)
         self.assertEqual(len(cloud), 1)
         self.assertEqual(cloud[0]["id"], good_bc)
@@ -2019,6 +2034,39 @@ class BoardMetaTests(unittest.TestCase):
         self.assertFalse(drop_leftover_verify("nope"))
 
 
+
+
+    def test_offline_fixture_allowlist_includes_storydesk_and_barker(self):
+        """Regression: StoryDesk added to REPOS must be in offline fixture; barker = rupret007."""
+        from pathlib import Path
+        fixture_src = (Path(__file__).parent / "offline_qa_fixtures.py").read_text()
+        self.assertIn('"StoryDesk"', fixture_src,
+                      "StoryDesk must be in offline_qa_fixtures.py allowlist")
+        self.assertIn('"rupret007/barker"', fixture_src,
+                      "barker must be rupret007/barker in fixture")
+        self.assertNotIn("0xc0re", fixture_src,
+                         "0xc0re must not appear in fixture")
+
+    def test_work_meta_html_links_repo_and_pr(self):
+        """meta line renders linked <a> for repo and PR#; idle lane has no links."""
+        from board_meta import safe_pr_url, safe_repo_url
+        import html as html_mod
+        # Build the meta HTML inline (mirrors _work_meta_html logic).
+        row_with_pr = {
+            "repo": "rupret007/bob-ops-dashboard",
+            "pr_url": "https://github.com/rupret007/bob-ops-dashboard/pull/56",
+            "pr_number": "56",
+            "branch": "cursor/max-llm-resource-strip-ec39",
+            "why": "",
+        }
+        pr = safe_pr_url(row_with_pr["pr_url"])
+        self.assertEqual(pr, row_with_pr["pr_url"])
+        repo_url = safe_repo_url("https://github.com/" + row_with_pr["repo"])
+        self.assertEqual(repo_url, "https://github.com/rupret007/bob-ops-dashboard")
+        # Row with no repo or PR — idle lane.
+        idle_row = {"repo": "", "pr_url": "", "pr_number": "", "branch": "", "why": ""}
+        self.assertFalse(safe_pr_url(idle_row["pr_url"]))
+        self.assertFalse(safe_repo_url("https://github.com/" + idle_row["repo"]) if idle_row["repo"] else "")
 
 
 class CoordLeaseTests(unittest.TestCase):

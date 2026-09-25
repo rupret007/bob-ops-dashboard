@@ -1,0 +1,70 @@
+{
+  "work": [
+    {
+      "id": "codex",
+      "name": "Codex (ChatGPT)",
+      "task_title": "Pivot PR #56 to LLM work-now attribution board",
+      "repo": "rupret007/bob-ops-dashboard",
+      "pr_url": "https://github.com/rupret007/bob-ops-dashboard/pull/56",
+      "pr_number": "56",
+      "branch": "cursor/max-llm-resource-strip-ec39",
+      "goal": "Replace process-state pills with detailed assignment rows and keep public-board safety filters fail-closed.",
+      "status": "running",
+      "why": "Primary build lane for this dashboard PR"
+    },
+    {
+      "id": "claude",
+      "name": "Claude",
+      "task_title": "QA and safety sweep for attribution fields",
+      "repo": "rupret007/bob-ops-dashboard",
+      "pr_url": "https://github.com/rupret007/bob-ops-dashboard/pull/56",
+      "pr_number": "56",
+      "branch": "cursor/max-llm-resource-strip-ec39",
+      "goal": "Verify links, branch text, and notes stay public-safe with no secrets or customer paths.",
+      "status": "running",
+      "why": "Review lane for board safety"
+    },
+    {
+      "id": "gemini",
+      "name": "Gemini",
+      "task_title": "WashOps exterior-services copy verification",
+      "repo": "rupret007/StoryOps-AI",
+      "goal": "Confirm StoryOps-AI display rename to WashOps and keep high-level/non-customer wording.",
+      "status": "running",
+      "why": "Product naming and content lane"
+    },
+    {
+      "id": "minimax",
+      "name": "MiniMax",
+      "task_title": "Mobile readability pass for work-now rows",
+      "repo": "rupret007/bob-ops-dashboard",
+      "pr_url": "https://github.com/rupret007/bob-ops-dashboard/pull/56",
+      "pr_number": "56",
+      "branch": "cursor/max-llm-resource-strip-ec39",
+      "goal": "Keep multi-row layout readable on dark theme while preserving first-screen signal hierarchy.",
+      "status": "running",
+      "why": "UI density and wrap lane"
+    },
+    {
+      "id": "grok",
+      "name": "Grok",
+      "task_title": "Conductor assignment routing notes",
+      "repo": "rupret007/barker",
+      "goal": "Track high-level conductor coordination for Cloud Agent usage without exposing private internals.",
+      "status": "running",
+      "why": "Conductor context lane"
+    },
+    {
+      "id": "cursor-cloud",
+      "name": "Cursor Cloud",
+      "task_title": "Draft PR #56 handoff and cloud agent attribution",
+      "repo": "rupret007/bob-ops-dashboard",
+      "pr_url": "https://github.com/rupret007/bob-ops-dashboard/pull/56",
+      "pr_number": "56",
+      "branch": "cursor/max-llm-resource-strip-ec39",
+      "goal": "Keep attribution source grounded in cloud_agents and explicit assignment blob.",
+      "status": "running",
+      "why": "Cloud execution lane"
+    }
+  ]
+}

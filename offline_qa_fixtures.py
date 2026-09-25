@@ -39,9 +39,10 @@ repos = {
         "Andrea_NanoBot", "Bob-the-Bot", "story-corner-shelf", "StoryOps-AI",
         "ballbeacon", "CSS_Conductor", "bob-ops-dashboard",
         "Cursor-OpenClaw-Integration", "Sliding-Glass-Door-PETG-Screw",
+        "StoryDesk",
     )
-} | {"0xc0re/barker"}
-private = {"AdoptIQ", "TACTrack", "AI-Music-Vault", "CSS_Conductor", "Bob-the-Bot"}
+} | {"rupret007/barker"}
+private = {"AdoptIQ", "TACTrack", "AI-Music-Vault", "CSS_Conductor", "Bob-the-Bot", "StoryDesk"}
 scenario = os.environ.get("BOB_DASHBOARD_FIXTURE_SCENARIO")
 if scenario not in {"complete", "metadata-outage"}:
     refuse()

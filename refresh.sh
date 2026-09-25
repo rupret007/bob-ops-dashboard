@@ -18,7 +18,7 @@ OWNER="${OWNER:-rupret007}"
 REPOS=(
   webjam StoryLiner StoryBoard Rad-Dad-Merch RadDadSite Turdanoid
   AdoptIQ TACTrack AI-Music-Vault rad-dad-show-night Andrea_NanoBot Bob-the-Bot
-  StoryOps-AI ballbeacon CSS_Conductor 0xc0re/barker bob-ops-dashboard
+  StoryOps-AI ballbeacon CSS_Conductor barker bob-ops-dashboard
   Cursor-OpenClaw-Integration StoryDesk
 )
 PUSH=0
@@ -207,6 +207,7 @@ root = Path(sys.argv[1])
 sys.path.insert(0, str(root))
 from board_meta import (
     AGENT_IDS,
+    MAC_PROBE_AGENT_IDS,
     AGENT_STATE_CHIP,
     CONTROL_ACTIONS,
     attention_rank,
@@ -238,6 +239,7 @@ from board_meta import (
     safe_game_url,
     safe_pr_url,
     safe_release_url,
+    safe_repo_url,
     short_note,
     split_pending,
     status_from_fetch,
@@ -416,7 +418,8 @@ status = {
       "title": "Apps & utilities",
       "projects": [
         project("StoryOps-AI",
-                notes="WashOps (formerly StoryOps AI) — exterior wash ops OS. High-level only; no customer data on this board."),
+                notes="Exterior wash/services OS (WashOps). High-level only; no customer data on this board.",
+                extra={"name": "WashOps"}),
         project("ballbeacon",
                 notes="Private iOS utility. Software validation only; device and signing steps stay owner-only."),
         project("CSS_Conductor", high_level_only=True,
@@ -482,7 +485,7 @@ status = {
     },
     {
       "id": "active-agents",
-      "title": "Active agents NOW",
+      "title": "LLM work now",
       "projects": [],
     },
   ],
@@ -497,7 +500,7 @@ status["sections"] = prune_closed_parked_prs(
 )
 status["sections"] = merge_first_class(status["sections"])
 
-# --- Active agents (Codex / Cursor / Claude) — safe public fields only ---
+# --- LLM resources strip — safe public fields only ---
 prev_early = {}
 try:
     prev_early = json.loads((root / "status.json").read_text())
@@ -556,27 +559,204 @@ for agent in agents:
 status["agents"] = agents
 status["cloud_agents"] = trusted_cloud
 
-# Pulse data only -- do not invent a fourth Yellow "Cloud Agent" card.
+LANE_ORDER = (
+    ("codex", "Codex (ChatGPT)"),
+    ("claude", "Claude"),
+    ("gemini", "Gemini"),
+    ("minimax", "MiniMax"),
+    ("grok", "Grok"),
+    ("cursor-cloud", "Cursor Cloud"),
+)
+
+def _clean_line(value, limit=240):
+    text = " ".join(str(value or "").split()).strip()
+    return text[:limit]
+
+def _safe_branch(value):
+    branch = str(value or "").strip()
+    if not branch:
+        return ""
+    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._/-]{0,254}", branch):
+        return ""
+    if ".." in branch or "@{" in branch or "//" in branch or branch.endswith(("/", ".")):
+        return ""
+    return branch
+
+def _repo_from_pr_url(url):
+    safe = safe_pr_url(url)
+    if not safe:
+        return ""
+    m = re.match(r"^https://github\.com/([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)/pull/[1-9][0-9]*$", safe, re.I)
+    return m.group(1) if m else ""
+
+def _pr_number(url):
+    safe = safe_pr_url(url)
+    if not safe:
+        return ""
+    m = re.search(r"/pull/([1-9][0-9]*)$", safe)
+    return m.group(1) if m else ""
+
+def _lane_id(raw_id, raw_name):
+    value = str(raw_id or "").strip().lower().replace("_", "-")
+    aliases = {
+        "chatgpt": "codex",
+        "codex-chatgpt": "codex",
+        "cursor": "cursor-cloud",
+        "cursor-cloud": "cursor-cloud",
+        "cloud": "cursor-cloud",
+    }
+    if value in {"codex", "claude", "gemini", "minimax", "grok", "cursor-cloud"}:
+        return value
+    if value in aliases:
+        return aliases[value]
+    text = str(raw_name or "").strip().lower()
+    if "cursor cloud" in text or text == "cloud":
+        return "cursor-cloud"
+    if "codex" in text or "chatgpt" in text:
+        return "codex"
+    if "claude" in text:
+        return "claude"
+    if "gemini" in text:
+        return "gemini"
+    if "minimax" in text:
+        return "minimax"
+    if "grok" in text:
+        return "grok"
+    return ""
+
+def _normalize_work_row(raw):
+    if not isinstance(raw, dict):
+        return None
+    lane = _lane_id(raw.get("id"), raw.get("name"))
+    if not lane:
+        return None
+    pr_url = safe_pr_url(raw.get("pr_url") or raw.get("pr"))
+    repo = _clean_line(raw.get("repo") or _repo_from_pr_url(pr_url), 96)
+    status_name = str(raw.get("status") or "").strip().lower()
+    if status_name not in {"running", "finished", "blocked", "idle"}:
+        status_name = "idle"
+    return {
+        "id": lane,
+        "name": next((n for i, n in LANE_ORDER if i == lane), lane.title()),
+        "task_title": _clean_line(raw.get("task_title") or raw.get("title"), 120),
+        "repo": repo,
+        "pr_url": pr_url,
+        "pr_number": str(raw.get("pr_number") or _pr_number(pr_url)),
+        "branch": _safe_branch(raw.get("branch")),
+        "goal": _clean_line(raw.get("goal") or raw.get("notes"), 220),
+        "status": status_name,
+        "agent_url": safe_agent_url(raw.get("agent_url") or raw.get("url")),
+        "why": _clean_line(raw.get("why") or raw.get("lane_why"), 120),
+        "note": _clean_line(raw.get("note") or raw.get("detail"), 160),
+        "last_task": _clean_line(raw.get("last_task"), 120),
+        "source": _clean_line(raw.get("source"), 48),
+    }
+
+work_blob = None
+for work_path in (root / "llm-work-now.json", Path("/workspace/bob-ops-dashboard/llm-work-now.json")):
+    if work_path.is_file():
+        try:
+            work_blob = json.loads(work_path.read_text())
+            break
+        except Exception:
+            continue
+if work_blob is None:
+    env_work = os.environ.get("LLM_WORK_NOW_JSON")
+    if env_work:
+        try:
+            work_blob = json.loads(env_work)
+        except Exception:
+            work_blob = None
+work_rows = []
+if isinstance(work_blob, dict):
+    work_rows = work_blob.get("work") or work_blob.get("lanes") or []
+elif isinstance(work_blob, list):
+    work_rows = work_blob
+
+by_lane = {}
+for raw in work_rows or []:
+    row = _normalize_work_row(raw)
+    if row:
+        by_lane[row["id"]] = row
+
+for cloud in trusted_cloud:
+    lane = _lane_id("", cloud.get("name"))
+    if not lane:
+        continue
+    if lane in by_lane and by_lane[lane].get("task_title"):
+        continue
+    pr_url = safe_pr_url(cloud.get("pr_url"))
+    by_lane[lane] = {
+        "id": lane,
+        "name": next((n for i, n in LANE_ORDER if i == lane), lane.title()),
+        "task_title": _clean_line(cloud.get("detail") or cloud.get("name") or "Cloud assignment", 120),
+        "repo": _repo_from_pr_url(pr_url),
+        "pr_url": pr_url,
+        "pr_number": _pr_number(pr_url),
+        "branch": "",
+        "goal": "Cloud Agent assignment sourced from open PR attribution.",
+        "status": "running",
+        "agent_url": safe_agent_url(cloud.get("url")),
+        "why": "Cloud Agent",
+        "note": _clean_line(cloud.get("detail"), 160),
+        "last_task": "",
+        "source": "cloud_agents",
+    }
+
+prev_work = prev_early.get("llm_work") if isinstance(prev_early, dict) else []
+prev_by_lane = {}
+for raw in prev_work or []:
+    row = _normalize_work_row(raw)
+    if row:
+        prev_by_lane[row["id"]] = row
+
+llm_work = []
+for lane_id, lane_name in LANE_ORDER:
+    row = dict(by_lane.get(lane_id) or {})
+    previous = prev_by_lane.get(lane_id) or {}
+    row["id"] = lane_id
+    row["name"] = lane_name
+    if not row.get("task_title"):
+        row["task_title"] = "idle - needs assignment"
+        row["status"] = "idle"
+        if previous.get("task_title") and previous.get("task_title") != "idle - needs assignment":
+            row["last_task"] = previous.get("task_title")
+    if not row.get("status"):
+        row["status"] = "idle"
+    if not row.get("source"):
+        row["source"] = "idle"
+    llm_work.append(row)
+
+status["llm_work"] = llm_work
+
+# Pulse data only -- this section now reflects current work attribution.
 agent_projects = []
-for a in agents:
-    st, label = AGENT_STATE_CHIP.get(a["state"], AGENT_STATE_CHIP["unknown"])
-    notes = a.get("detail") or ""
-    if a.get("checked_at"):
-        notes = (notes + f" · checked {a['checked_at']}").strip(" ·")
+for row in llm_work:
+    lane_status = str(row.get("status") or "idle")
+    chip_map = {
+        "running": ("green", "Running"),
+        "finished": ("parked", "Finished"),
+        "blocked": ("red", "Blocked"),
+        "idle": ("parked", "Idle"),
+    }
+    st, label = chip_map.get(lane_status, chip_map["idle"])
+    task = row.get("task_title") or "idle - needs assignment"
+    note = row.get("goal") or row.get("why") or row.get("note") or ""
+    notes = task + ((" - " + note) if note else "")
     agent_projects.append({
-        "name": a["name"],
+        "name": row.get("name") or row.get("id"),
         "status": st,
         "chip": label,
         "notes": notes,
-        "agent_id": a["id"],
-        "agent_state": a["state"],
-        "url": a.get("url"),
-        "pr_url": a.get("pr_url"),
+        "agent_id": row.get("id"),
+        "agent_state": lane_status,
+        "url": row.get("agent_url"),
+        "pr_url": row.get("pr_url"),
     })
 for sec in status["sections"]:
     if sec.get("id") == "active-agents":
         sec["projects"] = agent_projects
-        sec["title"] = "Active agents NOW"
+        sec["title"] = "LLM work now"
         break
 
 # Decisions inbox (needed before first paint -- Jeff should see pending immediately)
@@ -816,6 +996,32 @@ def tap_link(href, label, extra=""):
         f'target="_blank" rel="noopener noreferrer">{h(label)}</a>'
     )
 
+def compact_agent_detail(agent):
+    """Short public detail for pill face; full safe detail remains in title."""
+    if not isinstance(agent, dict):
+        return ""
+    aid = str(agent.get("id") or "").strip().lower()
+    state = str(agent.get("state") or "unknown").strip().lower()
+    detail = str(agent.get("detail") or "").strip()
+    if aid == "codex":
+        if state == "running":
+            return "running · ChatGPT app"
+        if state == "installed":
+            return "installed · ChatGPT tools"
+    if aid == "cursor":
+        return "Cursor.app desktop"
+    if aid == "claude":
+        return "Anthropic desktop/CLI"
+    if aid == "gemini":
+        return "BYOK API key" if state in {"ready", "installed"} else "BYOK key needed"
+    if aid == "minimax":
+        return "BYOK API key" if state in {"ready", "installed"} else "BYOK key needed"
+    if aid == "grok":
+        return "conductor + Cloud Agents"
+    if detail:
+        return short_note(detail, 38)
+    return "status unknown"
+
 def lane_html(p):
     chip_label = visible_chip(p)
     chip = chip_html(p.get("status") or "parked", chip_label) if chip_label else ""
@@ -868,49 +1074,79 @@ def lanes_html(projects, *, sort_attention=False):
 sections_html = []
 control_projects = []
 
-def agent_pill_html(a):
-    st, label = AGENT_STATE_CHIP.get((a or {}).get("state"), AGENT_STATE_CHIP["unknown"])
-    chip = chip_html(st, label)
-    name = h((a or {}).get("name") or (a or {}).get("id") or "agent")
-    detail = h((a or {}).get("detail") or "")
-    aid = h((a or {}).get("id") or (a or {}).get("name") or "agent")
-    state = h((a or {}).get("state") or "unknown")
-    checked = h((a or {}).get("checked_at") or "")
-    url = safe_agent_url((a or {}).get("url"))
-    pr = safe_pr_url((a or {}).get("pr_url"))
-    name_html = (
-        f'<a class="name" data-open="work" href="{h(url)}" target="_blank" rel="noopener noreferrer">{name}</a>'
-        if url else f'<span class="name">{name}</span>'
-    )
+def _work_chip(status):
+    st = str(status or "idle").strip().lower()
+    mapping = {
+        "running": ("green", "Running"),
+        "finished": ("parked", "Finished"),
+        "blocked": ("red", "Blocked"),
+        "idle": ("parked", "Idle"),
+    }
+    color, label = mapping.get(st, mapping["idle"])
+    return chip_html(color, label)
+
+def _work_meta_html(row):
+    """Return the meta line as safe HTML with linked repo and PR number."""
+    pr = safe_pr_url(row.get("pr_url"))
+    repo_display = _clean_line(row.get("repo"), 96)
+    repo_url = safe_repo_url("https://github.com/" + repo_display) if repo_display else ""
+    pr_number = str(row.get("pr_number") or "").strip()
+    branch = _safe_branch(row.get("branch"))
+    why = _clean_line(row.get("why"), 120)
+    bits = []
+    if repo_url:
+        bits.append(f'<a href="{h(repo_url)}" class="meta-link" target="_blank" rel="noopener">{h(repo_display)}</a>')
+    elif repo_display:
+        bits.append(h(repo_display))
+    if pr and pr_number:
+        bits.append(f'<a href="{h(pr)}" class="meta-link" target="_blank" rel="noopener">PR #{h(pr_number)}</a>')
+    elif pr_number:
+        bits.append(f'PR #{h(pr_number)}')
+    if branch:
+        bits.append(h(branch))
+    if why:
+        bits.append(h(why))
+    return " - ".join(bits)
+
+def work_row_html(row):
+    lane = row if isinstance(row, dict) else {}
+    lane_id = h(lane.get("id") or "lane")
+    name = h(lane.get("name") or lane.get("id") or "LLM")
+    task = h(lane.get("task_title") or "idle - needs assignment")
+    meta_html = _work_meta_html(lane)
+    goal = h(_clean_line(lane.get("goal"), 260))
+    note = h(_clean_line(lane.get("note"), 200))
+    last_task = h(_clean_line(lane.get("last_task"), 160))
+    pr = safe_pr_url(lane.get("pr_url"))
+    agent = safe_agent_url(lane.get("agent_url"))
+    repo_display = _clean_line(lane.get("repo"), 96)
+    repo_url = safe_repo_url("https://github.com/" + repo_display) if repo_display else ""
     links = []
-    if url:
-        links.append(tap_link(url, "Open agent"))
+    if agent:
+        links.append(tap_link(agent, "Open agent"))
     if pr:
         links.append(tap_link(pr, "Open PR"))
-    links_html = ('<span class="agent-links">' + "".join(links) + "</span>") if links else ""
-    extra = " has-links" if links else ""
-    probe = "mac" if str((a or {}).get("id") or "") in AGENT_IDS else "cloud"
+    if repo_url:
+        links.append(tap_link(repo_url, "Open repo"))
+    links_html = ('<div class="agent-links">' + "".join(links) + "</div>") if links else ""
+    goal_html = f'<p class="goal">{goal}</p>' if goal else ""
+    note_html = f'<p class="note">{note}</p>' if note else ""
+    last_html = f'<p class="last-task">Last: {last_task}</p>' if last_task else ""
     return (
-        f'<div class="agent-pill{extra}" data-probe="{probe}" data-agent-id="{aid}" data-state="{state}" '
-        f'data-checked-at="{checked}" data-agent-url="{h(url)}" data-pr-url="{h(pr)}" title="{detail}">'
-        f'{name_html}{chip}{links_html}</div>'
+        f'<article class="agent-row" data-lane-id="{lane_id}" data-lane-status="{h(lane.get("status") or "idle")}">'
+        f'<div class="agent-head"><h3>{name}</h3>{_work_chip(lane.get("status"))}</div>'
+        f'<p class="task">{task}</p>'
+        f'<p class="meta">{meta_html}</p>'
+        f'{goal_html}{note_html}{last_html}{links_html}</article>'
     )
 
-def agents_strip_html(agents_list, cloud_list=None):
-    compact = compact_unknown_mac_probes(agents_list)
-    cloud_rows = [a for a in (cloud_list or []) if isinstance(a, dict)]
-    cls = "agents-strip"
-    if compact:
-        cls += " is-unknown-mac"
-        if not cloud_rows:
-            cls += " is-unknown-only"
-    pills = [unknown_mac_probes_html(agents_list)]
-    pills.extend(agent_pill_html(a) for a in (agents_list or []))
-    pills.extend(agent_pill_html(a) for a in cloud_rows)
+def agents_strip_html(work_rows):
+    rows = [row for row in (work_rows or []) if isinstance(row, dict)]
     return (
-        f'<div class="{cls}" id="agents-strip">'
-        + "".join(pills)
-        + "</div>"
+        '<section class="agents-strip" id="agents-strip" aria-label="LLM work now">'
+        '<h2 class="llm-work-title">Work now</h2>'
+        + "".join(work_row_html(row) for row in rows)
+        + "</section>"
     )
 
 def fetched_line_html(repos):
@@ -997,7 +1233,7 @@ html = f'''<!DOCTYPE html>
     font-size:16px; line-height:1.4; }}
   a {{ color:var(--link); text-decoration:none; }} a:hover {{ text-decoration:underline; }}
   .wrap {{ max-width:40rem; margin:0 auto; padding:calc(1rem + env(safe-area-inset-top, 0px)) 1rem calc(3.25rem + env(safe-area-inset-bottom, 0px)); }}
-  header.pulse {{ padding:0 0 .55rem; margin:0 0 .85rem; border:0; background:transparent; }}
+  header.pulse {{ padding:0 0 .65rem; margin:0 0 1rem; border:0; background:transparent; }}
   header.pulse h1 {{ margin:0; font-size:.92rem; font-weight:700; letter-spacing:-.01em; }}
   header.pulse h1 .mark {{ color:var(--orange); }}
   .pulse-row {{ display:flex; flex-direction:column; gap:.4rem; margin-top:.45rem; }}
@@ -1022,7 +1258,7 @@ html = f'''<!DOCTYPE html>
   .chip {{ display:inline-flex; align-items:center; color:var(--c);
     background:transparent; border:0; padding:0; font-size:.68rem; font-weight:700;
     text-transform:uppercase; letter-spacing:.04em; white-space:nowrap; }}
-  section.block {{ margin:0 0 1.75rem; padding:0; border:0; }}
+  section.block {{ margin:0 0 1.55rem; padding:0; border:0; }}
   section.block[hidden] {{ display:none !important; }}
   section.block.pending {{ margin-bottom:2rem; }}
   section.block.primary {{ margin-bottom:2.1rem; }}
@@ -1036,10 +1272,10 @@ html = f'''<!DOCTYPE html>
     margin:0 0 .35rem; padding:0; border:0;
     font-size:.7rem; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:var(--muted);
   }}
-  .lanes {{ display:flex; flex-direction:column; }}
+  .lanes {{ display:flex; flex-direction:column; gap:.05rem; }}
   .lane {{
     display:grid; grid-template-columns:minmax(0,1fr) auto; column-gap:.75rem; row-gap:.15rem;
-    padding:.72rem 0; border:0; border-bottom:1px solid var(--hair); background:transparent; border-radius:0;
+    padding:.78rem 0; border:0; border-bottom:1px solid var(--hair); background:transparent; border-radius:0;
   }}
   .lane:last-child {{ border-bottom:0; }}
   .lane h3 {{ margin:0; font-size:.95rem; font-weight:600; letter-spacing:-.01em; }}
@@ -1068,7 +1304,7 @@ html = f'''<!DOCTYPE html>
   .pending-help {{ margin:0 0 .7rem; color:var(--muted); font-size:.8rem; line-height:1.4; }}
   .pending-item {{
     border:0; border-bottom:1px solid var(--hair); border-radius:0;
-    padding:.65rem 0; margin:0; background:transparent;
+    padding:.72rem 0; margin:0; background:transparent;
   }}
   .lane:focus, .pending-item:focus {{ outline:2px solid var(--orange); outline-offset:3px; }}
   .lane.is-glance-target, .pending-item.is-glance-target {{
@@ -1143,19 +1379,38 @@ html = f'''<!DOCTYPE html>
   }}
   #board {{ min-height:2rem; }}
   #active-agents {{ margin:0; }}
-  .agents-strip {{ display:flex; flex-wrap:wrap; gap:.55rem .85rem; align-items:flex-start; margin:0; padding:0; border:0; background:transparent; }}
-  .agents-unknown {{ display:none; margin:0; color:var(--muted); font-size:.8rem; font-weight:600; }}
-  .agents-strip.is-unknown-mac .agent-pill[data-probe="mac"] {{ display:none; }}
-  .agents-strip.is-unknown-only {{ display:none; }}
+  .agents-strip {{
+    display:grid; grid-template-columns:1fr; gap:.52rem; align-items:stretch;
+    margin:0; padding:0; border:0; background:transparent;
+  }}
+  .llm-work-title {{
+    margin:0 0 .15rem; font-size:.86rem; font-weight:800; letter-spacing:.02em;
+    text-transform:uppercase; color:var(--muted);
+  }}
+  .agent-row {{
+    border:1px solid var(--border); border-radius:10px;
+    padding:.58rem .62rem; background:rgba(255,255,255,.02);
+    display:grid; gap:.22rem;
+  }}
+  .agent-row .agent-head {{
+    display:flex; align-items:center; justify-content:space-between; gap:.4rem;
+  }}
+  .agent-row h3 {{ margin:0; font-size:.9rem; font-weight:700; letter-spacing:-.01em; }}
+  .agent-row p {{ margin:0; }}
+  .agent-row .task {{ font-size:.82rem; font-weight:650; color:#fff; }}
+  .agent-row .meta {{ font-size:.74rem; color:var(--muted); line-height:1.3; }}
+  .agent-row .meta .meta-link {{ color:var(--link); text-decoration:none; }}
+  .agent-row .meta .meta-link:hover {{ text-decoration:underline; }}
+  .agent-row .goal {{ font-size:.75rem; color:var(--muted); line-height:1.32; }}
+  .agent-row .note, .agent-row .last-task {{
+    font-size:.75rem; color:var(--muted); line-height:1.32;
+  }}
   body.tab-home section.block.foot {{ display:none; }}
   body.tab-home footer {{ display:none; }}
   body.tab-home .live-stamp .when {{ display:none; }}
   body.tab-home .agent-links {{ display:none; }}
-  body.tab-home .agent-pill.has-links {{ flex-direction:row; flex-wrap:wrap; align-items:center; }}
-  body.tab-home .agent-pill[data-probe="cloud"] .chip {{ display:none; }}
-  .agent-pill {{ display:inline-flex; align-items:center; gap:.35rem; border:0; background:transparent; padding:0; }}
-  .agent-pill.has-links {{ flex-direction:column; align-items:flex-start; gap:.3rem; }}
-  .agent-pill .name {{ font-weight:600; font-size:.8rem; }}
+  body.tab-home .agent-row .note,
+  body.tab-home .agent-row .last-task {{ display:none; }}
   .agent-links {{ display:flex; flex-wrap:wrap; gap:.35rem; }}
   .tools {{ display:flex; flex-wrap:wrap; gap:.45rem; margin:0 0 .85rem; }}
   .how-board, .abilities-foot {{ margin:0; }}
@@ -1185,6 +1440,9 @@ html = f'''<!DOCTYPE html>
     section.pending h2, section.primary h2 {{ font-size:1.85rem; }}
     .type-tabs {{ flex-wrap:wrap; overflow:visible; }}
     .type-tabs button {{ flex:0 0 auto; padding:.4rem .85rem; font-size:.8rem; }}
+    .agents-strip {{ grid-template-columns:repeat(auto-fit,minmax(17.5rem,1fr)); }}
+    body.tab-home .agent-row .note,
+    body.tab-home .agent-row .last-task {{ display:block; }}
   }}
 </style>
 </head>
@@ -1194,7 +1452,7 @@ html = f'''<!DOCTYPE html>
     <h1><span class="mark">Bob</span> Ops</h1>
     <div class="pulse-row">
       <div class="live-stamp" id="live-stamp" data-generated-at="{h(updated_iso)}" data-display="{h(updated_ct)}"><span class="live-dot" id="live-dot" aria-hidden="true"></span><span id="freshness">Live - starting</span><span class="when"> · <strong id="updated-display">{h(updated_ct)}</strong></span></div>
-      <div id="active-agents">{agents_strip_html(status.get("agents"), status.get("cloud_agents"))}</div>
+      <div id="active-agents">{agents_strip_html(status.get("llm_work"))}</div>
     </div>
     <div class="status hint" id="panel-status"></div>
   </header>
@@ -1500,7 +1758,7 @@ function focusKey(kind, raw) {{
     if (dot) {{
       dot.classList.toggle("stale", stale || pollFailStreak > 0);
     }}
-    if (lastAgents && lastAgents.length) paintAgents(lastAgents, lastCloud);
+    if (lastAgents && lastAgents.length) paintAgents(lastAgents);
     if (typeof updateSilence === "function") updateSilence();
   }}
 
@@ -1563,15 +1821,15 @@ function focusKey(kind, raw) {{
   }}
   function safePrUrl(u) {{
     var s = cleanPublicUrl(u);
-    return /^https:\\/\\/github\\.com\\/(?:rupret007\\/[A-Za-z0-9._-]+|0xc0re\\/barker)\\/pull\\/[1-9][0-9]*$/i.test(s) ? s : "";
+    return /^https:\\/\\/github\\.com\\/rupret007\\/[A-Za-z0-9._-]+\\/pull\\/[1-9][0-9]*$/i.test(s) ? s : "";
   }}
   function safeActionsUrl(u) {{
     var s = cleanPublicUrl(u);
-    return /^https:\\/\\/github\\.com\\/(?:rupret007\\/[A-Za-z0-9._-]+|0xc0re\\/barker)\\/actions\\/runs\\/[1-9][0-9]*$/i.test(s) ? s : "";
+    return /^https:\\/\\/github\\.com\\/rupret007\\/[A-Za-z0-9._-]+\\/actions\\/runs\\/[1-9][0-9]*$/i.test(s) ? s : "";
   }}
   function safeRepoUrl(u) {{
     var s = cleanPublicUrl(u);
-    return /^https:\\/\\/github\\.com\\/(?:rupret007\\/[A-Za-z0-9._-]+|0xc0re\\/barker)$/i.test(s) ? s : "";
+    return /^https:\\/\\/github\\.com\\/rupret007\\/[A-Za-z0-9._-]+$/i.test(s) ? s : "";
   }}
   function safeGameUrl(u) {{
     var s = cleanPublicUrl(u);
@@ -1580,11 +1838,11 @@ function focusKey(kind, raw) {{
   }}
   function safePullsUrl(u) {{
     var s = cleanPublicUrl(u);
-    return /^https:\\/\\/github\\.com\\/(?:rupret007\\/[A-Za-z0-9._-]+|0xc0re\\/barker)\\/pulls$/i.test(s) ? s : "";
+    return /^https:\\/\\/github\\.com\\/rupret007\\/[A-Za-z0-9._-]+\\/pulls$/i.test(s) ? s : "";
   }}
   function safeReleaseUrl(u) {{
     var s = cleanPublicUrl(u);
-    return /^https:\\/\\/github\\.com\\/(?:rupret007\\/[A-Za-z0-9._-]+|0xc0re\\/barker)\\/releases\\/(?:latest|tag\\/[A-Za-z0-9][A-Za-z0-9._-]{{0,63}})$/i.test(s) ? s : "";
+    return /^https:\\/\\/github\\.com\\/rupret007\\/[A-Za-z0-9._-]+\\/releases\\/(?:latest|tag\\/[A-Za-z0-9][A-Za-z0-9._-]{{0,63}})$/i.test(s) ? s : "";
   }}
   function pullsUrlFromRepo(u) {{
     var repo = safeRepoUrl(u);
@@ -1698,7 +1956,7 @@ function focusKey(kind, raw) {{
           valid = false;
           break;
         }}
-        var match = url.match(/^https:\/\/github\.com\/(?:rupret007\/[A-Za-z0-9._-]+|0xc0re\/barker)\/pull\/([1-9][0-9]*)$/i);
+        var match = url.match(/^https:\/\/github\.com\/rupret007\/[A-Za-z0-9._-]+\/pull\/([1-9][0-9]*)$/i);
         if (!match || Number(match[1]) !== number) {{
           valid = false;
           break;
@@ -2102,88 +2360,165 @@ function focusKey(kind, raw) {{
     hideSilence();
   }}
 
-  function agentStateChip(state) {{
+  function workChip(status) {{
     var map = {{
       running: ["green", "Running"],
-      idle: ["yellow", "Idle"],
-      installed: ["parked", "Installed"],
-      down: ["red", "Down"],
-      unknown: ["parked", "Unknown"]
+      finished: ["parked", "Finished"],
+      blocked: ["red", "Blocked"],
+      idle: ["parked", "Idle"]
     }};
-    var m = map[state] || map.unknown;
+    var m = map[String(status || "idle").toLowerCase()] || map.idle;
     return chipHtml(m[0], m[1]);
   }}
-
-  function agentPillHtml(a) {{
-    var row = a || {{}};
-    var name = row.name || row.id || "agent";
-    var detail = row.detail || "";
-    var url = safeAgentUrl(row.url);
-    var pr = safePrUrl(row.pr_url);
-    var nameHtml = url
-      ? '<a class="name" data-open="work" href="' + esc(url) + '" target="_blank" rel="noopener noreferrer">' + esc(name) + "</a>"
-      : '<span class="name">' + esc(name) + "</span>";
-    var links = "";
-    if (url) links += tapLink(url, "Open agent");
-    if (pr) links += tapLink(pr, "Open PR");
-    var extra = links ? " has-links" : "";
-    var id = String(row.id || "");
-    var probe = (id === "codex" || id === "cursor" || id === "claude") ? "mac" : "cloud";
-    return '<div class="agent-pill' + extra + '" data-probe="' + probe + '" data-agent-id="' + esc(row.id || name) +
-      '" data-state="' + esc(row.state || "unknown") +
-      '" data-checked-at="' + esc(row.checked_at || "") +
-      '" data-agent-url="' + esc(url) +
-      '" data-pr-url="' + esc(pr) +
-      '" title="' + esc(detail) + '">' +
-      nameHtml + agentStateChip(row.state) +
-      (links ? '<span class="agent-links">' + links + "</span>" : "") + "</div>";
+  function laneName(id) {{
+    var map = {{
+      codex: "Codex (ChatGPT)",
+      claude: "Claude",
+      gemini: "Gemini",
+      minimax: "MiniMax",
+      grok: "Grok",
+      "cursor-cloud": "Cursor Cloud"
+    }};
+    return map[id] || id;
   }}
-  function compactUnknownMacProbes(agents) {{
-    var known = false;
-    (agents || []).forEach(function (a) {{
-      if (!a) return;
-      var id = String(a.id || "");
-      if (id !== "codex" && id !== "cursor" && id !== "claude") return;
-      var state = String(a.state || "unknown").toLowerCase();
-      if (state && state !== "unknown") known = true;
+  function laneId(rawId, rawName) {{
+    var id = String(rawId || "").trim().toLowerCase().replace(/_/g, "-");
+    if (id === "codex" || id === "claude" || id === "gemini" || id === "minimax" || id === "grok" || id === "cursor-cloud") return id;
+    if (id === "cursor" || id === "cloud") return "cursor-cloud";
+    var name = String(rawName || "").toLowerCase();
+    if (name.indexOf("cursor cloud") !== -1 || name === "cloud") return "cursor-cloud";
+    if (name.indexOf("codex") !== -1 || name.indexOf("chatgpt") !== -1) return "codex";
+    if (name.indexOf("claude") !== -1) return "claude";
+    if (name.indexOf("gemini") !== -1) return "gemini";
+    if (name.indexOf("minimax") !== -1) return "minimax";
+    if (name.indexOf("grok") !== -1) return "grok";
+    return "";
+  }}
+  function compactText(value, limit) {{
+    var text = String(value || "").replace(/\s+/g, " ").trim();
+    if (!limit || text.length <= limit) return text;
+    return text.slice(0, limit);
+  }}
+  function safeBranch(value) {{
+    var branch = String(value || "").trim();
+    if (!branch) return "";
+    if (!/^[A-Za-z0-9][A-Za-z0-9._/-]{{0,254}}$/.test(branch)) return "";
+    if (branch.indexOf("@{{") !== -1 || branch.indexOf("..") !== -1 || branch.indexOf("//") !== -1) return "";
+    if (/[/.]$/.test(branch)) return "";
+    return branch;
+  }}
+  function repoFromPrUrl(url) {{
+    var safe = safePrUrl(url);
+    if (!safe) return "";
+    var m = safe.match(/^https:\/\/github\.com\/([A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+)\/pull\/[1-9][0-9]*$/i);
+    return m ? m[1] : "";
+  }}
+  function prNumber(url) {{
+    var safe = safePrUrl(url);
+    if (!safe) return "";
+    var m = safe.match(/\/pull\/([1-9][0-9]*)$/);
+    return m ? m[1] : "";
+  }}
+  function normalizeWorkRow(raw) {{
+    if (!raw || typeof raw !== "object") return null;
+    var id = laneId(raw.id, raw.name);
+    if (!id) return null;
+    var pr = safePrUrl(raw.pr_url || raw.pr);
+    var status = String(raw.status || "").toLowerCase();
+    if (status !== "running" && status !== "finished" && status !== "blocked" && status !== "idle") status = "idle";
+    return {{
+      id: id,
+      name: laneName(id),
+      task_title: compactText(raw.task_title || raw.title, 120),
+      repo: compactText(raw.repo || repoFromPrUrl(pr), 96),
+      pr_url: pr,
+      pr_number: String(raw.pr_number || prNumber(pr)),
+      branch: safeBranch(raw.branch),
+      goal: compactText(raw.goal || raw.notes, 220),
+      status: status,
+      agent_url: safeAgentUrl(raw.agent_url || raw.url),
+      why: compactText(raw.why || raw.lane_why, 120),
+      note: compactText(raw.note || raw.detail, 160),
+      last_task: compactText(raw.last_task, 120),
+      source: compactText(raw.source, 48)
+    }};
+  }}
+  function normalizeLlmWork(rows) {{
+    var order = ["codex", "claude", "gemini", "minimax", "grok", "cursor-cloud"];
+    var by = {{}};
+    (rows || []).forEach(function (raw) {{
+      var row = normalizeWorkRow(raw);
+      if (row) by[row.id] = row;
     }});
-    return !known;
+    return order.map(function (id) {{
+      var row = by[id] || {{}};
+      return {{
+        id: id,
+        name: laneName(id),
+        task_title: row.task_title || "idle - needs assignment",
+        repo: row.repo || "",
+        pr_url: row.pr_url || "",
+        pr_number: row.pr_number || "",
+        branch: row.branch || "",
+        goal: row.goal || "",
+        status: row.status || "idle",
+        agent_url: row.agent_url || "",
+        why: row.why || "",
+        note: row.note || "",
+        last_task: row.last_task || "",
+        source: row.source || "idle"
+      }};
+    }});
   }}
-  function publicProbeDetail(detail) {{
-    var text = String(detail || "").replace(/^\s+|\s+$/g, "").slice(0, 200);
-    var low = text.toLowerCase();
-    var bad = ["token", "secret", "bearer", "csone", "keeper", "password", "api_key", "apikey", "/users/", "/home/", "file:", "probe-agents-status.sh"];
-    var i;
-    for (i = 0; i < bad.length; i++) {{
-      if (low.indexOf(bad[i]) !== -1) return "No live Mac probe";
+  function workMetaHtml(row) {{
+    var pr = safePrUrl(row.pr_url || "");
+    var repoDisplay = row.repo || "";
+    var repoUrl = repoDisplay ? safeRepoUrl("https://github.com/" + repoDisplay) : "";
+    var prNumber = String(row.pr_number || "").trim();
+    var branch = row.branch || "";
+    var why = row.why || "";
+    var bits = [];
+    if (repoUrl) {{
+      bits.push('<a href="' + esc(repoUrl) + '" class="meta-link" target="_blank" rel="noopener">' + esc(repoDisplay) + "</a>");
+    }} else if (repoDisplay) {{
+      bits.push(esc(repoDisplay));
     }}
-    return text || "No live Mac probe";
+    if (pr && prNumber) {{
+      bits.push('<a href="' + esc(pr) + '" class="meta-link" target="_blank" rel="noopener">PR #' + esc(prNumber) + "</a>");
+    }} else if (prNumber) {{
+      bits.push("PR #" + esc(prNumber));
+    }}
+    if (branch) bits.push(esc(branch));
+    if (why) bits.push(esc(why));
+    return bits.join(" - ");
   }}
-  function unknownMacProbesHtml(agents) {{
-    var detail = "No live Mac probe";
-    var i;
-    for (i = 0; i < (agents || []).length; i++) {{
-      var a = agents[i];
-      if (!a) continue;
-      var id = String(a.id || "");
-      if (id !== "codex" && id !== "cursor" && id !== "claude") continue;
-      var text = String(a.detail || "").replace(/^\s+|\s+$/g, "");
-      if (text) {{ detail = publicProbeDetail(text); break; }}
+  function workRowHtml(row) {{
+    var lane = row || {{}};
+    var name = lane.name || laneName(lane.id || "");
+    var task = lane.task_title || "idle - needs assignment";
+    var metaHtml = workMetaHtml(lane);
+    var links = "";
+    if (lane.agent_url) links += tapLink(lane.agent_url, "Open agent");
+    if (lane.pr_url) links += tapLink(lane.pr_url, "Open PR");
+    if (lane.repo) {{
+      var repo = safeRepoUrl("https://github.com/" + lane.repo);
+      if (repo) links += tapLink(repo, "Open repo");
     }}
-    return '<p class="agents-unknown" id="agents-unknown" title="' + esc(detail) + '">Agents unknown</p>';
+    var goal = lane.goal ? '<p class="goal">' + esc(lane.goal) + "</p>" : "";
+    var note = lane.note ? '<p class="note">' + esc(lane.note) + "</p>" : "";
+    var lastTask = lane.last_task ? '<p class="last-task">Last: ' + esc(lane.last_task) + "</p>" : "";
+    return '<article class="agent-row" data-lane-id="' + esc(lane.id || "") + '" data-lane-status="' + esc(lane.status || "idle") + '">' +
+      '<div class="agent-head"><h3>' + esc(name) + '</h3>' + workChip(lane.status) + "</div>" +
+      '<p class="task">' + esc(task) + "</p>" +
+      '<p class="meta">' + metaHtml + "</p>" +
+      goal + note + lastTask +
+      (links ? '<div class="agent-links">' + links + "</div>" : "") +
+      "</article>";
   }}
-  function agentsStripHtml(agents, cloud) {{
-    var compact = compactUnknownMacProbes(agents);
-    var cloudRows = (cloud || []).filter(function (a) {{ return !!a; }});
-    var cls = "agents-strip";
-    if (compact) {{
-      cls += " is-unknown-mac";
-      if (!cloudRows.length) cls += " is-unknown-only";
-    }}
-    var pills = unknownMacProbesHtml(agents);
-    (agents || []).forEach(function (a) {{ pills += agentPillHtml(a); }});
-    cloudRows.forEach(function (a) {{ pills += agentPillHtml(a); }});
-    return '<div class="' + cls + '" id="agents-strip">' + pills + "</div>";
+  function agentsStripHtml(workRows) {{
+    var rows = normalizeLlmWork(workRows);
+    var html = rows.map(workRowHtml).join("");
+    return '<section class="agents-strip" id="agents-strip" aria-label="LLM work now"><h2 class="llm-work-title">Work now</h2>' + html + "</section>";
   }}
   function fetchedLineHtml(repos) {{
     var names = [];
@@ -2214,34 +2549,6 @@ function focusKey(kind, raw) {{
     return out.slice(0, 3);
   }}
 
-  var AGENT_FRESH_MS = 45 * 60 * 1000;
-  function parseCheckedAt(ts) {{
-    var ms = Date.parse(String(ts || ""));
-    return isFinite(ms) ? ms : 0;
-  }}
-  function ageGateAgents(agents) {{
-    var names = {{ codex: "Codex", cursor: "Cursor", claude: "Claude" }};
-    var by = {{}};
-    (agents || []).forEach(function (a) {{
-      if (a && a.id) by[String(a.id)] = a;
-    }});
-    var now = Date.now();
-    return ["codex", "cursor", "claude"].map(function (id) {{
-      var a = by[id] || {{ id: id, name: names[id], state: "unknown", detail: "No Mac probe yet" }};
-      var ms = parseCheckedAt(a.checked_at);
-      var fresh = !!(ms && (now - ms) < AGENT_FRESH_MS && (ms - now) <= 5 * 60 * 1000);
-      var state = String(a.state || "unknown").toLowerCase();
-      if (!fresh) {{
-        var detail = String(a.detail || "probe");
-        if (detail.toLowerCase().indexOf("probe stale") === -1) detail = detail + " \\u00b7 probe stale (>45m)";
-        return {{ id: id, name: a.name || names[id], state: "unknown", detail: detail, checked_at: a.checked_at || "", url: safeAgentUrl(a.url), pr_url: safePrUrl(a.pr_url) }};
-      }}
-      if (state !== "running" && state !== "idle" && state !== "installed" && state !== "down" && state !== "unknown") {{
-        state = "unknown";
-      }}
-      return {{ id: id, name: a.name || names[id], state: state, detail: a.detail || "", checked_at: a.checked_at || "", url: safeAgentUrl(a.url), pr_url: safePrUrl(a.pr_url) }};
-    }});
-  }}
   function boardFingerprint(data) {{
     if (!data || typeof data !== "object") return "";
     function agentKey(a) {{ return a ? [a.id, a.state, a.detail, a.url || "", a.pr_url || ""] : []; }}
@@ -2287,54 +2594,32 @@ function focusKey(kind, raw) {{
     setOpen("details.pending-more", s.more);
     applyTypeTab(s.tab || "");
   }}
-  function paintAgents(agents, cloud) {{
+  function paintAgents(workRows) {{
     var host = document.getElementById("active-agents");
     if (!host) return;
-    var html = agentsStripHtml(ageGateAgents(agents || []), sanitizeCloudAgents(cloud || lastCloud));
+    var html = agentsStripHtml(workRows || []);
     if (host.innerHTML === html) return;
     host.innerHTML = html;
   }}
-  function readDomAgents() {{
-    var mac = {{ codex: 1, cursor: 1, claude: 1 }};
-    var pills = document.querySelectorAll("#agents-strip .agent-pill");
-    return Array.prototype.map.call(pills, function (el) {{
+  function readDomLlmWork() {{
+    var rows = document.querySelectorAll("#agents-strip .agent-row");
+    return Array.prototype.map.call(rows, function (el) {{
       return {{
-        id: el.getAttribute("data-agent-id") || "",
-        name: ((el.querySelector(".name") || {{}}).textContent) || "",
-        state: el.getAttribute("data-state") || "unknown",
-        detail: el.getAttribute("title") || "",
-        checked_at: el.getAttribute("data-checked-at") || "",
-        url: el.getAttribute("data-agent-url") || "",
-        pr_url: el.getAttribute("data-pr-url") || ""
+        id: el.getAttribute("data-lane-id") || "",
+        status: el.getAttribute("data-lane-status") || "idle",
+        name: ((el.querySelector("h3") || {{}}).textContent) || "",
+        task_title: ((el.querySelector(".task") || {{}}).textContent) || "",
+        goal: ((el.querySelector(".goal") || {{}}).textContent) || "",
+        note: ((el.querySelector(".note") || {{}}).textContent) || "",
+        last_task: (((el.querySelector(".last-task") || {{}}).textContent) || "").replace(/^Last:\s*/i, "")
       }};
-    }}).filter(function (row) {{ return !!mac[row.id]; }});
-  }}
-  function readDomCloud() {{
-    var mac = {{ codex: 1, cursor: 1, claude: 1 }};
-    var pills = document.querySelectorAll("#agents-strip .agent-pill");
-    var out = [];
-    Array.prototype.forEach.call(pills, function (el) {{
-      var id = el.getAttribute("data-agent-id") || "";
-      if (mac[id]) return;
-      var url = safeAgentUrl(el.getAttribute("data-agent-url"));
-      if (!url) return;
-      out.push({{
-        id: id,
-        name: ((el.querySelector(".name") || {{}}).textContent) || "Cloud",
-        state: "unknown",
-        detail: el.getAttribute("title") || "",
-        url: url,
-        pr_url: safePrUrl(el.getAttribute("data-pr-url")),
-        checked_at: el.getAttribute("data-checked-at") || ""
-      }});
     }});
-    return out;
   }}
 
   function renderBoard(data) {{
     if (!boardEl || !data || !Array.isArray(data.sections)) return;
     lastCloud = sanitizeCloudAgents((data && data.cloud_agents) || lastCloud);
-    paintAgents(data.agents || [], lastCloud);
+    paintAgents((data && data.llm_work) || []);
     var controlProjects = [];
     var html = glanceHtml(data.pending, data.sections) + typeTabsHtml(data.sections, data.pending, "");
     data.sections.forEach(function (sec) {{
@@ -2423,8 +2708,8 @@ function focusKey(kind, raw) {{
     retryStatus.textContent = busy ? "Checking..." : "Retry now";
     retryStatus.setAttribute("aria-busy", busy ? "true" : "false");
   }}
-  lastAgents = readDomAgents();
-  lastCloud = readDomCloud();
+  lastAgents = readDomLlmWork();
+  lastCloud = [];
   function signalHref(p) {{
     var signal = compactSignal(p);
     if (!signal) return "";
@@ -2512,9 +2797,9 @@ function focusKey(kind, raw) {{
           dot.classList.add("poll");
           setTimeout(function () {{ dot.classList.remove("poll"); }}, 600);
         }}
-        lastAgents = (data && data.agents) || lastAgents;
+        lastAgents = (data && data.llm_work) || lastAgents;
         lastCloud = sanitizeCloudAgents((data && data.cloud_agents) || lastCloud);
-        paintAgents(lastAgents, lastCloud);
+        paintAgents(lastAgents);
         applyStamp(data);
         if (decision === "paint") {{
           // Soft-paint from JSON -- skip timestamp-only Actions refreshes (no flash).

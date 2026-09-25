@@ -59,13 +59,22 @@ ATTENTION_ORDER = {
     "parked": 4,
 }
 PENDING_RISK_ORDER = {"high": 0, "medium": 1, "low": 2}
-# Pulse strip only. Extra probe rows never become a fourth invented pill.
-AGENT_IDS = ("codex", "cursor", "claude")
-AGENT_NAMES = {"codex": "Codex", "cursor": "Cursor", "claude": "Claude"}
-AGENT_STATES = frozenset({"running", "idle", "installed", "down", "unknown"})
+# Pulse strip resources. Mac probes are a subset.
+AGENT_IDS = ("codex", "cursor", "claude", "gemini", "minimax", "grok")
+MAC_PROBE_AGENT_IDS = ("codex", "cursor", "claude")
+AGENT_NAMES = {
+    "codex": "Codex (ChatGPT)",
+    "cursor": "Cursor",
+    "claude": "Claude",
+    "gemini": "Gemini",
+    "minimax": "MiniMax",
+    "grok": "Grok",
+}
+AGENT_STATES = frozenset({"running", "idle", "ready", "installed", "down", "unknown"})
 AGENT_STATE_CHIP = {
     "running": ("green", "Running"),
     "idle": ("yellow", "Idle"),
+    "ready": ("green", "Ready"),
     "installed": ("parked", "Installed"),
     "down": ("red", "Down"),
     "unknown": ("parked", "Unknown"),
@@ -162,7 +171,7 @@ AGENT_BCID_QUERY_RE = re.compile(
     r"(bc-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})",
     re.I,
 )
-GITHUB_REPO_PATH = r"(?:rupret007/[A-Za-z0-9._-]+|0xc0re/barker)"
+GITHUB_REPO_PATH = r"(?:rupret007/[A-Za-z0-9._-]+)"
 PR_URL_RE = re.compile(
     rf"^https://github\.com/{GITHUB_REPO_PATH}/pull/[1-9][0-9]*$", re.I
 )
@@ -759,7 +768,7 @@ def mac_probe_known(agent: Any) -> bool:
     if not isinstance(agent, dict):
         return False
     aid = str(agent.get("id") or "")
-    if aid not in AGENT_IDS:
+    if aid not in MAC_PROBE_AGENT_IDS:
         return False
     state = str(agent.get("state") or "unknown").strip().lower()
     return state in AGENT_STATES and state != "unknown"
@@ -770,7 +779,7 @@ def compact_unknown_mac_probes(agents: Any) -> bool:
     rows = [
         a
         for a in (agents or [])
-        if isinstance(a, dict) and str(a.get("id") or "") in AGENT_IDS
+        if isinstance(a, dict) and str(a.get("id") or "") in MAC_PROBE_AGENT_IDS
     ]
     return not any(mac_probe_known(a) for a in rows)
 
@@ -779,7 +788,7 @@ def unknown_mac_probes_html(agents: Any = None) -> str:
     """Honest unknown marker in the document. Visible text is never Running."""
     detail = PUBLIC_PROBE_DETAIL
     for a in agents or []:
-        if not isinstance(a, dict) or str(a.get("id") or "") not in AGENT_IDS:
+        if not isinstance(a, dict) or str(a.get("id") or "") not in MAC_PROBE_AGENT_IDS:
             continue
         text = str(a.get("detail") or "").strip()
         if text:
@@ -1597,9 +1606,9 @@ def safe_agent(raw: Any, fallback_id: str) -> dict[str, Any]:
     if state not in AGENT_STATES:
         state = "unknown"
     detail = _redact_agent_detail(str(raw.get("detail") or ""))
-    url = agent_url_from_fields(raw) if aid in AGENT_IDS else ""
+    url = agent_url_from_fields(raw) if aid in MAC_PROBE_AGENT_IDS else ""
     # Mac pills may carry a real agent/PR URL. Extra ids are not invented here.
-    if aid not in AGENT_IDS:
+    if aid not in MAC_PROBE_AGENT_IDS:
         url = ""
     return {
         "id": aid,
@@ -1620,7 +1629,7 @@ def default_agents(
 
 
 def parse_agents_blob(blob: Any) -> list[dict[str, Any]] | None:
-    """Parse probe JSON. Always returns the three known ids or None if unusable."""
+    """Parse probe JSON. Always returns known resource ids or None if unusable."""
     if blob is None:
         return None
     if isinstance(blob, str):
