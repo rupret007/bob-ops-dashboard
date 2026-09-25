@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-09-25T03:06:55.454239-05:00",
-  "generated_at_display": "Fri Sep 25, 2026 \u00b7 3:06 AM CDT",
+  "generated_at": "2026-09-25T03:17:06.670444-05:00",
+  "generated_at_display": "Fri Sep 25, 2026 \u00b7 3:17 AM CDT",
   "timezone": "America/Chicago",
   "owner": "rupret007",
   "dashboard": "bob-ops-dashboard",
@@ -464,8 +464,8 @@
           "status": "red",
           "chip": "Red",
           "default_branch": "main",
-          "tip_sha": "1616492",
-          "tip_date": "2026-09-25T08:06:03Z",
+          "tip_sha": "78b6301",
+          "tip_date": "2026-09-25T08:16:18Z",
           "open_prs": 0,
           "open_pr_url": null,
           "open_pr_number": null,
@@ -477,9 +477,9 @@
             "name": "QA claim smoke",
             "conclusion": "failure",
             "branch": "main",
-            "sha": "1616492",
-            "created": "2026-09-25T08:06:06Z",
-            "html_url": "https://github.com/rupret007/bob-ops-dashboard/actions/runs/36111089470"
+            "sha": "78b6301",
+            "created": "2026-09-25T08:16:21Z",
+            "html_url": "https://github.com/rupret007/bob-ops-dashboard/actions/runs/36112019499"
           },
           "release": null,
           "release_sha": null,
@@ -853,7 +853,7 @@
   ],
   "inaccessible": [],
   "publish_notes": "Public board -- no secrets or customer paths. Private repositories stay high-level; AI Music Vault stays private-content-boundary only.",
-  "refresh_started_ms": 1790323568969,
+  "refresh_started_ms": 1790324179802,
   "agents_source": "file:stale->unknown",
   "agents": [
     {
@@ -1009,19 +1009,19 @@
     }
   ],
   "harden_window": {
-    "round": 7,
+    "round": 8,
     "status": "closed",
-    "started_at": "2026-09-25T02:58:58-05:00",
-    "ended_at": "2026-09-25T03:06:03-05:00",
+    "started_at": "2026-09-25T03:11:04-05:00",
+    "ended_at": "2026-09-25T03:15:20-05:00",
     "lanes_fired": [
-      "Gemini",
-      "MiniMax",
       "Codex",
       "Claude",
+      "Gemini",
+      "MiniMax",
       "LocalCursor"
     ],
-    "scorecard_line": "Stress PASS \u00b7 Eff PASS \u00b7 CQ PASS (exit-bar 1/2)",
-    "updated_at": "2026-09-25T03:06:03-05:00",
+    "scorecard_line": "Stress PASS | Eff PASS | CQ PASS (exit-bar 2/2; Mini Working PARTIAL)",
+    "updated_at": "2026-09-25T03:15:20-05:00",
     "display_status": "closed",
     "idle": true
   },

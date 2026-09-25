@@ -1250,9 +1250,9 @@ def harden_window_html(hw: Any) -> str:
     if idle:
         display = "closed"
     round_n = data.get("round")
-    round_label = f"R{round_n}" if isinstance(round_n, int) and round_n > 0 else "R—"
+    round_label = f"R{round_n}" if isinstance(round_n, int) and round_n > 0 else "R-"
     state_label = "Open" if display == "open" else "Closed"
-    idle_bit = " · Idle" if display == "closed" else ""
+    idle_bit = " - Idle" if display == "closed" else ""
     lanes = data.get("lanes_fired") if isinstance(data.get("lanes_fired"), list) else []
     fired = {str(x) for x in lanes}
     lane_bits: list[str] = []

@@ -7,8 +7,8 @@ Never set llm-work-now.json status=running for one-shot harden lane fires.
 Examples:
   ./write_harden_window.py open --round 8 --lanes Codex,Claude  # fresh started_at; lanes only from args
   ./write_harden_window.py fire --lanes LocalCursor,Codex
-  ./write_harden_window.py score --line 'Stress FAIL · Eff FAIL · CQ PASS'
-  ./write_harden_window.py close --round 7 --line 'Stress PASS · Eff PASS'
+  ./write_harden_window.py score --line 'Stress FAIL | Eff FAIL | CQ PASS'
+  ./write_harden_window.py close --round 7 --line 'Stress PASS | Eff PASS'
   ./write_harden_window.py idle
 """
 from __future__ import annotations

@@ -2634,8 +2634,8 @@ function focusKey(kind, raw) {{
   function hardenWindowHtml(raw) {{
     var hw = normalizeHardenWindow(raw);
     var display = hw.display_status === "open" ? "open" : "closed";
-    var roundLabel = hw.round ? ("R" + hw.round) : "R—";
-    var stateLabel = display === "open" ? "Open" : "Closed · Idle";
+    var roundLabel = hw.round ? ("R" + hw.round) : "R-";
+    var stateLabel = display === "open" ? "Open" : "Closed - Idle";
     var fired = {{}};
     (hw.lanes_fired || []).forEach(function (x) {{ fired[String(x)] = 1; }});
     var laneHtml = HARDEN_LANE_IDS.map(function (lid) {{

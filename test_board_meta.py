@@ -2749,3 +2749,27 @@ class WriteHardenWindowOpenResetTests(unittest.TestCase):
             blob = json.loads(path.read_text())
             self.assertEqual(blob["started_at"], stamp)
             self.assertEqual(blob["lanes_fired"], ["Gemini"])
+
+
+def test_harden_window_softpaint_js_is_ascii():
+    """Soft-paint hardenWindowHtml literals must stay ASCII (qa-claim-smoke s*.js gate)."""
+    import re
+    text = Path("refresh.sh").read_text(encoding="utf-8")
+    m = re.search(r"function hardenWindowHtml\(raw\) \{.*?\n  \}", text, re.S)
+    assert m, "hardenWindowHtml missing from refresh.sh"
+    non = sorted({hex(ord(c)) for c in m.group(0) if ord(c) > 127})
+    assert not non, f"non-ASCII in hardenWindowHtml JS: {non}"
+    html = harden_window_html(
+        {
+            "round": 1,
+            "status": "closed",
+            "started_at": "2026-09-25T03:00:00-05:00",
+            "ended_at": "2026-09-25T03:05:00-05:00",
+            "lanes_fired": ["Gemini"],
+            "scorecard_line": "Stress PASS | Eff PASS",
+            "updated_at": "2026-09-25T03:05:00-05:00",
+        }
+    )
+    assert "R—" not in html
+    assert "\u00b7" not in html.encode("unicode_escape").decode()
+    assert "Closed - Idle" in html or "Closed" in html

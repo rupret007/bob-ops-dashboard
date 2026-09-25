@@ -10,6 +10,6 @@
     "MiniMax",
     "LocalCursor"
   ],
-  "scorecard_line": "Stress PASS \u00b7 Eff PASS \u00b7 CQ PASS (exit-bar 2/2; Mini Working PARTIAL)",
+  "scorecard_line": "Stress PASS | Eff PASS | CQ PASS (exit-bar 2/2; Mini Working PARTIAL)",
   "updated_at": "2026-09-25T03:15:20-05:00"
 }
