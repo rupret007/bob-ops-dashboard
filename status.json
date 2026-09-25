@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-09-25T04:16:26.777990-05:00",
-  "generated_at_display": "Fri Sep 25, 2026 \u00b7 4:16 AM CDT",
+  "generated_at": "2026-09-25T04:22:59.532358-05:00",
+  "generated_at_display": "Fri Sep 25, 2026 \u00b7 4:22 AM CDT",
   "timezone": "America/Chicago",
   "owner": "rupret007",
   "dashboard": "bob-ops-dashboard",
@@ -73,8 +73,8 @@
           "accessible": true,
           "coord": {
             "repo": "webjam",
-            "agent": "codex",
-            "lease_state": "active",
+            "agent": "none",
+            "lease_state": "expired",
             "next": "",
             "sha": "88a9c31"
           }
@@ -284,8 +284,8 @@
           "ci": {},
           "coord": {
             "repo": "AI-Music-Vault",
-            "agent": "codex",
-            "lease_state": "active",
+            "agent": "none",
+            "lease_state": "expired",
             "next": "gpt-5.3-codex DRAFT-only; not WebJam"
           }
         },
@@ -307,14 +307,7 @@
           "open_pr_stack": [],
           "pr_listing_complete": true,
           "agent_url": null,
-          "ci": {
-            "name": "CI",
-            "conclusion": "success",
-            "branch": "main",
-            "sha": "c08c489",
-            "created": "2026-09-08T05:10:56Z",
-            "html_url": "https://github.com/rupret007/Turdanoid/actions/runs/34189652739"
-          },
+          "ci": null,
           "release": null,
           "release_sha": null,
           "release_url": null,
@@ -464,8 +457,8 @@
           "status": "green",
           "chip": "Green",
           "default_branch": "main",
-          "tip_sha": "030200a",
-          "tip_date": "2026-09-25T09:15:32Z",
+          "tip_sha": "3abd34b",
+          "tip_date": "2026-09-25T09:16:29Z",
           "open_prs": 0,
           "open_pr_url": null,
           "open_pr_number": null,
@@ -477,9 +470,9 @@
             "name": "QA claim smoke",
             "conclusion": "success",
             "branch": "main",
-            "sha": "030200a",
-            "created": "2026-09-25T09:15:35Z",
-            "html_url": "https://github.com/rupret007/bob-ops-dashboard/actions/runs/36117431544"
+            "sha": "3abd34b",
+            "created": "2026-09-25T09:16:33Z",
+            "html_url": "https://github.com/rupret007/bob-ops-dashboard/actions/runs/36117520174"
           },
           "release": null,
           "release_sha": null,
@@ -488,8 +481,8 @@
           "accessible": true,
           "coord": {
             "repo": "bob-ops-dashboard",
-            "agent": "claude",
-            "lease_state": "active",
+            "agent": "none",
+            "lease_state": "expired",
             "next": ""
           }
         },
@@ -853,7 +846,7 @@
   ],
   "inaccessible": [],
   "publish_notes": "Public board -- no secrets or customer paths. Private repositories stay high-level; AI Music Vault stays private-content-boundary only.",
-  "refresh_started_ms": 1790327736760,
+  "refresh_started_ms": 1790328129516,
   "agents_source": "file:stale->unknown",
   "agents": [
     {
@@ -1009,9 +1002,9 @@
     }
   ],
   "harden_window": {
-    "round": 36,
+    "round": 41,
     "status": "open",
-    "started_at": "2026-09-25T04:15:41-05:00",
+    "started_at": "2026-09-25T04:22:14-05:00",
     "ended_at": "",
     "lanes_fired": [
       "Codex",
@@ -1021,7 +1014,7 @@
       "LocalCursor"
     ],
     "scorecard_line": "",
-    "updated_at": "2026-09-25T04:15:41-05:00",
+    "updated_at": "2026-09-25T04:22:14-05:00",
     "display_status": "open",
     "idle": false
   },
