@@ -2673,3 +2673,79 @@ class HardenWindowStripTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
+
+
+class WriteHardenWindowOpenResetTests(unittest.TestCase):
+    """R8 hole: open must not inherit prior started_at/lanes across rounds."""
+
+    def test_open_resets_started_at_and_lanes(self):
+        import json
+        import tempfile
+        from pathlib import Path
+
+        import write_harden_window as wh
+
+        with tempfile.TemporaryDirectory() as td:
+            path = Path(td) / "harden-window.json"
+            path.write_text(
+                json.dumps(
+                    {
+                        "round": 7,
+                        "status": "closed",
+                        "started_at": "2026-09-25T02:58:58-05:00",
+                        "ended_at": "2026-09-25T03:06:03-05:00",
+                        "lanes_fired": ["Gemini", "MiniMax"],
+                        "scorecard_line": "old",
+                        "updated_at": "2026-09-25T03:06:03-05:00",
+                    }
+                )
+                + "\n"
+            )
+            rc = wh.main(
+                [
+                    "open",
+                    "--round",
+                    "8",
+                    "--lanes",
+                    "Codex,Claude",
+                    "--path",
+                    str(path),
+                ]
+            )
+            self.assertEqual(rc, 0)
+            blob = json.loads(path.read_text())
+            self.assertEqual(blob["round"], 8)
+            self.assertEqual(blob["status"], "open")
+            self.assertEqual(blob["lanes_fired"], ["Codex", "Claude"])
+            self.assertNotEqual(blob["started_at"], "2026-09-25T02:58:58-05:00")
+            self.assertTrue(str(blob["started_at"]).startswith("2026-"))
+            self.assertEqual(blob.get("scorecard_line") or "", "")
+
+    def test_open_respects_explicit_started_at(self):
+        import json
+        import tempfile
+        from pathlib import Path
+
+        import write_harden_window as wh
+
+        with tempfile.TemporaryDirectory() as td:
+            path = Path(td) / "harden-window.json"
+            path.write_text("{}\n")
+            stamp = "2026-09-25T03:11:04-05:00"
+            rc = wh.main(
+                [
+                    "open",
+                    "--round",
+                    "8",
+                    "--lanes",
+                    "Gemini",
+                    "--started-at",
+                    stamp,
+                    "--path",
+                    str(path),
+                ]
+            )
+            self.assertEqual(rc, 0)
+            blob = json.loads(path.read_text())
+            self.assertEqual(blob["started_at"], stamp)
+            self.assertEqual(blob["lanes_fired"], ["Gemini"])

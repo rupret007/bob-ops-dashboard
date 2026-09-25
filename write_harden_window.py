@@ -5,7 +5,7 @@ Keeps llm_work chips honest: this file drives the separate Harden strip only.
 Never set llm-work-now.json status=running for one-shot harden lane fires.
 
 Examples:
-  ./write_harden_window.py open --round 7 --lanes Gemini,MiniMax
+  ./write_harden_window.py open --round 8 --lanes Codex,Claude  # fresh started_at; lanes only from args
   ./write_harden_window.py fire --lanes LocalCursor,Codex
   ./write_harden_window.py score --line 'Stress FAIL · Eff FAIL · CQ PASS'
   ./write_harden_window.py close --round 7 --line 'Stress PASS · Eff PASS'
@@ -82,7 +82,7 @@ def _write(path: Path, payload: dict) -> None:
     print(json.dumps(normalize_harden_window(store), indent=2))
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument(
         "action",
@@ -107,7 +107,7 @@ def main() -> int:
         default="",
         help="Optional ISO start stamp (defaults to now on open)",
     )
-    args = ap.parse_args()
+    args = ap.parse_args(argv)
 
     primary = Path(args.path) if args.path else DEFAULT_PATHS[0]
     prior = _read(primary)
@@ -129,13 +129,16 @@ def main() -> int:
             updated_at=_now(),
         )
     elif args.action == "open":
-        started = args.started_at or prior.get("started_at") or _now()
+        # New round: always fresh started_at (unless --started-at) and ONLY the
+        # lanes passed on this open — do not inherit prior round clock/lanes.
+        # (R8 measured hole: open preserved R7 started_at + merged lanes.)
+        started = args.started_at or _now()
         payload = build_harden_window_payload(
             round=args.round if args.round is not None else prior.get("round"),
             status="open",
             started_at=started,
             ended_at="",
-            lanes_fired=_lanes(args.lanes, prior.get("lanes_fired") if args.lanes else []),
+            lanes_fired=_lanes(args.lanes),
             scorecard_line="",
             updated_at=_now(),
         )
