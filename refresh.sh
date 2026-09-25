@@ -221,6 +221,8 @@ from board_meta import (
     demote_stale_running_llm_work,
     validate_llm_work_write,
     finalize_llm_work_after_live_poll,
+    build_llm_work_now_payload,
+    write_llm_work_now_json,
     STALE_RUNNING_SOURCES,
     LLM_WORK_PROOF_TS_KEYS,
     load_harden_window,
@@ -760,6 +762,16 @@ llm_work = finalize_llm_work_after_live_poll(
     llm_work, _live_cloud_lanes, now_iso=_now_iso
 )
 status["llm_work"] = llm_work
+
+# R126: rewrite llm-work-now.json every refresh so Pages stamp never freezes
+# while status.json keeps moving (measured hole: generated_at stuck at 02:37 CT).
+_ct_stamp = now.strftime("%Y-%m-%d %H:%M CT")
+write_llm_work_now_json(
+    root / "llm-work-now.json",
+    llm_work,
+    generated_at_ct=_ct_stamp,
+)
+print(f"Wrote llm-work-now.json generated_at={_ct_stamp}")
 
 # Harden stress window strip (separate from llm_work — never invents Running chips).
 _hw_blob = None

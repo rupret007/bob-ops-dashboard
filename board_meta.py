@@ -7,6 +7,7 @@ import json
 import re
 import time
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any
 from urllib.parse import urlencode
 from zoneinfo import ZoneInfo
@@ -983,6 +984,74 @@ def finalize_llm_work_after_live_poll(
     return demote_stale_running_llm_work(
         validated, live_cloud_lane_ids, now=now, ttl_sec=ttl_sec
     )
+
+
+
+def build_llm_work_now_payload(
+    rows: Any,
+    *,
+    generated_at_ct: str | None = None,
+    honest_note: str | None = None,
+    now: float | None = None,
+    ttl_sec: int = LLM_WORK_RUNNING_HEARTBEAT_TTL_SEC,
+) -> dict[str, Any]:
+    """Publish blob for llm-work-now.json (Pages SoT alongside status.llm_work).
+
+    Refresh must rewrite this every rebuild so generated_at never freezes while
+    status.json keeps moving (R126 measured hole: stamp stuck at 02:37 CT).
+    Always runs validate_llm_work_write per row — never invents Running.
+    """
+    clock = time.time() if now is None else float(now)
+    if generated_at_ct is None:
+        generated_at_ct = datetime.now(tz=ZoneInfo(BOARD_TZ)).strftime(
+            "%Y-%m-%d %H:%M CT"
+        )
+    work: list[dict[str, Any]] = []
+    for raw in rows or []:
+        if not isinstance(raw, dict):
+            continue
+        work.append(validate_llm_work_write(raw, now=clock, ttl_sec=ttl_sec))
+    if honest_note is None:
+        honest_note = (
+            f"{generated_at_ct}: Work-now honesty — Running requires non-idle "
+            f"source with proof heartbeat younger than "
+            f"LLM_WORK_RUNNING_HEARTBEAT_TTL_SEC={ttl_sec}s. Else demote "
+            f"(spend_wall→blocked, mini_paste→finished, else idle). "
+            f"STALE_RUNNING_SOURCES never paint Running. "
+            f"board_meta.build_llm_work_now_payload + finalize_llm_work_after_live_poll; "
+            f"Refresh rewrites this file each rebuild. Current chips: "
+            f"idle/finished/blocked only when no live proof — no Running lies."
+        )
+    return {
+        "generated_at": generated_at_ct,
+        "honest_note": honest_note,
+        "work": work,
+    }
+
+
+def write_llm_work_now_json(
+    path: Any,
+    rows: Any,
+    *,
+    generated_at_ct: str | None = None,
+    honest_note: str | None = None,
+    now: float | None = None,
+    ttl_sec: int = LLM_WORK_RUNNING_HEARTBEAT_TTL_SEC,
+) -> Path:
+    """Atomic write of llm-work-now.json from finalized work rows."""
+    target = Path(path)
+    payload = build_llm_work_now_payload(
+        rows,
+        generated_at_ct=generated_at_ct,
+        honest_note=honest_note,
+        now=now,
+        ttl_sec=ttl_sec,
+    )
+    target.parent.mkdir(parents=True, exist_ok=True)
+    tmp = target.with_suffix(target.suffix + ".tmp")
+    tmp.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+    tmp.replace(target)
+    return target
 
 
 def llm_work_stale_running_violations(

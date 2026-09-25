@@ -28,6 +28,8 @@ from board_meta import (
     llm_work_proof_is_fresh,
     stamp_live_llm_work_heartbeats,
     finalize_llm_work_after_live_poll,
+    build_llm_work_now_payload,
+    write_llm_work_now_json,
     LLM_WORK_RUNNING_HEARTBEAT_TTL_SEC,
     LLM_WORK_PROOF_FUTURE_SKEW_SEC,
     HARDEN_WINDOW_STALE_SEC,
@@ -2524,6 +2526,49 @@ class LlmWorkHonestyTests(unittest.TestCase):
         self.assertEqual(by_id["cursor-cloud"]["status"], "blocked")
         self.assertEqual(by_id["gemini"]["status"], "idle")
 
+
+
+
+
+class LlmWorkNowPublishTests(unittest.TestCase):
+    """R126: llm-work-now.json must republish fresh generated_at from finalized rows."""
+
+    def test_build_llm_work_now_payload_fresh_stamp(self):
+        rows = [
+            {
+                "id": "gemini",
+                "status": "running",
+                "source": "byok_oneshot",
+                "task_title": "stale lie",
+            }
+        ]
+        blob = build_llm_work_now_payload(
+            rows, generated_at_ct="2026-09-25 07:20 CT", now=1_000_000.0
+        )
+        self.assertEqual(blob["generated_at"], "2026-09-25 07:20 CT")
+        self.assertEqual(blob["work"][0]["status"], "idle")
+        self.assertIn("07:20 CT", blob["honest_note"])
+
+    def test_write_llm_work_now_json_atomic(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as td:
+            path = Path(td) / "llm-work-now.json"
+            write_llm_work_now_json(
+                path,
+                [
+                    {
+                        "id": "cursor-cloud",
+                        "status": "running",
+                        "source": "spend_wall",
+                        "task_title": "wall",
+                    }
+                ],
+                generated_at_ct="2026-09-25 07:21 CT",
+                now=1_000_000.0,
+            )
+            blob = json.loads(path.read_text(encoding="utf-8"))
+            self.assertEqual(blob["generated_at"], "2026-09-25 07:21 CT")
+            self.assertEqual(blob["work"][0]["status"], "blocked")
 
 
 class HardenWindowStripTests(unittest.TestCase):
