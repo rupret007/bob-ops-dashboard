@@ -1382,9 +1382,12 @@ class BoardMetaTests(unittest.TestCase):
             }
         )
         gated = age_gate_agents(stale, now=now)
-        self.assertEqual([a["state"] for a in gated], ["unknown", "unknown", "unknown"])
+        self.assertEqual(
+            [a["state"] for a in gated],
+            ["unknown", "unknown", "unknown", "unknown", "unknown", "unknown"],
+        )
         self.assertTrue(all("probe stale" in a["detail"] for a in gated))
-        self.assertEqual(len(gated), 3)
+        self.assertEqual(len(gated), 6)
 
         untimestamped = age_gate_agents(
             [{"id": "codex", "state": "running", "detail": "PID 9", "checked_at": None}],
@@ -1400,7 +1403,10 @@ class BoardMetaTests(unittest.TestCase):
             ],
             now=now,
         )
-        self.assertEqual([a["state"] for a in fresh], ["running", "idle", "installed"])
+        self.assertEqual(
+            [a["state"] for a in fresh],
+            ["running", "idle", "installed", "unknown", "unknown", "unknown"],
+        )
 
     def test_future_checked_at_is_not_treated_as_live(self):
         now = datetime(2026, 8, 23, 5, 26, tzinfo=timezone.utc).timestamp()
@@ -1437,7 +1443,10 @@ class BoardMetaTests(unittest.TestCase):
             now=now,
         )
         self.assertEqual(src, "file:stale->unknown")
-        self.assertEqual([a["state"] for a in agents], ["unknown", "unknown", "unknown"])
+        self.assertEqual(
+            [a["state"] for a in agents],
+            ["unknown", "unknown", "unknown", "unknown", "unknown", "unknown"],
+        )
         self.assertNotIn("running", [a["state"] for a in agents])
 
         _, local_src = resolve_agents(
@@ -1457,7 +1466,10 @@ class BoardMetaTests(unittest.TestCase):
         )
         self.assertIsNotNone(parsed)
         assert parsed is not None
-        self.assertEqual([a["id"] for a in parsed], ["codex", "cursor", "claude"])
+        self.assertEqual(
+            [a["id"] for a in parsed],
+            ["codex", "cursor", "claude", "gemini", "minimax", "grok"],
+        )
         self.assertEqual(parsed[0]["detail"], "detail redacted")
         path_parsed = parse_agents_blob(
             {
@@ -1874,7 +1886,10 @@ class BoardMetaTests(unittest.TestCase):
         mac = parse_agents_blob(blob)
         self.assertIsNotNone(mac)
         assert mac is not None
-        self.assertEqual([a["id"] for a in mac], ["codex", "cursor", "claude"])
+        self.assertEqual(
+            [a["id"] for a in mac],
+            ["codex", "cursor", "claude", "gemini", "minimax", "grok"],
+        )
         cloud = parse_cloud_agents(blob)
         self.assertEqual(len(cloud), 1)
         self.assertEqual(cloud[0]["id"], good_bc)

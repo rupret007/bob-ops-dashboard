@@ -207,6 +207,7 @@ root = Path(sys.argv[1])
 sys.path.insert(0, str(root))
 from board_meta import (
     AGENT_IDS,
+    MAC_PROBE_AGENT_IDS,
     AGENT_STATE_CHIP,
     CONTROL_ACTIONS,
     attention_rank,
@@ -482,7 +483,7 @@ status = {
     },
     {
       "id": "active-agents",
-      "title": "Active agents NOW",
+      "title": "LLM resources NOW",
       "projects": [],
     },
   ],
@@ -497,7 +498,7 @@ status["sections"] = prune_closed_parked_prs(
 )
 status["sections"] = merge_first_class(status["sections"])
 
-# --- Active agents (Codex / Cursor / Claude) — safe public fields only ---
+# --- LLM resources strip — safe public fields only ---
 prev_early = {}
 try:
     prev_early = json.loads((root / "status.json").read_text())
@@ -576,7 +577,7 @@ for a in agents:
 for sec in status["sections"]:
     if sec.get("id") == "active-agents":
         sec["projects"] = agent_projects
-        sec["title"] = "Active agents NOW"
+        sec["title"] = "LLM resources NOW"
         break
 
 # Decisions inbox (needed before first paint -- Jeff should see pending immediately)
@@ -816,6 +817,32 @@ def tap_link(href, label, extra=""):
         f'target="_blank" rel="noopener noreferrer">{h(label)}</a>'
     )
 
+def compact_agent_detail(agent):
+    """Short public detail for pill face; full safe detail remains in title."""
+    if not isinstance(agent, dict):
+        return ""
+    aid = str(agent.get("id") or "").strip().lower()
+    state = str(agent.get("state") or "unknown").strip().lower()
+    detail = str(agent.get("detail") or "").strip()
+    if aid == "codex":
+        if state == "running":
+            return "running · ChatGPT app"
+        if state == "installed":
+            return "installed · ChatGPT tools"
+    if aid == "cursor":
+        return "Cursor.app desktop"
+    if aid == "claude":
+        return "Anthropic desktop/CLI"
+    if aid == "gemini":
+        return "BYOK API key" if state in {"ready", "installed"} else "BYOK key needed"
+    if aid == "minimax":
+        return "BYOK API key" if state in {"ready", "installed"} else "BYOK key needed"
+    if aid == "grok":
+        return "conductor + Cloud Agents"
+    if detail:
+        return short_note(detail, 38)
+    return "status unknown"
+
 def lane_html(p):
     chip_label = visible_chip(p)
     chip = chip_html(p.get("status") or "parked", chip_label) if chip_label else ""
@@ -873,6 +900,7 @@ def agent_pill_html(a):
     chip = chip_html(st, label)
     name = h((a or {}).get("name") or (a or {}).get("id") or "agent")
     detail = h((a or {}).get("detail") or "")
+    face_detail = h(compact_agent_detail(a))
     aid = h((a or {}).get("id") or (a or {}).get("name") or "agent")
     state = h((a or {}).get("state") or "unknown")
     checked = h((a or {}).get("checked_at") or "")
@@ -889,11 +917,17 @@ def agent_pill_html(a):
         links.append(tap_link(pr, "Open PR"))
     links_html = ('<span class="agent-links">' + "".join(links) + "</span>") if links else ""
     extra = " has-links" if links else ""
-    probe = "mac" if str((a or {}).get("id") or "") in AGENT_IDS else "cloud"
+    aid_raw = str((a or {}).get("id") or "")
+    if aid_raw in MAC_PROBE_AGENT_IDS:
+        probe = "mac"
+    elif (a or {}).get("url"):
+        probe = "cloud"
+    else:
+        probe = "resource"
     return (
         f'<div class="agent-pill{extra}" data-probe="{probe}" data-agent-id="{aid}" data-state="{state}" '
         f'data-checked-at="{checked}" data-agent-url="{h(url)}" data-pr-url="{h(pr)}" title="{detail}">'
-        f'{name_html}{chip}{links_html}</div>'
+        f'<div class="agent-pill-top">{name_html}{chip}</div><span class="meta">{face_detail}</span>{links_html}</div>'
     )
 
 def agents_strip_html(agents_list, cloud_list=None):
@@ -997,7 +1031,7 @@ html = f'''<!DOCTYPE html>
     font-size:16px; line-height:1.4; }}
   a {{ color:var(--link); text-decoration:none; }} a:hover {{ text-decoration:underline; }}
   .wrap {{ max-width:40rem; margin:0 auto; padding:calc(1rem + env(safe-area-inset-top, 0px)) 1rem calc(3.25rem + env(safe-area-inset-bottom, 0px)); }}
-  header.pulse {{ padding:0 0 .55rem; margin:0 0 .85rem; border:0; background:transparent; }}
+  header.pulse {{ padding:0 0 .65rem; margin:0 0 1rem; border:0; background:transparent; }}
   header.pulse h1 {{ margin:0; font-size:.92rem; font-weight:700; letter-spacing:-.01em; }}
   header.pulse h1 .mark {{ color:var(--orange); }}
   .pulse-row {{ display:flex; flex-direction:column; gap:.4rem; margin-top:.45rem; }}
@@ -1022,7 +1056,7 @@ html = f'''<!DOCTYPE html>
   .chip {{ display:inline-flex; align-items:center; color:var(--c);
     background:transparent; border:0; padding:0; font-size:.68rem; font-weight:700;
     text-transform:uppercase; letter-spacing:.04em; white-space:nowrap; }}
-  section.block {{ margin:0 0 1.75rem; padding:0; border:0; }}
+  section.block {{ margin:0 0 1.55rem; padding:0; border:0; }}
   section.block[hidden] {{ display:none !important; }}
   section.block.pending {{ margin-bottom:2rem; }}
   section.block.primary {{ margin-bottom:2.1rem; }}
@@ -1036,10 +1070,10 @@ html = f'''<!DOCTYPE html>
     margin:0 0 .35rem; padding:0; border:0;
     font-size:.7rem; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:var(--muted);
   }}
-  .lanes {{ display:flex; flex-direction:column; }}
+  .lanes {{ display:flex; flex-direction:column; gap:.05rem; }}
   .lane {{
     display:grid; grid-template-columns:minmax(0,1fr) auto; column-gap:.75rem; row-gap:.15rem;
-    padding:.72rem 0; border:0; border-bottom:1px solid var(--hair); background:transparent; border-radius:0;
+    padding:.78rem 0; border:0; border-bottom:1px solid var(--hair); background:transparent; border-radius:0;
   }}
   .lane:last-child {{ border-bottom:0; }}
   .lane h3 {{ margin:0; font-size:.95rem; font-weight:600; letter-spacing:-.01em; }}
@@ -1068,7 +1102,7 @@ html = f'''<!DOCTYPE html>
   .pending-help {{ margin:0 0 .7rem; color:var(--muted); font-size:.8rem; line-height:1.4; }}
   .pending-item {{
     border:0; border-bottom:1px solid var(--hair); border-radius:0;
-    padding:.65rem 0; margin:0; background:transparent;
+    padding:.72rem 0; margin:0; background:transparent;
   }}
   .lane:focus, .pending-item:focus {{ outline:2px solid var(--orange); outline-offset:3px; }}
   .lane.is-glance-target, .pending-item.is-glance-target {{
@@ -1143,7 +1177,10 @@ html = f'''<!DOCTYPE html>
   }}
   #board {{ min-height:2rem; }}
   #active-agents {{ margin:0; }}
-  .agents-strip {{ display:flex; flex-wrap:wrap; gap:.55rem .85rem; align-items:flex-start; margin:0; padding:0; border:0; background:transparent; }}
+  .agents-strip {{
+    display:grid; grid-template-columns:repeat(auto-fit,minmax(10.4rem,1fr));
+    gap:.5rem; align-items:stretch; margin:0; padding:0; border:0; background:transparent;
+  }}
   .agents-unknown {{ display:none; margin:0; color:var(--muted); font-size:.8rem; font-weight:600; }}
   .agents-strip.is-unknown-mac .agent-pill[data-probe="mac"] {{ display:none; }}
   .agents-strip.is-unknown-only {{ display:none; }}
@@ -1151,11 +1188,20 @@ html = f'''<!DOCTYPE html>
   body.tab-home footer {{ display:none; }}
   body.tab-home .live-stamp .when {{ display:none; }}
   body.tab-home .agent-links {{ display:none; }}
-  body.tab-home .agent-pill.has-links {{ flex-direction:row; flex-wrap:wrap; align-items:center; }}
-  body.tab-home .agent-pill[data-probe="cloud"] .chip {{ display:none; }}
-  .agent-pill {{ display:inline-flex; align-items:center; gap:.35rem; border:0; background:transparent; padding:0; }}
-  .agent-pill.has-links {{ flex-direction:column; align-items:flex-start; gap:.3rem; }}
-  .agent-pill .name {{ font-weight:600; font-size:.8rem; }}
+  body.tab-home .agent-pill.has-links {{ flex-direction:column; align-items:flex-start; }}
+  .agent-pill {{
+    display:flex; flex-direction:column; align-items:flex-start; gap:.26rem;
+    border:1px solid var(--border); border-radius:10px; background:rgba(255,255,255,.02);
+    padding:.5rem .55rem; min-height:5.35rem;
+  }}
+  .agent-pill.has-links {{ gap:.3rem; }}
+  .agent-pill-top {{ width:100%; display:flex; align-items:center; justify-content:space-between; gap:.45rem; }}
+  .agent-pill .name {{ font-weight:650; font-size:.82rem; line-height:1.2; }}
+  .agent-pill .meta {{
+    display:block; width:100%;
+    color:var(--muted); font-size:.73rem; line-height:1.25;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+  }}
   .agent-links {{ display:flex; flex-wrap:wrap; gap:.35rem; }}
   .tools {{ display:flex; flex-wrap:wrap; gap:.45rem; margin:0 0 .85rem; }}
   .how-board, .abilities-foot {{ margin:0; }}
@@ -1185,6 +1231,7 @@ html = f'''<!DOCTYPE html>
     section.pending h2, section.primary h2 {{ font-size:1.85rem; }}
     .type-tabs {{ flex-wrap:wrap; overflow:visible; }}
     .type-tabs button {{ flex:0 0 auto; padding:.4rem .85rem; font-size:.8rem; }}
+    .agents-strip {{ grid-template-columns:repeat(auto-fit,minmax(11.5rem,1fr)); }}
   }}
 </style>
 </head>
@@ -2106,6 +2153,7 @@ function focusKey(kind, raw) {{
     var map = {{
       running: ["green", "Running"],
       idle: ["yellow", "Idle"],
+      ready: ["green", "Ready"],
       installed: ["parked", "Installed"],
       down: ["red", "Down"],
       unknown: ["parked", "Unknown"]
@@ -2114,10 +2162,29 @@ function focusKey(kind, raw) {{
     return chipHtml(m[0], m[1]);
   }}
 
+  function compactAgentDetail(row) {{
+    var a = row || {{}};
+    var id = String(a.id || "").trim().toLowerCase();
+    var state = String(a.state || "unknown").trim().toLowerCase();
+    var detail = String(a.detail || "").replace(/^\s+|\s+$/g, "");
+    if (id === "codex") {{
+      if (state === "running") return "running · ChatGPT app";
+      if (state === "installed") return "installed · ChatGPT tools";
+    }}
+    if (id === "cursor") return "Cursor.app desktop";
+    if (id === "claude") return "Anthropic desktop/CLI";
+    if (id === "gemini") return (state === "ready" || state === "installed") ? "BYOK API key" : "BYOK key needed";
+    if (id === "minimax") return (state === "ready" || state === "installed") ? "BYOK API key" : "BYOK key needed";
+    if (id === "grok") return "conductor + Cloud Agents";
+    if (detail.length > 38) return detail.slice(0, 37).replace(/\s+\S*$/, "").trim() + "...";
+    return detail || "status unknown";
+  }}
+
   function agentPillHtml(a) {{
     var row = a || {{}};
     var name = row.name || row.id || "agent";
     var detail = row.detail || "";
+    var faceDetail = compactAgentDetail(row);
     var url = safeAgentUrl(row.url);
     var pr = safePrUrl(row.pr_url);
     var nameHtml = url
@@ -2128,14 +2195,17 @@ function focusKey(kind, raw) {{
     if (pr) links += tapLink(pr, "Open PR");
     var extra = links ? " has-links" : "";
     var id = String(row.id || "");
-    var probe = (id === "codex" || id === "cursor" || id === "claude") ? "mac" : "cloud";
+    var probe = "resource";
+    if (id === "codex" || id === "cursor" || id === "claude") probe = "mac";
+    else if (isBcId(id) || url) probe = "cloud";
     return '<div class="agent-pill' + extra + '" data-probe="' + probe + '" data-agent-id="' + esc(row.id || name) +
       '" data-state="' + esc(row.state || "unknown") +
       '" data-checked-at="' + esc(row.checked_at || "") +
       '" data-agent-url="' + esc(url) +
       '" data-pr-url="' + esc(pr) +
       '" title="' + esc(detail) + '">' +
-      nameHtml + agentStateChip(row.state) +
+      '<div class="agent-pill-top">' + nameHtml + agentStateChip(row.state) + '</div>' +
+      '<span class="meta">' + esc(faceDetail) + '</span>' +
       (links ? '<span class="agent-links">' + links + "</span>" : "") + "</div>";
   }}
   function compactUnknownMacProbes(agents) {{
@@ -2220,14 +2290,23 @@ function focusKey(kind, raw) {{
     return isFinite(ms) ? ms : 0;
   }}
   function ageGateAgents(agents) {{
-    var names = {{ codex: "Codex", cursor: "Cursor", claude: "Claude" }};
+    var names = {{
+      codex: "Codex (ChatGPT)",
+      cursor: "Cursor",
+      claude: "Claude",
+      gemini: "Gemini",
+      minimax: "MiniMax",
+      grok: "Grok"
+    }};
+    var macOnly = {{ codex: 1, cursor: 1, claude: 1 }};
     var by = {{}};
     (agents || []).forEach(function (a) {{
       if (a && a.id) by[String(a.id)] = a;
     }});
     var now = Date.now();
-    return ["codex", "cursor", "claude"].map(function (id) {{
-      var a = by[id] || {{ id: id, name: names[id], state: "unknown", detail: "No Mac probe yet" }};
+    return ["codex", "cursor", "claude", "gemini", "minimax", "grok"].map(function (id) {{
+      var missingDetail = macOnly[id] ? "No Mac probe yet" : "Resource not reported";
+      var a = by[id] || {{ id: id, name: names[id], state: "unknown", detail: missingDetail }};
       var ms = parseCheckedAt(a.checked_at);
       var fresh = !!(ms && (now - ms) < AGENT_FRESH_MS && (ms - now) <= 5 * 60 * 1000);
       var state = String(a.state || "unknown").toLowerCase();
@@ -2236,7 +2315,7 @@ function focusKey(kind, raw) {{
         if (detail.toLowerCase().indexOf("probe stale") === -1) detail = detail + " \\u00b7 probe stale (>45m)";
         return {{ id: id, name: a.name || names[id], state: "unknown", detail: detail, checked_at: a.checked_at || "", url: safeAgentUrl(a.url), pr_url: safePrUrl(a.pr_url) }};
       }}
-      if (state !== "running" && state !== "idle" && state !== "installed" && state !== "down" && state !== "unknown") {{
+      if (state !== "running" && state !== "idle" && state !== "ready" && state !== "installed" && state !== "down" && state !== "unknown") {{
         state = "unknown";
       }}
       return {{ id: id, name: a.name || names[id], state: state, detail: a.detail || "", checked_at: a.checked_at || "", url: safeAgentUrl(a.url), pr_url: safePrUrl(a.pr_url) }};
@@ -2295,7 +2374,7 @@ function focusKey(kind, raw) {{
     host.innerHTML = html;
   }}
   function readDomAgents() {{
-    var mac = {{ codex: 1, cursor: 1, claude: 1 }};
+    var known = {{ codex: 1, cursor: 1, claude: 1, gemini: 1, minimax: 1, grok: 1 }};
     var pills = document.querySelectorAll("#agents-strip .agent-pill");
     return Array.prototype.map.call(pills, function (el) {{
       return {{
@@ -2307,15 +2386,15 @@ function focusKey(kind, raw) {{
         url: el.getAttribute("data-agent-url") || "",
         pr_url: el.getAttribute("data-pr-url") || ""
       }};
-    }}).filter(function (row) {{ return !!mac[row.id]; }});
+    }}).filter(function (row) {{ return !!known[row.id]; }});
   }}
   function readDomCloud() {{
-    var mac = {{ codex: 1, cursor: 1, claude: 1 }};
+    var known = {{ codex: 1, cursor: 1, claude: 1, gemini: 1, minimax: 1, grok: 1 }};
     var pills = document.querySelectorAll("#agents-strip .agent-pill");
     var out = [];
     Array.prototype.forEach.call(pills, function (el) {{
       var id = el.getAttribute("data-agent-id") || "";
-      if (mac[id]) return;
+      if (known[id]) return;
       var url = safeAgentUrl(el.getAttribute("data-agent-url"));
       if (!url) return;
       out.push({{

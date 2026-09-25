@@ -514,7 +514,7 @@ if isinstance(agents, list):
     for a in agents:
         if not isinstance(a, dict):
             raise SystemExit("agent row must be an object")
-        if str(a.get("id") or "") not in ("codex", "cursor", "claude"):
+        if str(a.get("id") or "") not in ("codex", "cursor", "claude", "gemini", "minimax", "grok"):
             raise SystemExit("invented agent id: " + str(a.get("id")))
         if str(a.get("state") or "") == "running" and not a.get("checked_at"):
             raise SystemExit("Running without checked_at is invented status")
@@ -1402,7 +1402,7 @@ if "lane-links" not in html and "data-open=\"work\"" not in html:
 agents = st.get("agents") or []
 if any(str(a.get("state") or "") == "running" for a in agents):
     raise SystemExit("stale seed Running leaked into agents")
-if any(str(a.get("id") or "") not in ("codex", "cursor", "claude") for a in agents):
+if any(str(a.get("id") or "") not in ("codex", "cursor", "claude", "gemini", "minimax", "grok") for a in agents):
     raise SystemExit("invented extra agent id leaked")
 if any(str(a.get("state") or "") != "unknown" for a in agents):
     raise SystemExit("stale probe must fail closed to unknown")
