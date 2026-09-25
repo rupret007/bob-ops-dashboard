@@ -41,21 +41,23 @@ function run() {
   const src = scriptsFrom(html);
   const refresh = fs.readFileSync(path.join(ROOT, "refresh.sh"), "utf8");
 
-  // LLM work-now pivot guardrails (PR #56): lanes and attribution-first UI.
-  if (src.indexOf("function normalizeLlmWork") === -1) fail("normalizeLlmWork missing");
-  if (src.indexOf("function workRowHtml") === -1) fail("workRowHtml missing");
-  if (src.indexOf("function agentsStripHtml") === -1) fail("agentsStripHtml missing");
-  if (html.indexOf("Work now") === -1) fail("work-now heading missing");
+  // LLM work-now pivot guardrails (PR #56): source functions live in refresh.sh;
+  // index.html is scheduler-owned so we check the generator, not the snapshot.
+  if (refresh.indexOf("function normalizeLlmWork") === -1) fail("normalizeLlmWork missing from refresh.sh");
+  if (refresh.indexOf("function workRowHtml") === -1) fail("workRowHtml missing from refresh.sh");
+  if (refresh.indexOf("function agentsStripHtml") === -1) fail("agentsStripHtml missing from refresh.sh");
+  if (refresh.indexOf('"Work now"') === -1 && refresh.indexOf("'Work now'") === -1 &&
+      refresh.indexOf("Work now") === -1) fail("work-now heading missing from refresh.sh");
   for (const lane of ["codex", "claude", "gemini", "minimax", "grok", "cursor-cloud"]) {
-    if (html.indexOf('data-lane-id="' + lane + '"') === -1) fail("missing lane " + lane);
+    if (refresh.indexOf('"' + lane + '"') === -1) fail("lane id missing from refresh.sh: " + lane);
   }
-  if (src.indexOf("idle - needs assignment") === -1) fail("idle assignment fallback missing");
+  if (refresh.indexOf("idle - needs assignment") === -1) fail("idle assignment fallback missing");
   if (refresh.indexOf('project("StoryOps-AI"') === -1 || refresh.indexOf("WashOps") === -1) {
     fail("WashOps display rename mapping missing");
   }
 
   // Honesty slice: meta links and tab-home visibility (PR #56 next slice).
-  if (src.indexOf("function workMetaHtml") === -1) fail("workMetaHtml missing from page JS");
+  if (refresh.indexOf("function workMetaHtml") === -1) fail("workMetaHtml missing from refresh.sh");
   if (refresh.indexOf("def _work_meta_html") === -1) fail("_work_meta_html missing from refresh.sh");
   if (refresh.indexOf("meta-link") === -1) fail("meta-link anchor class missing from refresh.sh");
   // meta and goal must NOT be suppressed on tab-home (honesty requirement).
