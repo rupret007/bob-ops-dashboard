@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-09-24T23:14:22.058069-05:00",
-  "generated_at_display": "Thu Sep 24, 2026 \u00b7 11:14 PM CDT",
+  "generated_at": "2026-09-24T23:17:42.333702-05:00",
+  "generated_at_display": "Thu Sep 24, 2026 \u00b7 11:17 PM CDT",
   "timezone": "America/Chicago",
   "owner": "rupret007",
   "dashboard": "bob-ops-dashboard",
@@ -334,7 +334,7 @@
       "title": "Apps & utilities",
       "projects": [
         {
-          "name": "StoryOps-AI",
+          "name": "WashOps",
           "repo": "rupret007/StoryOps-AI",
           "url": "https://github.com/rupret007/StoryOps-AI",
           "repo_url": "https://github.com/rupret007/StoryOps-AI",
@@ -362,7 +362,7 @@
           "release": null,
           "release_sha": null,
           "release_url": null,
-          "notes": "Private workflow utility. High-level only; no customer data on this board.",
+          "notes": "WashOps (formerly StoryOps AI) \u2014 exterior wash ops OS. High-level only; no customer data on this board.",
           "accessible": true,
           "coord": {
             "repo": "StoryOps-AI",
@@ -460,11 +460,11 @@
           "url": "https://github.com/rupret007/bob-ops-dashboard",
           "repo_url": "https://github.com/rupret007/bob-ops-dashboard",
           "private": false,
-          "status": "green",
-          "chip": "Green",
+          "status": "red",
+          "chip": "Red",
           "default_branch": "main",
-          "tip_sha": "1d2f3ca",
-          "tip_date": "2026-09-25T04:10:58Z",
+          "tip_sha": "41bb085",
+          "tip_date": "2026-09-25T04:14:25Z",
           "open_prs": 0,
           "open_pr_url": null,
           "open_pr_number": null,
@@ -472,7 +472,14 @@
           "open_pr_stack": [],
           "pr_listing_complete": true,
           "agent_url": null,
-          "ci": null,
+          "ci": {
+            "name": "QA claim smoke",
+            "conclusion": "failure",
+            "branch": "main",
+            "sha": "41bb085",
+            "created": "2026-09-25T04:14:28Z",
+            "html_url": "https://github.com/rupret007/bob-ops-dashboard/actions/runs/36093643461"
+          },
           "release": null,
           "release_sha": null,
           "release_url": null,
@@ -507,10 +514,10 @@
       "title": "Active agents NOW",
       "projects": [
         {
-          "name": "Codex (ChatGPT)",
+          "name": "Codex",
           "status": "green",
           "chip": "Running",
-          "notes": "PID 70926 \u00b7 70926 /Applications/ChatGPT.app/Contents/Resources/codex -c features.code_mode_host=true app-server --analytics-default- \u00b7 codex-local :3210 down \u00b7 checked 2026-09-24T23:13:38.339233-05:00",
+          "notes": "PID 70926 \u00b7 70926 /Applications/ChatGPT.app/Contents/Resources/codex -c features.code_mode_host=true app-server --analytics-default- \u00b7 codex-local :3210 down \u00b7 checked 2026-09-24T23:16:58.133116-05:00",
           "agent_id": "codex",
           "agent_state": "running",
           "url": null,
@@ -520,7 +527,7 @@
           "name": "Cursor",
           "status": "parked",
           "chip": "Installed",
-          "notes": "Cursor.app installed \u00b7 v3.17.21, not running \u00b7 checked 2026-09-24T23:13:38.339233-05:00",
+          "notes": "Cursor.app installed \u00b7 v3.17.21, not running \u00b7 checked 2026-09-24T23:16:58.133116-05:00",
           "agent_id": "cursor",
           "agent_state": "installed",
           "url": null,
@@ -530,7 +537,7 @@
           "name": "Claude",
           "status": "green",
           "chip": "Running",
-          "notes": "Claude.app running \u00b7 2.1.216 (Claude Code) \u00b7 checked 2026-09-24T23:13:38.339233-05:00",
+          "notes": "Claude.app running \u00b7 2.1.216 (Claude Code) \u00b7 checked 2026-09-24T23:16:58.133116-05:00",
           "agent_id": "claude",
           "agent_state": "running",
           "url": null,
@@ -815,29 +822,29 @@
   ],
   "inaccessible": [],
   "publish_notes": "Public board -- no secrets or customer paths. Private repositories stay high-level; AI Music Vault stays private-content-boundary only.",
-  "refresh_started_ms": 1790309619017,
+  "refresh_started_ms": 1790309818854,
   "agents_source": "file",
   "agents": [
     {
       "id": "codex",
-      "name": "Codex (ChatGPT)",
+      "name": "Codex",
       "state": "running",
       "detail": "PID 70926 \u00b7 70926 /Applications/ChatGPT.app/Contents/Resources/codex -c features.code_mode_host=true app-server --analytics-default- \u00b7 codex-local :3210 down",
-      "checked_at": "2026-09-24T23:13:38.339233-05:00"
+      "checked_at": "2026-09-24T23:16:58.133116-05:00"
     },
     {
       "id": "cursor",
       "name": "Cursor",
       "state": "installed",
       "detail": "Cursor.app installed \u00b7 v3.17.21, not running",
-      "checked_at": "2026-09-24T23:13:38.339233-05:00"
+      "checked_at": "2026-09-24T23:16:58.133116-05:00"
     },
     {
       "id": "claude",
       "name": "Claude",
       "state": "running",
       "detail": "Claude.app running \u00b7 2.1.216 (Claude Code)",
-      "checked_at": "2026-09-24T23:13:38.339233-05:00"
+      "checked_at": "2026-09-24T23:16:58.133116-05:00"
     }
   ],
   "cloud_agents": [],

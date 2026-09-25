@@ -379,6 +379,7 @@ def project(
         "AI-Music-Vault": "AI Music Vault",
         "Andrea_NanoBot": "Andrea NanoBot",
         "Bob-the-Bot": "Bob the Bot",
+        "StoryOps-AI": "WashOps",
     }
     p["name"] = rename.get(name, p["name"])
     return p
@@ -415,7 +416,7 @@ status = {
       "title": "Apps & utilities",
       "projects": [
         project("StoryOps-AI",
-                notes="Private workflow utility. High-level only; no customer data on this board."),
+                notes="WashOps (formerly StoryOps AI) — exterior wash ops OS. High-level only; no customer data on this board."),
         project("ballbeacon",
                 notes="Private iOS utility. Software validation only; device and signing steps stay owner-only."),
         project("CSS_Conductor", high_level_only=True,
