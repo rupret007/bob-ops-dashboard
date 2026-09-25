@@ -1088,12 +1088,21 @@ def canonicalize_harden_lane(raw: Any) -> str:
 
 def _clean_harden_line(raw: Any, limit: int = 160) -> str:
     text = " ".join(str(raw or "").split())
+    # Fold typographic chars so scorecard lines stay ASCII-safe for soft-paint/JS.
+    for src, dst in (
+        ("—", "-"),  # em dash
+        ("–", "-"),  # en dash
+        ("·", "|"),  # middle dot
+        ("•", "|"),  # bullet
+        ("…", "..."),  # ellipsis
+    ):
+        text = text.replace(src, dst)
     if len(text) <= limit:
         return text
     cut = text[: limit - 1].rsplit(" ", 1)[0].rstrip(".,;:")
     if len(cut) < 24:
         cut = text[: limit - 1]
-    return cut + "…"
+    return cut + "..."
 
 
 def _parse_harden_round(raw: Any) -> int | None:

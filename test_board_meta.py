@@ -2612,7 +2612,7 @@ class HardenWindowStripTests(unittest.TestCase):
                     "status": "open",
                     "lanes_fired": ["LocalCursor", "Codex"],
                     "updated_at": now_iso,
-                    "scorecard_line": "mid — awaiting scorecard",
+                    "scorecard_line": "mid - awaiting scorecard",
                 }
             )
         )
@@ -2620,7 +2620,7 @@ class HardenWindowStripTests(unittest.TestCase):
         self.assertIn("R7", html)
         self.assertIn('hw-lane fired">LocalCursor', html)
         self.assertIn('hw-lane fired">Codex', html)
-        self.assertIn("mid — awaiting scorecard", html)
+        self.assertIn("mid - awaiting scorecard", html)
         self.assertNotIn("Running", html)
 
     def test_never_overrides_llm_work_statuses(self):
