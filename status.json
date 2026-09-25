@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-09-25T07:44:04.322853-05:00",
-  "generated_at_display": "Fri Sep 25, 2026 \u00b7 7:44 AM CDT",
+  "generated_at": "2026-09-25T07:54:02.247998-05:00",
+  "generated_at_display": "Fri Sep 25, 2026 \u00b7 7:54 AM CDT",
   "timezone": "America/Chicago",
   "owner": "rupret007",
   "dashboard": "bob-ops-dashboard",
@@ -46,8 +46,8 @@
           "url": "https://github.com/rupret007/webjam",
           "repo_url": "https://github.com/rupret007/webjam",
           "private": false,
-          "status": "yellow",
-          "chip": "Yellow",
+          "status": "green",
+          "chip": "Green",
           "default_branch": "master",
           "tip_sha": "ce52e9c",
           "tip_date": "2026-09-25T12:10:46Z",
@@ -60,7 +60,7 @@
           "agent_url": null,
           "ci": {
             "name": "WebJam CI",
-            "conclusion": "in_progress",
+            "conclusion": "success",
             "branch": "master",
             "sha": "ce52e9c",
             "created": "2026-09-25T12:10:49Z",
@@ -337,8 +337,8 @@
           "url": "https://github.com/rupret007/StoryOps-AI",
           "repo_url": "https://github.com/rupret007/StoryOps-AI",
           "private": false,
-          "status": "yellow",
-          "chip": "Yellow",
+          "status": "green",
+          "chip": "Green",
           "default_branch": "main",
           "tip_sha": "5c9aa49",
           "tip_date": "2026-09-25T12:42:52Z",
@@ -351,7 +351,7 @@
           "agent_url": null,
           "ci": {
             "name": "StoryOps CI",
-            "conclusion": "in_progress",
+            "conclusion": "success",
             "branch": "main",
             "sha": "5c9aa49",
             "created": "2026-09-25T12:42:56Z",
@@ -494,8 +494,8 @@
           "status": "green",
           "chip": "Green",
           "default_branch": "main",
-          "tip_sha": "eb52266",
-          "tip_date": "2026-09-25T12:33:52Z",
+          "tip_sha": "551ffb6",
+          "tip_date": "2026-09-25T12:44:19Z",
           "open_prs": 0,
           "open_pr_url": null,
           "open_pr_number": null,
@@ -877,7 +877,7 @@
     "barker"
   ],
   "publish_notes": "Public board -- no secrets or customer paths. Private repositories stay high-level; AI Music Vault stays private-content-boundary only.",
-  "refresh_started_ms": 1790340208051,
+  "refresh_started_ms": 1790340796157,
   "agents_source": "file:stale->unknown",
   "agents": [
     {
@@ -1033,7 +1033,7 @@
     }
   ],
   "llm_work_now_freshness": {
-    "generated_at": "2026-09-25 07:44 CT",
+    "generated_at": "2026-09-25 07:54 CT",
     "warn_ttl_sec": 1200,
     "warnings": [],
     "ok": true
