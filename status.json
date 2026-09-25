@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-09-25T07:54:02.247998-05:00",
-  "generated_at_display": "Fri Sep 25, 2026 \u00b7 7:54 AM CDT",
+  "generated_at": "2026-09-25T07:59:58.680745-05:00",
+  "generated_at_display": "Fri Sep 25, 2026 \u00b7 7:59 AM CDT",
   "timezone": "America/Chicago",
   "owner": "rupret007",
   "dashboard": "bob-ops-dashboard",
@@ -66,9 +66,9 @@
             "created": "2026-09-25T12:10:49Z",
             "html_url": "https://github.com/rupret007/webjam/actions/runs/36133456644"
           },
-          "release": "v0.28.3",
-          "release_sha": "da16749",
-          "release_url": "https://github.com/rupret007/webjam/releases/tag/v0.28.3",
+          "release": "v0.28.4",
+          "release_sha": "ce52e9c",
+          "release_url": "https://github.com/rupret007/webjam/releases/tag/v0.28.4",
           "notes": "Making room. Latest is the published test candidate; source can be ahead.",
           "accessible": true,
           "coord": {
@@ -491,14 +491,14 @@
           "url": "https://github.com/rupret007/bob-ops-dashboard",
           "repo_url": "https://github.com/rupret007/bob-ops-dashboard",
           "private": false,
-          "status": "green",
-          "chip": "Green",
+          "status": "yellow",
+          "chip": "Yellow",
           "default_branch": "main",
-          "tip_sha": "551ffb6",
-          "tip_date": "2026-09-25T12:44:19Z",
-          "open_prs": 0,
-          "open_pr_url": null,
-          "open_pr_number": null,
+          "tip_sha": "9ab681f",
+          "tip_date": "2026-09-25T12:54:18Z",
+          "open_prs": 1,
+          "open_pr_url": "https://github.com/rupret007/bob-ops-dashboard/pull/59",
+          "open_pr_number": 59,
           "open_pr_draft": false,
           "open_pr_stack": [],
           "pr_listing_complete": true,
@@ -877,7 +877,7 @@
     "barker"
   ],
   "publish_notes": "Public board -- no secrets or customer paths. Private repositories stay high-level; AI Music Vault stays private-content-boundary only.",
-  "refresh_started_ms": 1790340796157,
+  "refresh_started_ms": 1790341159152,
   "agents_source": "file:stale->unknown",
   "agents": [
     {
@@ -1033,7 +1033,7 @@
     }
   ],
   "llm_work_now_freshness": {
-    "generated_at": "2026-09-25 07:54 CT",
+    "generated_at": "2026-09-25 07:59 CT",
     "warn_ttl_sec": 1200,
     "warnings": [],
     "ok": true
