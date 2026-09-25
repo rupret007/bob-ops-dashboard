@@ -122,6 +122,7 @@ async function main() {
       assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
       const workRow = page.locator('#agents-strip .agent-row[data-lane-id="codex"]');
       await workRow.waitFor({ state: 'visible' });
+      assert.equal(await workRow.locator('.model').innerText(), 'Model: Unknown');
       await workRow.locator('.task').click();
       const sheet = page.locator('#detail-sheet');
       await sheet.waitFor({ state: 'visible' });
@@ -129,6 +130,7 @@ async function main() {
       assert((await page.locator('#detail-task').innerText()).includes('Pivot PR #56 to LLM work-now attribution board'));
       assert((await page.locator('#detail-goal').innerText()).includes('Replace process-state pills with detailed assignment rows'));
       const factsText = await page.locator('#detail-facts').innerText();
+      assert(factsText.includes('Model') && factsText.includes('Unknown'));
       assert(factsText.includes('Repo') && factsText.includes('rupret007/bob-ops-dashboard'));
       assert(factsText.includes('Branch') && factsText.includes('cursor/max-llm-resource-strip-ec39'));
       assert(factsText.includes('PR') && factsText.includes('#56'));

@@ -582,6 +582,16 @@ def _safe_branch(value):
         return ""
     return branch
 
+def _safe_model_id(value):
+    model = str(value or "").strip()
+    if not model:
+        return ""
+    if len(model) > 80:
+        return ""
+    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._:-]{1,79}", model):
+        return ""
+    return model
+
 def _repo_from_pr_url(url):
     safe = safe_pr_url(url)
     if not safe:
@@ -635,6 +645,12 @@ def _normalize_work_row(raw):
     status_name = str(raw.get("status") or "").strip().lower()
     if status_name not in {"running", "finished", "blocked", "idle"}:
         status_name = "idle"
+    model = (
+        _safe_model_id(raw.get("model"))
+        or _safe_model_id(raw.get("model_id"))
+        or _safe_model_id(raw.get("resource_model"))
+        or _safe_model_id(raw.get("runner_model"))
+    )
     return {
         "id": lane,
         "name": next((n for i, n in LANE_ORDER if i == lane), lane.title()),
@@ -645,12 +661,40 @@ def _normalize_work_row(raw):
         "branch": _safe_branch(raw.get("branch")),
         "goal": _clean_line(raw.get("goal") or raw.get("notes"), 220),
         "status": status_name,
+        "model": model,
         "agent_url": safe_agent_url(raw.get("agent_url") or raw.get("url")),
         "why": _clean_line(raw.get("why") or raw.get("lane_why"), 120),
         "note": _clean_line(raw.get("note") or raw.get("detail"), 160),
         "last_task": _clean_line(raw.get("last_task"), 120),
         "source": _clean_line(raw.get("source"), 48),
     }
+
+def _assignment_models_from_blob(blob):
+    out = {}
+    if not isinstance(blob, dict):
+        return out
+    candidates = []
+    for key in ("assignment", "assignment_blob", "assignments", "resources", "models"):
+        val = blob.get(key)
+        if isinstance(val, list):
+            candidates.extend(val)
+    if isinstance(blob.get("work"), list):
+        candidates.extend(blob.get("work") or [])
+    for entry in candidates:
+        if not isinstance(entry, dict):
+            continue
+        lane = _lane_id(entry.get("id") or entry.get("lane"), entry.get("name") or entry.get("resource"))
+        if not lane:
+            continue
+        model = (
+            _safe_model_id(entry.get("model"))
+            or _safe_model_id(entry.get("model_id"))
+            or _safe_model_id(entry.get("resource_model"))
+            or _safe_model_id(entry.get("runner_model"))
+        )
+        if model:
+            out[lane] = model
+    return out
 
 work_blob = None
 for work_path in (root / "llm-work-now.json", Path("/workspace/bob-ops-dashboard/llm-work-now.json")):
@@ -668,8 +712,10 @@ if work_blob is None:
         except Exception:
             work_blob = None
 work_rows = []
+assignment_models = {}
 if isinstance(work_blob, dict):
     work_rows = work_blob.get("work") or work_blob.get("lanes") or []
+    assignment_models = _assignment_models_from_blob(work_blob)
 elif isinstance(work_blob, list):
     work_rows = work_blob
 
@@ -678,6 +724,28 @@ for raw in work_rows or []:
     row = _normalize_work_row(raw)
     if row:
         by_lane[row["id"]] = row
+for lane, model in assignment_models.items():
+    row = by_lane.get(lane)
+    if row is None:
+        by_lane[lane] = {
+            "id": lane,
+            "name": next((n for i, n in LANE_ORDER if i == lane), lane.title()),
+            "task_title": "idle - needs assignment",
+            "repo": "",
+            "pr_url": "",
+            "pr_number": "",
+            "branch": "",
+            "goal": "",
+            "status": "idle",
+            "model": model,
+            "agent_url": "",
+            "why": "",
+            "note": "",
+            "last_task": "",
+            "source": "assignment",
+        }
+    elif not row.get("model"):
+        row["model"] = model
 
 for cloud in trusted_cloud:
     lane = _lane_id("", cloud.get("name"))
@@ -696,6 +764,7 @@ for cloud in trusted_cloud:
         "branch": "",
         "goal": "Cloud Agent assignment sourced from open PR attribution.",
         "status": "running",
+        "model": _safe_model_id(cloud.get("model")) or _safe_model_id(cloud.get("model_id")),
         "agent_url": safe_agent_url(cloud.get("url")),
         "why": "Cloud Agent",
         "note": _clean_line(cloud.get("detail"), 160),
@@ -723,6 +792,8 @@ for lane_id, lane_name in LANE_ORDER:
             row["last_task"] = previous.get("task_title")
     if not row.get("status"):
         row["status"] = "idle"
+    if not row.get("model"):
+        row["model"] = _safe_model_id(previous.get("model"))
     if not row.get("source"):
         row["source"] = "idle"
     llm_work.append(row)
@@ -748,6 +819,7 @@ for row in llm_work:
         "status": st,
         "chip": label,
         "notes": notes,
+        "model": row.get("model") or "",
         "agent_id": row.get("id"),
         "agent_state": lane_status,
         "url": row.get("agent_url"),
@@ -1118,6 +1190,7 @@ def work_row_html(row):
     detail_key = "work:" + lane_id_raw
     name = h(lane.get("name") or lane.get("id") or "LLM")
     task = h(lane.get("task_title") or "idle - needs assignment")
+    model = _safe_model_id(lane.get("model")) or "Unknown"
     meta_html = _work_meta_html(lane)
     goal = h(_clean_line(lane.get("goal"), 260))
     note = h(_clean_line(lane.get("note"), 200))
@@ -1142,6 +1215,7 @@ def work_row_html(row):
         f'data-detail-kind="work" data-detail-key="{h(detail_key)}">'
         f'<div class="agent-head"><h3>{name}</h3>{_work_chip(lane.get("status"))}</div>'
         f'<p class="task">{task}</p>'
+        f'<p class="model">Model: {h(model)}</p>'
         f'<p class="meta">{meta_html}</p>'
         f'{goal_html}{note_html}{last_html}{links_html}</article>'
     )
@@ -1405,6 +1479,7 @@ html = f'''<!DOCTYPE html>
   .agent-row h3 {{ margin:0; font-size:.9rem; font-weight:700; letter-spacing:-.01em; }}
   .agent-row p {{ margin:0; }}
   .agent-row .task {{ font-size:.82rem; font-weight:650; color:#fff; }}
+  .agent-row .model {{ font-size:.76rem; color:var(--muted); line-height:1.3; }}
   .agent-row .meta {{ font-size:.74rem; color:var(--muted); line-height:1.3; }}
   .agent-row .meta .meta-link {{ color:var(--link); text-decoration:none; }}
   .agent-row .meta .meta-link:hover {{ text-decoration:underline; }}
@@ -2202,6 +2277,7 @@ function focusKey(kind, raw) {{
             history: workHistory(row, project, cloud),
             facts: []
           }};
+          addFact(meta, "Model", safeModelId(row.model) || "Unknown", "");
           if (project) {{
             var ci = project.ci && typeof project.ci === "object" ? project.ci : {{}};
             var ciConcl = String(ci.conclusion || "").trim().toLowerCase();
@@ -2899,6 +2975,12 @@ function focusKey(kind, raw) {{
     if (/[/.]$/.test(branch)) return "";
     return branch;
   }}
+  function safeModelId(value) {{
+    var model = String(value || "").trim();
+    if (!model || model.length > 80) return "";
+    if (!/^[A-Za-z0-9][A-Za-z0-9._:-]{1,79}$/.test(model)) return "";
+    return model;
+  }}
   function repoFromPrUrl(url) {{
     var safe = safePrUrl(url);
     if (!safe) return "";
@@ -2918,6 +3000,7 @@ function focusKey(kind, raw) {{
     var pr = safePrUrl(raw.pr_url || raw.pr);
     var status = String(raw.status || "").toLowerCase();
     if (status !== "running" && status !== "finished" && status !== "blocked" && status !== "idle") status = "idle";
+    var model = safeModelId(raw.model) || safeModelId(raw.model_id) || safeModelId(raw.resource_model) || safeModelId(raw.runner_model);
     return {{
       id: id,
       name: laneName(id),
@@ -2930,6 +3013,7 @@ function focusKey(kind, raw) {{
       goal: compactText(raw.goal || raw.notes, 220),
       goal_full: compactText(raw.goal || raw.notes, 1200),
       status: status,
+      model: model,
       agent_url: safeAgentUrl(raw.agent_url || raw.url),
       why: compactText(raw.why || raw.lane_why, 120),
       note: compactText(raw.note || raw.detail, 160),
@@ -2960,6 +3044,7 @@ function focusKey(kind, raw) {{
         goal: row.goal || "",
         goal_full: row.goal_full || row.goal || "",
         status: row.status || "idle",
+        model: safeModelId(row.model),
         agent_url: row.agent_url || "",
         why: row.why || "",
         note: row.note || "",
@@ -2996,6 +3081,7 @@ function focusKey(kind, raw) {{
     var lane = row || {{}};
     var name = lane.name || laneName(lane.id || "");
     var task = lane.task_title || "idle - needs assignment";
+    var model = safeModelId(lane.model) || "Unknown";
     var metaHtml = workMetaHtml(lane);
     var links = "";
     if (lane.agent_url) links += tapLink(lane.agent_url, "Open agent");
@@ -3012,6 +3098,7 @@ function focusKey(kind, raw) {{
     return '<article class="agent-row" data-lane-id="' + esc(lane.id || "") + '" data-lane-status="' + esc(lane.status || "idle") + '"' + detailAttr + '>' +
       '<div class="agent-head"><h3>' + esc(name) + '</h3>' + workChip(lane.status) + "</div>" +
       '<p class="task">' + esc(task) + "</p>" +
+      '<p class="model">Model: ' + esc(model) + "</p>" +
       '<p class="meta">' + metaHtml + "</p>" +
       goal + note + lastTask +
       (links ? '<div class="agent-links">' + links + "</div>" : "") +
@@ -3111,6 +3198,7 @@ function focusKey(kind, raw) {{
         status: el.getAttribute("data-lane-status") || "idle",
         name: ((el.querySelector("h3") || {{}}).textContent) || "",
         task_title: ((el.querySelector(".task") || {{}}).textContent) || "",
+        model: ((((el.querySelector(".model") || {{}}).textContent) || "").replace(/^Model:\\s*/i, "")),
         goal: ((el.querySelector(".goal") || {{}}).textContent) || "",
         note: ((el.querySelector(".note") || {{}}).textContent) || "",
         last_task: (((el.querySelector(".last-task") || {{}}).textContent) || "").replace(/^Last:\s*/i, "")

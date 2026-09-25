@@ -21,6 +21,7 @@ Implement one cohesive, phone-first in-board detail experience so tapping a lane
   - Browser Back closes the sheet first.
   - Close button, scrim tap, and Escape close the sheet.
 - Expanded **Work now resource-type details** so Jeff can read assignment state without leaving board:
+  - exact model id on row + in detail sheet (`Unknown` fail-closed when absent)
   - full task + full goal text
   - repo + branch + PR field (number/URL when present)
   - cloud agent id and Open agent link when available
