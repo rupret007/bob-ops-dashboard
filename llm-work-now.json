@@ -10,6 +10,9 @@
       "branch": "cursor/max-llm-resource-strip-ec39",
       "goal": "Replace process-state pills with detailed assignment rows and keep public-board safety filters fail-closed.",
       "status": "running",
+      "model": "gpt-4o",
+      "spend_session": "$0.42",
+      "spend_day": "$1.87",
       "why": "Primary build lane for this dashboard PR"
     },
     {
@@ -22,6 +25,9 @@
       "branch": "cursor/max-llm-resource-strip-ec39",
       "goal": "Verify links, branch text, and notes stay public-safe with no secrets or customer paths.",
       "status": "running",
+      "model": "claude-sonnet-4-20250514",
+      "spend_session": "$2.14",
+      "spend_day": "$8.92",
       "why": "Review lane for board safety"
     },
     {
@@ -31,6 +37,8 @@
       "repo": "rupret007/StoryOps-AI",
       "goal": "Confirm StoryOps-AI display rename to WashOps and keep high-level/non-customer wording.",
       "status": "running",
+      "model": "gemini-2.5-pro",
+      "spend_session": "$0.08",
       "why": "Product naming and content lane"
     },
     {
@@ -43,6 +51,7 @@
       "branch": "cursor/max-llm-resource-strip-ec39",
       "goal": "Keep multi-row layout readable on dark theme while preserving first-screen signal hierarchy.",
       "status": "running",
+      "model": "abab7-chat-preview",
       "why": "UI density and wrap lane"
     },
     {
@@ -52,18 +61,24 @@
       "repo": "rupret007/barker",
       "goal": "Track high-level conductor coordination for Cloud Agent usage without exposing private internals.",
       "status": "running",
+      "model": "grok-3",
+      "spend_session": "$0.31",
+      "spend_day": "$4.55",
       "why": "Conductor context lane"
     },
     {
       "id": "cursor-cloud",
       "name": "Cursor Cloud",
-      "task_title": "Draft PR #56 handoff and cloud agent attribution",
+      "task_title": "Draft PR #57 handoff and cloud agent attribution",
       "repo": "rupret007/bob-ops-dashboard",
-      "pr_url": "https://github.com/rupret007/bob-ops-dashboard/pull/56",
-      "pr_number": "56",
-      "branch": "cursor/max-llm-resource-strip-ec39",
+      "pr_url": "https://github.com/rupret007/bob-ops-dashboard/pull/57",
+      "pr_number": "57",
+      "branch": "cursor/status-detail-sheet-5230",
       "goal": "Keep attribution source grounded in cloud_agents and explicit assignment blob.",
       "status": "running",
+      "model": "claude-opus-4-20250514",
+      "spend_session": "$6.25",
+      "spend_day": "$18.40",
       "why": "Cloud execution lane"
     }
   ]

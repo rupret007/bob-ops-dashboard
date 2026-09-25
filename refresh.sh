@@ -634,6 +634,23 @@ def _lane_id(raw_id, raw_name):
         return "grok"
     return ""
 
+def _safe_spend(value):
+    """Sanitize and format spend/cost values for public display."""
+    if value is None:
+        return ""
+    if isinstance(value, (int, float)):
+        if value < 0 or not isinstance(value, (int, float)) or value != value:
+            return ""
+        return f"${value:.2f}" if value < 1000 else f"${value:,.0f}"
+    text = str(value or "").strip()
+    if not text:
+        return ""
+    if len(text) > 20:
+        return ""
+    if not re.fullmatch(r"\$?[0-9,.]+", text):
+        return ""
+    return text if text.startswith("$") else f"${text}"
+
 def _normalize_work_row(raw):
     if not isinstance(raw, dict):
         return None
@@ -651,6 +668,8 @@ def _normalize_work_row(raw):
         or _safe_model_id(raw.get("resource_model"))
         or _safe_model_id(raw.get("runner_model"))
     )
+    spend_session = _safe_spend(raw.get("spend_session") or raw.get("session_spend"))
+    spend_day = _safe_spend(raw.get("spend_day") or raw.get("day_spend") or raw.get("spend_today"))
     return {
         "id": lane,
         "name": next((n for i, n in LANE_ORDER if i == lane), lane.title()),
@@ -662,6 +681,8 @@ def _normalize_work_row(raw):
         "goal": _clean_line(raw.get("goal") or raw.get("notes"), 220),
         "status": status_name,
         "model": model,
+        "spend_session": spend_session,
+        "spend_day": spend_day,
         "agent_url": safe_agent_url(raw.get("agent_url") or raw.get("url")),
         "why": _clean_line(raw.get("why") or raw.get("lane_why"), 120),
         "note": _clean_line(raw.get("note") or raw.get("detail"), 160),
@@ -738,6 +759,8 @@ for lane, model in assignment_models.items():
             "goal": "",
             "status": "idle",
             "model": model,
+            "spend_session": "",
+            "spend_day": "",
             "agent_url": "",
             "why": "",
             "note": "",
@@ -765,6 +788,8 @@ for cloud in trusted_cloud:
         "goal": "Cloud Agent assignment sourced from open PR attribution.",
         "status": "running",
         "model": _safe_model_id(cloud.get("model")) or _safe_model_id(cloud.get("model_id")),
+        "spend_session": _safe_spend(cloud.get("spend_session")),
+        "spend_day": _safe_spend(cloud.get("spend_day")),
         "agent_url": safe_agent_url(cloud.get("url")),
         "why": "Cloud Agent",
         "note": _clean_line(cloud.get("detail"), 160),
@@ -1191,6 +1216,8 @@ def work_row_html(row):
     name = h(lane.get("name") or lane.get("id") or "LLM")
     task = h(lane.get("task_title") or "idle - needs assignment")
     model = _safe_model_id(lane.get("model")) or "Unknown"
+    spend_session = str(lane.get("spend_session") or "").strip()
+    spend_day = str(lane.get("spend_day") or "").strip()
     meta_html = _work_meta_html(lane)
     goal = h(_clean_line(lane.get("goal"), 260))
     note = h(_clean_line(lane.get("note"), 200))
@@ -1210,12 +1237,19 @@ def work_row_html(row):
     goal_html = f'<p class="goal">{goal}</p>' if goal else ""
     note_html = f'<p class="note">{note}</p>' if note else ""
     last_html = f'<p class="last-task">Last: {last_task}</p>' if last_task else ""
+    spend_bits = []
+    if spend_session:
+        spend_bits.append(f"Session: {h(spend_session)}")
+    if spend_day:
+        spend_bits.append(f"Today: {h(spend_day)}")
+    spend_html = f'<p class="spend">{" · ".join(spend_bits)}</p>' if spend_bits else ""
     return (
         f'<article class="agent-row" data-lane-id="{lane_id}" data-lane-status="{h(lane.get("status") or "idle")}" '
         f'data-detail-kind="work" data-detail-key="{h(detail_key)}">'
         f'<div class="agent-head"><h3>{name}</h3>{_work_chip(lane.get("status"))}</div>'
         f'<p class="task">{task}</p>'
         f'<p class="model">Model: {h(model)}</p>'
+        f'{spend_html}'
         f'<p class="meta">{meta_html}</p>'
         f'{goal_html}{note_html}{last_html}{links_html}</article>'
     )
@@ -1480,6 +1514,7 @@ html = f'''<!DOCTYPE html>
   .agent-row p {{ margin:0; }}
   .agent-row .task {{ font-size:.82rem; font-weight:650; color:#fff; }}
   .agent-row .model {{ font-size:.76rem; color:var(--muted); line-height:1.3; }}
+  .agent-row .spend {{ font-size:.72rem; color:var(--warn); font-weight:600; line-height:1.3; }}
   .agent-row .meta {{ font-size:.74rem; color:var(--muted); line-height:1.3; }}
   .agent-row .meta .meta-link {{ color:var(--link); text-decoration:none; }}
   .agent-row .meta .meta-link:hover {{ text-decoration:underline; }}
@@ -2278,6 +2313,10 @@ function focusKey(kind, raw) {{
             facts: []
           }};
           addFact(meta, "Model", safeModelId(row.model) || "Unknown", "");
+          var spendSession = String(row.spend_session || "").trim();
+          var spendDay = String(row.spend_day || "").trim();
+          if (spendSession) addFact(meta, "Session spend", spendSession, "");
+          if (spendDay) addFact(meta, "Today spend", spendDay, "");
           if (project) {{
             var ci = project.ci && typeof project.ci === "object" ? project.ci : {{}};
             var ciConcl = String(ci.conclusion || "").trim().toLowerCase();
@@ -3045,6 +3084,8 @@ function focusKey(kind, raw) {{
         goal_full: row.goal_full || row.goal || "",
         status: row.status || "idle",
         model: safeModelId(row.model),
+        spend_session: String(row.spend_session || "").trim(),
+        spend_day: String(row.spend_day || "").trim(),
         agent_url: row.agent_url || "",
         why: row.why || "",
         note: row.note || "",
@@ -3082,6 +3123,8 @@ function focusKey(kind, raw) {{
     var name = lane.name || laneName(lane.id || "");
     var task = lane.task_title || "idle - needs assignment";
     var model = safeModelId(lane.model) || "Unknown";
+    var spendSession = String(lane.spend_session || "").trim();
+    var spendDay = String(lane.spend_day || "").trim();
     var metaHtml = workMetaHtml(lane);
     var links = "";
     if (lane.agent_url) links += tapLink(lane.agent_url, "Open agent");
@@ -3093,12 +3136,17 @@ function focusKey(kind, raw) {{
     var goal = lane.goal ? '<p class="goal">' + esc(lane.goal) + "</p>" : "";
     var note = lane.note ? '<p class="note">' + esc(lane.note) + "</p>" : "";
     var lastTask = lane.last_task ? '<p class="last-task">Last: ' + esc(lane.last_task) + "</p>" : "";
+    var spendBits = [];
+    if (spendSession) spendBits.push("Session: " + esc(spendSession));
+    if (spendDay) spendBits.push("Today: " + esc(spendDay));
+    var spendHtml = spendBits.length > 0 ? '<p class="spend">' + spendBits.join(" \\u00b7 ") + "</p>" : "";
     var detailKey = lane.id ? "work:" + lane.id : "";
     var detailAttr = detailKey ? ' data-detail-kind="work" data-detail-key="' + esc(detailKey) + '"' : "";
     return '<article class="agent-row" data-lane-id="' + esc(lane.id || "") + '" data-lane-status="' + esc(lane.status || "idle") + '"' + detailAttr + '>' +
       '<div class="agent-head"><h3>' + esc(name) + '</h3>' + workChip(lane.status) + "</div>" +
       '<p class="task">' + esc(task) + "</p>" +
       '<p class="model">Model: ' + esc(model) + "</p>" +
+      spendHtml +
       '<p class="meta">' + metaHtml + "</p>" +
       goal + note + lastTask +
       (links ? '<div class="agent-links">' + links + "</div>" : "") +

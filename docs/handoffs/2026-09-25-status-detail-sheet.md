@@ -31,9 +31,29 @@ Implement one cohesive, phone-first in-board detail experience so tapping a lane
   - recent public-safe snippets from llm work + cloud/detail context (fail-closed filters)
 - Added phone-safe sheet controls (44px dismiss target) and link chips with existing safe URL plumbing.
 
+### Spend visibility (polished in PR #57)
+- Added **spend_session** and **spend_day** fields to work rows for resource consumption tracking
+- Work-now belly now displays spend when available (yellow warning color for visibility)
+- Detail sheet includes "Session spend" and "Today spend" fact rows
+- Spend values are sanitized and formatted with `_safe_spend()` (fail-closed: invalid values become empty)
+- Supports numeric values (formatted as `$X.XX`) and pre-formatted strings (`$X.XX` or `X.XX`)
+- Both first-paint (Python) and soft-paint (JavaScript) paths handle spend consistently
+
+### Model ID handling (polished in PR #57)
+- Work-now belly shows exact model IDs directly under task title (e.g., `Model: claude-opus-4-20250514`)
+- Model IDs sourced from multiple fields in priority order:
+  1. `model` field
+  2. `model_id` field
+  3. `resource_model` field
+  4. `runner_model` field
+- Fail-closed fallback to `Unknown` when no valid model ID is present
+- Model validation via `_safe_model_id()` enforces pattern `[A-Za-z0-9][A-Za-z0-9._:-]{1,79}`
+- Detail sheet includes model as first fact row
+
 ### Public-board safety
 - Reused/kept existing allowlisted URL validators (`safeAgentUrl`, `safePrUrl`, `safeActionsUrl`, `safeRepoUrl`, `safePullsUrl`, `safeReleaseUrl`, `safeGameUrl`) before any outbound href.
 - Recent events are generated from already-public status fields; no private paths, OTP/auth controls, or customer payloads added.
+- Spend values are sanitized (only `$X.XX` format allowed, no scripts or injection vectors)
 - Change is source-only (`refresh.sh` + tests + docs), with no direct scheduler snapshot edits.
 
 ### QA additions
