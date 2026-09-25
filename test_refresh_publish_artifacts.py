@@ -49,6 +49,40 @@ class RefreshPublishArtifactsTests(unittest.TestCase):
         # agents-status stays off the default publish set.
         self.assertIn("Do not commit agents-status.json", sh)
 
+    def test_workflow_dual_sot_assert_before_and_after_push(self):
+        yml = WORKFLOW.read_text(encoding="utf-8")
+        self.assertIn("Dual-SoT assert (status ↔ llm-work-now)", yml)
+        self.assertIn("assert_dual_sot_files", yml)
+        self.assertIn('assert_dual_sot_files("status.json", "llm-work-now.json")', yml)
+        # K5 stub listener present (release nudge without cron wait).
+        self.assertIn("repository_dispatch:", yml)
+        self.assertIn("release-published", yml)
+        # Post-push re-assert before exit 0.
+        push_at = yml.find("Pushed on attempt")
+        post_at = yml.find("dual-SoT PASS post-push")
+        self.assertGreater(push_at, 0)
+        self.assertGreater(post_at, push_at)
+
+    def test_refresh_k2_k3_dual_sot_wire(self):
+        sh = REFRESH.read_text(encoding="utf-8")
+        self.assertIn("build_llm_work_now_freshness_meta", sh)
+        self.assertIn("assert_dual_sot_files", sh)
+        self.assertIn("DUAL_SOT_MAX_STAMP_SKEW_SEC", sh)
+        # K3: freshness from the blob just written, not a stale prior.
+        self.assertIn("Never claim ok on a stale paired artifact", sh)
+        self.assertIn(
+            'status["llm_work_now_freshness"] = build_llm_work_now_freshness_meta(_pub)',
+            sh,
+        )
+        # K2: assert after atomic write + post-push.
+        self.assertIn(
+            'assert_dual_sot_files(root / "status.json", root / "llm-work-now.json")',
+            sh,
+        )
+        self.assertIn("dual-SoT PASS post-push", sh)
+        # verify-block guard must remain.
+        self.assertIn("drop_leftover_verify", sh)
+
 
 if __name__ == "__main__":
     unittest.main()
