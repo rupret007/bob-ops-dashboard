@@ -51,9 +51,9 @@ class RefreshPublishArtifactsTests(unittest.TestCase):
 
     def test_workflow_dual_sot_assert_before_and_after_push(self):
         yml = WORKFLOW.read_text(encoding="utf-8")
-        self.assertIn("Dual-SoT assert (status ↔ llm-work-now)", yml)
+        self.assertIn("Dual-SoT assert (status vs llm-work-now)", yml)
         self.assertIn("assert_dual_sot_files", yml)
-        self.assertIn('assert_dual_sot_files("status.json", "llm-work-now.json")', yml)
+        self.assertIn("assert_dual_sot_files('status.json', 'llm-work-now.json')", yml)
         # K5 stub listener present (release nudge without cron wait).
         self.assertIn("repository_dispatch:", yml)
         self.assertIn("release-published", yml)
