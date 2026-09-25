@@ -127,13 +127,13 @@ function run() {
   }
   if (workHref("https://evil.example/rupret007/webjam/releases/latest")) fail("workHref must drop foreign Latest");
   if (workHref("https://github.com/rupret007/webjam/releases/tag/../v1")) fail("workHref must drop path-like release tags");
-  if (workHref("https://github.com/0xc0re/barker/pull/41") !== "https://github.com/0xc0re/barker/pull/41") {
+  if (workHref("https://github.com/rupret007/barker/pull/41") !== "https://github.com/rupret007/barker/pull/41") {
     fail("workHref must keep canonical Barker PR");
   }
-  if (workHref("https://github.com/0xc0re/barker/actions/runs/9") !== "https://github.com/0xc0re/barker/actions/runs/9") {
+  if (workHref("https://github.com/rupret007/barker/actions/runs/9") !== "https://github.com/rupret007/barker/actions/runs/9") {
     fail("workHref must keep canonical Barker Actions run");
   }
-  if (workHref("https://github.com/0xc0re/barker/pulls") !== "https://github.com/0xc0re/barker/pulls") {
+  if (workHref("https://github.com/rupret007/barker/pulls") !== "https://github.com/rupret007/barker/pulls") {
     fail("workHref must keep canonical Barker pulls list");
   }
   const gameHub = "https://rupret007.github.io/Turdanoid/hub.html";

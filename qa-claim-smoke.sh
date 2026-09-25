@@ -164,8 +164,8 @@ grep -q 'function revealGlanceTarget' "$INDEX" || fail "revealGlanceTarget missi
 grep -q 'data-focus-target=' "$INDEX" || fail "next action missing exact focus target"
 grep -q 'data-focus-key=' "$INDEX" || fail "project/decision rows missing focus keys"
 grep -q 'is-glance-target' "$INDEX" || fail "exact target confirmation style missing"
-grep -q 'function ageGateAgents' "$INDEX" || fail "ageGateAgents missing"
-grep -q 'data-checked-at' "$INDEX" || fail "agent data-checked-at missing"
+grep -q 'function normalizeLlmWork' "$INDEX" || fail "normalizeLlmWork missing"
+grep -q 'data-lane-id="codex"' "$INDEX" || fail "work lanes missing"
 grep -q 'id="pending-box"' "$INDEX" || fail "pending-box missing"
 grep -q 'class="pulse"' "$INDEX" || fail "pulse strip missing"
 grep -q 'class="lane"' "$INDEX" || fail "compact lanes missing"
@@ -216,7 +216,7 @@ grep -q 'function findFocusTarget' "$REFRESH" || fail "refresh.sh missing findFo
 grep -q 'function revealGlanceTarget' "$REFRESH" || fail "refresh.sh missing revealGlanceTarget"
 grep -q 'data-focus-target=' "$REFRESH" || fail "refresh.sh missing exact glance target"
 grep -q 'data-focus-key=' "$REFRESH" || fail "refresh.sh missing row focus keys"
-grep -q 'ageGateAgents' "$REFRESH" || fail "refresh.sh missing ageGateAgents"
+grep -q 'normalizeLlmWork' "$REFRESH" || fail "refresh.sh missing normalizeLlmWork"
 grep -q 'decisionHref' "$REFRESH" || fail "refresh.sh missing decisionHref"
 grep -q 'pick_tip_ci' "$REFRESH" || fail "refresh.sh missing pick_tip_ci"
 grep -q 'incomplete_public_collections' "$REFRESH" || fail "refresh.sh missing collection outage guard"
@@ -570,7 +570,7 @@ private_not_tap = (
     "Ball Beacon",
     "CSS Conductor",
     "TACTrack",
-    "0xc0re/barker",
+    "Barker",
     "AI Music Vault",
     "Bob the Bot",
     "StoryDesk",
@@ -1356,8 +1356,8 @@ if 'class="card"' in html:
     raise SystemExit("generated page still paints essay cards")
 if "pending-more" not in html:
     raise SystemExit("generated page missing collapsed lower-risk pending")
-if "function boardFingerprint" not in html or "function ageGateAgents" not in html:
-    raise SystemExit("generated page missing no-flash / age-gate helpers")
+if "function boardFingerprint" not in html or "function normalizeLlmWork" not in html:
+    raise SystemExit("generated page missing no-flash / llm-work helpers")
 if "function decisionHref" not in html or "pageshow" not in html or "AbortController" not in html:
     raise SystemExit("generated page missing phone decision / poll helpers")
 if "function pollIsNewer" not in html or "function pollFailureCounts" not in html:
@@ -1424,8 +1424,12 @@ for sec in st.get("sections") or []:
         names = [p.get("name") for p in (sec.get("projects") or [])]
 if "AdoptIQ Cloud Agent" in names:
     raise SystemExit("invented Cloud Agent yellow card leaked into pulse data")
-if "Running" in html.split('id="active-agents"', 1)[-1].split('id="silence-banner"', 1)[0]:
-    raise SystemExit("pulse strip still claims Running from stale seed")
+work_area = html.split('id="active-agents"', 1)[-1].split('id="silence-banner"', 1)[0]
+for lane in ("codex", "claude", "gemini", "minimax", "grok", "cursor-cloud"):
+    if f'data-lane-id="{lane}"' not in work_area:
+        raise SystemExit("missing work lane: " + lane)
+if "idle - needs assignment" not in work_area and "Running" not in work_area:
+    raise SystemExit("work area missing assignment/idle status text")
 print("refresh.sh e2e stripped leftover verify")
 PY
   pass "refresh.sh e2e stripped leftover verify"
@@ -1523,10 +1527,8 @@ if 'aria-selected="true"' in nav:
     raise SystemExit("first paint must not open a type tab")
 if 'id="tab-controls"' in nav or ">Decisions<" in nav:
     raise SystemExit("Decisions must not be a first-screen project-type tab")
-if "is-unknown-mac" not in html:
-    raise SystemExit("unknown Mac probes must collapse on the Actions box")
-if "Agents unknown" not in html:
-    raise SystemExit("unknown Mac probes must stay honest in the document, not invent Running")
+if "Work now" not in html and "LLM work now" not in html:
+    raise SystemExit("work-now heading missing from the pulse strip")
 if "probe-agents-status.sh" in html.split("<script>", 1)[0]:
     raise SystemExit("local probe helper name leaked onto the public page")
 if "fromGlance" not in html or "revealGlanceTarget(id, focus)" not in html:
@@ -1539,16 +1541,15 @@ if "body.tab-home footer" not in html:
     raise SystemExit("home screen must hide the repo footer")
 if "body.tab-home .live-stamp .when" not in html:
     raise SystemExit("home screen must hide the long timestamp")
-if "is-unknown-mac .agents-unknown" in html:
-    raise SystemExit("Agents unknown must not become first-screen chrome")
-if ".agents-strip.is-unknown-only" not in html:
-    raise SystemExit("unknown-only agent chrome must collapse")
+if ".llm-work-title" not in html:
+    raise SystemExit("llm-work title style missing")
 if "font-size:1.55rem" not in html:
     raise SystemExit("next action must be the first-screen hero")
 if "flex:1 1 0" not in html:
     raise SystemExit("phone type tabs must share one row so Parked is not clipped")
-if html.count('data-probe="mac"') < 3:
-    raise SystemExit("unknown compact must keep Codex/Cursor/Claude pills in the DOM")
+for lane in ("codex", "claude", "gemini", "minimax", "grok", "cursor-cloud"):
+    if f'data-lane-id="{lane}"' not in html:
+        raise SystemExit("llm lane missing from DOM: " + lane)
 pre_how = html.split('<details class="how-board">', 1)[0]
 if "Live CI via" in pre_how:
     raise SystemExit("fetched-repo line leaked onto the first phone screen")

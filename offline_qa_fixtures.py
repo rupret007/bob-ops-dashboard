@@ -40,7 +40,7 @@ repos = {
         "ballbeacon", "CSS_Conductor", "bob-ops-dashboard",
         "Cursor-OpenClaw-Integration", "Sliding-Glass-Door-PETG-Screw",
     )
-} | {"0xc0re/barker"}
+} | {"rupret007/barker"}
 private = {"AdoptIQ", "TACTrack", "AI-Music-Vault", "CSS_Conductor", "Bob-the-Bot"}
 scenario = os.environ.get("BOB_DASHBOARD_FIXTURE_SCENARIO")
 if scenario not in {"complete", "metadata-outage"}:

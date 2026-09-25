@@ -171,7 +171,7 @@ AGENT_BCID_QUERY_RE = re.compile(
     r"(bc-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})",
     re.I,
 )
-GITHUB_REPO_PATH = r"(?:rupret007/[A-Za-z0-9._-]+|0xc0re/barker)"
+GITHUB_REPO_PATH = r"(?:rupret007/[A-Za-z0-9._-]+)"
 PR_URL_RE = re.compile(
     rf"^https://github\.com/{GITHUB_REPO_PATH}/pull/[1-9][0-9]*$", re.I
 )

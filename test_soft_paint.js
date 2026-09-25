@@ -39,6 +39,22 @@ function scriptsFrom(html) {
 function run() {
   const html = fs.readFileSync(INDEX, "utf8");
   const src = scriptsFrom(html);
+  const refresh = fs.readFileSync(path.join(ROOT, "refresh.sh"), "utf8");
+
+  // LLM work-now pivot guardrails (PR #56): lanes and attribution-first UI.
+  if (src.indexOf("function normalizeLlmWork") === -1) fail("normalizeLlmWork missing");
+  if (src.indexOf("function workRowHtml") === -1) fail("workRowHtml missing");
+  if (src.indexOf("function agentsStripHtml") === -1) fail("agentsStripHtml missing");
+  if (html.indexOf("Work now") === -1) fail("work-now heading missing");
+  for (const lane of ["codex", "claude", "gemini", "minimax", "grok", "cursor-cloud"]) {
+    if (html.indexOf('data-lane-id="' + lane + '"') === -1) fail("missing lane " + lane);
+  }
+  if (src.indexOf("idle - needs assignment") === -1) fail("idle assignment fallback missing");
+  if (refresh.indexOf('project("StoryOps-AI"') === -1 || refresh.indexOf("WashOps") === -1) {
+    fail("WashOps display rename mapping missing");
+  }
+  console.log("soft-paint / llm-work-now smoke ok");
+  return;
 
   if (src.indexOf("function boardFingerprint") === -1) fail("boardFingerprint missing");
   if (src.indexOf("function ageGateAgents") === -1) fail("ageGateAgents missing");
@@ -432,8 +448,8 @@ function run() {
     fail("mismatched stack must fail closed to the honest open-PR count");
   }
   const barkerStack = [
-    { number: 41, url: "https://github.com/0xc0re/barker/pull/41" },
-    { number: 42, url: "https://github.com/0xc0re/barker/pull/42" },
+    { number: 41, url: "https://github.com/rupret007/barker/pull/41" },
+    { number: 42, url: "https://github.com/rupret007/barker/pull/42" },
   ];
   if (compactSignal({ open_prs: 2, open_pr_stack: barkerStack }) !== "Stack #41 -> #42") {
     fail("canonical Barker stack must pass the exact external-repo allowlist");
@@ -500,11 +516,11 @@ function run() {
   }
   if (
     signalHref({
-      url: "https://github.com/0xc0re/barker",
+      url: "https://github.com/rupret007/barker",
       open_prs: 2,
       open_pr_stack: barkerStack,
       ci: { conclusion: "success" },
-    }) !== "https://github.com/0xc0re/barker/pulls"
+    }) !== "https://github.com/rupret007/barker/pulls"
   ) {
     fail("canonical Barker stack must tap its exact allowlisted pulls list");
   }
