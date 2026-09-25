@@ -2,8 +2,14 @@
 # Rebuild Bob ops dashboard from live gh data, then optionally push to Pages.
 # Noninteractive: safe for GitHub Actions (gh uses GH_TOKEN / GITHUB_TOKEN).
 # Usage:
-#   ./refresh.sh              # write index.html + status.json in this dir
+#   ./refresh.sh              # write index.html + status.json (+ llm-work-now.json) in this dir
 #   ./refresh.sh --push       # also commit+push to rupret007/bob-ops-dashboard main
+#
+# Pages publish set (must stay aligned with .github/workflows/refresh-dashboard.yml):
+#   index.html status.json llm-work-now.json [harden-window.json if present]
+# R126 rewrites llm-work-now.json every rebuild — it must publish with status.json.
+# Unstaged llm-work-now must never block rebase on a concurrent tip move
+# (measured fail: actions run 36137598706). Do not commit agents-status.json.
 set -euo pipefail
 if [[ -n "${GH_TOKEN:-}" || -n "${GITHUB_TOKEN:-}" ]]; then
   export GH_TOKEN="${GH_TOKEN:-${GITHUB_TOKEN}}"
@@ -3096,6 +3102,7 @@ if [[ $PUSH -eq 1 ]]; then
   [[ -f "$ROOT/qa-source-only.sh" ]] && cp "$ROOT/qa-source-only.sh" "$WORK/"
   [[ -f "$ROOT/test_board_meta.py" ]] && cp "$ROOT/test_board_meta.py" "$WORK/"
   [[ -f "$ROOT/test_refresh_outage_guard.py" ]] && cp "$ROOT/test_refresh_outage_guard.py" "$WORK/"
+  [[ -f "$ROOT/test_refresh_publish_artifacts.py" ]] && cp "$ROOT/test_refresh_publish_artifacts.py" "$WORK/"
   [[ -f "$ROOT/test_open_decision.js" ]] && cp "$ROOT/test_open_decision.js" "$WORK/"
   [[ -f "$ROOT/test_open_links.js" ]] && cp "$ROOT/test_open_links.js" "$WORK/"
   [[ -f "$ROOT/test_soft_paint.js" ]] && cp "$ROOT/test_soft_paint.js" "$WORK/"
@@ -3111,9 +3118,13 @@ if [[ $PUSH -eq 1 ]]; then
   [[ -f "$WORK/qa-claim-smoke.sh" ]] && chmod +x "$WORK/qa-claim-smoke.sh"
   [[ -f "$WORK/qa-source-only.sh" ]] && chmod +x "$WORK/qa-source-only.sh"
   cd "$WORK"
-  git add index.html status.json README.md refresh.sh
-  [[ -f llm-work-now.json ]] && git add llm-work-now.json
-  [[ -f harden-window.json ]] && git add harden-window.json
+  # Same Pages board artifacts as the Actions commit step (plus source helpers).
+  # llm-work-now.json must ship with status.json; unstaged leftovers must not
+  # block rebase when a concurrent tip move rejects the first push.
+  PAGES_ARTIFACTS=(index.html status.json)
+  [[ -f llm-work-now.json ]] && PAGES_ARTIFACTS+=(llm-work-now.json)
+  [[ -f harden-window.json ]] && PAGES_ARTIFACTS+=(harden-window.json)
+  git add "${PAGES_ARTIFACTS[@]}" README.md refresh.sh
   [[ -f write_harden_window.py ]] && git add write_harden_window.py
   [[ -f board_meta.py ]] && git add board_meta.py
   [[ -f probe-agents-status.sh ]] && git add probe-agents-status.sh
@@ -3121,6 +3132,7 @@ if [[ $PUSH -eq 1 ]]; then
   [[ -f qa-source-only.sh ]] && git add qa-source-only.sh
   [[ -f test_board_meta.py ]] && git add test_board_meta.py
   [[ -f test_refresh_outage_guard.py ]] && git add test_refresh_outage_guard.py
+  [[ -f test_refresh_publish_artifacts.py ]] && git add test_refresh_publish_artifacts.py
   [[ -f test_open_decision.js ]] && git add test_open_decision.js
   [[ -f test_open_links.js ]] && git add test_open_links.js
   [[ -f test_soft_paint.js ]] && git add test_soft_paint.js
@@ -3132,7 +3144,40 @@ if [[ $PUSH -eq 1 ]]; then
   else
     git -c user.email="${OWNER}@users.noreply.github.com" -c user.name="$OWNER" \
       commit -m "chore: refresh ops dashboard $(date -u +%Y-%m-%dT%H:%MZ)"
-    git push origin HEAD:main
+    # Race-safe vs concurrent Actions refresh / other --push (mirror workflow).
+    pushed=0
+    for attempt in 1 2 3 4 5; do
+      if git push origin HEAD:main; then
+        echo "Pushed on attempt ${attempt}."
+        pushed=1
+        break
+      fi
+      echo "Push rejected (attempt ${attempt}); stash dirt, rebase onto origin/main, retry."
+      STASHED=0
+      if ! git diff --quiet || ! git diff --cached --quiet || [[ -n "$(git ls-files --others --exclude-standard)" ]]; then
+        git stash push --include-untracked -m "refresh-push-race-${attempt}"
+        STASHED=1
+      fi
+      git fetch origin main
+      if ! git rebase origin/main; then
+        # Prefer this rebuild's Pages artifacts (rebase --theirs = our commit).
+        git checkout --theirs -- "${PAGES_ARTIFACTS[@]}"
+        git add "${PAGES_ARTIFACTS[@]}"
+        GIT_EDITOR=true git rebase --continue
+      fi
+      if [[ "${STASHED}" -eq 1 ]]; then
+        git stash pop || true
+        git add "${PAGES_ARTIFACTS[@]}"
+        if ! git diff --cached --quiet; then
+          git -c user.email="${OWNER}@users.noreply.github.com" -c user.name="$OWNER" \
+            commit --amend --no-edit
+        fi
+      fi
+    done
+    if [[ "${pushed}" -ne 1 ]]; then
+      echo "Exhausted push retries." >&2
+      exit 1
+    fi
     echo "Pushed. Pages: https://${OWNER}.github.io/bob-ops-dashboard/"
   fi
   rm -rf "$WORK"
