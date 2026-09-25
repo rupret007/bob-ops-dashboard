@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-09-25T03:31:00.572661-05:00",
-  "generated_at_display": "Fri Sep 25, 2026 \u00b7 3:31 AM CDT",
+  "generated_at": "2026-09-25T03:33:13.925018-05:00",
+  "generated_at_display": "Fri Sep 25, 2026 \u00b7 3:33 AM CDT",
   "timezone": "America/Chicago",
   "owner": "rupret007",
   "dashboard": "bob-ops-dashboard",
@@ -215,14 +215,7 @@
           "open_pr_stack": [],
           "pr_listing_complete": true,
           "agent_url": null,
-          "ci": {
-            "name": "Test, Package, and Deploy Site",
-            "conclusion": "success",
-            "branch": "main",
-            "sha": "66fc392",
-            "created": "2026-09-08T05:11:09Z",
-            "html_url": "https://github.com/rupret007/RadDadSite/actions/runs/34189664981"
-          },
+          "ci": null,
           "release": null,
           "release_sha": null,
           "release_url": null,
@@ -464,8 +457,8 @@
           "status": "green",
           "chip": "Green",
           "default_branch": "main",
-          "tip_sha": "5d69bb9",
-          "tip_date": "2026-09-25T08:27:29Z",
+          "tip_sha": "a6182d3",
+          "tip_date": "2026-09-25T08:31:03Z",
           "open_prs": 0,
           "open_pr_url": null,
           "open_pr_number": null,
@@ -477,9 +470,9 @@
             "name": "QA claim smoke",
             "conclusion": "success",
             "branch": "main",
-            "sha": "5d69bb9",
-            "created": "2026-09-25T08:27:32Z",
-            "html_url": "https://github.com/rupret007/bob-ops-dashboard/actions/runs/36113024004"
+            "sha": "a6182d3",
+            "created": "2026-09-25T08:31:06Z",
+            "html_url": "https://github.com/rupret007/bob-ops-dashboard/actions/runs/36113356200"
           },
           "release": null,
           "release_sha": null,
@@ -853,7 +846,7 @@
   ],
   "inaccessible": [],
   "publish_notes": "Public board -- no secrets or customer paths. Private repositories stay high-level; AI Music Vault stays private-content-boundary only.",
-  "refresh_started_ms": 1790325014493,
+  "refresh_started_ms": 1790325148643,
   "agents_source": "file:stale->unknown",
   "agents": [
     {
@@ -1009,10 +1002,10 @@
     }
   ],
   "harden_window": {
-    "round": 10,
+    "round": 11,
     "status": "closed",
-    "started_at": "2026-09-25T03:28:05-05:00",
-    "ended_at": "2026-09-25T03:29:58-05:00",
+    "started_at": "2026-09-25T03:31:36-05:00",
+    "ended_at": "2026-09-25T03:32:28-05:00",
     "lanes_fired": [
       "Codex",
       "Claude",
@@ -1021,7 +1014,7 @@
       "LocalCursor"
     ],
     "scorecard_line": "Stress PASS | Eff PASS | CQ PASS",
-    "updated_at": "2026-09-25T03:29:58-05:00",
+    "updated_at": "2026-09-25T03:32:28-05:00",
     "display_status": "closed",
     "idle": true
   },
