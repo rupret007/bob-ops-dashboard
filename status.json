@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-09-26T11:53:53.740018-05:00",
-  "generated_at_display": "Sat Sep 26, 2026 \u00b7 11:53 AM CDT",
+  "generated_at": "2026-09-26T12:01:01.856519-05:00",
+  "generated_at_display": "Sat Sep 26, 2026 \u00b7 12:01 PM CDT",
   "timezone": "America/Chicago",
   "owner": "rupret007",
   "dashboard": "bob-ops-dashboard",
@@ -150,12 +150,9 @@
           "accessible": true,
           "coord": {
             "repo": "StoryBoard",
-            "agent": "grok",
-            "lease_state": "active",
-            "next": "",
-            "pr": 46,
-            "pr_url": "https://github.com/rupret007/StoryBoard/pull/46",
-            "pr_draft": true
+            "agent": "none",
+            "lease_state": "none",
+            "next": ""
           }
         },
         {
@@ -497,8 +494,8 @@
           "status": "green",
           "chip": "Green",
           "default_branch": "main",
-          "tip_sha": "6d7f047",
-          "tip_date": "2026-09-26T16:44:28Z",
+          "tip_sha": "b61b597",
+          "tip_date": "2026-09-26T16:54:05Z",
           "open_prs": 0,
           "open_pr_url": null,
           "open_pr_number": null,
@@ -880,7 +877,7 @@
     "barker"
   ],
   "publish_notes": "Public board -- no secrets or customer paths. Private repositories stay high-level; AI Music Vault stays private-content-boundary only.",
-  "refresh_started_ms": 1790441603319,
+  "refresh_started_ms": 1790442021593,
   "agents_source": "file:stale->unknown",
   "agents": [
     {
@@ -1036,7 +1033,7 @@
     }
   ],
   "llm_work_now_freshness": {
-    "generated_at": "2026-09-26 11:53 CT",
+    "generated_at": "2026-09-26 12:01 CT",
     "warn_ttl_sec": 1200,
     "warnings": [],
     "ok": true
