@@ -240,11 +240,11 @@ class BoardMetaTests(unittest.TestCase):
 
     def test_soft_paint_and_agent_honesty_copy(self):
         blob = str(first_class_sections())
-        self.assertIn("not on every 15m", blob)
+        self.assertIn("not on every 5m", blob)
         self.assertIn("pageshow", blob)
         self.assertIn("Never invent Running", blob)
         self.assertIn("Agents unknown", blob)
-        self.assertIn("Actions cadence is ~15m", blob)
+        self.assertIn("Actions cadence is ~5m", blob)
         self.assertIn("real GitHub links", blob)
         self.assertIn("Pages / skipped helpers / this board's refresh publisher cannot hide a fail", blob)
         self.assertIn("cannot beat a success or become Open CI", blob)

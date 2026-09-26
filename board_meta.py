@@ -2702,7 +2702,7 @@ def first_class_sections() -> list[dict[str, Any]]:
             "projects": [
                 _card(
                     "Rebuild this board",
-                    "Actions cron every 15m plus ./refresh.sh. Live gh SHAs/CI. No secrets on the public page.",
+                    "Actions cron every 5m plus ./refresh.sh. Live gh SHAs/CI. No secrets on the public page.",
                 ),
                 _card(
                     "Cursor Cloud Agents",
@@ -2796,7 +2796,7 @@ def first_class_sections() -> list[dict[str, Any]]:
                 ),
                 _card(
                     "Soft-paint poll",
-                    "Client fetches status.json every 30s (pauses when the tab is hidden). Immediate poll on pageshow / visible. Fetch aborts after 8s. Hide / iOS-return abort is not a failed poll. A stale cached status.json cannot rewind the board. Repaints when board content changes -- not on every 15m Actions timestamp. Tip CI is the current SHA; Pages / skipped helpers / this board's refresh publisher cannot hide a fail. A skipped or cancelled helper cannot beat a success or become Open CI. Lanes prefer the open PR; CI fail/running taps the Actions run when a run URL is known. A complete same-repo stack shows safe base-to-tip PR order and taps the pulls list; ambiguous chains fall back to the honest open-PR count. Vault, StoryBoard, Show Night, and WebJam work together as one music stack. WebJam Latest is the published test candidate and is not unpublished source; a proven Latest != source signal taps /releases/latest -- not dead text.",
+                    "Client fetches status.json every 10s (pauses when the tab is hidden). Immediate poll on pageshow / visible. Fetch aborts after 8s. Hide / iOS-return abort is not a failed poll. A stale cached status.json cannot rewind the board. Repaints when board content changes -- not on every 5m Actions timestamp. Tip CI is the current SHA; Pages / skipped helpers / this board's refresh publisher cannot hide a fail. A skipped or cancelled helper cannot beat a success or become Open CI. Lanes prefer the open PR; CI fail/running taps the Actions run when a run URL is known. A complete same-repo stack shows safe base-to-tip PR order and taps the pulls list; ambiguous chains fall back to the honest open-PR count. Vault, StoryBoard, Show Night, and WebJam work together as one music stack. WebJam Latest is the published test candidate and is not unpublished source; a proven Latest != source signal taps /releases/latest -- not dead text.",
                     chip="Feature",
                 ),
                 _card(
@@ -2806,7 +2806,7 @@ def first_class_sections() -> list[dict[str, Any]]:
                 ),
                 _card(
                     "Silence banner",
-                    "Actions cadence is ~15m. If refresh is quiet for ~45m the page warns that chips may be stale.",
+                    "Actions cadence is ~5m. If refresh is quiet for ~15m the page warns that chips may be stale.",
                     chip="Feature",
                 ),
                 _card(

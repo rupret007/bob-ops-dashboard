@@ -9,8 +9,8 @@ Public, mobile-friendly status board for projects Bob is working on (Jeff Story 
 - `index.html` -- human dashboard (Claude orange `#d97757` on near-black `#0a0a0a`)
 - Phone-first board: compact **pulse** (live/stale only) + one **next action** + a **tab per existing type** (Live, Apps, Cisco, Bots, Media, Parked). The glance names the highest-risk real decision or red/yellow project. A decision glance leads with **Decide:** so the hero reads as a move, not a noun; red/yellow keep their `is red` / `needs a look` predicate. One tap opens the existing panel, focuses the exact matching row (full untrimmed title), and briefly highlights it -- no second menu or category hunt. Decisions is not a first-screen tab. Never a yes-count, and owner-only lane gates / parked leftover drafts cannot hide actionable work. Unsafe or missing target keys fail closed to the selected panel without guessing a row. Lane color is live GitHub evidence; standing notes and missing CI never invent yellow or **CI pending**. First screen is not the project wall. Unknown Mac probes stay honest in the document and never invent Running; that line is not first-screen chrome. Cloud work links stay as names on that first screen. Live still holds the music stack (Vault, StoryBoard, Show Night, WebJam). Timestamp, repo footer, **Abilities**, and the fetched-repo line stay off the first screen until a type is opened; engineer notes stay behind collapsed **How this board works**.
 - Tap-to-open: Cloud Agent pills with a real `cursor.com/agents/bc-…` URL (never invented) → Open agent / Open PR. Lanes prefer the open PR, plus Open repo / Open CI when those URLs are known. Turdanoid also exposes one exact-allowlisted **Play game** link; neighboring or foreign Pages URLs fail closed. A complete same-repository PR chain shows safe base-to-tip order (for example, **Stack #10 -> #11 -> #12**) and taps the repository pull list; ambiguous, forked, branching, or partial chains fall back to the honest open-PR count. iOS-safe: real `<a target=_blank>` plus `openBlank` fallback. Never invent a bc-id, stack, or green status.
-- `status.json` -- machine-readable snapshot (client polls every ~30s)
-- `.github/workflows/refresh-dashboard.yml` -- Actions cron every 15 minutes
+- `status.json` -- machine-readable snapshot (client polls every ~10s)
+- `.github/workflows/refresh-dashboard.yml` -- Actions cron every 5 minutes
 - No secrets, tokens, CSOne customer paths, Keeper material, or private handoff text
 - AdoptIQ appears only as a high-level private/offline summary with `ready_for_live_cisco=false`
 
@@ -42,13 +42,15 @@ Pending **Approve / Hold / Deny** opens a GitHub issue titled `BOB-APPROVE: <id>
 
 `status.json` must not contain a `verify` block. Refresh drops leftover OTP hashes fail-closed.
 
-## Near-realtime refresh cadence
+## Refresh cadence (fast, not real-time)
 
 | Layer | Cadence | What it does |
 |-------|---------|--------------|
-| GitHub Actions | every **15 minutes** (+ manual `workflow_dispatch`) | runs `./refresh.sh`, commits `index.html` + `status.json` to `main` |
-| Browser client | every **30 seconds** (pauses when tab hidden) | fetches `./status.json`; hide / iOS-return abort is not a failed poll; stale cached JSON cannot rewind freshness or the board; soft-paints only when board content changes (not on every 15m timestamp) and preserve the selected type tab; freshness says `Live` only inside the ~15m Actions window. A failed poll or >45m refresh silence changes the page to an explicit **last verified snapshot** state with one **Retry now** action. |
+| GitHub Actions | every **5 minutes** (+ manual `workflow_dispatch`) | runs `./refresh.sh`, commits `index.html` + `status.json` to `main` |
+| Browser client | every **10 seconds** (pauses when tab hidden) | fetches `./status.json`; hide / iOS-return abort is not a failed poll; stale cached JSON cannot rewind freshness or the board; soft-paints only when board content changes (not on every 5m timestamp) and preserve the selected type tab; freshness says `Live` only inside the ~5m Actions window. A failed poll or >15m refresh silence changes the page to an explicit **last verified snapshot** state with one **Retry now** action. |
 | Manual | on demand | `./refresh.sh` or `./refresh.sh --push` from a box with `gh`; decision issues are read-only by default |
+
+This board is fast-refreshing, but still bounded by the 5-minute Actions cadence and 10-second client poll loop.
 
 Optional: a Bob / Grok routine can also call `./refresh.sh --push` on meaningful events (merge, release, CI red). That is additive -- Actions remains the baseline; do not block shipping on the routine.
 
@@ -84,4 +86,4 @@ Hosted PR validation runs `python3 qa-offline.py` using existing runner tools; n
 
 `./qa-source-only.sh` still performs live portfolio reads and requires separate authorization. `./qa-claim-smoke.sh` is the lower-level command for an already generated page. The scheduled refresh workflow is unchanged; synthetic QA does not verify live publication.
 
-The stale-state smoke covers the exact trust boundary: one failed live poll immediately labels the board historical, an overdue refresh does the same after the 45-minute silence window, and a successful current snapshot clears that warning. **Retry now** reuses the same bounded, no-store poll path; it does not dispatch Actions, refresh GitHub, or publish Pages.
+The stale-state smoke covers the exact trust boundary: one failed live poll immediately labels the board historical, an overdue refresh does the same after the 15-minute silence window, and a successful current snapshot clears that warning. **Retry now** reuses the same bounded, no-store poll path; it does not dispatch Actions, refresh GitHub, or publish Pages.
