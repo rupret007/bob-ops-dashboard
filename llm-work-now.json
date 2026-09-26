@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-09-26 12:40 CT",
-  "honest_note": "2026-09-26 12:40 CT: Work-now honesty \u2014 Running requires non-idle source with proof heartbeat younger than LLM_WORK_RUNNING_HEARTBEAT_TTL_SEC=900s. Else demote (spend_wall\u2192blocked, mini_paste\u2192finished, else idle). STALE_RUNNING_SOURCES never paint Running. board_meta.build_llm_work_now_payload + finalize_llm_work_after_live_poll; Refresh rewrites this file each rebuild. Current chips: idle/finished/blocked only when no live proof \u2014 no Running lies.",
+  "generated_at": "2026-09-26 12:50 CT",
+  "honest_note": "2026-09-26 12:50 CT: Work-now honesty \u2014 Running requires non-idle source with proof heartbeat younger than LLM_WORK_RUNNING_HEARTBEAT_TTL_SEC=900s. Else demote (spend_wall\u2192blocked, mini_paste\u2192finished, else idle). STALE_RUNNING_SOURCES never paint Running. board_meta.build_llm_work_now_payload + finalize_llm_work_after_live_poll; Refresh rewrites this file each rebuild. Current chips: idle/finished/blocked only when no live proof \u2014 no Running lies.",
   "work": [
     {
       "id": "codex",
