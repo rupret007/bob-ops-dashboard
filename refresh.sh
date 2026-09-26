@@ -2,8 +2,17 @@
 # Rebuild Bob ops dashboard from live gh data, then optionally push to Pages.
 # Noninteractive: safe for GitHub Actions (gh uses GH_TOKEN / GITHUB_TOKEN).
 # Usage:
-#   ./refresh.sh              # write index.html + status.json in this dir
+#   ./refresh.sh              # write index.html + status.json (+ llm-work-now.json) in this dir
 #   ./refresh.sh --push       # also commit+push to rupret007/bob-ops-dashboard main
+#
+# Pages publish set (must stay aligned with .github/workflows/refresh-dashboard.yml):
+#   index.html status.json llm-work-now.json [harden-window.json if present]
+# R126 rewrites llm-work-now.json every rebuild — it must publish with status.json.
+# Unstaged llm-work-now must never block rebase on a concurrent tip move
+# (measured fail: actions run 36137598706). Do not commit agents-status.json.
+# K2/K3: after write (and before --push PASS) assert dual-SoT — status
+# llm_work_now_freshness.generated_at must match llm-work-now.json; never
+# freshness.ok while blob age > WARN TTL. Matching stamps = the publish bar.
 set -euo pipefail
 if [[ -n "${GH_TOKEN:-}" || -n "${GITHUB_TOKEN:-}" ]]; then
   export GH_TOKEN="${GH_TOKEN:-${GITHUB_TOKEN}}"
@@ -218,6 +227,22 @@ from board_meta import (
     parse_coord_issue,
     public_coord,
     status_with_coord_review,
+    demote_stale_running_llm_work,
+    validate_llm_work_write,
+    finalize_llm_work_after_live_poll,
+    build_llm_work_now_payload,
+    write_llm_work_now_json,
+    llm_work_now_freshness_warnings,
+    build_llm_work_now_freshness_meta,
+    assert_dual_sot_files,
+    LLM_WORK_NOW_STALE_WARN_SEC,
+    DUAL_SOT_MAX_STAMP_SKEW_SEC,
+    STALE_RUNNING_SOURCES,
+    LLM_WORK_PROOF_TS_KEYS,
+    load_harden_window,
+    harden_window_html,
+    normalize_harden_window,
+    closed_harden_window,
     drop_leftover_verify,
     extract_cloud_agents_from_prs,
     focus_key,
@@ -670,7 +695,7 @@ def _normalize_work_row(raw):
     )
     spend_session = _safe_spend(raw.get("spend_session") or raw.get("session_spend"))
     spend_day = _safe_spend(raw.get("spend_day") or raw.get("day_spend") or raw.get("spend_today"))
-    return {
+    row = {
         "id": lane,
         "name": next((n for i, n in LANE_ORDER if i == lane), lane.title()),
         "task_title": _clean_line(raw.get("task_title") or raw.get("title"), 120),
@@ -689,6 +714,13 @@ def _normalize_work_row(raw):
         "last_task": _clean_line(raw.get("last_task"), 120),
         "source": _clean_line(raw.get("source"), 48),
     }
+    # Preserve proof timestamps — dropping them made honest heartbeats vanish on ingest.
+    # Do NOT validate/demote here: live Cloud stamp must run first (R1 stamp-before-validate).
+    for key in LLM_WORK_PROOF_TS_KEYS:
+        val = raw.get(key)
+        if val is not None and str(val).strip():
+            row[key] = str(val).strip()
+    return row
 
 def _assignment_models_from_blob(blob):
     out = {}
@@ -795,6 +827,8 @@ for cloud in trusted_cloud:
         "note": _clean_line(cloud.get("detail"), 160),
         "last_task": "",
         "source": "cloud_agents",
+        # Receiver-clock heartbeat: trusted Cloud poll this refresh = proof of life.
+        "heartbeat_at": datetime.now(tz=ZoneInfo("UTC")).isoformat(),
     }
 
 prev_work = prev_early.get("llm_work") if isinstance(prev_early, dict) else []
@@ -824,6 +858,63 @@ for lane_id, lane_name in LANE_ORDER:
     llm_work.append(row)
 
 status["llm_work"] = llm_work
+
+# Fail-closed honesty (R1 order): live heartbeat stamp FIRST, then validate + demote.
+# Validate-before-stamp demoted live Running with aged prior proof and never re-promoted.
+# Never stamp spend_wall/idle-class into Running (STALE_RUNNING_SOURCES).
+_live_cloud_lanes = set()
+for cloud in trusted_cloud:
+    lid = _lane_id("", cloud.get("name"))
+    if lid:
+        _live_cloud_lanes.add(lid)
+_now_iso = datetime.now(tz=ZoneInfo("UTC")).isoformat()
+llm_work = finalize_llm_work_after_live_poll(
+    llm_work, _live_cloud_lanes, now_iso=_now_iso
+)
+status["llm_work"] = llm_work
+
+# R126: rewrite llm-work-now.json every refresh so Pages stamp never freezes
+# while status.json keeps moving (measured hole: generated_at stuck at 02:37 CT).
+_ct_stamp = now.strftime("%Y-%m-%d %H:%M CT")
+write_llm_work_now_json(
+    root / "llm-work-now.json",
+    llm_work,
+    generated_at_ct=_ct_stamp,
+)
+print(f"Wrote llm-work-now.json generated_at={_ct_stamp}")
+# K3: freshness meta ALWAYS from the llm-work-now blob just written (same
+# write path / about-to-commit pair). Never claim ok on a stale paired artifact.
+try:
+    _pub = json.loads((root / "llm-work-now.json").read_text(encoding="utf-8"))
+except Exception:
+    _pub = None
+status["llm_work_now_freshness"] = build_llm_work_now_freshness_meta(_pub)
+_fresh_warns = status["llm_work_now_freshness"].get("warnings") or []
+for _w in _fresh_warns:
+    print(f"WARN {_w}")
+
+# Harden stress window strip (separate from llm_work — never invents Running chips).
+_hw_blob = None
+for _hw_path in (
+    root / "harden-window.json",
+    Path("/workspace/bob-ops-dashboard/harden-window.json"),
+    Path("/home/box/conductor/llm-work-now/harden-window.json"),
+):
+    if _hw_path.is_file():
+        try:
+            _hw_blob = json.loads(_hw_path.read_text(encoding="utf-8"))
+            break
+        except Exception:
+            _hw_blob = None
+            continue
+if _hw_blob is None:
+    _env_hw = os.environ.get("HARDEN_WINDOW_JSON")
+    if _env_hw:
+        try:
+            _hw_blob = json.loads(_env_hw)
+        except Exception:
+            _hw_blob = None
+status["harden_window"] = normalize_harden_window(_hw_blob)
 
 # Pulse data only -- this section now reflects current work attribution.
 agent_projects = []
@@ -1502,6 +1593,34 @@ html = f'''<!DOCTYPE html>
     margin:0 0 .15rem; font-size:.86rem; font-weight:800; letter-spacing:.02em;
     text-transform:uppercase; color:var(--muted);
   }}
+  #harden-window {{ margin:0 0 .4rem; }}
+  .harden-strip {{
+    display:flex; flex-wrap:wrap; gap:.35rem .55rem; align-items:center;
+    border:1px solid var(--border); border-radius:10px;
+    padding:.42rem .58rem; background:rgba(217,119,87,.07);
+    font-size:.78rem; line-height:1.25;
+  }}
+  .harden-strip[data-status="closed"] {{
+    background:rgba(255,255,255,.02); opacity:.9;
+  }}
+  .harden-strip .hw-round {{
+    font-weight:800; color:var(--orange); letter-spacing:.02em;
+  }}
+  .harden-strip .hw-state {{ font-weight:700; }}
+  .harden-strip .hw-state.open {{ color:#86efac; }}
+  .harden-strip .hw-state.closed {{ color:var(--muted); }}
+  .harden-strip .hw-lanes {{ display:flex; flex-wrap:wrap; gap:.22rem; }}
+  .harden-strip .hw-lane {{
+    font-size:.68rem; padding:.08rem .34rem; border-radius:999px;
+    border:1px solid var(--border); color:var(--muted); font-weight:600;
+  }}
+  .harden-strip .hw-lane.fired {{
+    border-color:rgba(217,119,87,.55); color:#f5c4b3;
+    background:rgba(217,119,87,.14);
+  }}
+  .harden-strip .hw-score {{
+    color:var(--muted); flex:1 1 12rem; font-size:.74rem;
+  }}
   .agent-row {{
     border:1px solid var(--border); border-radius:10px;
     padding:.58rem .62rem; background:rgba(255,255,255,.02);
@@ -1621,6 +1740,7 @@ html = f'''<!DOCTYPE html>
     <h1><span class="mark">Bob</span> Ops</h1>
     <div class="pulse-row">
       <div class="live-stamp" id="live-stamp" data-generated-at="{h(updated_iso)}" data-display="{h(updated_ct)}"><span class="live-dot" id="live-dot" aria-hidden="true"></span><span id="freshness">Live - starting</span><span class="when"> · <strong id="updated-display">{h(updated_ct)}</strong></span></div>
+      <div id="harden-window">{harden_window_html(status.get("harden_window"))}</div>
       <div id="active-agents">{agents_strip_html(status.get("llm_work"))}</div>
     </div>
     <div class="status hint" id="panel-status"></div>
@@ -1945,6 +2065,7 @@ function sortHistoryEntries(rows, limit) {{
   var knownMs = Date.parse(known) || Date.now();
   var lastPollOk = Date.now();
   var lastAgents = [];
+  var lastHarden = null;
   var lastCloud = [];
   var lastFp = null;
 
@@ -1970,6 +2091,7 @@ function sortHistoryEntries(rows, limit) {{
       dot.classList.toggle("stale", stale || pollFailStreak > 0);
     }}
     if (lastAgents && lastAgents.length) paintAgents(lastAgents);
+    if (lastHarden) paintHardenWindow(lastHarden);
     if (typeof updateSilence === "function") updateSilence();
   }}
 
@@ -3374,6 +3496,59 @@ function sortHistoryEntries(rows, limit) {{
     var html = rows.map(workRowHtml).join("");
     return '<section class="agents-strip" id="agents-strip" aria-label="LLM work now"><h2 class="llm-work-title">Work now</h2>' + html + "</section>";
   }}
+  var HARDEN_LANE_IDS = ["Codex","Claude","Gemini","MiniMax","LocalCursor","CloudBA"];
+  function normalizeHardenWindow(raw) {{
+    var closed = {{
+      round: null, status: "closed", started_at: "", ended_at: "",
+      lanes_fired: [], scorecard_line: "", updated_at: "",
+      display_status: "closed", idle: true
+    }};
+    if (!raw || typeof raw !== "object") return closed;
+    var display = String(raw.display_status || raw.status || "closed").toLowerCase();
+    if (display !== "open") display = "closed";
+    var idle = raw.idle === true || display === "closed";
+    if (idle) display = "closed";
+    var lanes = Array.isArray(raw.lanes_fired) ? raw.lanes_fired : [];
+    return {{
+      round: (typeof raw.round === "number" && raw.round > 0) ? raw.round : null,
+      status: display,
+      started_at: raw.started_at || "",
+      ended_at: raw.ended_at || "",
+      lanes_fired: lanes,
+      scorecard_line: raw.scorecard_line || "",
+      updated_at: raw.updated_at || "",
+      display_status: display,
+      idle: idle
+    }};
+  }}
+  function hardenWindowHtml(raw) {{
+    var hw = normalizeHardenWindow(raw);
+    var display = hw.display_status === "open" ? "open" : "closed";
+    var roundLabel = hw.round ? ("R" + hw.round) : "R-";
+    var stateLabel = display === "open" ? "Open" : "Closed - Idle";
+    var fired = {{}};
+    (hw.lanes_fired || []).forEach(function (x) {{ fired[String(x)] = 1; }});
+    var laneHtml = HARDEN_LANE_IDS.map(function (lid) {{
+      return '<span class="hw-lane' + (fired[lid] ? " fired" : "") + '">' + esc(lid) + "</span>";
+    }}).join("");
+    var score = hw.scorecard_line
+      ? '<span class="hw-score">' + esc(hw.scorecard_line) + "</span>"
+      : "";
+    return '<aside class="harden-strip" id="harden-strip" data-status="' + display +
+      '" data-idle="' + (hw.idle ? "1" : "0") +
+      '" aria-label="Harden window">' +
+      '<span class="hw-round">' + esc(roundLabel) + "</span>" +
+      '<span class="hw-state ' + display + '">' + stateLabel + "</span>" +
+      '<span class="hw-lanes" aria-label="Lanes fired this round">' + laneHtml + "</span>" +
+      score + "</aside>";
+  }}
+  function paintHardenWindow(hw) {{
+    var host = document.getElementById("harden-window");
+    if (!host) return;
+    var html = hardenWindowHtml(hw);
+    if (host.innerHTML === html) return;
+    host.innerHTML = html;
+  }}
   function fetchedLineHtml(repos) {{
     var names = [];
     (repos || []).forEach(function (x) {{
@@ -3417,12 +3592,21 @@ function sortHistoryEntries(rows, limit) {{
       if (!sec) return [];
       return [sec.id, sec.title, (sec.projects || []).map(projectKey)];
     }});
+    var hw = (data.harden_window && typeof data.harden_window === "object")
+      ? data.harden_window : {{}};
     return JSON.stringify({{
       pending: (data.pending || []).map(pendingKey),
       agents: (data.agents || []).map(agentKey),
       cloud: (data.cloud_agents || []).map(agentKey),
       sections: sections,
-      fetched: data.fetched_repos || []
+      fetched: data.fetched_repos || [],
+      harden_window: [
+        hw.round || null,
+        hw.display_status || hw.status || "",
+        hw.lanes_fired || [],
+        hw.scorecard_line || "",
+        hw.updated_at || ""
+      ]
     }});
   }}
   function snapshotOpen() {{
@@ -3476,6 +3660,7 @@ function sortHistoryEntries(rows, limit) {{
     lastStatusData = data;
     lastCloud = sanitizeCloudAgents((data && data.cloud_agents) || lastCloud);
     paintAgents((data && data.llm_work) || []);
+    paintHardenWindow((data && data.harden_window) || lastHarden || {{}});
     var controlProjects = [];
     var html = glanceHtml(data.pending, data.sections) + typeTabsHtml(data.sections, data.pending, "");
     data.sections.forEach(function (sec) {{
@@ -3711,8 +3896,10 @@ function sortHistoryEntries(rows, limit) {{
           setTimeout(function () {{ dot.classList.remove("poll"); }}, 600);
         }}
         lastAgents = (data && data.llm_work) || lastAgents;
+        lastHarden = (data && data.harden_window) || lastHarden;
         lastCloud = sanitizeCloudAgents((data && data.cloud_agents) || lastCloud);
         paintAgents(lastAgents);
+        paintHardenWindow(lastHarden || {{}});
         applyStamp(data);
         if (decision === "paint") {{
           // Soft-paint from JSON -- skip timestamp-only Actions refreshes (no flash).
@@ -3801,6 +3988,13 @@ _html_tmp = root / "index.html.tmp"
 _html_tmp.write_text(html)
 _html_tmp.replace(root / "index.html")
 print(f"Wrote {root/'index.html'} and {root/'status.json'} (atomic)")
+# K2: dual-SoT assert on the paired artifacts about to publish (working tree).
+# Prefer local files over remote Pages — Pages lag is a separate concern.
+assert_dual_sot_files(root / "status.json", root / "llm-work-now.json")
+print(
+    f"dual-SoT PASS: status.freshness.generated_at matches llm-work-now "
+    f"(skew≤{DUAL_SOT_MAX_STAMP_SKEW_SEC}s; ok never with age>{LLM_WORK_NOW_STALE_WARN_SEC}s)"
+)
 print(f"Updated: {updated_ct}")
 print(f"Fetched OK: {status['fetched_repos']}")
 if status.get("inaccessible"):
@@ -3822,12 +4016,16 @@ if [[ $PUSH -eq 1 ]]; then
   gh repo clone "$OWNER/bob-ops-dashboard" "$WORK" -- --quiet
   mkdir -p "$WORK/.github/workflows"
   cp "$ROOT/index.html" "$ROOT/status.json" "$ROOT/README.md" "$ROOT/refresh.sh" "$WORK/"
+  [[ -f "$ROOT/llm-work-now.json" ]] && cp "$ROOT/llm-work-now.json" "$WORK/"
+  [[ -f "$ROOT/harden-window.json" ]] && cp "$ROOT/harden-window.json" "$WORK/"
+  [[ -f "$ROOT/write_harden_window.py" ]] && cp "$ROOT/write_harden_window.py" "$WORK/"
   [[ -f "$ROOT/board_meta.py" ]] && cp "$ROOT/board_meta.py" "$WORK/"
   [[ -f "$ROOT/probe-agents-status.sh" ]] && cp "$ROOT/probe-agents-status.sh" "$WORK/"
   [[ -f "$ROOT/qa-claim-smoke.sh" ]] && cp "$ROOT/qa-claim-smoke.sh" "$WORK/"
   [[ -f "$ROOT/qa-source-only.sh" ]] && cp "$ROOT/qa-source-only.sh" "$WORK/"
   [[ -f "$ROOT/test_board_meta.py" ]] && cp "$ROOT/test_board_meta.py" "$WORK/"
   [[ -f "$ROOT/test_refresh_outage_guard.py" ]] && cp "$ROOT/test_refresh_outage_guard.py" "$WORK/"
+  [[ -f "$ROOT/test_refresh_publish_artifacts.py" ]] && cp "$ROOT/test_refresh_publish_artifacts.py" "$WORK/"
   [[ -f "$ROOT/test_open_decision.js" ]] && cp "$ROOT/test_open_decision.js" "$WORK/"
   [[ -f "$ROOT/test_open_links.js" ]] && cp "$ROOT/test_open_links.js" "$WORK/"
   [[ -f "$ROOT/test_soft_paint.js" ]] && cp "$ROOT/test_soft_paint.js" "$WORK/"
@@ -3843,13 +4041,21 @@ if [[ $PUSH -eq 1 ]]; then
   [[ -f "$WORK/qa-claim-smoke.sh" ]] && chmod +x "$WORK/qa-claim-smoke.sh"
   [[ -f "$WORK/qa-source-only.sh" ]] && chmod +x "$WORK/qa-source-only.sh"
   cd "$WORK"
-  git add index.html status.json README.md refresh.sh
+  # Same Pages board artifacts as the Actions commit step (plus source helpers).
+  # llm-work-now.json must ship with status.json; unstaged leftovers must not
+  # block rebase when a concurrent tip move rejects the first push.
+  PAGES_ARTIFACTS=(index.html status.json)
+  [[ -f llm-work-now.json ]] && PAGES_ARTIFACTS+=(llm-work-now.json)
+  [[ -f harden-window.json ]] && PAGES_ARTIFACTS+=(harden-window.json)
+  git add "${PAGES_ARTIFACTS[@]}" README.md refresh.sh
+  [[ -f write_harden_window.py ]] && git add write_harden_window.py
   [[ -f board_meta.py ]] && git add board_meta.py
   [[ -f probe-agents-status.sh ]] && git add probe-agents-status.sh
   [[ -f qa-claim-smoke.sh ]] && git add qa-claim-smoke.sh
   [[ -f qa-source-only.sh ]] && git add qa-source-only.sh
   [[ -f test_board_meta.py ]] && git add test_board_meta.py
   [[ -f test_refresh_outage_guard.py ]] && git add test_refresh_outage_guard.py
+  [[ -f test_refresh_publish_artifacts.py ]] && git add test_refresh_publish_artifacts.py
   [[ -f test_open_decision.js ]] && git add test_open_decision.js
   [[ -f test_open_links.js ]] && git add test_open_links.js
   [[ -f test_soft_paint.js ]] && git add test_soft_paint.js
@@ -3861,7 +4067,43 @@ if [[ $PUSH -eq 1 ]]; then
   else
     git -c user.email="${OWNER}@users.noreply.github.com" -c user.name="$OWNER" \
       commit -m "chore: refresh ops dashboard $(date -u +%Y-%m-%dT%H:%MZ)"
-    git push origin HEAD:main
+    # Race-safe vs concurrent Actions refresh / other --push (mirror workflow).
+    pushed=0
+    for attempt in 1 2 3 4 5; do
+      if git push origin HEAD:main; then
+        echo "Pushed on attempt ${attempt}."
+        pushed=1
+        break
+      fi
+      echo "Push rejected (attempt ${attempt}); stash dirt, rebase onto origin/main, retry."
+      STASHED=0
+      if ! git diff --quiet || ! git diff --cached --quiet || [[ -n "$(git ls-files --others --exclude-standard)" ]]; then
+        git stash push --include-untracked -m "refresh-push-race-${attempt}"
+        STASHED=1
+      fi
+      git fetch origin main
+      if ! git rebase origin/main; then
+        # Prefer this rebuild's Pages artifacts (rebase --theirs = our commit).
+        git checkout --theirs -- "${PAGES_ARTIFACTS[@]}"
+        git add "${PAGES_ARTIFACTS[@]}"
+        GIT_EDITOR=true git rebase --continue
+      fi
+      if [[ "${STASHED}" -eq 1 ]]; then
+        git stash pop || true
+        git add "${PAGES_ARTIFACTS[@]}"
+        if ! git diff --cached --quiet; then
+          git -c user.email="${OWNER}@users.noreply.github.com" -c user.name="$OWNER" \
+            commit --amend --no-edit
+        fi
+      fi
+    done
+    if [[ "${pushed}" -ne 1 ]]; then
+      echo "Exhausted push retries." >&2
+      exit 1
+    fi
+    # K2 post-push dual-SoT: re-check the paired artifacts that just pushed
+    # (working tree / HEAD content — not remote Pages CDN lag).
+    python3 -c "from pathlib import Path; from board_meta import assert_dual_sot_files; assert_dual_sot_files(Path('status.json'), Path('llm-work-now.json')); print('dual-SoT PASS post-push (working-tree pair)')"
     echo "Pushed. Pages: https://${OWNER}.github.io/bob-ops-dashboard/"
   fi
   rm -rf "$WORK"

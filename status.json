@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-09-25T00:38:02.000188-05:00",
-  "generated_at_display": "Fri Sep 25, 2026 \u00b7 12:38 AM CDT",
+  "generated_at": "2026-09-26T03:28:11.139033-05:00",
+  "generated_at_display": "Sat Sep 26, 2026 \u00b7 3:28 AM CDT",
   "timezone": "America/Chicago",
   "owner": "rupret007",
   "dashboard": "bob-ops-dashboard",
@@ -49,8 +49,8 @@
           "status": "green",
           "chip": "Green",
           "default_branch": "master",
-          "tip_sha": "ddb38a6",
-          "tip_date": "2026-09-24T22:18:03Z",
+          "tip_sha": "ce52e9c",
+          "tip_date": "2026-09-25T12:10:46Z",
           "open_prs": 0,
           "open_pr_url": null,
           "open_pr_number": null,
@@ -62,24 +62,21 @@
             "name": "WebJam CI",
             "conclusion": "success",
             "branch": "master",
-            "sha": "ddb38a6",
-            "created": "2026-09-24T22:18:07Z",
-            "html_url": "https://github.com/rupret007/webjam/actions/runs/36066646056"
+            "sha": "ce52e9c",
+            "created": "2026-09-25T12:10:49Z",
+            "html_url": "https://github.com/rupret007/webjam/actions/runs/36133456644"
           },
-          "release": "v0.28.3",
-          "release_sha": "da16749",
-          "release_url": "https://github.com/rupret007/webjam/releases/tag/v0.28.3",
+          "release": "v0.28.4",
+          "release_sha": "ce52e9c",
+          "release_url": "https://github.com/rupret007/webjam/releases/tag/v0.28.4",
           "notes": "Making room. Latest is the published test candidate; source can be ahead.",
           "accessible": true,
           "coord": {
             "repo": "webjam",
-            "agent": "codex",
-            "lease_state": "active",
+            "agent": "none",
+            "lease_state": "expired",
             "next": "",
-            "sha": "88a9c31",
-            "pr": 155,
-            "pr_url": "https://github.com/rupret007/webjam/pull/155",
-            "pr_draft": true
+            "sha": "88a9c31"
           }
         },
         {
@@ -129,8 +126,8 @@
           "status": "green",
           "chip": "Green",
           "default_branch": "main",
-          "tip_sha": "51abb4b",
-          "tip_date": "2026-09-14T03:03:32Z",
+          "tip_sha": "1f75ca2",
+          "tip_date": "2026-09-25T12:29:00Z",
           "open_prs": 0,
           "open_pr_url": null,
           "open_pr_number": null,
@@ -142,9 +139,9 @@
             "name": "Quality",
             "conclusion": "success",
             "branch": "main",
-            "sha": "51abb4b",
-            "created": "2026-09-14T03:03:35Z",
-            "html_url": "https://github.com/rupret007/StoryBoard/actions/runs/34801265178"
+            "sha": "1f75ca2",
+            "created": "2026-09-25T12:29:03Z",
+            "html_url": "https://github.com/rupret007/StoryBoard/actions/runs/36135172359"
           },
           "release": null,
           "release_sha": null,
@@ -156,8 +153,8 @@
             "agent": "grok",
             "lease_state": "active",
             "next": "",
-            "pr": 44,
-            "pr_url": "https://github.com/rupret007/StoryBoard/pull/44",
+            "pr": 45,
+            "pr_url": "https://github.com/rupret007/StoryBoard/pull/45",
             "pr_draft": true
           }
         },
@@ -287,8 +284,8 @@
           "ci": {},
           "coord": {
             "repo": "AI-Music-Vault",
-            "agent": "codex",
-            "lease_state": "active",
+            "agent": "none",
+            "lease_state": "expired",
             "next": "gpt-5.3-codex DRAFT-only; not WebJam"
           }
         },
@@ -343,11 +340,11 @@
           "url": "https://github.com/rupret007/StoryOps-AI",
           "repo_url": "https://github.com/rupret007/StoryOps-AI",
           "private": false,
-          "status": "red",
-          "chip": "Red",
+          "status": "green",
+          "chip": "Green",
           "default_branch": "main",
-          "tip_sha": "02b0630",
-          "tip_date": "2026-09-05T08:33:24Z",
+          "tip_sha": "5c9aa49",
+          "tip_date": "2026-09-25T12:42:52Z",
           "open_prs": 0,
           "open_pr_url": null,
           "open_pr_number": null,
@@ -357,11 +354,11 @@
           "agent_url": null,
           "ci": {
             "name": "StoryOps CI",
-            "conclusion": "failure",
+            "conclusion": "success",
             "branch": "main",
-            "sha": "02b0630",
-            "created": "2026-09-05T08:33:27Z",
-            "html_url": "https://github.com/rupret007/StoryOps-AI/actions/runs/33955586738"
+            "sha": "5c9aa49",
+            "created": "2026-09-25T12:42:56Z",
+            "html_url": "https://github.com/rupret007/StoryOps-AI/actions/runs/36136526269"
           },
           "release": null,
           "release_sha": null,
@@ -372,7 +369,7 @@
             "repo": "StoryOps-AI",
             "agent": "none",
             "lease_state": "none",
-            "next": "Cloud gemini-* DRAFT-only"
+            "next": ""
           }
         },
         {
@@ -500,8 +497,8 @@
           "status": "green",
           "chip": "Green",
           "default_branch": "main",
-          "tip_sha": "8c85a6d",
-          "tip_date": "2026-09-25T05:37:09Z",
+          "tip_sha": "2e84a6d",
+          "tip_date": "2026-09-26T08:19:01Z",
           "open_prs": 0,
           "open_pr_url": null,
           "open_pr_number": null,
@@ -509,14 +506,7 @@
           "open_pr_stack": [],
           "pr_listing_complete": true,
           "agent_url": null,
-          "ci": {
-            "name": "QA claim smoke",
-            "conclusion": "success",
-            "branch": "main",
-            "sha": "8c85a6d",
-            "created": "2026-09-25T05:37:13Z",
-            "html_url": "https://github.com/rupret007/bob-ops-dashboard/actions/runs/36099320153"
-          },
+          "ci": null,
           "release": null,
           "release_sha": null,
           "release_url": null,
@@ -524,18 +514,18 @@
           "accessible": true,
           "coord": {
             "repo": "bob-ops-dashboard",
-            "agent": "claude",
-            "lease_state": "active",
+            "agent": "none",
+            "lease_state": "expired",
             "next": ""
           }
         },
         {
           "name": "StoryDesk",
           "private": true,
-          "status": "parked",
-          "chip": "Parked",
+          "status": "yellow",
+          "chip": "Yellow",
           "notes": "Private macOS virtual-display / Cast prototype. Software validation only; Screen Recording and device steps stay owner-only.",
-          "accessible": false,
+          "accessible": true,
           "ci": {}
         },
         {
@@ -552,63 +542,63 @@
       "projects": [
         {
           "name": "Codex (ChatGPT)",
-          "status": "green",
-          "chip": "Running",
-          "notes": "Pivot PR #56 to LLM work-now attribution board - Replace process-state pills with detailed assignment rows and keep public-board safety filters fail-closed.",
+          "status": "parked",
+          "chip": "Finished",
+          "notes": "FINISHED \u2014 overnight Mini Working STRONG through R125 (06:06 CT) - Overnight Mini native Codex proofs closed with R125. Not a long-running Codex worker. Morning R126 = board-truth refresh, not new paste.",
           "agent_id": "codex",
-          "agent_state": "running",
+          "agent_state": "finished",
           "url": "",
-          "pr_url": "https://github.com/rupret007/bob-ops-dashboard/pull/56"
+          "pr_url": ""
         },
         {
           "name": "Claude",
-          "status": "green",
-          "chip": "Running",
-          "notes": "QA and safety sweep for attribution fields - Verify links, branch text, and notes stay public-safe with no secrets or customer paths.",
+          "status": "parked",
+          "chip": "Finished",
+          "notes": "FINISHED \u2014 overnight Mini Claude paste proofs through R125 - Overnight Mini native Claude proofs. Not a standing Claude worker.",
           "agent_id": "claude",
-          "agent_state": "running",
+          "agent_state": "finished",
           "url": "",
-          "pr_url": "https://github.com/rupret007/bob-ops-dashboard/pull/56"
+          "pr_url": ""
         },
         {
           "name": "Gemini",
-          "status": "green",
-          "chip": "Running",
-          "notes": "WashOps exterior-services copy verification - Confirm StoryOps-AI display rename to WashOps and keep high-level/non-customer wording.",
+          "status": "parked",
+          "chip": "Idle",
+          "notes": "IDLE \u2014 overnight BYOK through R125 closed 06:06; morning R126 assess - Short Gemini API one-shots (3.1-pro heavy / flash light). No background Gemini worker.",
           "agent_id": "gemini",
-          "agent_state": "running",
+          "agent_state": "idle",
           "url": "",
           "pr_url": ""
         },
         {
           "name": "MiniMax",
-          "status": "green",
-          "chip": "Running",
-          "notes": "Mobile readability pass for work-now rows - Keep multi-row layout readable on dark theme while preserving first-screen signal hierarchy.",
+          "status": "parked",
+          "chip": "Idle",
+          "notes": "IDLE \u2014 overnight tips through R125; VERDICT contract holds - Silent capped MiniMax-M2.7 tip critiques. No standing Runner job.",
           "agent_id": "minimax",
-          "agent_state": "running",
+          "agent_state": "idle",
           "url": "",
-          "pr_url": "https://github.com/rupret007/bob-ops-dashboard/pull/56"
+          "pr_url": ""
         },
         {
           "name": "Grok",
-          "status": "green",
-          "chip": "Running",
-          "notes": "Conductor assignment routing notes - Track high-level conductor coordination for Cloud Agent usage without exposing private internals.",
+          "status": "parked",
+          "chip": "Idle",
+          "notes": "IDLE \u2014 Bob conducts only; Barker PARKED - Morning R126: local Cursor executor does heavy work. Bob thin conductor. Jeff reorder: RadDad+WashOps before Wildflower (finish-out HOLD).",
           "agent_id": "grok",
-          "agent_state": "running",
+          "agent_state": "idle",
           "url": "",
           "pr_url": ""
         },
         {
           "name": "Cursor Cloud",
-          "status": "green",
-          "chip": "Running",
-          "notes": "Draft PR #56 handoff and cloud agent attribution - Keep attribution source grounded in cloud_agents and explicit assignment blob.",
+          "status": "red",
+          "chip": "Blocked",
+          "notes": "BLOCKED_SPEND_WALL \u2014 zero new Cloud BA (forever this run) - Spend wall. No Cloud Background Agent relaunch.",
           "agent_id": "cursor-cloud",
-          "agent_state": "running",
+          "agent_state": "blocked",
           "url": "",
-          "pr_url": "https://github.com/rupret007/bob-ops-dashboard/pull/56"
+          "pr_url": ""
         }
       ]
     },
@@ -626,8 +616,8 @@
           "ci": {},
           "coord": {
             "repo": "AdoptIQ",
-            "agent": "grok",
-            "lease_state": "active",
+            "agent": "none",
+            "lease_state": "expired",
             "next": "Supervise Cloud #23 until CI settles; PRE_KAREN only if hosted-green..."
           }
         },
@@ -641,8 +631,8 @@
           "ci": {},
           "coord": {
             "repo": "TACTrack",
-            "agent": "codex",
-            "lease_state": "active",
+            "agent": "none",
+            "lease_state": "expired",
             "next": "gpt-5.3-codex DRAFT-only"
           }
         },
@@ -708,8 +698,8 @@
           },
           "coord": {
             "repo": "Bob-the-Bot",
-            "agent": "grok",
-            "lease_state": "active",
+            "agent": "none",
+            "lease_state": "expired",
             "next": "Cloud grok-* DRAFT-only"
           }
         },
@@ -880,17 +870,17 @@
     "Bob-the-Bot",
     "StoryOps-AI",
     "bob-ops-dashboard",
-    "Cursor-OpenClaw-Integration"
+    "Cursor-OpenClaw-Integration",
+    "StoryDesk"
   ],
   "inaccessible": [
     "TACTrack",
     "ballbeacon",
     "CSS_Conductor",
-    "barker",
-    "StoryDesk"
+    "barker"
   ],
   "publish_notes": "Public board -- no secrets or customer paths. Private repositories stay high-level; AI Music Vault stays private-content-boundary only.",
-  "refresh_started_ms": 1790314646370,
+  "refresh_started_ms": 1790411253138,
   "agents_source": "file:stale->unknown",
   "agents": [
     {
@@ -951,100 +941,123 @@
     {
       "id": "codex",
       "name": "Codex (ChatGPT)",
-      "task_title": "Pivot PR #56 to LLM work-now attribution board",
+      "task_title": "FINISHED \u2014 overnight Mini Working STRONG through R125 (06:06 CT)",
       "repo": "rupret007/bob-ops-dashboard",
-      "pr_url": "https://github.com/rupret007/bob-ops-dashboard/pull/56",
-      "pr_number": "56",
-      "branch": "cursor/max-llm-resource-strip-ec39",
-      "goal": "Replace process-state pills with detailed assignment rows and keep public-board safety filters fail-closed.",
-      "status": "running",
+      "pr_url": "",
+      "pr_number": "",
+      "branch": "",
+      "goal": "Overnight Mini native Codex proofs closed with R125. Not a long-running Codex worker. Morning R126 = board-truth refresh, not new paste.",
+      "status": "finished",
       "agent_url": "",
-      "why": "Primary build lane for this dashboard PR",
-      "note": "",
-      "last_task": "",
-      "source": "idle"
+      "why": "R125 closed; paste proofs done \u2014 not Work-now Running",
+      "note": "last tip: PR#56 merged; Mini Working STRONG on R125 scorecard",
+      "last_task": "R125 Mini Working Codex STRONG",
+      "source": "mini_paste"
     },
     {
       "id": "claude",
       "name": "Claude",
-      "task_title": "QA and safety sweep for attribution fields",
+      "task_title": "FINISHED \u2014 overnight Mini Claude paste proofs through R125",
       "repo": "rupret007/bob-ops-dashboard",
-      "pr_url": "https://github.com/rupret007/bob-ops-dashboard/pull/56",
-      "pr_number": "56",
-      "branch": "cursor/max-llm-resource-strip-ec39",
-      "goal": "Verify links, branch text, and notes stay public-safe with no secrets or customer paths.",
-      "status": "running",
+      "pr_url": "",
+      "pr_number": "",
+      "branch": "",
+      "goal": "Overnight Mini native Claude proofs. Not a standing Claude worker.",
+      "status": "finished",
       "agent_url": "",
-      "why": "Review lane for board safety",
-      "note": "",
-      "last_task": "",
-      "source": "idle"
+      "why": "R125 closed; paste proofs done \u2014 not Work-now Running",
+      "note": "native paste proofs overnight; morning idle for new assign",
+      "last_task": "R125 Mini Claude lane fire",
+      "source": "mini_paste"
     },
     {
       "id": "gemini",
       "name": "Gemini",
-      "task_title": "WashOps exterior-services copy verification",
-      "repo": "rupret007/StoryOps-AI",
+      "task_title": "IDLE \u2014 overnight BYOK through R125 closed 06:06; morning R126 assess",
+      "repo": "rupret007/bob-ops-dashboard",
       "pr_url": "",
       "pr_number": "",
       "branch": "",
-      "goal": "Confirm StoryOps-AI display rename to WashOps and keep high-level/non-customer wording.",
-      "status": "running",
+      "goal": "Short Gemini API one-shots (3.1-pro heavy / flash light). No background Gemini worker.",
+      "status": "idle",
       "agent_url": "",
-      "why": "Product naming and content lane",
-      "note": "",
-      "last_task": "",
-      "source": "idle"
+      "why": "One-shots done; not Work-now Running",
+      "note": "R125 ASSESS_OK; OPEN residual = invent running-guard (REJECT)",
+      "last_task": "R125 Gemini heavy+light",
+      "source": "byok_oneshot"
     },
     {
       "id": "minimax",
       "name": "MiniMax",
-      "task_title": "Mobile readability pass for work-now rows",
+      "task_title": "IDLE \u2014 overnight tips through R125; VERDICT contract holds",
       "repo": "rupret007/bob-ops-dashboard",
-      "pr_url": "https://github.com/rupret007/bob-ops-dashboard/pull/56",
-      "pr_number": "56",
-      "branch": "cursor/max-llm-resource-strip-ec39",
-      "goal": "Keep multi-row layout readable on dark theme while preserving first-screen signal hierarchy.",
-      "status": "running",
+      "pr_url": "",
+      "pr_number": "",
+      "branch": "",
+      "goal": "Silent capped MiniMax-M2.7 tip critiques. No standing Runner job.",
+      "status": "idle",
       "agent_url": "",
-      "why": "UI density and wrap lane",
-      "note": "",
-      "last_task": "",
-      "source": "idle"
+      "why": "One-shots done; not Work-now Running",
+      "note": "R125 VERDICT PASS 8.9s; invent running-guard = tip FAIL",
+      "last_task": "R125 MiniMax tip",
+      "source": "byok_oneshot"
     },
     {
       "id": "grok",
       "name": "Grok",
-      "task_title": "Conductor assignment routing notes",
-      "repo": "rupret007/barker",
+      "task_title": "IDLE \u2014 Bob conducts only; Barker PARKED",
+      "repo": "",
       "pr_url": "",
       "pr_number": "",
       "branch": "",
-      "goal": "Track high-level conductor coordination for Cloud Agent usage without exposing private internals.",
-      "status": "running",
+      "goal": "Morning R126: local Cursor executor does heavy work. Bob thin conductor. Jeff reorder: RadDad+WashOps before Wildflower (finish-out HOLD).",
+      "status": "idle",
       "agent_url": "",
-      "why": "Conductor context lane",
-      "note": "",
-      "last_task": "",
+      "why": "Parked / conductor only \u2014 not Work-now Running",
+      "note": "Barker FREE_PARKED_BILLING \u2014 no touch; CloudBA 0",
+      "last_task": "R126 morning deep assess order",
       "source": "idle"
     },
     {
       "id": "cursor-cloud",
       "name": "Cursor Cloud",
-      "task_title": "Draft PR #56 handoff and cloud agent attribution",
+      "task_title": "BLOCKED_SPEND_WALL \u2014 zero new Cloud BA (forever this run)",
       "repo": "rupret007/bob-ops-dashboard",
-      "pr_url": "https://github.com/rupret007/bob-ops-dashboard/pull/56",
-      "pr_number": "56",
-      "branch": "cursor/max-llm-resource-strip-ec39",
-      "goal": "Keep attribution source grounded in cloud_agents and explicit assignment blob.",
-      "status": "running",
+      "pr_url": "",
+      "pr_number": "",
+      "branch": "",
+      "goal": "Spend wall. No Cloud Background Agent relaunch.",
+      "status": "blocked",
       "agent_url": "",
-      "why": "Cloud execution lane",
-      "note": "",
-      "last_task": "",
-      "source": "idle"
+      "why": "Spend wall \u2014 honest blocked, not Running",
+      "note": "PR#56 merged; drafts held under wall",
+      "last_task": "Cloud BA attribution board era",
+      "source": "spend_wall"
     }
   ],
+  "llm_work_now_freshness": {
+    "generated_at": "2026-09-26 03:28 CT",
+    "warn_ttl_sec": 1200,
+    "warnings": [],
+    "ok": true
+  },
+  "harden_window": {
+    "round": 126,
+    "status": "closed",
+    "started_at": "2026-09-25T07:17:59-05:00",
+    "ended_at": "2026-09-25T07:24:02-05:00",
+    "lanes_fired": [
+      "LocalCursor",
+      "Gemini",
+      "MiniMax",
+      "Codex",
+      "Claude"
+    ],
+    "scorecard_line": "Assess PASS | Research PASS | Implement PASS | stamp WARN+wrappers | live 07:22+",
+    "updated_at": "2026-09-25T07:24:02-05:00",
+    "display_status": "closed",
+    "idle": true
+  },
   "pending": [
     {
       "id": "che-live-pull",
