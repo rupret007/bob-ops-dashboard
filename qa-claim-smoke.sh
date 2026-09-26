@@ -531,6 +531,13 @@ if isinstance(cloud, list):
         bc = url.rsplit("/", 1)[-1].split("?")[0].lower()
         if str(a.get("id") or "").lower() != bc:
             raise SystemExit("cloud agent id must match url bc-id")
+import sys as _sys
+from pathlib import Path as _P
+_sys.path.insert(0, str(_P(sys.argv[1]).resolve().parent))
+from board_meta import llm_work_stale_running_violations as _llm_viol
+_viol = _llm_viol(st.get("llm_work") or [])
+if _viol:
+    raise SystemExit("stale running llm_work on published path: " + "; ".join(_viol))
 print("status.json has no verify")
 PY
   pass "status.json has no verify"

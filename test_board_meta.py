@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import unittest
 from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 from pathlib import Path
 
 from board_meta import (
@@ -22,6 +23,30 @@ from board_meta import (
     compact_unknown_mac_probes,
     decision_href,
     detect_linear_pr_stack,
+    demote_stale_running_llm_work,
+    llm_work_stale_running_violations,
+    validate_llm_work_write,
+    llm_work_proof_is_fresh,
+    stamp_live_llm_work_heartbeats,
+    finalize_llm_work_after_live_poll,
+    build_llm_work_now_payload,
+    write_llm_work_now_json,
+    llm_work_now_freshness_warnings,
+    parse_llm_work_now_generated_at,
+    build_llm_work_now_freshness_meta,
+    dual_sot_assert_errors,
+    assert_dual_sot_files,
+    LLM_WORK_NOW_STALE_WARN_SEC,
+    DUAL_SOT_MAX_STAMP_SKEW_SEC,
+    LLM_WORK_RUNNING_HEARTBEAT_TTL_SEC,
+    LLM_WORK_PROOF_FUTURE_SKEW_SEC,
+    HARDEN_WINDOW_STALE_SEC,
+    canonicalize_harden_lane,
+    closed_harden_window,
+    harden_window_html,
+    load_harden_window,
+    normalize_harden_window,
+    build_harden_window_payload,
     drop_leftover_verify,
     extract_agent_url,
     extract_cloud_agents_from_prs,
@@ -2224,5 +2249,679 @@ class CoordLeaseTests(unittest.TestCase):
         self.assertIsNone(coord_review_signal(tampered))
 
 
+
+class LlmWorkHonestyTests(unittest.TestCase):
+    def test_demote_stale_running_llm_work_idle_source(self):
+        rows = [
+            {"id": "gemini", "status": "running", "source": "idle", "task_title": "WashOps copy"},
+            {"id": "minimax", "status": "running", "source": "byok_oneshot", "task_title": "tip probe"},
+            {"id": "codex", "status": "running", "source": "mini_paste", "task_title": "paste sent"},
+            {"id": "cursor-cloud", "status": "running", "source": "spend_wall", "task_title": "BA"},
+            {"id": "grok", "status": "running", "source": "idle", "task_title": "routing"},
+        ]
+        out = {r["id"]: r for r in demote_stale_running_llm_work(rows)}
+        self.assertEqual(out["gemini"]["status"], "idle")
+        self.assertEqual(out["gemini"]["last_task"], "WashOps copy")
+        self.assertEqual(out["minimax"]["status"], "idle")
+        self.assertEqual(out["codex"]["status"], "finished")
+        self.assertEqual(out["cursor-cloud"]["status"], "blocked")
+        self.assertEqual(out["grok"]["status"], "idle")
+        viol = llm_work_stale_running_violations(rows)
+        self.assertTrue(any("idle-class source" in v for v in viol))
+        self.assertEqual(llm_work_stale_running_violations(list(out.values())), [])
+
+    def test_demote_live_cloud_idle_source_still_demotes(self):
+        """live_cloud no longer bypasses STALE_RUNNING_SOURCES."""
+        rows = [
+            {"id": "cursor-cloud", "status": "running", "source": "idle", "task_title": "live BA"},
+        ]
+        out = demote_stale_running_llm_work(rows, {"cursor-cloud"})
+        self.assertEqual(out[0]["status"], "idle")
+        viol = llm_work_stale_running_violations(rows, {"cursor-cloud"})
+        self.assertTrue(any("idle-class source" in v for v in viol))
+
+    def test_demote_live_cloud_lane_with_stale_proof_demotes(self):
+        now = datetime(2026, 9, 25, 10, 0, tzinfo=timezone.utc).timestamp()
+        stale = datetime(2026, 9, 25, 8, 0, tzinfo=timezone.utc).isoformat()
+        rows = [
+            {
+                "id": "cursor-cloud",
+                "status": "running",
+                "source": "cloud_agents",
+                "task_title": "hung BA",
+                "updated_at": stale,
+            },
+        ]
+        out = demote_stale_running_llm_work(rows, {"cursor-cloud"}, now=now)
+        self.assertEqual(out[0]["status"], "idle")
+        viol = llm_work_stale_running_violations(rows, {"cursor-cloud"}, now=now)
+        self.assertTrue(any("proof age" in v and "TTL" in v for v in viol))
+
+    def test_demote_live_cloud_lane_with_spend_wall_blocked(self):
+        rows = [
+            {
+                "id": "cursor-cloud",
+                "status": "running",
+                "source": "spend_wall",
+                "task_title": "BA spend wall",
+            },
+        ]
+        out = demote_stale_running_llm_work(rows, {"cursor-cloud"})
+        self.assertEqual(out[0]["status"], "blocked")
+        viol = llm_work_stale_running_violations(rows, {"cursor-cloud"})
+        self.assertTrue(any("idle-class source" in v for v in viol))
+
+    def test_demote_live_cloud_lane_with_fresh_proof_keeps(self):
+        now = datetime(2026, 9, 25, 7, 30, tzinfo=timezone.utc).timestamp()
+        fresh = datetime(2026, 9, 25, 7, 25, tzinfo=timezone.utc).isoformat()
+        rows = [
+            {
+                "id": "cursor-cloud",
+                "status": "running",
+                "source": "cloud_agents",
+                "task_title": "live BA",
+                "heartbeat_at": fresh,
+            },
+        ]
+        out = demote_stale_running_llm_work(rows, {"cursor-cloud"}, now=now)
+        self.assertEqual(out[0]["status"], "running")
+        self.assertEqual(
+            llm_work_stale_running_violations(rows, {"cursor-cloud"}, now=now),
+            [],
+        )
+
+    def test_demote_keeps_explicit_cloud_agents_source_with_fresh_proof(self):
+        now = datetime(2026, 9, 25, 7, 30, tzinfo=timezone.utc).timestamp()
+        fresh = datetime(2026, 9, 25, 7, 25, tzinfo=timezone.utc).isoformat()
+        rows = [
+            {
+                "id": "codex",
+                "status": "running",
+                "source": "cloud_agents",
+                "task_title": "open PR agent",
+                "heartbeat_at": fresh,
+            },
+        ]
+        out = demote_stale_running_llm_work(rows, now=now)
+        self.assertEqual(out[0]["status"], "running")
+        self.assertEqual(llm_work_stale_running_violations(rows, now=now), [])
+
+    def test_demote_ttl_missing_proof_demotes_cloud_agents(self):
+        rows = [
+            {
+                "id": "codex",
+                "status": "running",
+                "source": "cloud_agents",
+                "task_title": "open PR agent",
+            },
+        ]
+        out = demote_stale_running_llm_work(rows, now=1_000_000.0)
+        self.assertEqual(out[0]["status"], "idle")
+        viol = llm_work_stale_running_violations(rows, now=1_000_000.0)
+        self.assertTrue(any("without proof timestamp" in v for v in viol))
+
+    def test_demote_ttl_stale_proof_demotes(self):
+        now = datetime(2026, 9, 25, 8, 0, tzinfo=timezone.utc).timestamp()
+        stale = datetime(2026, 9, 25, 7, 0, tzinfo=timezone.utc).isoformat()
+        rows = [
+            {
+                "id": "claude",
+                "status": "running",
+                "source": "cloud_agents",
+                "task_title": "old worker",
+                "updated_at": stale,
+            },
+        ]
+        self.assertGreater(
+            now - datetime(2026, 9, 25, 7, 0, tzinfo=timezone.utc).timestamp(),
+            LLM_WORK_RUNNING_HEARTBEAT_TTL_SEC,
+        )
+        out = demote_stale_running_llm_work(rows, now=now)
+        self.assertEqual(out[0]["status"], "idle")
+        viol = llm_work_stale_running_violations(rows, now=now)
+        self.assertTrue(any("proof age" in v and "TTL" in v for v in viol))
+
+    def test_demote_ttl_future_proof_demotes(self):
+        """Far-future proof must not paint Running (fail-closed; cf. agent_is_fresh)."""
+        now = datetime(2026, 9, 25, 8, 0, tzinfo=timezone.utc).timestamp()
+        future = datetime(2026, 9, 25, 12, 0, tzinfo=timezone.utc).isoformat()
+        rows = [
+            {
+                "id": "codex",
+                "status": "running",
+                "source": "cloud_agents",
+                "task_title": "bogus heartbeat",
+                "heartbeat_at": future,
+            },
+        ]
+        out = demote_stale_running_llm_work(rows, now=now)
+        self.assertEqual(out[0]["status"], "idle")
+        viol = llm_work_stale_running_violations(rows, now=now)
+        self.assertTrue(any("future" in v for v in viol))
+        self.assertFalse(
+            llm_work_proof_is_fresh(
+                datetime(2026, 9, 25, 12, 0, tzinfo=timezone.utc).timestamp(),
+                now,
+            )
+        )
+        self.assertGreater(
+            datetime(2026, 9, 25, 12, 0, tzinfo=timezone.utc).timestamp() - now,
+            LLM_WORK_PROOF_FUTURE_SKEW_SEC,
+        )
+
+    def test_demote_ttl_fresh_proof_at_keys(self):
+        now = datetime(2026, 9, 25, 7, 40, tzinfo=timezone.utc).timestamp()
+        for key in ("heartbeat_at", "proof_at", "checked_at", "updated_at"):
+            fresh = datetime(2026, 9, 25, 7, 35, tzinfo=timezone.utc).isoformat()
+            rows = [
+                {
+                    "id": "gemini",
+                    "status": "running",
+                    "source": "cloud_agents",
+                    "task_title": "worker",
+                    key: fresh,
+                }
+            ]
+            out = demote_stale_running_llm_work(rows, now=now)
+            self.assertEqual(out[0]["status"], "running", key)
+
+    def test_validate_llm_work_write_idle_source_demotes(self):
+        row = validate_llm_work_write(
+            {"id": "gemini", "status": "running", "source": "idle", "task_title": "lie"}
+        )
+        self.assertEqual(row["status"], "idle")
+
+    def test_validate_llm_work_write_missing_proof_demotes(self):
+        row = validate_llm_work_write(
+            {
+                "id": "codex",
+                "status": "running",
+                "source": "cloud_agents",
+                "task_title": "no proof",
+            },
+            now=1_000_000.0,
+        )
+        self.assertEqual(row["status"], "idle")
+
+    def test_validate_llm_work_write_future_skew_demotes(self):
+        now = datetime(2026, 9, 25, 8, 0, tzinfo=timezone.utc).timestamp()
+        future = datetime(2026, 9, 25, 12, 0, tzinfo=timezone.utc).isoformat()
+        row = validate_llm_work_write(
+            {
+                "id": "claude",
+                "status": "running",
+                "source": "cloud_agents",
+                "task_title": "skew",
+                "heartbeat_at": future,
+            },
+            now=now,
+        )
+        self.assertEqual(row["status"], "idle")
+
+    def test_validate_llm_work_write_reject_raises(self):
+        with self.assertRaises(ValueError):
+            validate_llm_work_write(
+                {"id": "grok", "status": "running", "source": "idle"},
+                demote=False,
+            )
+
+    def test_validate_llm_work_write_keeps_fresh_running(self):
+        now = datetime(2026, 9, 25, 7, 30, tzinfo=timezone.utc).timestamp()
+        fresh = datetime(2026, 9, 25, 7, 25, tzinfo=timezone.utc).isoformat()
+        row = validate_llm_work_write(
+            {
+                "id": "codex",
+                "status": "running",
+                "source": "cloud_agents",
+                "task_title": "ok",
+                "heartbeat_at": fresh,
+            },
+            now=now,
+        )
+        self.assertEqual(row["status"], "running")
+
+    def test_stale_prior_proof_live_poll_stays_running_after_full_path(self):
+        """R1: stamp-before-validate — live poll must not false-Idle aged prior proof."""
+        now = datetime(2026, 9, 25, 10, 0, tzinfo=timezone.utc).timestamp()
+        now_iso = datetime(2026, 9, 25, 10, 0, tzinfo=timezone.utc).isoformat()
+        stale = datetime(2026, 9, 25, 8, 0, tzinfo=timezone.utc).isoformat()
+        rows = [
+            {
+                "id": "cursor-cloud",
+                "status": "running",
+                "source": "cloud_agents",
+                "task_title": "live BA",
+                "heartbeat_at": stale,
+            },
+        ]
+        # Validate alone (old normalize order) would demote:
+        early = validate_llm_work_write(dict(rows[0]), now=now)
+        self.assertEqual(early["status"], "idle")
+        # Full refresh path stamps first → stays Running:
+        out = finalize_llm_work_after_live_poll(
+            rows, {"cursor-cloud"}, now=now, now_iso=now_iso
+        )
+        self.assertEqual(out[0]["status"], "running")
+        self.assertEqual(out[0]["heartbeat_at"], now_iso)
+
+    def test_live_poll_never_stamps_spend_wall_or_idle_class(self):
+        """AC: spend_wall/idle-class never stamped into Running."""
+        now = datetime(2026, 9, 25, 10, 0, tzinfo=timezone.utc).timestamp()
+        now_iso = datetime(2026, 9, 25, 10, 0, tzinfo=timezone.utc).isoformat()
+        rows = [
+            {
+                "id": "cursor-cloud",
+                "status": "running",
+                "source": "spend_wall",
+                "task_title": "BA spend wall",
+            },
+            {
+                "id": "gemini",
+                "status": "running",
+                "source": "idle",
+                "task_title": "stale blob",
+            },
+        ]
+        stamped = stamp_live_llm_work_heartbeats(
+            rows, {"cursor-cloud", "gemini"}, now_iso=now_iso
+        )
+        self.assertNotEqual(stamped[0].get("heartbeat_at"), now_iso)
+        self.assertNotEqual(stamped[1].get("heartbeat_at"), now_iso)
+        out = finalize_llm_work_after_live_poll(
+            rows, {"cursor-cloud", "gemini"}, now=now, now_iso=now_iso
+        )
+        by_id = {r["id"]: r for r in out}
+        self.assertEqual(by_id["cursor-cloud"]["status"], "blocked")
+        self.assertEqual(by_id["gemini"]["status"], "idle")
+
+
+
+
+
+class LlmWorkNowPublishTests(unittest.TestCase):
+    """R126: llm-work-now.json must republish fresh generated_at from finalized rows."""
+
+    def test_build_llm_work_now_payload_fresh_stamp(self):
+        rows = [
+            {
+                "id": "gemini",
+                "status": "running",
+                "source": "byok_oneshot",
+                "task_title": "stale lie",
+            }
+        ]
+        blob = build_llm_work_now_payload(
+            rows, generated_at_ct="2026-09-25 07:20 CT", now=1_000_000.0
+        )
+        self.assertEqual(blob["generated_at"], "2026-09-25 07:20 CT")
+        self.assertEqual(blob["work"][0]["status"], "idle")
+        self.assertIn("07:20 CT", blob["honest_note"])
+
+    def test_write_llm_work_now_json_atomic(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as td:
+            path = Path(td) / "llm-work-now.json"
+            write_llm_work_now_json(
+                path,
+                [
+                    {
+                        "id": "cursor-cloud",
+                        "status": "running",
+                        "source": "spend_wall",
+                        "task_title": "wall",
+                    }
+                ],
+                generated_at_ct="2026-09-25 07:21 CT",
+                now=1_000_000.0,
+            )
+            blob = json.loads(path.read_text(encoding="utf-8"))
+            self.assertEqual(blob["generated_at"], "2026-09-25 07:21 CT")
+            self.assertEqual(blob["work"][0]["status"], "blocked")
+
+
+
+    def test_llm_work_now_freshness_warns_on_stale_ct_stamp(self):
+        now = datetime(2026, 9, 25, 12, 0, tzinfo=ZoneInfo("America/Chicago")).timestamp()
+        stale = {"generated_at": "2026-09-25 02:37 CT", "work": []}
+        warns = llm_work_now_freshness_warnings(stale, now=now)
+        self.assertTrue(warns)
+        self.assertIn("STALE", warns[0])
+        fresh = {"generated_at": "2026-09-25 11:50 CT", "work": []}
+        self.assertEqual(llm_work_now_freshness_warnings(fresh, now=now), [])
+        self.assertIsNotNone(parse_llm_work_now_generated_at("2026-09-25 07:18 CT"))
+        self.assertGreater(LLM_WORK_NOW_STALE_WARN_SEC, 0)
+
+    def test_build_freshness_meta_never_ok_on_stale_blob(self):
+        now = datetime(2026, 9, 25, 12, 0, tzinfo=ZoneInfo("America/Chicago")).timestamp()
+        stale = {"generated_at": "2026-09-25 07:24 CT", "work": []}
+        meta = build_llm_work_now_freshness_meta(stale, now=now)
+        self.assertEqual(meta["generated_at"], "2026-09-25 07:24 CT")
+        self.assertFalse(meta["ok"])
+        self.assertTrue(meta["warnings"])
+        fresh = {"generated_at": "2026-09-25 11:50 CT", "work": []}
+        meta_ok = build_llm_work_now_freshness_meta(fresh, now=now)
+        self.assertTrue(meta_ok["ok"])
+        self.assertEqual(meta_ok["warnings"], [])
+
+    def test_dual_sot_assert_pass_on_matching_stamps(self):
+        now = datetime(2026, 9, 25, 12, 0, tzinfo=ZoneInfo("America/Chicago")).timestamp()
+        blob = {"generated_at": "2026-09-25 11:50 CT", "work": []}
+        status = {
+            "llm_work_now_freshness": build_llm_work_now_freshness_meta(blob, now=now)
+        }
+        self.assertEqual(dual_sot_assert_errors(status, blob, now=now), [])
+
+    def test_dual_sot_assert_fail_on_diverge_over_60s(self):
+        now = datetime(2026, 9, 25, 12, 0, tzinfo=ZoneInfo("America/Chicago")).timestamp()
+        # Measured hole shape: status freshness stamp from in-process write,
+        # blob left at older commit (07:24 vs 11:50 ≈ 4h > 60s).
+        status = {
+            "llm_work_now_freshness": {
+                "generated_at": "2026-09-25 11:50 CT",
+                "ok": True,
+                "warnings": [],
+                "warn_ttl_sec": 1200,
+            }
+        }
+        blob = {"generated_at": "2026-09-25 07:24 CT", "work": []}
+        errs = dual_sot_assert_errors(status, blob, now=now)
+        self.assertTrue(errs)
+        self.assertTrue(any("diverge" in e for e in errs))
+        self.assertGreater(DUAL_SOT_MAX_STAMP_SKEW_SEC, 0)
+
+    def test_dual_sot_assert_fail_ok_true_while_blob_stale(self):
+        now = datetime(2026, 9, 25, 12, 0, tzinfo=ZoneInfo("America/Chicago")).timestamp()
+        # False-negative: matching stamps but ok lied while age > TTL.
+        stamp = "2026-09-25 07:24 CT"
+        status = {
+            "llm_work_now_freshness": {
+                "generated_at": stamp,
+                "ok": True,
+                "warnings": [],
+                "warn_ttl_sec": 1200,
+            }
+        }
+        blob = {"generated_at": stamp, "work": []}
+        errs = dual_sot_assert_errors(status, blob, now=now)
+        self.assertTrue(errs)
+        self.assertTrue(any("false-negative" in e or "ok=true" in e for e in errs))
+
+    def test_assert_dual_sot_files_roundtrip(self):
+        import tempfile
+        now = datetime(2026, 9, 25, 12, 0, tzinfo=ZoneInfo("America/Chicago")).timestamp()
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            blob = {"generated_at": "2026-09-25 11:50 CT", "work": []}
+            status = {
+                "llm_work_now_freshness": build_llm_work_now_freshness_meta(
+                    blob, now=now
+                )
+            }
+            (root / "status.json").write_text(
+                json.dumps(status, indent=2) + "\n", encoding="utf-8"
+            )
+            (root / "llm-work-now.json").write_text(
+                json.dumps(blob, indent=2) + "\n", encoding="utf-8"
+            )
+            assert_dual_sot_files(
+                root / "status.json", root / "llm-work-now.json", now=now
+            )
+            # Diverge → SystemExit
+            bad = {"generated_at": "2026-09-25 07:24 CT", "work": []}
+            (root / "llm-work-now.json").write_text(
+                json.dumps(bad, indent=2) + "\n", encoding="utf-8"
+            )
+            with self.assertRaises(SystemExit) as ctx:
+                assert_dual_sot_files(
+                    root / "status.json", root / "llm-work-now.json", now=now
+                )
+            self.assertIn("dual-SoT FAIL", str(ctx.exception))
+
+
+class HardenWindowStripTests(unittest.TestCase):
+    """Harden strip is separate from llm_work — fail-closed, never invents Running."""
+
+    def test_missing_file_is_closed_idle(self):
+        missing = Path("/tmp/no-such-harden-window-jeff-20260925.json")
+        hw = load_harden_window(missing)
+        self.assertEqual(hw["display_status"], "closed")
+        self.assertTrue(hw["idle"])
+        self.assertEqual(hw["lanes_fired"], [])
+
+    def test_none_and_invalid_fail_closed(self):
+        for blob in (None, "", "{", [], "not-json", {"status": "open"}):
+            hw = normalize_harden_window(blob, now=1_000_000.0)
+            self.assertEqual(hw["display_status"], "closed")
+            self.assertTrue(hw["idle"])
+
+    def test_open_fresh_shows_open_and_lanes(self):
+        now = datetime(2026, 9, 25, 8, 5, tzinfo=timezone.utc).timestamp()
+        blob = {
+            "round": 7,
+            "status": "open",
+            "started_at": "2026-09-25T02:58:58-05:00",
+            "lanes_fired": ["Gemini", "MiniMax", "bogus"],
+            "updated_at": "2026-09-25T03:04:00-05:00",
+            "scorecard_line": "",
+        }
+        hw = normalize_harden_window(blob, now=now)
+        self.assertEqual(hw["display_status"], "open")
+        self.assertFalse(hw["idle"])
+        self.assertEqual(hw["round"], 7)
+        self.assertEqual(hw["lanes_fired"], ["Gemini", "MiniMax"])
+
+    def test_stale_updated_at_forces_closed(self):
+        now = datetime(2026, 9, 25, 10, 0, tzinfo=timezone.utc).timestamp()
+        # updated_at ~2h earlier → stale (>45m)
+        blob = {
+            "round": 7,
+            "status": "open",
+            "started_at": "2026-09-25T02:58:58-05:00",
+            "lanes_fired": ["Gemini"],
+            "updated_at": "2026-09-25T03:00:00-05:00",
+        }
+        hw = normalize_harden_window(blob, now=now, stale_sec=HARDEN_WINDOW_STALE_SEC)
+        self.assertEqual(hw["display_status"], "closed")
+        self.assertTrue(hw["idle"])
+        self.assertEqual(hw["round"], 7)  # keep round context
+        self.assertEqual(hw["lanes_fired"], ["Gemini"])
+
+    def test_explicit_closed_with_scorecard(self):
+        now = datetime(2026, 9, 25, 8, 10, tzinfo=timezone.utc).timestamp()
+        blob = {
+            "round": 6,
+            "status": "closed",
+            "lanes_fired": ["Codex", "Claude", "Gemini"],
+            "scorecard_line": "Stress FAIL · Eff FAIL · MiniMax E1",
+            "updated_at": "2026-09-25T02:55:00-05:00",
+        }
+        hw = normalize_harden_window(blob, now=now)
+        self.assertEqual(hw["display_status"], "closed")
+        self.assertIn("Stress FAIL", hw["scorecard_line"])
+
+    def test_html_marks_fired_lanes_and_closed_idle(self):
+        html = harden_window_html(
+            {
+                "round": 7,
+                "status": "open",
+                "lanes_fired": ["Gemini"],
+                "updated_at": "2099-01-01T00:00:00Z",  # future → fail-closed
+            }
+        )
+        self.assertIn('data-status="closed"', html)
+        self.assertIn("Closed", html)
+        self.assertIn("Idle", html)
+        # Still lists allowlisted lanes; Gemini not forced "fired" on stale? 
+        # closed_harden_window keeps lanes_fired from input when stale-forced.
+        self.assertIn("Gemini", html)
+
+    def test_html_open_fresh(self):
+        now_iso = datetime.now(tz=timezone.utc).isoformat()
+        html = harden_window_html(
+            normalize_harden_window(
+                {
+                    "round": 7,
+                    "status": "open",
+                    "lanes_fired": ["LocalCursor", "Codex"],
+                    "updated_at": now_iso,
+                    "scorecard_line": "mid - awaiting scorecard",
+                }
+            )
+        )
+        self.assertIn('data-status="open"', html)
+        self.assertIn("R7", html)
+        self.assertIn('hw-lane fired">LocalCursor', html)
+        self.assertIn('hw-lane fired">Codex', html)
+        self.assertIn("mid - awaiting scorecard", html)
+        self.assertNotIn("Running", html)
+
+    def test_never_overrides_llm_work_statuses(self):
+        """Harden normalize must not mutate llm_work rows."""
+        rows = [
+            {"id": "gemini", "status": "idle", "source": "byok_oneshot"},
+            {"id": "codex", "status": "finished", "source": "mini_paste"},
+        ]
+        before = json.dumps(rows, sort_keys=True)
+        _ = normalize_harden_window(
+            {
+                "round": 7,
+                "status": "open",
+                "lanes_fired": ["Gemini", "Codex"],
+                "updated_at": datetime.now(tz=timezone.utc).isoformat(),
+            }
+        )
+        after = json.dumps(rows, sort_keys=True)
+        self.assertEqual(before, after)
+        # Demote path still independent:
+        out = demote_stale_running_llm_work(
+            [
+                {
+                    "id": "gemini",
+                    "status": "running",
+                    "source": "byok_oneshot",
+                    "task_title": "should demote",
+                }
+            ]
+        )
+        self.assertEqual(out[0]["status"], "idle")
+
+    def test_canonicalize_and_payload_writer(self):
+        self.assertEqual(canonicalize_harden_lane("gemini heavy"), "Gemini")
+        self.assertEqual(canonicalize_harden_lane("CloudBA"), "CloudBA")
+        payload = build_harden_window_payload(
+            round="R7",
+            status="open",
+            lanes_fired=["MiniMax tip", "local-cursor"],
+            scorecard_line="Stress PASS",
+            updated_at="2026-09-25T03:04:00-05:00",
+        )
+        self.assertEqual(payload["round"], 7)
+        self.assertEqual(payload["lanes_fired"], ["MiniMax", "LocalCursor"])
+        closed = closed_harden_window(round=3)
+        self.assertEqual(closed["round"], 3)
+        self.assertTrue(closed["idle"])
+
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
+
+
+class WriteHardenWindowOpenResetTests(unittest.TestCase):
+    """R8 hole: open must not inherit prior started_at/lanes across rounds."""
+
+    def test_open_resets_started_at_and_lanes(self):
+        import json
+        import tempfile
+        from pathlib import Path
+
+        import write_harden_window as wh
+
+        with tempfile.TemporaryDirectory() as td:
+            path = Path(td) / "harden-window.json"
+            path.write_text(
+                json.dumps(
+                    {
+                        "round": 7,
+                        "status": "closed",
+                        "started_at": "2026-09-25T02:58:58-05:00",
+                        "ended_at": "2026-09-25T03:06:03-05:00",
+                        "lanes_fired": ["Gemini", "MiniMax"],
+                        "scorecard_line": "old",
+                        "updated_at": "2026-09-25T03:06:03-05:00",
+                    }
+                )
+                + "\n"
+            )
+            rc = wh.main(
+                [
+                    "open",
+                    "--round",
+                    "8",
+                    "--lanes",
+                    "Codex,Claude",
+                    "--path",
+                    str(path),
+                ]
+            )
+            self.assertEqual(rc, 0)
+            blob = json.loads(path.read_text())
+            self.assertEqual(blob["round"], 8)
+            self.assertEqual(blob["status"], "open")
+            self.assertEqual(blob["lanes_fired"], ["Codex", "Claude"])
+            self.assertNotEqual(blob["started_at"], "2026-09-25T02:58:58-05:00")
+            self.assertTrue(str(blob["started_at"]).startswith("2026-"))
+            self.assertEqual(blob.get("scorecard_line") or "", "")
+
+    def test_open_respects_explicit_started_at(self):
+        import json
+        import tempfile
+        from pathlib import Path
+
+        import write_harden_window as wh
+
+        with tempfile.TemporaryDirectory() as td:
+            path = Path(td) / "harden-window.json"
+            path.write_text("{}\n")
+            stamp = "2026-09-25T03:11:04-05:00"
+            rc = wh.main(
+                [
+                    "open",
+                    "--round",
+                    "8",
+                    "--lanes",
+                    "Gemini",
+                    "--started-at",
+                    stamp,
+                    "--path",
+                    str(path),
+                ]
+            )
+            self.assertEqual(rc, 0)
+            blob = json.loads(path.read_text())
+            self.assertEqual(blob["started_at"], stamp)
+            self.assertEqual(blob["lanes_fired"], ["Gemini"])
+
+
+def test_harden_window_softpaint_js_is_ascii():
+    """Soft-paint hardenWindowHtml literals must stay ASCII (qa-claim-smoke s*.js gate)."""
+    import re
+    text = Path("refresh.sh").read_text(encoding="utf-8")
+    m = re.search(r"function hardenWindowHtml\(raw\) \{.*?\n  \}", text, re.S)
+    assert m, "hardenWindowHtml missing from refresh.sh"
+    non = sorted({hex(ord(c)) for c in m.group(0) if ord(c) > 127})
+    assert not non, f"non-ASCII in hardenWindowHtml JS: {non}"
+    html = harden_window_html(
+        {
+            "round": 1,
+            "status": "closed",
+            "started_at": "2026-09-25T03:00:00-05:00",
+            "ended_at": "2026-09-25T03:05:00-05:00",
+            "lanes_fired": ["Gemini"],
+            "scorecard_line": "Stress PASS | Eff PASS",
+            "updated_at": "2026-09-25T03:05:00-05:00",
+        }
+    )
+    assert "R—" not in html
+    assert "\u00b7" not in html.encode("unicode_escape").decode()
+    assert "Closed - Idle" in html or "Closed" in html

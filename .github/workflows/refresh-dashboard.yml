@@ -8,6 +8,13 @@ on:
   schedule:
     - cron: "*/5 * * * *"
   workflow_dispatch:
+  # K5: external release/finish-out nudges refresh without waiting for cron.
+  # Paths: workflow_dispatch (manual) | scripts/dispatch-board-refresh.sh (box gh)
+  # | repository_dispatch types below. WebJam Actions→here needs PAT secret
+  # BOB_OPS_DISPATCH_TOKEN (not present — see docs/k5-release-refresh.md).
+  # Cadence cron remains reconciliation fallback.
+  repository_dispatch:
+    types: [refresh, release-published]
 
 concurrency:
   group: bob-ops-dashboard-refresh
@@ -22,6 +29,16 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Log K5 dispatch context
+        if: github.event_name == 'repository_dispatch'
+        env:
+          CLIENT_PAYLOAD: ${{ toJson(github.event.client_payload) }}
+          EVENT_ACTION: ${{ github.event.action }}
+        run: |
+          set -euo pipefail
+          echo "K5 repository_dispatch action=${EVENT_ACTION}"
+          echo "client_payload=${CLIENT_PAYLOAD}"
 
       - name: Setup gh auth
         env:
@@ -47,6 +64,14 @@ jobs:
           print("public board: no verify block")
           PY
 
+      # K2: dual-SoT assert on the about-to-commit working tree (not remote Pages).
+      # FAIL if status.llm_work_now_freshness.generated_at diverges from
+      # llm-work-now.json by >60s, or freshness.ok while blob age > TTL (1200s).
+      - name: Dual-SoT assert (status vs llm-work-now)
+        run: |
+          set -euo pipefail
+          python3 -c "from board_meta import assert_dual_sot_files; assert_dual_sot_files('status.json', 'llm-work-now.json'); print('dual-SoT PASS: paired artifacts match before commit')"
+
       - name: QA claim smoke (generated page)
         run: |
           set -euo pipefail
@@ -58,10 +83,51 @@ jobs:
           set -euo pipefail
           git config user.name "bob-ops-dashboard[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add index.html status.json
+          # Pages board artifacts refresh.sh writes every rebuild. R126 rewrites
+          # llm-work-now.json alongside status.json — both must publish together.
+          # Narrower git add left llm-work-now unstaged; that dirt blocked rebase on
+          # concurrent tip move (actions run 36137598706, 2026-09-25 ~7:53 CT).
+          # Do not git add agents-status.json (Mac-local probe; not Pages-owned).
+          PAGES_ARTIFACTS=(index.html status.json llm-work-now.json)
+          [[ -f harden-window.json ]] && PAGES_ARTIFACTS+=(harden-window.json)
+          git add "${PAGES_ARTIFACTS[@]}"
           if git diff --cached --quiet; then
             echo "No dashboard changes."
             exit 0
           fi
           git commit -m "chore: refresh ops dashboard $(date -u +%Y-%m-%dT%H:%MZ)"
-          git push origin HEAD:main
+          # Race-safe vs concurrent ./refresh.sh --push from conductors.
+          # concurrency group cancels sibling workflow runs, not local pushes.
+          # Unstaged leftovers must never block rebase (stash → rebase → pop → re-add).
+          for attempt in 1 2 3 4 5; do
+            if git push origin HEAD:main; then
+              echo "Pushed on attempt ${attempt}."
+              # K2 post-push: re-assert working-tree pair (same commit content).
+              # (python -c avoids unindented heredoc breaking YAML run:| block)
+              python3 -c "from board_meta import assert_dual_sot_files; assert_dual_sot_files('status.json', 'llm-work-now.json'); print('dual-SoT PASS post-push')"
+              exit 0
+            fi
+            echo "Push rejected (attempt ${attempt}); stash dirt, rebase onto origin/main, retry."
+            STASHED=0
+            if ! git diff --quiet || ! git diff --cached --quiet || [[ -n "$(git ls-files --others --exclude-standard)" ]]; then
+              git stash push --include-untracked -m "refresh-race-${attempt}"
+              STASHED=1
+            fi
+            git fetch origin main
+            if ! git rebase origin/main; then
+              # Prefer this job's freshly rebuilt artifacts over the tip's older pages.
+              # During rebase, --theirs = the commit being replayed (this job).
+              git checkout --theirs -- "${PAGES_ARTIFACTS[@]}"
+              git add "${PAGES_ARTIFACTS[@]}"
+              GIT_EDITOR=true git rebase --continue
+            fi
+            if [[ "${STASHED}" -eq 1 ]]; then
+              git stash pop || true
+              git add "${PAGES_ARTIFACTS[@]}"
+              if ! git diff --cached --quiet; then
+                git commit --amend --no-edit
+              fi
+            fi
+          done
+          echo "Exhausted push retries."
+          exit 1

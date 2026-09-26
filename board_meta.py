@@ -6,7 +6,8 @@ import html as html_lib
 import json
 import re
 import time
-from datetime import datetime
+from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any
 from urllib.parse import urlencode
 from zoneinfo import ZoneInfo
@@ -761,6 +762,855 @@ def visible_chip(project: Any) -> str | None:
     if not label or label in SECTION_TYPE_CHIPS:
         return None
     return label
+
+
+
+# Sources that must NEVER paint Running (even if lane appears in live Cloud set).
+STALE_RUNNING_SOURCES = frozenset({"", "idle", "byok_oneshot", "mini_paste", "spend_wall"})
+# Running without a fresh proof heartbeat is demoted (Actions ~15m cadence).
+LLM_WORK_RUNNING_HEARTBEAT_TTL_SEC = 15 * 60
+# Mirror agent_is_fresh: far-future proof stamps fail closed (~5m clock skew OK).
+LLM_WORK_PROOF_FUTURE_SKEW_SEC = 5 * 60
+LLM_WORK_PROOF_TS_KEYS = ("heartbeat_at", "proof_at", "checked_at", "updated_at")
+
+
+def llm_work_proof_timestamp(row: Any) -> float | None:
+    """First parseable proof timestamp on an llm_work row (fail-closed)."""
+    if not isinstance(row, dict):
+        return None
+    for key in LLM_WORK_PROOF_TS_KEYS:
+        ts = parse_checked_at(row.get(key))
+        if ts is not None:
+            return ts
+    return None
+
+
+def llm_work_proof_is_fresh(
+    proof: float | None,
+    now: float,
+    ttl_sec: int = LLM_WORK_RUNNING_HEARTBEAT_TTL_SEC,
+    *,
+    future_skew_sec: int = LLM_WORK_PROOF_FUTURE_SKEW_SEC,
+) -> bool:
+    """True only when proof exists, is not far in the future, and age <= TTL."""
+    if proof is None:
+        return False
+    clock = float(now)
+    # Invented future stamps fail closed (same class as agent_is_fresh skew).
+    if proof - clock > future_skew_sec:
+        return False
+    if (clock - proof) > ttl_sec:
+        return False
+    return True
+
+
+def llm_work_running_reject_reasons(
+    row: Any,
+    *,
+    now: float | None = None,
+    ttl_sec: int = LLM_WORK_RUNNING_HEARTBEAT_TTL_SEC,
+) -> list[str]:
+    """Reasons a Running row is dishonest (empty = keep Running)."""
+    if not isinstance(row, dict):
+        return ["row is not an object"]
+    st = str(row.get("status") or "idle").strip().lower()
+    if st != "running":
+        return []
+    lid = str(row.get("id") or "").strip().lower() or "?"
+    src = str(row.get("source") or "").strip().lower()
+    clock = time.time() if now is None else float(now)
+    reasons: list[str] = []
+    if src in STALE_RUNNING_SOURCES:
+        reasons.append(f"{lid}: running with idle-class source={src or 'empty'}")
+        return reasons
+    # Single freshness call site (R4) — reason strings stay specific for QA/smoke.
+    proof = llm_work_proof_timestamp(row)
+    if not llm_work_proof_is_fresh(proof, clock, ttl_sec):
+        if proof is None:
+            reasons.append(f"{lid}: running without proof timestamp")
+            return reasons
+        if proof - clock > LLM_WORK_PROOF_FUTURE_SKEW_SEC:
+            skew = int(proof - clock)
+            reasons.append(
+                f"{lid}: running proof {skew}s in the future (skew > "
+                f"{LLM_WORK_PROOF_FUTURE_SKEW_SEC}s)"
+            )
+            return reasons
+        age = int(clock - proof)
+        reasons.append(f"{lid}: running proof age {age}s > TTL {ttl_sec}s")
+    return reasons
+
+
+def _demote_running_llm_work_row(row: dict[str, Any]) -> dict[str, Any]:
+    """Source-aware demotion: spend_wall→blocked, mini_paste→finished, else idle."""
+    src = str(row.get("source") or "").strip().lower()
+    if row.get("task_title") and row.get("task_title") != "idle - needs assignment":
+        if not row.get("last_task"):
+            row["last_task"] = row.get("task_title")
+    if src == "spend_wall":
+        row["status"] = "blocked"
+    elif src == "mini_paste":
+        row["status"] = "finished"
+    elif src == "byok_oneshot":
+        row["status"] = "idle"
+    else:
+        row["status"] = "idle"
+        title = str(row.get("task_title") or "")
+        if not title or "running" in title.lower():
+            row["task_title"] = "idle - needs assignment"
+    if not row.get("source"):
+        row["source"] = "idle"
+    return row
+
+
+def validate_llm_work_write(
+    row: Any,
+    *,
+    now: float | None = None,
+    ttl_sec: int = LLM_WORK_RUNNING_HEARTBEAT_TTL_SEC,
+    demote: bool = True,
+) -> dict[str, Any]:
+    """Write-time honesty: reject/auto-demote invalid Running before persistence.
+
+    Callers that write llm-work-now.json (conductor / refresh ingest) should run
+    this before disk. Default auto-demotes; demote=False raises ValueError.
+    """
+    if not isinstance(row, dict):
+        raise TypeError("llm_work row must be a dict")
+    out = dict(row)
+    reasons = llm_work_running_reject_reasons(out, now=now, ttl_sec=ttl_sec)
+    if not reasons:
+        return out
+    if demote:
+        return _demote_running_llm_work_row(out)
+    raise ValueError("; ".join(reasons))
+
+
+def demote_stale_running_llm_work(
+    rows: Any,
+    live_cloud_lane_ids: Any = None,
+    *,
+    now: float | None = None,
+    ttl_sec: int = LLM_WORK_RUNNING_HEARTBEAT_TTL_SEC,
+) -> list[dict[str, Any]]:
+    """Fail-closed: demote status=running when source/TTL cannot prove a live worker.
+
+    Stale assignment blobs with status=running + source=idle were painting
+    Gemini/MiniMax/etc as Running for Jeff after one-shots finished (PR#56 era).
+    Keep Running only when source is not idle-class AND a proof ts
+    (heartbeat_at/proof_at/checked_at/updated_at) is present, not far in the
+    future (~5m skew), and younger than TTL (default 15m).
+
+    live_cloud_lane_ids is retained for API compat / refresh stamping hints but
+    does NOT skip TTL or STALE_RUNNING_SOURCES (hung/spend_wall Cloud must not
+    paint Running forever). Refresh should stamp receiver-side heartbeat_at when
+    a live Cloud poll proves life, then still call this demote.
+    """
+    # live set unused for bypass — kept so callers keep passing it without break.
+    _ = {
+        str(x).strip().lower()
+        for x in (live_cloud_lane_ids or [])
+        if str(x).strip()
+    }
+    clock = time.time() if now is None else float(now)
+    out: list[dict[str, Any]] = []
+    for raw in rows or []:
+        if not isinstance(raw, dict):
+            continue
+        row = dict(raw)
+        st = str(row.get("status") or "idle").strip().lower()
+        if st != "running":
+            out.append(row)
+            continue
+        if llm_work_running_reject_reasons(row, now=clock, ttl_sec=ttl_sec):
+            out.append(_demote_running_llm_work_row(row))
+            continue
+        out.append(row)
+    return out
+
+
+
+def stamp_live_llm_work_heartbeats(
+    rows: Any,
+    live_cloud_lane_ids: Any = None,
+    *,
+    now_iso: str | None = None,
+) -> list[dict[str, Any]]:
+    """Stamp receiver heartbeat_at for live non-stale-source lanes.
+
+    Never stamps spend_wall / idle-class sources into a heartbeat that could
+    paint Running. Call BEFORE validate_llm_work_write / demote on a refresh.
+    """
+    live = {
+        str(x).strip().lower()
+        for x in (live_cloud_lane_ids or [])
+        if str(x).strip()
+    }
+    stamp = now_iso
+    if stamp is None:
+        stamp = datetime.now(tz=timezone.utc).isoformat()
+    out: list[dict[str, Any]] = []
+    for raw in rows or []:
+        if not isinstance(raw, dict):
+            continue
+        row = dict(raw)
+        lid = str(row.get("id") or "").strip().lower()
+        src = str(row.get("source") or "").strip().lower()
+        if lid in live and src not in STALE_RUNNING_SOURCES:
+            row["heartbeat_at"] = stamp
+        out.append(row)
+    return out
+
+
+def finalize_llm_work_after_live_poll(
+    rows: Any,
+    live_cloud_lane_ids: Any = None,
+    *,
+    now: float | None = None,
+    now_iso: str | None = None,
+    ttl_sec: int = LLM_WORK_RUNNING_HEARTBEAT_TTL_SEC,
+) -> list[dict[str, Any]]:
+    """Refresh honesty path: live stamp FIRST, then validate, then demote.
+
+    Order is load-bearing. Validate-before-stamp demoted live Running rows that
+    still had an aged prior proof; a later heartbeat stamp did not re-promote.
+    """
+    stamped = stamp_live_llm_work_heartbeats(
+        rows, live_cloud_lane_ids, now_iso=now_iso
+    )
+    validated = [
+        validate_llm_work_write(r, now=now, ttl_sec=ttl_sec) for r in stamped
+    ]
+    return demote_stale_running_llm_work(
+        validated, live_cloud_lane_ids, now=now, ttl_sec=ttl_sec
+    )
+
+
+
+def build_llm_work_now_payload(
+    rows: Any,
+    *,
+    generated_at_ct: str | None = None,
+    honest_note: str | None = None,
+    now: float | None = None,
+    ttl_sec: int = LLM_WORK_RUNNING_HEARTBEAT_TTL_SEC,
+) -> dict[str, Any]:
+    """Publish blob for llm-work-now.json (Pages SoT alongside status.llm_work).
+
+    Refresh must rewrite this every rebuild so generated_at never freezes while
+    status.json keeps moving (R126 measured hole: stamp stuck at 02:37 CT).
+    Always runs validate_llm_work_write per row — never invents Running.
+    """
+    clock = time.time() if now is None else float(now)
+    if generated_at_ct is None:
+        generated_at_ct = datetime.now(tz=ZoneInfo(BOARD_TZ)).strftime(
+            "%Y-%m-%d %H:%M CT"
+        )
+    work: list[dict[str, Any]] = []
+    for raw in rows or []:
+        if not isinstance(raw, dict):
+            continue
+        work.append(validate_llm_work_write(raw, now=clock, ttl_sec=ttl_sec))
+    if honest_note is None:
+        honest_note = (
+            f"{generated_at_ct}: Work-now honesty — Running requires non-idle "
+            f"source with proof heartbeat younger than "
+            f"LLM_WORK_RUNNING_HEARTBEAT_TTL_SEC={ttl_sec}s. Else demote "
+            f"(spend_wall→blocked, mini_paste→finished, else idle). "
+            f"STALE_RUNNING_SOURCES never paint Running. "
+            f"board_meta.build_llm_work_now_payload + finalize_llm_work_after_live_poll; "
+            f"Refresh rewrites this file each rebuild. Current chips: "
+            f"idle/finished/blocked only when no live proof — no Running lies."
+        )
+    return {
+        "generated_at": generated_at_ct,
+        "honest_note": honest_note,
+        "work": work,
+    }
+
+
+def write_llm_work_now_json(
+    path: Any,
+    rows: Any,
+    *,
+    generated_at_ct: str | None = None,
+    honest_note: str | None = None,
+    now: float | None = None,
+    ttl_sec: int = LLM_WORK_RUNNING_HEARTBEAT_TTL_SEC,
+) -> Path:
+    """Atomic write of llm-work-now.json from finalized work rows."""
+    target = Path(path)
+    payload = build_llm_work_now_payload(
+        rows,
+        generated_at_ct=generated_at_ct,
+        honest_note=honest_note,
+        now=now,
+        ttl_sec=ttl_sec,
+    )
+    target.parent.mkdir(parents=True, exist_ok=True)
+    tmp = target.with_suffix(target.suffix + ".tmp")
+    tmp.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+    tmp.replace(target)
+    return target
+
+
+
+# Pages SoT freshness (R126): warn when llm-work-now.json stamp lags refresh.
+LLM_WORK_NOW_STALE_WARN_SEC = 20 * 60  # ~Actions cadence + slack
+
+
+def parse_llm_work_now_generated_at(value: Any) -> float | None:
+    """Parse llm-work-now generated_at ('YYYY-MM-DD HH:MM CT' or ISO) → epoch."""
+    if value is None:
+        return None
+    s = str(value).strip()
+    if not s:
+        return None
+    # Prefer ISO / checked_at parser first.
+    ts = parse_checked_at(s)
+    if ts is not None:
+        return ts
+    # Display form written by refresh: "2026-09-25 07:18 CT"
+    m = re.match(
+        r"^(\d{4}-\d{2}-\d{2})\s+(\d{1,2}):(\d{2})\s*CT\s*$",
+        s,
+        re.I,
+    )
+    if not m:
+        return None
+    try:
+        dt = datetime(
+            int(m.group(1)[0:4]),
+            int(m.group(1)[5:7]),
+            int(m.group(1)[8:10]),
+            int(m.group(2)),
+            int(m.group(3)),
+            tzinfo=ZoneInfo(BOARD_TZ),
+        )
+        return dt.timestamp()
+    except Exception:
+        return None
+
+
+def llm_work_now_stamp_age_sec(
+    blob: Any,
+    *,
+    now: float | None = None,
+) -> float | None:
+    """Age in seconds of llm-work-now generated_at; None if unparseable."""
+    if not isinstance(blob, dict):
+        return None
+    ts = parse_llm_work_now_generated_at(blob.get("generated_at"))
+    if ts is None:
+        return None
+    clock = time.time() if now is None else float(now)
+    return max(0.0, clock - ts)
+
+
+def llm_work_now_freshness_warnings(
+    blob: Any,
+    *,
+    now: float | None = None,
+    max_age_sec: int = LLM_WORK_NOW_STALE_WARN_SEC,
+) -> list[str]:
+    """WARN strings when Pages SoT stamp is missing/unparseable/stale.
+
+    Does not change chip statuses — refresh should still rewrite the file.
+    Used for Actions logs + status.llm_work_now_freshness meta.
+    """
+    warns: list[str] = []
+    if not isinstance(blob, dict):
+        return ["llm-work-now: missing or not an object"]
+    raw = blob.get("generated_at")
+    if raw is None or not str(raw).strip():
+        return ["llm-work-now: generated_at missing"]
+    age = llm_work_now_stamp_age_sec(blob, now=now)
+    if age is None:
+        return [f"llm-work-now: generated_at unparseable ({raw!r})"]
+    if age > max_age_sec:
+        warns.append(
+            f"llm-work-now: STALE generated_at={raw!s} age={int(age)}s "
+            f"> WARN_TTL={max_age_sec}s (refresh must rewrite via "
+            f"write_llm_work_now_json)"
+        )
+    return warns
+
+
+# Dual-SoT (K2/K3): status.llm_work_now_freshness must match the llm-work-now
+# blob about to publish. In-process write alone ≠ PASS — pairing is the bar.
+DUAL_SOT_MAX_STAMP_SKEW_SEC = 60
+
+
+def build_llm_work_now_freshness_meta(
+    blob: Any,
+    *,
+    now: float | None = None,
+    max_age_sec: int = LLM_WORK_NOW_STALE_WARN_SEC,
+) -> dict[str, Any]:
+    """Freshness meta for status.json — ALWAYS derived from the paired blob.
+
+    Never claim ok=True when the blob age exceeds WARN TTL (K3). Callers must
+    pass the llm-work-now object that will be committed, not a stale prior.
+    """
+    warns = llm_work_now_freshness_warnings(
+        blob, now=now, max_age_sec=max_age_sec
+    )
+    gen = None
+    if isinstance(blob, dict):
+        raw = blob.get("generated_at")
+        if raw is not None and str(raw).strip():
+            gen = raw
+    return {
+        "generated_at": gen,
+        "warn_ttl_sec": int(max_age_sec),
+        "warnings": list(warns),
+        "ok": not warns,
+    }
+
+
+def dual_sot_assert_errors(
+    status: Any,
+    work_now: Any,
+    *,
+    now: float | None = None,
+    max_skew_sec: int = DUAL_SOT_MAX_STAMP_SKEW_SEC,
+    stale_ttl_sec: int = LLM_WORK_NOW_STALE_WARN_SEC,
+) -> list[str]:
+    """FAIL messages when status freshness and llm-work-now diverge (K2).
+
+    Empty list = PASS. Prefer exact generated_at string match; allow parsed
+    epoch skew ≤ max_skew_sec. Also FAIL when freshness.ok while blob age
+    exceeds stale_ttl_sec (false-negative guard).
+    """
+    errs: list[str] = []
+    if not isinstance(status, dict):
+        return ["dual-SoT: status missing or not an object"]
+    if not isinstance(work_now, dict):
+        return ["dual-SoT: llm-work-now missing or not an object"]
+
+    fresh = status.get("llm_work_now_freshness")
+    if not isinstance(fresh, dict):
+        errs.append("dual-SoT: status.llm_work_now_freshness missing")
+        fresh = {}
+
+    status_gen = fresh.get("generated_at")
+    blob_gen = work_now.get("generated_at")
+    if status_gen is None or not str(status_gen).strip():
+        errs.append("dual-SoT: status.llm_work_now_freshness.generated_at missing")
+    if blob_gen is None or not str(blob_gen).strip():
+        errs.append("dual-SoT: llm-work-now.generated_at missing")
+
+    if (
+        status_gen is not None
+        and blob_gen is not None
+        and str(status_gen).strip()
+        and str(blob_gen).strip()
+    ):
+        if str(status_gen).strip() != str(blob_gen).strip():
+            ts_a = parse_llm_work_now_generated_at(status_gen)
+            ts_b = parse_llm_work_now_generated_at(blob_gen)
+            if ts_a is None or ts_b is None:
+                errs.append(
+                    f"dual-SoT: generated_at mismatch "
+                    f"status={status_gen!r} blob={blob_gen!r} "
+                    f"(unparseable; require exact match or ≤{max_skew_sec}s skew)"
+                )
+            else:
+                skew = abs(ts_a - ts_b)
+                if skew > max_skew_sec:
+                    errs.append(
+                        f"dual-SoT: generated_at diverge {int(skew)}s "
+                        f"> max_skew={max_skew_sec}s "
+                        f"status={status_gen!r} blob={blob_gen!r}"
+                    )
+
+    age = llm_work_now_stamp_age_sec(work_now, now=now)
+    ok_flag = bool(fresh.get("ok"))
+    if age is not None and age > stale_ttl_sec and ok_flag:
+        errs.append(
+            f"dual-SoT: freshness.ok=true while llm-work-now age="
+            f"{int(age)}s > TTL={stale_ttl_sec}s (false-negative; "
+            f"recompute freshness from the blob being published)"
+        )
+    # Also surface bare stale when meta.ok lied by omission (no ok key but age bad)
+    if age is not None and age > stale_ttl_sec and "ok" not in fresh:
+        errs.append(
+            f"dual-SoT: llm-work-now age={int(age)}s > TTL={stale_ttl_sec}s "
+            f"and freshness.ok absent"
+        )
+    return errs
+
+
+def assert_dual_sot_files(
+    status_path: Any,
+    work_now_path: Any,
+    *,
+    now: float | None = None,
+    max_skew_sec: int = DUAL_SOT_MAX_STAMP_SKEW_SEC,
+    stale_ttl_sec: int = LLM_WORK_NOW_STALE_WARN_SEC,
+) -> None:
+    """Load paired artifacts from disk; raise SystemExit with clear message on FAIL.
+
+    Prefer the working-tree / about-to-commit files — not remote Pages (lag is
+    a separate concern). Used by refresh.sh and the Actions refresh workflow.
+    """
+    sp = Path(status_path)
+    wp = Path(work_now_path)
+    try:
+        status = json.loads(sp.read_text(encoding="utf-8"))
+    except Exception as exc:
+        raise SystemExit(f"dual-SoT FAIL: cannot read {sp}: {exc}") from exc
+    try:
+        work_now = json.loads(wp.read_text(encoding="utf-8"))
+    except Exception as exc:
+        raise SystemExit(f"dual-SoT FAIL: cannot read {wp}: {exc}") from exc
+    errs = dual_sot_assert_errors(
+        status,
+        work_now,
+        now=now,
+        max_skew_sec=max_skew_sec,
+        stale_ttl_sec=stale_ttl_sec,
+    )
+    if errs:
+        msg = "dual-SoT FAIL: status.json ↔ llm-work-now.json dishonest\n  - " + "\n  - ".join(
+            errs
+        )
+        raise SystemExit(msg)
+
+
+def llm_work_stale_running_violations(
+    rows: Any,
+    live_cloud_lane_ids: Any = None,
+    *,
+    now: float | None = None,
+    ttl_sec: int = LLM_WORK_RUNNING_HEARTBEAT_TTL_SEC,
+) -> list[str]:
+    """QA/smoke helper: Running rows that fail idle-source or heartbeat TTL gates."""
+    # live_cloud_lane_ids no longer exempts — hung Cloud must still violate.
+    _ = {
+        str(x).strip().lower()
+        for x in (live_cloud_lane_ids or [])
+        if str(x).strip()
+    }
+    clock = time.time() if now is None else float(now)
+    violations: list[str] = []
+    for raw in rows or []:
+        if not isinstance(raw, dict):
+            continue
+        violations.extend(
+            llm_work_running_reject_reasons(raw, now=clock, ttl_sec=ttl_sec)
+        )
+    return violations
+
+
+
+# Harden stress window (separate from llm_work chips — never invents Running).
+# Stress runners write harden-window.json; refresh ingests into status.harden_window.
+HARDEN_WINDOW_STALE_SEC = 45 * 60  # midpoint of 30–60m fail-closed window
+HARDEN_WINDOW_LANE_IDS = (
+    "Codex",
+    "Claude",
+    "Gemini",
+    "MiniMax",
+    "LocalCursor",
+    "CloudBA",
+)
+_HARDEN_LANE_ALIASES = {
+    "codex": "Codex",
+    "chatgpt": "Codex",
+    "claude": "Claude",
+    "gemini": "Gemini",
+    "minimax": "MiniMax",
+    "mini-max": "MiniMax",
+    "localcursor": "LocalCursor",
+    "local-cursor": "LocalCursor",
+    "local_cursor": "LocalCursor",
+    "cursor": "LocalCursor",
+    "cloudb": "CloudBA",
+    "cloudba": "CloudBA",
+    "cloud-ba": "CloudBA",
+    "cloud_ba": "CloudBA",
+    "cursor-cloud": "CloudBA",
+    "cursor_cloud": "CloudBA",
+}
+
+
+def closed_harden_window(**overrides: Any) -> dict[str, Any]:
+    """Canonical Closed / Idle harden strip payload (fail-closed default)."""
+    out: dict[str, Any] = {
+        "round": None,
+        "status": "closed",
+        "started_at": "",
+        "ended_at": "",
+        "lanes_fired": [],
+        "scorecard_line": "",
+        "updated_at": "",
+        "display_status": "closed",
+        "idle": True,
+    }
+    for key, val in overrides.items():
+        if key in out:
+            out[key] = val
+    out["status"] = "closed"
+    out["display_status"] = "closed"
+    out["idle"] = True
+    return out
+
+
+def canonicalize_harden_lane(raw: Any) -> str:
+    """Map free-form lane labels onto the allowlisted harden strip ids."""
+    s = str(raw or "").strip()
+    if not s:
+        return ""
+    if s in HARDEN_WINDOW_LANE_IDS:
+        return s
+    key = s.lower().replace(" ", "").replace("_", "-")
+    # Direct alias table (already normalized forms).
+    hit = _HARDEN_LANE_ALIASES.get(key) or _HARDEN_LANE_ALIASES.get(
+        key.replace("-", "")
+    )
+    if hit:
+        return hit
+    # Loose contains for "Gemini heavy" / "MiniMax tip".
+    low = s.lower()
+    for canon in HARDEN_WINDOW_LANE_IDS:
+        if canon.lower() in low:
+            return canon
+    return ""
+
+
+def _clean_harden_line(raw: Any, limit: int = 160) -> str:
+    text = " ".join(str(raw or "").split())
+    # Fold typographic chars so scorecard lines stay ASCII-safe for soft-paint/JS.
+    for src, dst in (
+        ("—", "-"),  # em dash
+        ("–", "-"),  # en dash
+        ("·", "|"),  # middle dot
+        ("•", "|"),  # bullet
+        ("…", "..."),  # ellipsis
+    ):
+        text = text.replace(src, dst)
+    if len(text) <= limit:
+        return text
+    cut = text[: limit - 1].rsplit(" ", 1)[0].rstrip(".,;:")
+    if len(cut) < 24:
+        cut = text[: limit - 1]
+    return cut + "..."
+
+
+def _parse_harden_round(raw: Any) -> int | None:
+    if raw is None or raw is False:
+        return None
+    if isinstance(raw, bool):
+        return None
+    if isinstance(raw, int):
+        return raw if raw > 0 else None
+    s = str(raw).strip()
+    if not s:
+        return None
+    m = re.search(r"(\d+)", s)
+    if not m:
+        return None
+    try:
+        n = int(m.group(1))
+    except ValueError:
+        return None
+    return n if n > 0 else None
+
+
+def normalize_harden_window(
+    blob: Any,
+    *,
+    now: float | None = None,
+    stale_sec: int = HARDEN_WINDOW_STALE_SEC,
+) -> dict[str, Any]:
+    """Fail-closed harden strip. Missing/invalid/stale → Closed / Idle.
+
+    Never mutates llm_work. Open only when status=open AND updated_at is fresh.
+    """
+    if blob is None:
+        return closed_harden_window()
+    if isinstance(blob, (bytes, bytearray)):
+        try:
+            blob = blob.decode("utf-8")
+        except Exception:
+            return closed_harden_window()
+    if isinstance(blob, str):
+        s = blob.strip()
+        if not s:
+            return closed_harden_window()
+        try:
+            blob = json.loads(s)
+        except Exception:
+            return closed_harden_window()
+    if not isinstance(blob, dict):
+        return closed_harden_window()
+
+    clock = time.time() if now is None else float(now)
+    round_n = _parse_harden_round(blob.get("round"))
+    raw_status = str(blob.get("status") or "").strip().lower()
+    status = "open" if raw_status == "open" else "closed"
+    started_at = str(blob.get("started_at") or "").strip()
+    ended_at = str(blob.get("ended_at") or "").strip()
+    scorecard_line = _clean_harden_line(blob.get("scorecard_line"), 160)
+    updated_at = str(blob.get("updated_at") or "").strip()
+
+    lanes: list[str] = []
+    seen: set[str] = set()
+    raw_lanes = blob.get("lanes_fired") or blob.get("lanes") or []
+    if isinstance(raw_lanes, str):
+        raw_lanes = [x for x in re.split(r"[,|;]+", raw_lanes) if x.strip()]
+    if isinstance(raw_lanes, (list, tuple)):
+        for item in raw_lanes:
+            canon = canonicalize_harden_lane(item)
+            if canon and canon not in seen:
+                seen.add(canon)
+                lanes.append(canon)
+
+    # Freshness from updated_at (preferred) else started_at when open.
+    proof = parse_checked_at(updated_at) or (
+        parse_checked_at(started_at) if status == "open" else None
+    )
+    stale = True
+    if proof is not None:
+        # Far-future stamps fail closed (same class as llm_work proof skew).
+        if proof - clock <= LLM_WORK_PROOF_FUTURE_SKEW_SEC and (clock - proof) <= stale_sec:
+            stale = False
+
+    if status != "open" or stale or proof is None:
+        return closed_harden_window(
+            round=round_n,
+            started_at=started_at,
+            ended_at=ended_at or (updated_at if status == "closed" else ""),
+            lanes_fired=lanes,
+            scorecard_line=scorecard_line,
+            updated_at=updated_at,
+        )
+
+    return {
+        "round": round_n,
+        "status": "open",
+        "started_at": started_at,
+        "ended_at": ended_at,
+        "lanes_fired": lanes,
+        "scorecard_line": scorecard_line,
+        "updated_at": updated_at,
+        "display_status": "open",
+        "idle": False,
+    }
+
+
+def load_harden_window(
+    source: Any = None,
+    *,
+    now: float | None = None,
+    stale_sec: int = HARDEN_WINDOW_STALE_SEC,
+) -> dict[str, Any]:
+    """Load from path/Path/dict/JSON string; missing file → closed."""
+    if source is None:
+        return closed_harden_window()
+    if hasattr(source, "read_text"):
+        try:
+            if not source.is_file():
+                return closed_harden_window()
+            return normalize_harden_window(
+                source.read_text(encoding="utf-8"), now=now, stale_sec=stale_sec
+            )
+        except Exception:
+            return closed_harden_window()
+    if isinstance(source, (str, bytes, bytearray)) and not (
+        isinstance(source, str)
+        and (source.strip().startswith("{") or source.strip().startswith("["))
+    ):
+        # Treat non-JSON strings as filesystem paths.
+        try:
+            from pathlib import Path as _Path
+
+            p = _Path(str(source))
+            if p.suffix.lower() == ".json" or p.exists() or "/" in str(source):
+                if not p.is_file():
+                    return closed_harden_window()
+                return normalize_harden_window(
+                    p.read_text(encoding="utf-8"), now=now, stale_sec=stale_sec
+                )
+        except Exception:
+            pass
+    return normalize_harden_window(source, now=now, stale_sec=stale_sec)
+
+
+def harden_window_html(hw: Any) -> str:
+    """Compact top-of-board harden strip (XSS-safe). Separate from llm chips."""
+    data = normalize_harden_window(hw) if not (
+        isinstance(hw, dict) and "display_status" in hw and "idle" in hw
+    ) else hw
+    if not isinstance(data, dict):
+        data = closed_harden_window()
+    display = str(data.get("display_status") or data.get("status") or "closed").lower()
+    if display not in ("open", "closed"):
+        display = "closed"
+    idle = bool(data.get("idle", display != "open"))
+    if idle:
+        display = "closed"
+    round_n = data.get("round")
+    round_label = f"R{round_n}" if isinstance(round_n, int) and round_n > 0 else "R-"
+    state_label = "Open" if display == "open" else "Closed"
+    idle_bit = " - Idle" if display == "closed" else ""
+    lanes = data.get("lanes_fired") if isinstance(data.get("lanes_fired"), list) else []
+    fired = {str(x) for x in lanes}
+    lane_bits: list[str] = []
+    for lid in HARDEN_WINDOW_LANE_IDS:
+        cls = "hw-lane fired" if lid in fired else "hw-lane"
+        lane_bits.append(
+            f'<span class="{cls}">{html_lib.escape(lid)}</span>'
+        )
+    score = _clean_harden_line(data.get("scorecard_line"), 160)
+    score_html = (
+        f'<span class="hw-score">{html_lib.escape(score)}</span>' if score else ""
+    )
+    return (
+        f'<aside class="harden-strip" id="harden-strip" data-status="{display}" '
+        f'data-idle="{"1" if idle else "0"}" aria-label="Harden window">'
+        f'<span class="hw-round">{html_lib.escape(round_label)}</span>'
+        f'<span class="hw-state {display}">{state_label}{idle_bit}</span>'
+        f'<span class="hw-lanes" aria-label="Lanes fired this round">'
+        + "".join(lane_bits)
+        + "</span>"
+        + score_html
+        + "</aside>"
+    )
+
+
+def build_harden_window_payload(
+    *,
+    round: Any = None,
+    status: str = "closed",
+    started_at: str = "",
+    ended_at: str = "",
+    lanes_fired: Any = None,
+    scorecard_line: str = "",
+    updated_at: str | None = None,
+) -> dict[str, Any]:
+    """Writer helper payload (before normalize). Stress runners call this."""
+    lanes: list[str] = []
+    seen: set[str] = set()
+    for item in lanes_fired or []:
+        canon = canonicalize_harden_lane(item)
+        if canon and canon not in seen:
+            seen.add(canon)
+            lanes.append(canon)
+    st = "open" if str(status or "").strip().lower() == "open" else "closed"
+    ts = updated_at
+    if not ts:
+        ts = datetime.now(tz=ZoneInfo(BOARD_TZ)).isoformat(timespec="seconds")
+    return {
+        "round": _parse_harden_round(round),
+        "status": st,
+        "started_at": str(started_at or "").strip(),
+        "ended_at": str(ended_at or "").strip(),
+        "lanes_fired": lanes,
+        "scorecard_line": _clean_harden_line(scorecard_line, 160),
+        "updated_at": str(ts).strip(),
+    }
 
 
 def mac_probe_known(agent: Any) -> bool:
@@ -1789,12 +2639,20 @@ def board_content_fingerprint(data: Any) -> str:
                 [project_key(p) for p in (sec.get("projects") or [])],
             ]
         )
+    hw = data.get("harden_window") if isinstance(data.get("harden_window"), dict) else {}
     payload = {
         "pending": [pending_key(it) for it in (data.get("pending") or [])],
         "agents": [agent_key(a) for a in (data.get("agents") or [])],
         "cloud": [agent_key(a) for a in (data.get("cloud_agents") or [])],
         "sections": sections,
         "fetched": data.get("fetched_repos") or [],
+        "harden_window": [
+            hw.get("round"),
+            hw.get("display_status") or hw.get("status"),
+            hw.get("lanes_fired") or [],
+            hw.get("scorecard_line") or "",
+            hw.get("updated_at") or "",
+        ],
     }
     return json.dumps(payload, sort_keys=True, separators=(",", ":"))
 
