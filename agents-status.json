@@ -1,54 +1,54 @@
 {
   "source": "mini-conductor-services",
-  "checked_at": "2026-09-27T05:39:11+00:00",
+  "checked_at": "2026-09-27T05:44:13+00:00",
   "agents": [
     {
       "id": "codex",
       "name": "Codex",
-      "state": "ready",
+      "state": "busy",
       "detail": "Completed local work in last 24h",
-      "checked_at": "2026-09-27T05:39:11+00:00"
+      "checked_at": "2026-09-27T05:44:13+00:00"
     },
     {
       "id": "claude",
       "name": "Claude",
-      "state": "ready",
+      "state": "busy",
       "detail": "Completed local work in last 24h",
-      "checked_at": "2026-09-27T05:39:11+00:00"
+      "checked_at": "2026-09-27T05:44:13+00:00"
     },
     {
       "id": "cursor",
       "name": "Cursor",
-      "state": "ready",
+      "state": "busy",
       "detail": "Active local job",
-      "checked_at": "2026-09-27T05:39:11+00:00"
+      "checked_at": "2026-09-27T05:44:13+00:00"
     },
     {
       "id": "gemini",
       "name": "Gemini",
-      "state": "ready",
+      "state": "busy",
       "detail": "Completed local work in last 24h",
-      "checked_at": "2026-09-27T05:39:11+00:00"
+      "checked_at": "2026-09-27T05:44:13+00:00"
     },
     {
       "id": "minimax",
       "name": "MiniMax",
       "state": "busy",
       "detail": "Completed local work in last 24h",
-      "checked_at": "2026-09-27T05:39:11+00:00"
+      "checked_at": "2026-09-27T05:44:13+00:00"
     }
   ],
   "conductor": {
     "services": {
       "job-runner": {
         "interval_seconds": 60,
-        "heartbeat_age_seconds": 19.4,
+        "heartbeat_age_seconds": 8.6,
         "screen_running": true,
         "healthy": true
       },
       "reviewer": {
         "interval_seconds": 300,
-        "heartbeat_age_seconds": 14.5,
+        "heartbeat_age_seconds": 316.9,
         "screen_running": true,
         "healthy": true
       },
@@ -60,7 +60,7 @@
       },
       "watchdog": {
         "interval_seconds": 180,
-        "heartbeat_age_seconds": 62.8,
+        "heartbeat_age_seconds": 3.2,
         "screen_running": true,
         "healthy": true
       }
@@ -75,7 +75,7 @@
       "minimax"
     ],
     "jobs_running": 1,
-    "jobs_unharvested": 13,
+    "jobs_unharvested": 12,
     "restarts_last_hour": {
       "dashboard-updater": 1,
       "job-runner": 0,
