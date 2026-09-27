@@ -1,66 +1,66 @@
 {
   "source": "mini-conductor-services",
-  "checked_at": "2026-09-27T05:29:05+00:00",
+  "checked_at": "2026-09-27T05:34:08+00:00",
   "agents": [
     {
       "id": "codex",
       "name": "Codex",
-      "state": "ready",
+      "state": "busy",
       "detail": "Completed local work in last 24h",
-      "checked_at": "2026-09-27T05:29:05+00:00"
+      "checked_at": "2026-09-27T05:34:08+00:00"
     },
     {
       "id": "claude",
       "name": "Claude",
-      "state": "ready",
+      "state": "busy",
       "detail": "Completed local work in last 24h",
-      "checked_at": "2026-09-27T05:29:05+00:00"
+      "checked_at": "2026-09-27T05:34:08+00:00"
     },
     {
       "id": "cursor",
       "name": "Cursor",
-      "state": "ready",
+      "state": "busy",
       "detail": "Completed local work in last 24h",
-      "checked_at": "2026-09-27T05:29:05+00:00"
+      "checked_at": "2026-09-27T05:34:08+00:00"
     },
     {
       "id": "gemini",
       "name": "Gemini",
       "state": "ready",
       "detail": "Completed local work in last 24h",
-      "checked_at": "2026-09-27T05:29:05+00:00"
+      "checked_at": "2026-09-27T05:34:08+00:00"
     },
     {
       "id": "minimax",
       "name": "MiniMax",
       "state": "ready",
       "detail": "Completed local work in last 24h",
-      "checked_at": "2026-09-27T05:29:05+00:00"
+      "checked_at": "2026-09-27T05:34:08+00:00"
     }
   ],
   "conductor": {
     "services": {
       "job-runner": {
         "interval_seconds": 60,
-        "heartbeat_age_seconds": 40.5,
+        "heartbeat_age_seconds": 29.1,
         "screen_running": true,
         "healthy": true
       },
       "reviewer": {
         "interval_seconds": 300,
-        "heartbeat_age_seconds": 94.0,
+        "heartbeat_age_seconds": 52.2,
         "screen_running": true,
         "healthy": true
       },
       "dashboard-updater": {
         "interval_seconds": 300,
-        "heartbeat_age_seconds": 252.3,
+        "heartbeat_age_seconds": 301.0,
         "screen_running": true,
         "healthy": true
       },
       "watchdog": {
         "interval_seconds": 180,
-        "heartbeat_age_seconds": 0.8,
+        "heartbeat_age_seconds": 122.3,
         "screen_running": true,
         "healthy": true
       }
