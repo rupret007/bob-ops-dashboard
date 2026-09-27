@@ -4,11 +4,13 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")" && pwd)"
+BEFORE="$(git -C "$ROOT" diff -- index.html status.json | shasum)"
 SCRATCH="$(mktemp -d)"
 trap 'rm -rf "$SCRATCH"' EXIT
 
 cp "$ROOT/README.md" "$ROOT/board_meta.py" "$ROOT/index.html" \
-  "$ROOT/refresh.sh" "$ROOT/status.json" "$SCRATCH/"
+  "$ROOT/refresh.sh" "$ROOT/status.json" "$ROOT/render_dashboard.py" "$SCRATCH/"
+cp -R "$ROOT/ui" "$SCRATCH/ui"
 chmod +x "$SCRATCH/refresh.sh" "$ROOT/qa-claim-smoke.sh"
 
 (
@@ -20,7 +22,7 @@ REFRESH_SH="$SCRATCH/refresh.sh" \
 STATUS_JSON="$SCRATCH/status.json" \
   "$ROOT/qa-claim-smoke.sh" "$SCRATCH/index.html"
 
-if [[ -n "$(git -C "$ROOT" status --porcelain -- index.html status.json)" ]]; then
+if [[ "$BEFORE" != "$(git -C "$ROOT" diff -- index.html status.json | shasum)" ]]; then
   echo "FAIL: source-only QA changed scheduler-owned artifacts" >&2
   exit 1
 fi

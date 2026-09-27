@@ -1,6 +1,6 @@
 name: QA claim smoke
 
-# Fail-closed static gate: node --check, ASCII-safe JS, no OTP leftovers, XSS helpers.
+# Public snapshot contract, shared-renderer behavior, and offline refresh integrity.
 on:
   pull_request:
   push:
@@ -19,13 +19,8 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
-      - name: Test source-only boundary
-        run: python3 -m unittest -v test_pr_source_only
-      - name: Enforce source-only feature PRs
-        if: github.event_name == 'pull_request'
-        env:
-          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-        run: bash qa-source-only-pr.sh
+      - name: Validate checked-in public artifacts
+        run: python3 qa-generated.py
       - name: Validate synthetic integration with existing runner tools
         run: |
           set -euo pipefail

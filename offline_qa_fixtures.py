@@ -7,6 +7,7 @@ import shutil
 import sys
 import tempfile
 import textwrap
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 
@@ -39,10 +40,10 @@ repos = {
         "Andrea_NanoBot", "Bob-the-Bot", "story-corner-shelf", "StoryOps-AI",
         "ballbeacon", "CSS_Conductor", "bob-ops-dashboard",
         "Cursor-OpenClaw-Integration", "Sliding-Glass-Door-PETG-Screw",
-        "StoryDesk",
+        "StoryDesk", "Storyland-Fantasy-Football",
     )
 } | {"rupret007/barker"}
-private = {"AdoptIQ", "TACTrack", "AI-Music-Vault", "CSS_Conductor", "Bob-the-Bot", "StoryDesk"}
+private = {"AdoptIQ", "TACTrack", "AI-Music-Vault", "CSS_Conductor", "Bob-the-Bot", "StoryDesk", "Storyland-Fantasy-Football"}
 scenario = os.environ.get("BOB_DASHBOARD_FIXTURE_SCENARIO")
 if scenario not in {"complete", "metadata-outage"}:
     refuse()
@@ -75,11 +76,23 @@ elif len(args) == 2 and args[0] == "api":
                        "message": "offline fixture tip"},
         }
     elif parts[3:] == ["pulls"] and params == {"state": ["open"], "per_page": ["100"], "page": ["1"]}:
-        value = []
+        value = [{
+            "number": 42, "state": "open", "draft": True,
+            "title": "Synthetic draft candidate", "html_url": f"https://github.com/{owner}/{repo}/pull/42",
+            "base": {"ref": "main", "repo": {"full_name": f"{owner}/{repo}"}},
+            "head": {"ref": "fixture", "repo": {"full_name": f"{owner}/{repo}"}},
+        }] if repo in {"webjam", "AdoptIQ"} else []
     elif parts[1:] == ["rupret007", "bob-ops-dashboard", "pulls"] and params == {"state": ["open"], "per_page": ["20"]}:
         value = []
     elif parts[3:] == ["actions", "runs"] and params == {"per_page": ["20"], "branch": ["main"]}:
-        value = {"workflow_runs": []}
+        value = {"workflow_runs": [{
+            "id": 42, "name": "Project tests", "head_branch": "main",
+            "head_sha": "0123456789abcdef0123456789abcdef01234567",
+            "status": "queued" if repo == "StoryBoard" else "completed",
+            "conclusion": None if repo == "StoryBoard" else "success",
+            "created_at": "2026-09-03T20:01:00Z",
+            "html_url": f"https://github.com/{owner}/{repo}/actions/runs/42",
+        }] if repo in {"webjam", "StoryBoard", "AdoptIQ"} else []}
     elif parts[3:] == ["releases"] and params == {"per_page": ["1"]}:
         value = []
     else:
@@ -119,11 +132,21 @@ def prepare_generator(source: Path, destination: Path) -> None:
     if destination.exists() and any(destination.iterdir()):
         raise ValueError("Fixture generator destination must be empty")
     destination.mkdir(parents=True, exist_ok=True)
-    for name in ("README.md", "board_meta.py", "refresh.sh"):
+    for name in ("README.md", "board_meta.py", "refresh.sh", "render_dashboard.py"):
         shutil.copyfile(source / name, destination / name)
+    shutil.copytree(source / "ui", destination / "ui")
     (destination / "status.json").write_text('{"offline_fixture": true}\n', encoding="utf-8")
     (destination / "index.html").write_text("<!-- offline fixture sentinel -->\n", encoding="utf-8")
     seed_agent_fixture(destination)
+    now = datetime.now(timezone.utc)
+    (destination / "llm-work-now.json").write_text(json.dumps({"work": [
+        {"id": "codex", "repo": "rupret007/webjam", "task_title": "Review the draft candidate",
+         "status": "running", "source": "offline_fixture", "heartbeat_at": (now - timedelta(minutes=2)).isoformat()},
+        {"id": "claude", "repo": "rupret007/StoryBoard", "task_title": "Complete the interface review",
+         "status": "finished", "source": "offline_fixture", "checked_at": (now - timedelta(minutes=8)).isoformat()},
+        {"id": "cursor", "repo": "rupret007/bob-ops-dashboard", "task_title": "Wait for capacity",
+         "status": "blocked", "source": "spend_wall", "checked_at": (now - timedelta(minutes=12)).isoformat()},
+    ]}) + "\n", encoding="utf-8")
 
 
 def fixture_environment(scratch: Path, *, scenario: str = "complete") -> dict[str, str]:

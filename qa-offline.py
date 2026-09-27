@@ -51,7 +51,7 @@ def mark_offline_artifacts(generator: Path) -> None:
     status_path.write_text(json.dumps(status, indent=2) + "\n", encoding="utf-8")
     index_path = generator / "index.html"
     html = index_path.read_text(encoding="utf-8")
-    body = '<body class="tab-home">'
+    body = "<body>"
     if html.count(body) != 1:
         raise RuntimeError("Cannot visibly label the offline fixture: unexpected page body")
     banner = (

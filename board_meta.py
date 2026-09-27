@@ -61,7 +61,7 @@ ATTENTION_ORDER = {
 }
 PENDING_RISK_ORDER = {"high": 0, "medium": 1, "low": 2}
 # Pulse strip resources. Mac probes are a subset.
-AGENT_IDS = ("codex", "cursor", "claude", "gemini", "minimax", "grok")
+AGENT_IDS = ("codex", "cursor", "claude", "gemini", "minimax")
 MAC_PROBE_AGENT_IDS = ("codex", "cursor", "claude")
 AGENT_NAMES = {
     "codex": "Codex (ChatGPT)",
@@ -69,7 +69,6 @@ AGENT_NAMES = {
     "claude": "Claude",
     "gemini": "Gemini",
     "minimax": "MiniMax",
-    "grok": "Grok",
 }
 AGENT_STATES = frozenset({"running", "idle", "ready", "installed", "down", "unknown"})
 AGENT_STATE_CHIP = {
@@ -139,16 +138,10 @@ COORD_AGENTS = frozenset({"none", "codex", "grok", "claude"})
 # instead of repainting a transient API outage as a product-state change.
 REQUIRED_PUBLIC_REPOS = (
     "rupret007/webjam",
-    "rupret007/StoryLiner",
     "rupret007/StoryBoard",
-    "rupret007/Rad-Dad-Merch",
-    "rupret007/RadDadSite",
-    "rupret007/Turdanoid",
-    "rupret007/rad-dad-show-night",
-    "rupret007/Andrea_NanoBot",
     "rupret007/bob-ops-dashboard",
-    "rupret007/Cursor-OpenClaw-Integration",
 )
+
 COORD_TITLE_RE = re.compile(
     r"^coord:\s*(?:(?P<owner>[A-Za-z0-9_.-]+)/)?(?P<repo>[A-Za-z0-9_.-]+)\s*$",
     re.I,
