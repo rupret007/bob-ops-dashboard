@@ -1,54 +1,54 @@
 {
   "source": "mini-conductor-services",
-  "checked_at": "2026-09-27T05:34:08+00:00",
+  "checked_at": "2026-09-27T05:39:11+00:00",
   "agents": [
     {
       "id": "codex",
       "name": "Codex",
-      "state": "busy",
+      "state": "ready",
       "detail": "Completed local work in last 24h",
-      "checked_at": "2026-09-27T05:34:08+00:00"
+      "checked_at": "2026-09-27T05:39:11+00:00"
     },
     {
       "id": "claude",
       "name": "Claude",
-      "state": "busy",
+      "state": "ready",
       "detail": "Completed local work in last 24h",
-      "checked_at": "2026-09-27T05:34:08+00:00"
+      "checked_at": "2026-09-27T05:39:11+00:00"
     },
     {
       "id": "cursor",
       "name": "Cursor",
-      "state": "busy",
-      "detail": "Completed local work in last 24h",
-      "checked_at": "2026-09-27T05:34:08+00:00"
+      "state": "ready",
+      "detail": "Active local job",
+      "checked_at": "2026-09-27T05:39:11+00:00"
     },
     {
       "id": "gemini",
       "name": "Gemini",
       "state": "ready",
       "detail": "Completed local work in last 24h",
-      "checked_at": "2026-09-27T05:34:08+00:00"
+      "checked_at": "2026-09-27T05:39:11+00:00"
     },
     {
       "id": "minimax",
       "name": "MiniMax",
-      "state": "ready",
+      "state": "busy",
       "detail": "Completed local work in last 24h",
-      "checked_at": "2026-09-27T05:34:08+00:00"
+      "checked_at": "2026-09-27T05:39:11+00:00"
     }
   ],
   "conductor": {
     "services": {
       "job-runner": {
         "interval_seconds": 60,
-        "heartbeat_age_seconds": 29.1,
+        "heartbeat_age_seconds": 19.4,
         "screen_running": true,
         "healthy": true
       },
       "reviewer": {
         "interval_seconds": 300,
-        "heartbeat_age_seconds": 52.2,
+        "heartbeat_age_seconds": 14.5,
         "screen_running": true,
         "healthy": true
       },
@@ -60,7 +60,7 @@
       },
       "watchdog": {
         "interval_seconds": 180,
-        "heartbeat_age_seconds": 122.3,
+        "heartbeat_age_seconds": 62.8,
         "screen_running": true,
         "healthy": true
       }
@@ -74,7 +74,7 @@
       "gemini-2.5-flash",
       "minimax"
     ],
-    "jobs_running": 0,
+    "jobs_running": 1,
     "jobs_unharvested": 13,
     "restarts_last_hour": {
       "dashboard-updater": 1,
