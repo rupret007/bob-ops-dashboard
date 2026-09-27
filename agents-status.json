@@ -1,66 +1,66 @@
 {
   "source": "mini-conductor-services",
-  "checked_at": "2026-09-27T06:24:35+00:00",
+  "checked_at": "2026-09-27T06:29:38+00:00",
   "agents": [
     {
       "id": "codex",
       "name": "Codex",
       "state": "ready",
       "detail": "Completed local work in last 24h",
-      "checked_at": "2026-09-27T06:24:35+00:00"
+      "checked_at": "2026-09-27T06:29:38+00:00"
     },
     {
       "id": "claude",
       "name": "Claude",
       "state": "ready",
       "detail": "Completed local work in last 24h",
-      "checked_at": "2026-09-27T06:24:35+00:00"
+      "checked_at": "2026-09-27T06:29:38+00:00"
     },
     {
       "id": "cursor",
       "name": "Cursor",
       "state": "busy",
       "detail": "Active local job",
-      "checked_at": "2026-09-27T06:24:35+00:00"
+      "checked_at": "2026-09-27T06:29:38+00:00"
     },
     {
       "id": "gemini",
       "name": "Gemini",
       "state": "ready",
       "detail": "Completed local work in last 24h",
-      "checked_at": "2026-09-27T06:24:35+00:00"
+      "checked_at": "2026-09-27T06:29:38+00:00"
     },
     {
       "id": "minimax",
       "name": "MiniMax",
       "state": "ready",
       "detail": "Completed local work in last 24h",
-      "checked_at": "2026-09-27T06:24:35+00:00"
+      "checked_at": "2026-09-27T06:29:38+00:00"
     }
   ],
   "conductor": {
     "services": {
       "job-runner": {
         "interval_seconds": 60,
-        "heartbeat_age_seconds": 39.2,
+        "heartbeat_age_seconds": 27.6,
         "screen_running": true,
         "healthy": true
       },
       "reviewer": {
         "interval_seconds": 300,
-        "heartbeat_age_seconds": 74.9,
+        "heartbeat_age_seconds": 50.6,
         "screen_running": true,
         "healthy": true
       },
       "dashboard-updater": {
         "interval_seconds": 300,
-        "heartbeat_age_seconds": 301.1,
+        "heartbeat_age_seconds": 301.0,
         "screen_running": true,
         "healthy": true
       },
       "watchdog": {
         "interval_seconds": 180,
-        "heartbeat_age_seconds": 71.4,
+        "heartbeat_age_seconds": 11.7,
         "screen_running": true,
         "healthy": true
       }
@@ -77,7 +77,7 @@
     "jobs_running": 1,
     "jobs_unharvested": 12,
     "restarts_last_hour": {
-      "dashboard-updater": 1,
+      "dashboard-updater": 0,
       "job-runner": 0,
       "reviewer": 0,
       "watchdog": 0
