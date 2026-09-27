@@ -1,8 +1,12 @@
 {
   "name": "bob-ops-dashboard-qa",
   "private": true,
-  "description": "Browser checks for disposable synthetic dashboard fixtures",
+  "description": "Bob Ops shared renderer and offline browser QA",
   "devDependencies": {
     "playwright": "1.63.0"
+  },
+  "scripts": {
+    "test": "python3 qa-offline.py",
+    "test:browser": "python3 qa-offline.py --browser"
   }
 }

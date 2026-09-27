@@ -1,10 +1,10 @@
 {
-  "generated_at": "2026-09-27 16:28 CT",
-  "honest_note": "2026-09-27 16:28 CT: Work-now honesty \u2014 Running requires non-idle source with proof heartbeat younger than LLM_WORK_RUNNING_HEARTBEAT_TTL_SEC=900s. Else demote (spend_wall\u2192blocked, mini_paste\u2192finished, else idle). STALE_RUNNING_SOURCES never paint Running. board_meta.build_llm_work_now_payload + finalize_llm_work_after_live_poll; Refresh rewrites this file each rebuild. Current chips: idle/finished/blocked only when no live proof \u2014 no Running lies.",
+  "generated_at": "2026-09-27 17:59 CT",
+  "honest_note": "2026-09-27 17:59 CT: Work-now honesty \u2014 Running requires non-idle source with proof heartbeat younger than LLM_WORK_RUNNING_HEARTBEAT_TTL_SEC=900s. Else demote (spend_wall\u2192blocked, mini_paste\u2192finished, else idle). STALE_RUNNING_SOURCES never paint Running. board_meta.build_llm_work_now_payload + finalize_llm_work_after_live_poll; Refresh rewrites this file each rebuild. Current chips: idle/finished/blocked only when no live proof \u2014 no Running lies.",
   "work": [
     {
       "id": "codex",
-      "name": "Codex (ChatGPT)",
+      "name": "Codex",
       "task_title": "FINISHED \u2014 overnight Mini Working STRONG through R125 (06:06 CT)",
       "repo": "rupret007/bob-ops-dashboard",
       "pr_url": "",
@@ -33,6 +33,22 @@
       "note": "native paste proofs overnight; morning idle for new assign",
       "last_task": "R125 Mini Claude lane fire",
       "source": "mini_paste"
+    },
+    {
+      "id": "cursor",
+      "name": "Cursor",
+      "task_title": "BLOCKED_SPEND_WALL \u2014 zero new Cloud BA (forever this run)",
+      "repo": "rupret007/bob-ops-dashboard",
+      "pr_url": "",
+      "pr_number": "",
+      "branch": "",
+      "goal": "Spend wall. No Cloud Background Agent relaunch.",
+      "status": "blocked",
+      "agent_url": "",
+      "why": "Spend wall \u2014 honest blocked, not Running",
+      "note": "PR#56 merged; drafts held under wall",
+      "last_task": "Cloud BA attribution board era",
+      "source": "spend_wall"
     },
     {
       "id": "gemini",
@@ -65,38 +81,6 @@
       "note": "R125 VERDICT PASS 8.9s; invent running-guard = tip FAIL",
       "last_task": "R125 MiniMax tip",
       "source": "byok_oneshot"
-    },
-    {
-      "id": "grok",
-      "name": "Grok",
-      "task_title": "IDLE \u2014 Bob conducts only; Barker PARKED",
-      "repo": "",
-      "pr_url": "",
-      "pr_number": "",
-      "branch": "",
-      "goal": "Morning R126: local Cursor executor does heavy work. Bob thin conductor. Jeff reorder: RadDad+WashOps before Wildflower (finish-out HOLD).",
-      "status": "idle",
-      "agent_url": "",
-      "why": "Parked / conductor only \u2014 not Work-now Running",
-      "note": "Barker FREE_PARKED_BILLING \u2014 no touch; CloudBA 0",
-      "last_task": "R126 morning deep assess order",
-      "source": "idle"
-    },
-    {
-      "id": "cursor-cloud",
-      "name": "Cursor Cloud",
-      "task_title": "BLOCKED_SPEND_WALL \u2014 zero new Cloud BA (forever this run)",
-      "repo": "rupret007/bob-ops-dashboard",
-      "pr_url": "",
-      "pr_number": "",
-      "branch": "",
-      "goal": "Spend wall. No Cloud Background Agent relaunch.",
-      "status": "blocked",
-      "agent_url": "",
-      "why": "Spend wall \u2014 honest blocked, not Running",
-      "note": "PR#56 merged; drafts held under wall",
-      "last_task": "Cloud BA attribution board era",
-      "source": "spend_wall"
     }
   ]
 }

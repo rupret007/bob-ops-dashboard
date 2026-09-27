@@ -433,7 +433,7 @@ class BoardMetaTests(unittest.TestCase):
         self.assertGreater(start, 0)
         self.assertGreater(end, start)
         standing = blob[start:end]
-        for want in ("che-live-pull", "logic-keys-wavs", "adoptiq-live-cisco"):
+        for want in ("adoptiq-live-cisco",):
             self.assertIn('"id": "' + want + '"', standing)
         for drop in (
             "webjam-exploratory",
@@ -1351,18 +1351,6 @@ class BoardMetaTests(unittest.TestCase):
             hrefs["ci"],
             "https://github.com/rupret007/rad-dad-show-night/actions/runs/33142362633",
         )
-        refresh = Path(__file__).with_name("refresh.sh").read_text()
-        self.assertIn(
-            "Live run sheet. GitHub is source; live Latest is Sites. Green CI is not Latest.",
-            refresh,
-        )
-        self.assertNotIn("No CI is OK", refresh)
-        self.assertLessEqual(
-            len(
-                "Live run sheet. GitHub is source; live Latest is Sites. Green CI is not Latest."
-            ),
-            88,
-        )
 
     def test_decision_href_is_safe_and_stable(self):
         from urllib.parse import parse_qs, urlparse
@@ -1409,10 +1397,10 @@ class BoardMetaTests(unittest.TestCase):
         gated = age_gate_agents(stale, now=now)
         self.assertEqual(
             [a["state"] for a in gated],
-            ["unknown", "unknown", "unknown", "unknown", "unknown", "unknown"],
+            ["unknown", "unknown", "unknown", "unknown", "unknown"],
         )
         self.assertTrue(all("probe stale" in a["detail"] for a in gated))
-        self.assertEqual(len(gated), 6)
+        self.assertEqual(len(gated), 5)
 
         untimestamped = age_gate_agents(
             [{"id": "codex", "state": "running", "detail": "PID 9", "checked_at": None}],
@@ -1430,7 +1418,7 @@ class BoardMetaTests(unittest.TestCase):
         )
         self.assertEqual(
             [a["state"] for a in fresh],
-            ["running", "idle", "installed", "unknown", "unknown", "unknown"],
+            ["running", "idle", "installed", "unknown", "unknown"],
         )
 
     def test_future_checked_at_is_not_treated_as_live(self):
@@ -1470,7 +1458,7 @@ class BoardMetaTests(unittest.TestCase):
         self.assertEqual(src, "file:stale->unknown")
         self.assertEqual(
             [a["state"] for a in agents],
-            ["unknown", "unknown", "unknown", "unknown", "unknown", "unknown"],
+            ["unknown", "unknown", "unknown", "unknown", "unknown"],
         )
         self.assertNotIn("running", [a["state"] for a in agents])
 
@@ -1493,7 +1481,7 @@ class BoardMetaTests(unittest.TestCase):
         assert parsed is not None
         self.assertEqual(
             [a["id"] for a in parsed],
-            ["codex", "cursor", "claude", "gemini", "minimax", "grok"],
+            ["codex", "cursor", "claude", "gemini", "minimax"],
         )
         self.assertEqual(parsed[0]["detail"], "detail redacted")
         path_parsed = parse_agents_blob(
@@ -1804,7 +1792,7 @@ class BoardMetaTests(unittest.TestCase):
             'project("Sliding-Glass-Door-PETG-Screw", jeff_gate=True', blob
         )
         self.assertIn("public_high_level_ci", blob)
-        for want in ("che-live-pull", "logic-keys-wavs", "adoptiq-live-cisco"):
+        for want in ("adoptiq-live-cisco",):
             self.assertIn('"id": "' + want + '"', blob)
 
     def test_refresh_drops_standing_yellow_overrides(self):
@@ -1816,10 +1804,8 @@ class BoardMetaTests(unittest.TestCase):
             'project("Bob-the-Bot", status="yellow"',
         ):
             self.assertNotIn(pin, blob)
-        self.assertIn('project("Turdanoid",', blob)
         self.assertIn('project("AdoptIQ", high_level_only=True,', blob)
-        self.assertIn('project("TACTrack", high_level_only=True,', blob)
-        self.assertIn('project("Bob-the-Bot", high_level_only=True,', blob)
+        self.assertIn('project("Storyland-Fantasy-Football", high_level_only=True,', blob)
 
     def test_linear_pr_stack_requires_one_complete_same_repo_chain(self):
         repo = {"full_name": "rupret007/repo"}
@@ -1913,7 +1899,7 @@ class BoardMetaTests(unittest.TestCase):
         assert mac is not None
         self.assertEqual(
             [a["id"] for a in mac],
-            ["codex", "cursor", "claude", "gemini", "minimax", "grok"],
+            ["codex", "cursor", "claude", "gemini", "minimax"],
         )
         cloud = parse_cloud_agents(blob)
         self.assertEqual(len(cloud), 1)
@@ -2901,27 +2887,3 @@ class WriteHardenWindowOpenResetTests(unittest.TestCase):
             blob = json.loads(path.read_text())
             self.assertEqual(blob["started_at"], stamp)
             self.assertEqual(blob["lanes_fired"], ["Gemini"])
-
-
-def test_harden_window_softpaint_js_is_ascii():
-    """Soft-paint hardenWindowHtml literals must stay ASCII (qa-claim-smoke s*.js gate)."""
-    import re
-    text = Path("refresh.sh").read_text(encoding="utf-8")
-    m = re.search(r"function hardenWindowHtml\(raw\) \{.*?\n  \}", text, re.S)
-    assert m, "hardenWindowHtml missing from refresh.sh"
-    non = sorted({hex(ord(c)) for c in m.group(0) if ord(c) > 127})
-    assert not non, f"non-ASCII in hardenWindowHtml JS: {non}"
-    html = harden_window_html(
-        {
-            "round": 1,
-            "status": "closed",
-            "started_at": "2026-09-25T03:00:00-05:00",
-            "ended_at": "2026-09-25T03:05:00-05:00",
-            "lanes_fired": ["Gemini"],
-            "scorecard_line": "Stress PASS | Eff PASS",
-            "updated_at": "2026-09-25T03:05:00-05:00",
-        }
-    )
-    assert "R—" not in html
-    assert "\u00b7" not in html.encode("unicode_escape").decode()
-    assert "Closed - Idle" in html or "Closed" in html

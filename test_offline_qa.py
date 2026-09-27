@@ -96,8 +96,10 @@ class OfflineQaTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             source = Path(tmp) / "source"
             source.mkdir()
-            for name in ("README.md", "board_meta.py", "refresh.sh"):
+            for name in ("README.md", "board_meta.py", "refresh.sh", "render_dashboard.py"):
                 (source / name).write_text("fixture source\n", encoding="utf-8")
+            (source / "ui").mkdir()
+            (source / "ui" / "dashboard.js").write_text("fixture renderer")
             for name in ("status.json", "index.html", "agents-status.json"):
                 (source / name).write_text("synthetic-owner-data-must-not-copy\n", encoding="utf-8")
             destination = Path(tmp) / "generator"
@@ -105,7 +107,7 @@ class OfflineQaTests(unittest.TestCase):
             self.assertEqual(json.loads((destination / "status.json").read_text()), {"offline_fixture": True})
             agents = json.loads((destination / "agents-status.json").read_text())["agents"]
             self.assertEqual([row["state"] for row in agents], ["unknown", "unknown", "unknown"])
-            self.assertFalse(any("owner-data" in file.read_text() for file in destination.iterdir()))
+            self.assertFalse(any("owner-data" in file.read_text() for file in destination.iterdir() if file.is_file()))
 
     def test_output_must_be_an_empty_non_repository_temporary_child(self):
         for unsafe in (str(ROOT), str(Path("/tmp").resolve()), "/", "/bob-dashboard-not-temp-output"):
@@ -153,7 +155,7 @@ class OfflineQaTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             generator = Path(tmp)
             (generator / "status.json").write_text('{}\n', encoding="utf-8")
-            (generator / "index.html").write_text('<body class="tab-home"><main>fixture</main></body>', encoding="utf-8")
+            (generator / "index.html").write_text('<body><main>fixture</main></body>', encoding="utf-8")
             qa.mark_offline_artifacts(generator)
             html = (generator / "index.html").read_text()
             metadata = json.loads((generator / "status.json").read_text())["offline_fixture"]
