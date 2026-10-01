@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-10-01T02:43:34.604611-05:00",
-  "generated_at_display": "Thu Oct 1, 2026 \u00b7 2:43 AM CDT",
+  "generated_at": "2026-10-01T09:49:52.817217-05:00",
+  "generated_at_display": "Thu Oct 1, 2026 \u00b7 9:49 AM CDT",
   "timezone": "America/Chicago",
   "owner": "rupret007",
   "dashboard": "bob-ops-dashboard",
@@ -465,14 +465,7 @@
           "open_pr_stack": [],
           "pr_listing_complete": true,
           "agent_url": null,
-          "ci": {
-            "name": "Pull request integration",
-            "conclusion": "success",
-            "branch": "main",
-            "sha": "2348c92",
-            "created": "2026-09-11T03:22:26Z",
-            "html_url": "https://github.com/rupret007/Cursor-OpenClaw-Integration/actions/runs/34558183689"
-          },
+          "ci": null,
           "release": null,
           "release_sha": null,
           "release_url": null,
@@ -494,8 +487,8 @@
           "status": "green",
           "chip": "Green",
           "default_branch": "main",
-          "tip_sha": "ce0fb95",
-          "tip_date": "2026-10-01T01:28:49Z",
+          "tip_sha": "a93cad0",
+          "tip_date": "2026-10-01T07:43:45Z",
           "open_prs": 0,
           "open_pr_url": null,
           "open_pr_number": null,
@@ -877,7 +870,7 @@
     "barker"
   ],
   "publish_notes": "Public board -- no secrets or customer paths. Private repositories stay high-level; AI Music Vault stays private-content-boundary only.",
-  "refresh_started_ms": 1790840572568,
+  "refresh_started_ms": 1790866150449,
   "agents_source": "file:stale->unknown",
   "agents": [
     {
@@ -1033,7 +1026,7 @@
     }
   ],
   "llm_work_now_freshness": {
-    "generated_at": "2026-10-01 02:43 CT",
+    "generated_at": "2026-10-01 09:49 CT",
     "warn_ttl_sec": 1200,
     "warnings": [],
     "ok": true
