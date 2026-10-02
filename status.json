@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-10-02T06:24:44.736600-05:00",
-  "generated_at_display": "Fri Oct 2, 2026 \u00b7 6:24 AM CDT",
+  "generated_at": "2026-10-02T11:48:20.273966-05:00",
+  "generated_at_display": "Fri Oct 2, 2026 \u00b7 11:48 AM CDT",
   "timezone": "America/Chicago",
   "owner": "rupret007",
   "dashboard": "bob-ops-dashboard",
@@ -58,14 +58,7 @@
           "open_pr_stack": [],
           "pr_listing_complete": true,
           "agent_url": null,
-          "ci": {
-            "name": "WebJam CI",
-            "conclusion": "success",
-            "branch": "master",
-            "sha": "7aa74be",
-            "created": "2026-09-30T04:48:54Z",
-            "html_url": "https://github.com/rupret007/webjam/actions/runs/36670539518"
-          },
+          "ci": null,
           "release": "v0.29.0",
           "release_sha": "7aa74be",
           "release_url": "https://github.com/rupret007/webjam/releases/tag/v0.29.0",
@@ -494,8 +487,8 @@
           "status": "green",
           "chip": "Green",
           "default_branch": "main",
-          "tip_sha": "b59ee6d",
-          "tip_date": "2026-10-02T05:45:48Z",
+          "tip_sha": "bdea357",
+          "tip_date": "2026-10-02T11:24:58Z",
           "open_prs": 0,
           "open_pr_url": null,
           "open_pr_number": null,
@@ -870,7 +863,7 @@
     "barker"
   ],
   "publish_notes": "Public board -- no secrets or customer paths. Private repositories stay high-level; AI Music Vault stays private-content-boundary only.",
-  "refresh_started_ms": 1790940236283,
+  "refresh_started_ms": 1790959660850,
   "agents_source": "file:stale->unknown",
   "agents": [
     {
@@ -1026,7 +1019,7 @@
     }
   ],
   "llm_work_now_freshness": {
-    "generated_at": "2026-10-02 06:24 CT",
+    "generated_at": "2026-10-02 11:48 CT",
     "warn_ttl_sec": 1200,
     "warnings": [],
     "ok": true
