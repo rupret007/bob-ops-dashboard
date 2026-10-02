@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-10-02T11:48:20.273966-05:00",
-  "generated_at_display": "Fri Oct 2, 2026 \u00b7 11:48 AM CDT",
+  "generated_at": "2026-10-02T16:16:22.365916-05:00",
+  "generated_at_display": "Fri Oct 2, 2026 \u00b7 4:16 PM CDT",
   "timezone": "America/Chicago",
   "owner": "rupret007",
   "dashboard": "bob-ops-dashboard",
@@ -58,7 +58,14 @@
           "open_pr_stack": [],
           "pr_listing_complete": true,
           "agent_url": null,
-          "ci": null,
+          "ci": {
+            "name": "WebJam CI",
+            "conclusion": "success",
+            "branch": "master",
+            "sha": "7aa74be",
+            "created": "2026-09-30T04:48:54Z",
+            "html_url": "https://github.com/rupret007/webjam/actions/runs/36670539518"
+          },
           "release": "v0.29.0",
           "release_sha": "7aa74be",
           "release_url": "https://github.com/rupret007/webjam/releases/tag/v0.29.0",
@@ -487,8 +494,8 @@
           "status": "green",
           "chip": "Green",
           "default_branch": "main",
-          "tip_sha": "bdea357",
-          "tip_date": "2026-10-02T11:24:58Z",
+          "tip_sha": "6e62ed6",
+          "tip_date": "2026-10-02T16:48:36Z",
           "open_prs": 0,
           "open_pr_url": null,
           "open_pr_number": null,
@@ -644,8 +651,8 @@
           "url": "https://github.com/rupret007/Andrea_NanoBot",
           "repo_url": "https://github.com/rupret007/Andrea_NanoBot",
           "private": false,
-          "status": "green",
-          "chip": "Green",
+          "status": "red",
+          "chip": "Red",
           "default_branch": "main",
           "tip_sha": "b2856e7",
           "tip_date": "2026-09-11T03:17:56Z",
@@ -656,7 +663,14 @@
           "open_pr_stack": [],
           "pr_listing_complete": true,
           "agent_url": null,
-          "ci": null,
+          "ci": {
+            "name": "Security",
+            "conclusion": "failure",
+            "branch": "main",
+            "sha": "b2856e7",
+            "created": "2026-09-28T14:50:02Z",
+            "html_url": "https://github.com/rupret007/Andrea_NanoBot/actions/runs/36438948501"
+          },
           "release": null,
           "release_sha": null,
           "release_url": null,
@@ -863,7 +877,7 @@
     "barker"
   ],
   "publish_notes": "Public board -- no secrets or customer paths. Private repositories stay high-level; AI Music Vault stays private-content-boundary only.",
-  "refresh_started_ms": 1790959660850,
+  "refresh_started_ms": 1790975739574,
   "agents_source": "file:stale->unknown",
   "agents": [
     {
@@ -1019,7 +1033,7 @@
     }
   ],
   "llm_work_now_freshness": {
-    "generated_at": "2026-10-02 11:48 CT",
+    "generated_at": "2026-10-02 16:16 CT",
     "warn_ttl_sec": 1200,
     "warnings": [],
     "ok": true
