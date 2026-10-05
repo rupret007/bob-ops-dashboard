@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-10-04T21:26:09.754309-05:00",
-  "generated_at_display": "Sun Oct 4, 2026 \u00b7 9:26 PM CDT",
+  "generated_at": "2026-10-05T04:34:16.171990-05:00",
+  "generated_at_display": "Mon Oct 5, 2026 \u00b7 4:34 AM CDT",
   "timezone": "America/Chicago",
   "owner": "rupret007",
   "dashboard": "bob-ops-dashboard",
@@ -203,8 +203,8 @@
           "status": "green",
           "chip": "Green",
           "default_branch": "main",
-          "tip_sha": "2ac5ad2",
-          "tip_date": "2026-10-02T07:30:10Z",
+          "tip_sha": "236c397",
+          "tip_date": "2026-10-05T05:25:16Z",
           "open_prs": 0,
           "open_pr_url": null,
           "open_pr_number": null,
@@ -216,9 +216,9 @@
             "name": "Test, Package, and Deploy Site",
             "conclusion": "success",
             "branch": "main",
-            "sha": "2ac5ad2",
-            "created": "2026-10-02T07:30:13Z",
-            "html_url": "https://github.com/rupret007/RadDadSite/actions/runs/36978893162"
+            "sha": "236c397",
+            "created": "2026-10-05T05:25:19Z",
+            "html_url": "https://github.com/rupret007/RadDadSite/actions/runs/37267713614"
           },
           "release": null,
           "release_sha": null,
@@ -295,8 +295,8 @@
           "status": "green",
           "chip": "Green",
           "default_branch": "main",
-          "tip_sha": "c08c489",
-          "tip_date": "2026-09-08T05:10:54Z",
+          "tip_sha": "a60d53c",
+          "tip_date": "2026-10-05T05:24:57Z",
           "open_prs": 0,
           "open_pr_url": null,
           "open_pr_number": null,
@@ -308,9 +308,9 @@
             "name": "CI",
             "conclusion": "success",
             "branch": "main",
-            "sha": "c08c489",
-            "created": "2026-09-08T05:10:56Z",
-            "html_url": "https://github.com/rupret007/Turdanoid/actions/runs/34189652739"
+            "sha": "a60d53c",
+            "created": "2026-10-05T05:25:00Z",
+            "html_url": "https://github.com/rupret007/Turdanoid/actions/runs/37267688201"
           },
           "release": null,
           "release_sha": null,
@@ -494,8 +494,8 @@
           "status": "green",
           "chip": "Green",
           "default_branch": "main",
-          "tip_sha": "dbb1c07",
-          "tip_date": "2026-10-04T23:31:39Z",
+          "tip_sha": "60a3268",
+          "tip_date": "2026-10-05T02:26:23Z",
           "open_prs": 0,
           "open_pr_url": null,
           "open_pr_number": null,
@@ -651,8 +651,8 @@
           "url": "https://github.com/rupret007/Andrea_NanoBot",
           "repo_url": "https://github.com/rupret007/Andrea_NanoBot",
           "private": false,
-          "status": "red",
-          "chip": "Red",
+          "status": "green",
+          "chip": "Green",
           "default_branch": "main",
           "tip_sha": "b2856e7",
           "tip_date": "2026-09-11T03:17:56Z",
@@ -663,14 +663,7 @@
           "open_pr_stack": [],
           "pr_listing_complete": true,
           "agent_url": null,
-          "ci": {
-            "name": "Security",
-            "conclusion": "failure",
-            "branch": "main",
-            "sha": "b2856e7",
-            "created": "2026-09-28T14:50:02Z",
-            "html_url": "https://github.com/rupret007/Andrea_NanoBot/actions/runs/36438948501"
-          },
+          "ci": null,
           "release": null,
           "release_sha": null,
           "release_url": null,
@@ -877,7 +870,7 @@
     "barker"
   ],
   "publish_notes": "Public board -- no secrets or customer paths. Private repositories stay high-level; AI Music Vault stays private-content-boundary only.",
-  "refresh_started_ms": 1791167135737,
+  "refresh_started_ms": 1791192817262,
   "agents_source": "file:stale->unknown",
   "agents": [
     {
@@ -1033,7 +1026,7 @@
     }
   ],
   "llm_work_now_freshness": {
-    "generated_at": "2026-10-04 21:26 CT",
+    "generated_at": "2026-10-05 04:34 CT",
     "warn_ttl_sec": 1200,
     "warnings": [],
     "ok": true
