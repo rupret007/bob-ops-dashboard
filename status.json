@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-10-07T11:52:03.083500-05:00",
-  "generated_at_display": "Wed Oct 7, 2026 \u00b7 11:52 AM CDT",
+  "generated_at": "2026-10-07T16:55:02.479010-05:00",
+  "generated_at_display": "Wed Oct 7, 2026 \u00b7 4:55 PM CDT",
   "timezone": "America/Chicago",
   "owner": "rupret007",
   "dashboard": "bob-ops-dashboard",
@@ -58,7 +58,14 @@
           "open_pr_stack": [],
           "pr_listing_complete": true,
           "agent_url": null,
-          "ci": null,
+          "ci": {
+            "name": "WebJam CI",
+            "conclusion": "success",
+            "branch": "master",
+            "sha": "18afc81",
+            "created": "2026-10-07T15:54:23Z",
+            "html_url": "https://github.com/rupret007/webjam/actions/runs/37647760391"
+          },
           "release": "v0.29.0",
           "release_sha": "7aa74be",
           "release_url": "https://github.com/rupret007/webjam/releases/tag/v0.29.0",
@@ -205,7 +212,14 @@
           "open_pr_stack": [],
           "pr_listing_complete": true,
           "agent_url": null,
-          "ci": null,
+          "ci": {
+            "name": "Test, Package, and Deploy Site",
+            "conclusion": "success",
+            "branch": "main",
+            "sha": "08e69e5",
+            "created": "2026-10-07T05:51:46Z",
+            "html_url": "https://github.com/rupret007/RadDadSite/actions/runs/37578428378"
+          },
           "release": null,
           "release_sha": null,
           "release_url": null,
@@ -482,8 +496,8 @@
           "status": "green",
           "chip": "Green",
           "default_branch": "main",
-          "tip_sha": "17a31b6",
-          "tip_date": "2026-10-07T09:22:36Z",
+          "tip_sha": "1343cac",
+          "tip_date": "2026-10-07T16:52:21Z",
           "open_prs": 0,
           "open_pr_url": null,
           "open_pr_number": null,
@@ -867,7 +881,7 @@
     "barker"
   ],
   "publish_notes": "Public board -- no secrets or customer paths. Private repositories stay high-level; AI Music Vault stays private-content-boundary only.",
-  "refresh_started_ms": 1791391880403,
+  "refresh_started_ms": 1791410066372,
   "agents_source": "file:stale->unknown",
   "agents": [
     {
@@ -1023,7 +1037,7 @@
     }
   ],
   "llm_work_now_freshness": {
-    "generated_at": "2026-10-07 11:52 CT",
+    "generated_at": "2026-10-07 16:55 CT",
     "warn_ttl_sec": 1200,
     "warnings": [],
     "ok": true
