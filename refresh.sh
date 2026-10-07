@@ -1841,9 +1841,9 @@ function focusKey(kind, raw) {{
 }})();
 
 (function () {{
-  // Near-realtime: poll status.json every 30s; paint board when content changes (no full reload).
+  // Fast-refresh: poll status.json every 10s; paint board when content changes (no full reload).
   // Hide / iOS-return abort is not a fail. Stale cached JSON cannot rewind the board.
-  var POLL_MS = 30000;
+  var POLL_MS = 10000;
   var stamp = document.getElementById("live-stamp");
   var freshness = document.getElementById("freshness");
   var dot = document.getElementById("live-dot");
@@ -1859,12 +1859,12 @@ function focusKey(kind, raw) {{
   var lastFp = null;
 
   function fmtAge(ms) {{
-    // Actions cadence is ~15m. "Live" only while we are still inside that window.
+    // Actions cadence is ~5m. "Live" only while we are still inside that window.
     var s = Math.max(0, Math.floor(ms / 1000));
     if (s < 8) return "Updated just now";
     if (s < 60) return "Updated " + s + "s ago";
     var m = Math.floor(s / 60);
-    if (m < 16) return "Live - updated " + m + "m ago";
+    if (m < 6) return "Live - updated " + m + "m ago";
     if (m < 60) return "Updated " + m + "m ago";
     var h = Math.floor(m / 60);
     return "Updated " + h + "h ago";
@@ -1884,9 +1884,9 @@ function focusKey(kind, raw) {{
     if (typeof updateSilence === "function") updateSilence();
   }}
 
-  // Actions cadence ~15m; silence = max(45m, 3x cadence) - uptime-pulse pattern.
-  var EXPECTED_REFRESH_MS = 15 * 60 * 1000;
-  var SILENCE_LIMIT_MS = Math.max(45 * 60 * 1000, 3 * EXPECTED_REFRESH_MS);
+  // Actions cadence ~5m; silence = max(15m, 3x cadence) - uptime-pulse pattern.
+  var EXPECTED_REFRESH_MS = 5 * 60 * 1000;
+  var SILENCE_LIMIT_MS = Math.max(15 * 60 * 1000, 3 * EXPECTED_REFRESH_MS);
   var silenceEl = document.getElementById("silence-banner");
   var silenceTitleEl = document.getElementById("silence-title");
   var silenceDetailEl = document.getElementById("silence-detail");
