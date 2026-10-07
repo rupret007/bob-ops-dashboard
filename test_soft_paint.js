@@ -52,6 +52,10 @@ function run() {
     if (refresh.indexOf('"' + lane + '"') === -1) fail("lane id missing from refresh.sh: " + lane);
   }
   if (refresh.indexOf("idle - needs assignment") === -1) fail("idle assignment fallback missing");
+  if (refresh.indexOf("function laneIsHighLevel") === -1) fail("laneIsHighLevel missing from refresh.sh");
+  if (refresh.indexOf("function projectHistory") === -1) fail("projectHistory missing from refresh.sh");
+  if (refresh.indexOf('id="detail-history"') === -1) fail("detail-history missing from refresh.sh");
+  if (refresh.indexOf("High-level only") === -1) fail("high-level detail fail-closed copy missing");
   if (refresh.indexOf('project("StoryOps-AI"') === -1 || refresh.indexOf("WashOps") === -1) {
     fail("WashOps display rename mapping missing");
   }

@@ -607,6 +607,16 @@ def _safe_branch(value):
         return ""
     return branch
 
+def _safe_model_id(value):
+    model = str(value or "").strip()
+    if not model:
+        return ""
+    if len(model) > 80:
+        return ""
+    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._:-]{1,79}", model):
+        return ""
+    return model
+
 def _repo_from_pr_url(url):
     safe = safe_pr_url(url)
     if not safe:
@@ -649,6 +659,23 @@ def _lane_id(raw_id, raw_name):
         return "grok"
     return ""
 
+def _safe_spend(value):
+    """Sanitize and format spend/cost values for public display."""
+    if value is None:
+        return ""
+    if isinstance(value, (int, float)):
+        if value < 0 or not isinstance(value, (int, float)) or value != value:
+            return ""
+        return f"${value:.2f}" if value < 1000 else f"${value:,.0f}"
+    text = str(value or "").strip()
+    if not text:
+        return ""
+    if len(text) > 20:
+        return ""
+    if not re.fullmatch(r"\$?[0-9,.]+", text):
+        return ""
+    return text if text.startswith("$") else f"${text}"
+
 def _normalize_work_row(raw):
     if not isinstance(raw, dict):
         return None
@@ -660,6 +687,14 @@ def _normalize_work_row(raw):
     status_name = str(raw.get("status") or "").strip().lower()
     if status_name not in {"running", "finished", "blocked", "idle"}:
         status_name = "idle"
+    model = (
+        _safe_model_id(raw.get("model"))
+        or _safe_model_id(raw.get("model_id"))
+        or _safe_model_id(raw.get("resource_model"))
+        or _safe_model_id(raw.get("runner_model"))
+    )
+    spend_session = _safe_spend(raw.get("spend_session") or raw.get("session_spend"))
+    spend_day = _safe_spend(raw.get("spend_day") or raw.get("day_spend") or raw.get("spend_today"))
     row = {
         "id": lane,
         "name": next((n for i, n in LANE_ORDER if i == lane), lane.title()),
@@ -670,6 +705,9 @@ def _normalize_work_row(raw):
         "branch": _safe_branch(raw.get("branch")),
         "goal": _clean_line(raw.get("goal") or raw.get("notes"), 220),
         "status": status_name,
+        "model": model,
+        "spend_session": spend_session,
+        "spend_day": spend_day,
         "agent_url": safe_agent_url(raw.get("agent_url") or raw.get("url")),
         "why": _clean_line(raw.get("why") or raw.get("lane_why"), 120),
         "note": _clean_line(raw.get("note") or raw.get("detail"), 160),
@@ -683,6 +721,33 @@ def _normalize_work_row(raw):
         if val is not None and str(val).strip():
             row[key] = str(val).strip()
     return row
+
+def _assignment_models_from_blob(blob):
+    out = {}
+    if not isinstance(blob, dict):
+        return out
+    candidates = []
+    for key in ("assignment", "assignment_blob", "assignments", "resources", "models"):
+        val = blob.get(key)
+        if isinstance(val, list):
+            candidates.extend(val)
+    if isinstance(blob.get("work"), list):
+        candidates.extend(blob.get("work") or [])
+    for entry in candidates:
+        if not isinstance(entry, dict):
+            continue
+        lane = _lane_id(entry.get("id") or entry.get("lane"), entry.get("name") or entry.get("resource"))
+        if not lane:
+            continue
+        model = (
+            _safe_model_id(entry.get("model"))
+            or _safe_model_id(entry.get("model_id"))
+            or _safe_model_id(entry.get("resource_model"))
+            or _safe_model_id(entry.get("runner_model"))
+        )
+        if model:
+            out[lane] = model
+    return out
 
 work_blob = None
 for work_path in (root / "llm-work-now.json", Path("/workspace/bob-ops-dashboard/llm-work-now.json")):
@@ -700,8 +765,10 @@ if work_blob is None:
         except Exception:
             work_blob = None
 work_rows = []
+assignment_models = {}
 if isinstance(work_blob, dict):
     work_rows = work_blob.get("work") or work_blob.get("lanes") or []
+    assignment_models = _assignment_models_from_blob(work_blob)
 elif isinstance(work_blob, list):
     work_rows = work_blob
 
@@ -710,6 +777,30 @@ for raw in work_rows or []:
     row = _normalize_work_row(raw)
     if row:
         by_lane[row["id"]] = row
+for lane, model in assignment_models.items():
+    row = by_lane.get(lane)
+    if row is None:
+        by_lane[lane] = {
+            "id": lane,
+            "name": next((n for i, n in LANE_ORDER if i == lane), lane.title()),
+            "task_title": "idle - needs assignment",
+            "repo": "",
+            "pr_url": "",
+            "pr_number": "",
+            "branch": "",
+            "goal": "",
+            "status": "idle",
+            "model": model,
+            "spend_session": "",
+            "spend_day": "",
+            "agent_url": "",
+            "why": "",
+            "note": "",
+            "last_task": "",
+            "source": "assignment",
+        }
+    elif not row.get("model"):
+        row["model"] = model
 
 for cloud in trusted_cloud:
     lane = _lane_id("", cloud.get("name"))
@@ -728,6 +819,9 @@ for cloud in trusted_cloud:
         "branch": "",
         "goal": "Cloud Agent assignment sourced from open PR attribution.",
         "status": "running",
+        "model": _safe_model_id(cloud.get("model")) or _safe_model_id(cloud.get("model_id")),
+        "spend_session": _safe_spend(cloud.get("spend_session")),
+        "spend_day": _safe_spend(cloud.get("spend_day")),
         "agent_url": safe_agent_url(cloud.get("url")),
         "why": "Cloud Agent",
         "note": _clean_line(cloud.get("detail"), 160),
@@ -757,6 +851,8 @@ for lane_id, lane_name in LANE_ORDER:
             row["last_task"] = previous.get("task_title")
     if not row.get("status"):
         row["status"] = "idle"
+    if not row.get("model"):
+        row["model"] = _safe_model_id(previous.get("model"))
     if not row.get("source"):
         row["source"] = "idle"
     llm_work.append(row)
@@ -839,6 +935,7 @@ for row in llm_work:
         "status": st,
         "chip": label,
         "notes": notes,
+        "model": row.get("model") or "",
         "agent_id": row.get("id"),
         "agent_state": lane_status,
         "url": row.get("agent_url"),
@@ -1149,8 +1246,9 @@ def lane_html(p):
     links_html = ('<div class="lane-links">' + "".join(links) + "</div>") if links else ""
     focus = focus_key("project", p.get("name"))
     focus_attr = f' data-focus-key="{h(focus)}" tabindex="-1"' if focus else ""
+    detail_attr = f' data-detail-kind="project" data-detail-key="{h(focus)}"' if focus else ""
     return (
-        f'<article class="lane{quiet}"{focus_attr}>'
+        f'<article class="lane{quiet}"{focus_attr}{detail_attr}>'
         f'<h3>{title_html}</h3>'
         f'<div class="lane-end">{chip}{signal_html}</div>'
         f'{links_html}{notes_html}</article>'
@@ -1201,9 +1299,16 @@ def _work_meta_html(row):
 
 def work_row_html(row):
     lane = row if isinstance(row, dict) else {}
-    lane_id = h(lane.get("id") or "lane")
+    lane_id_raw = str(lane.get("id") or "lane").strip().lower()
+    if not re.match(r"^[a-z0-9-]{1,64}$", lane_id_raw):
+        lane_id_raw = "lane"
+    lane_id = h(lane_id_raw)
+    detail_key = "work:" + lane_id_raw
     name = h(lane.get("name") or lane.get("id") or "LLM")
     task = h(lane.get("task_title") or "idle - needs assignment")
+    model = _safe_model_id(lane.get("model")) or "Unknown"
+    spend_session = str(lane.get("spend_session") or "").strip()
+    spend_day = str(lane.get("spend_day") or "").strip()
     meta_html = _work_meta_html(lane)
     goal = h(_clean_line(lane.get("goal"), 260))
     note = h(_clean_line(lane.get("note"), 200))
@@ -1223,10 +1328,19 @@ def work_row_html(row):
     goal_html = f'<p class="goal">{goal}</p>' if goal else ""
     note_html = f'<p class="note">{note}</p>' if note else ""
     last_html = f'<p class="last-task">Last: {last_task}</p>' if last_task else ""
+    spend_bits = []
+    if spend_session:
+        spend_bits.append(f"Session: {h(spend_session)}")
+    if spend_day:
+        spend_bits.append(f"Today: {h(spend_day)}")
+    spend_html = f'<p class="spend">{" · ".join(spend_bits)}</p>' if spend_bits else ""
     return (
-        f'<article class="agent-row" data-lane-id="{lane_id}" data-lane-status="{h(lane.get("status") or "idle")}">'
+        f'<article class="agent-row" data-lane-id="{lane_id}" data-lane-status="{h(lane.get("status") or "idle")}" '
+        f'data-detail-kind="work" data-detail-key="{h(detail_key)}">'
         f'<div class="agent-head"><h3>{name}</h3>{_work_chip(lane.get("status"))}</div>'
         f'<p class="task">{task}</p>'
+        f'<p class="model">Model: {h(model)}</p>'
+        f'{spend_html}'
         f'<p class="meta">{meta_html}</p>'
         f'{goal_html}{note_html}{last_html}{links_html}</article>'
     )
@@ -1368,6 +1482,7 @@ html = f'''<!DOCTYPE html>
     display:grid; grid-template-columns:minmax(0,1fr) auto; column-gap:.75rem; row-gap:.15rem;
     padding:.78rem 0; border:0; border-bottom:1px solid var(--hair); background:transparent; border-radius:0;
   }}
+  .lane[data-detail-key], .agent-row[data-detail-key] {{ cursor:pointer; touch-action:manipulation; }}
   .lane:last-child {{ border-bottom:0; }}
   .lane h3 {{ margin:0; font-size:.95rem; font-weight:600; letter-spacing:-.01em; }}
   .lane-end {{ display:flex; align-items:center; gap:.45rem; justify-self:end; }}
@@ -1517,6 +1632,8 @@ html = f'''<!DOCTYPE html>
   .agent-row h3 {{ margin:0; font-size:.9rem; font-weight:700; letter-spacing:-.01em; }}
   .agent-row p {{ margin:0; }}
   .agent-row .task {{ font-size:.82rem; font-weight:650; color:#fff; }}
+  .agent-row .model {{ font-size:.76rem; color:var(--muted); line-height:1.3; }}
+  .agent-row .spend {{ font-size:.72rem; color:var(--warn); font-weight:600; line-height:1.3; }}
   .agent-row .meta {{ font-size:.74rem; color:var(--muted); line-height:1.3; }}
   .agent-row .meta .meta-link {{ color:var(--link); text-decoration:none; }}
   .agent-row .meta .meta-link:hover {{ text-decoration:underline; }}
@@ -1545,8 +1662,60 @@ html = f'''<!DOCTYPE html>
     list-style:outside disclosure-closed;
   }}
   .pending-more[open] > summary {{ color:var(--orange); }}
+  .detail-scrim {{
+    position:fixed; inset:0; background:rgba(0,0,0,.68); z-index:40;
+    display:none; opacity:0; transition:opacity .15s ease-out;
+  }}
+  .detail-scrim.show {{ display:block; opacity:1; }}
+  .detail-sheet {{
+    position:fixed; left:0; right:0; bottom:0; max-height:85vh; overflow:auto;
+    border-top:1px solid var(--border); border-radius:14px 14px 0 0;
+    background:var(--panel); z-index:41; padding:.9rem 1rem calc(1rem + env(safe-area-inset-bottom, 0px));
+    transform:translateY(104%); transition:transform .17s ease-out;
+    box-shadow:0 -14px 32px rgba(0,0,0,.42);
+  }}
+  .detail-sheet.show {{ transform:translateY(0); }}
+  .detail-head {{
+    display:flex; align-items:flex-start; justify-content:space-between; gap:.6rem; margin:0 0 .65rem;
+  }}
+  .detail-head-copy {{ min-width:0; flex:1; }}
+  .detail-head h2 {{ margin:0; font-size:1.05rem; line-height:1.25; }}
+  .detail-back, .detail-close {{
+    min-height:44px; min-width:44px; border:1px solid var(--border); border-radius:8px;
+    background:transparent; color:var(--text); font-size:1rem; font-weight:700; cursor:pointer;
+  }}
+  .detail-back {{ margin:0 0 .35rem; padding:0 .7rem; font-size:.82rem; }}
+  .detail-back:hover, .detail-close:hover {{ border-color:var(--orange); color:var(--orange); }}
+  .detail-meta, .detail-note, .detail-time {{ margin:0 0 .55rem; color:var(--muted); font-size:.82rem; line-height:1.4; }}
+  .detail-note {{ color:var(--text); white-space:pre-wrap; }}
+  .detail-task, .detail-goal {{ margin:0 0 .55rem; font-size:.83rem; line-height:1.4; color:#fff; white-space:pre-wrap; }}
+  .detail-facts {{
+    margin:0 0 .7rem; padding:0; display:grid; grid-template-columns:auto 1fr; gap:.26rem .6rem;
+  }}
+  .detail-facts dt {{ margin:0; color:var(--muted); font-size:.74rem; }}
+  .detail-facts dd {{ margin:0; color:#fff; font-size:.78rem; overflow-wrap:anywhere; }}
+  .detail-links {{ display:flex; flex-wrap:wrap; gap:.42rem; margin:0 0 .72rem; }}
+  .detail-links a {{
+    min-height:44px; display:inline-flex; align-items:center; justify-content:center;
+    border:1px solid var(--border); border-radius:8px; padding:.35rem .6rem; font-size:.78rem;
+    text-decoration:none;
+  }}
+  .detail-links a:hover {{ border-color:var(--orange); color:var(--orange); }}
+  .detail-events-title {{ margin:.15rem 0 .35rem; font-size:.76rem; letter-spacing:.05em; text-transform:uppercase; color:var(--muted); }}
+  .detail-events, .detail-history {{ margin:0 0 .72rem; padding:0 0 0 1rem; display:grid; gap:.36rem; }}
+  .detail-events li, .detail-history li {{ color:var(--muted); font-size:.78rem; line-height:1.35; }}
+  .detail-events a, .detail-history a {{ color:var(--link); }}
+  .detail-when {{ color:var(--muted); font-size:.7rem; letter-spacing:.02em; }}
+  .detail-related {{ display:flex; flex-wrap:wrap; gap:.42rem; margin:0 0 .72rem; }}
+  .detail-related button, .detail-history button {{
+    min-height:44px; display:inline-flex; align-items:center; justify-content:center;
+    border:1px solid var(--border); border-radius:8px; padding:.35rem .6rem; font-size:.78rem;
+    background:transparent; color:var(--link); cursor:pointer;
+  }}
+  .detail-related button:hover, .detail-history button:hover {{ border-color:var(--orange); color:var(--orange); }}
   @media (prefers-reduced-motion: reduce) {{
     .live-dot {{ animation:none; box-shadow:none; }}
+    .detail-scrim, .detail-sheet {{ transition:none; }}
   }}
   @media (min-width:720px) {{
     .wrap {{ padding:1.5rem 1.25rem 3.75rem; }}
@@ -1584,11 +1753,35 @@ html = f'''<!DOCTYPE html>
   {glance_html(status.get("pending"), status.get("sections"))}{type_tabs_html(status.get("sections"), status.get("pending"))}
   {''.join(sections_html)}
   </div>
+  <div id="detail-scrim" class="detail-scrim" hidden></div>
+  <aside id="detail-sheet" class="detail-sheet" hidden role="dialog" aria-modal="true" aria-labelledby="detail-title">
+    <div class="detail-head">
+      <div class="detail-head-copy">
+        <button id="detail-back" class="detail-back" type="button" hidden>Back</button>
+        <h2 id="detail-title">Details</h2>
+      </div>
+      <button id="detail-close" class="detail-close" type="button" aria-label="Close details">Close</button>
+    </div>
+    <p id="detail-meta" class="detail-meta"></p>
+    <p id="detail-time" class="detail-time"></p>
+    <p id="detail-task" class="detail-task"></p>
+    <p id="detail-goal" class="detail-goal"></p>
+    <dl id="detail-facts" class="detail-facts"></dl>
+    <p id="detail-note" class="detail-note"></p>
+    <div id="detail-links" class="detail-links"></div>
+    <h3 id="detail-related-title" class="detail-events-title" hidden>Related</h3>
+    <div id="detail-related" class="detail-related"></div>
+    <h3 id="detail-events-title" class="detail-events-title" hidden>Now</h3>
+    <ul id="detail-events" class="detail-events"></ul>
+    <h3 id="detail-history-title" class="detail-events-title" hidden>History</h3>
+    <ol id="detail-history" class="detail-history"></ol>
+  </aside>
   <footer>
     <p><a href="https://github.com/rupret007/bob-ops-dashboard">rupret007/bob-ops-dashboard</a>
     · <a href="./status.json">status.json</a></p>
   </footer>
 </div>
+<script id="status-bootstrap" type="application/json">{json.dumps(status, ensure_ascii=True).replace("<", "\\u003c")}</script>
 <script>
 function focusKey(kind, raw) {{
   var prefix = String(kind || "").replace(/^\s+|\s+$/g, "").toLowerCase();
@@ -1604,6 +1797,24 @@ function focusKey(kind, raw) {{
     return "";
   }}
   return prefix + ":" + token;
+}}
+function laneIsHighLevel(p) {{
+  if (!p || typeof p !== "object") return true;
+  if (p.private === true) return true;
+  if (p.accessible === false) return true;
+  return false;
+}}
+function sortHistoryEntries(rows, limit) {{
+  var out = [];
+  var i;
+  for (i = 0; i < (rows || []).length; i += 1) {{
+    if (rows[i]) out.push(rows[i]);
+  }}
+  out.sort(function (a, b) {{
+    return (Number(b && b.at) || 0) - (Number(a && a.at) || 0);
+  }});
+  var cap = (typeof limit === "number" && isFinite(limit) && limit > 0) ? Math.floor(limit) : 8;
+  return out.slice(0, cap);
 }}
 (function () {{
   // Public board: URL is enough. Real yes is a GitHub issue from rupret007.
@@ -1892,7 +2103,43 @@ function focusKey(kind, raw) {{
   var silenceDetailEl = document.getElementById("silence-detail");
   var retryStatus = document.getElementById("retry-status");
   var boardEl = document.getElementById("board");
+  var detailScrim = document.getElementById("detail-scrim");
+  var detailSheet = document.getElementById("detail-sheet");
+  var detailTitleEl = document.getElementById("detail-title");
+  var detailMetaEl = document.getElementById("detail-meta");
+  var detailTimeEl = document.getElementById("detail-time");
+  var detailTaskEl = document.getElementById("detail-task");
+  var detailGoalEl = document.getElementById("detail-goal");
+  var detailFactsEl = document.getElementById("detail-facts");
+  var detailNoteEl = document.getElementById("detail-note");
+  var detailLinksEl = document.getElementById("detail-links");
+  var detailEventsEl = document.getElementById("detail-events");
+  var detailEventsTitleEl = document.getElementById("detail-events-title");
+  var detailHistoryEl = document.getElementById("detail-history");
+  var detailHistoryTitleEl = document.getElementById("detail-history-title");
+  var detailRelatedEl = document.getElementById("detail-related");
+  var detailRelatedTitleEl = document.getElementById("detail-related-title");
+  var detailCloseEl = document.getElementById("detail-close");
+  var detailBackEl = document.getElementById("detail-back");
   var pollFailStreak = 0;
+  var detailOpen = false;
+  var detailToken = "";
+  var detailTrail = [];
+  var detailHistoryDepth = 0;
+  var lastStatusData = null;
+
+  function bootstrapStatus() {{
+    var el = document.getElementById("status-bootstrap");
+    if (!el) return null;
+    var raw = el.textContent || "";
+    if (!raw) return null;
+    try {{
+      var parsed = JSON.parse(raw);
+      return parsed && typeof parsed === "object" ? parsed : null;
+    }} catch (e) {{
+      return null;
+    }}
+  }}
 
   var CHIP_COLORS = {{
     "green": ["#16a34a", "#052e16", "#bbf7d0"],
@@ -2007,6 +2254,562 @@ function focusKey(kind, raw) {{
     if (actions) out.ci = actions;
     if (game) out.game = game;
     return out;
+  }}
+  function detailStatusLabel(raw) {{
+    var status = String(raw || "").trim().toLowerCase();
+    if (status === "red") return "Red";
+    if (status === "yellow") return "Yellow";
+    if (status === "green") return "Green";
+    if (status === "parked") return "Parked";
+    if (status === "running") return "Running";
+    if (status === "blocked") return "Blocked";
+    if (status === "finished") return "Finished";
+    if (status === "idle") return "Idle";
+    if (status === "jeff-gate") return "After yes";
+    return status ? status.charAt(0).toUpperCase() + status.slice(1) : "Unknown";
+  }}
+  function parseCheckedAt(value) {{
+    var ms = Date.parse(String(value || ""));
+    return isFinite(ms) ? ms : 0;
+  }}
+  function sinceLabel(iso) {{
+    var ms = parseCheckedAt(iso);
+    if (!ms) return "";
+    var diff = Date.now() - ms;
+    if (diff < 0) return "";
+    var s = Math.floor(diff / 1000);
+    if (s < 60) return s + "s ago";
+    var m = Math.floor(s / 60);
+    if (m < 60) return m + "m ago";
+    var h = Math.floor(m / 60);
+    return h + "h ago";
+  }}
+  function shortSha(raw) {{
+    var sha = String(raw || "").trim().toLowerCase();
+    return /^[0-9a-f]{{7,40}}$/.test(sha) ? sha.slice(0, 7) : "";
+  }}
+  function safeSnippetText(value) {{
+    var text = String(value || "").replace(/\\s+/g, " ").trim();
+    if (!text) return "";
+    if (text.length > 220) text = text.slice(0, 220);
+    var low = text.toLowerCase();
+    if (low.indexOf("/users/") !== -1 || low.indexOf("/home/") !== -1 || low.indexOf("c:\\\\") !== -1) return "";
+    if (low.indexOf("token") !== -1 || low.indexOf("apikey") !== -1 || low.indexOf("secret") !== -1) return "";
+    return text;
+  }}
+  function repoFromAny(raw) {{
+    var text = String(raw || "").trim();
+    if (!text) return "";
+    if (/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(text)) return text.toLowerCase();
+    var safe = safeRepoUrl(text);
+    if (!safe) return "";
+    var m = safe.match(/^https:\/\/github\.com\/([A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+)$/i);
+    return m ? m[1].toLowerCase() : "";
+  }}
+  function matchProjectForWork(row, data) {{
+    var repo = repoFromAny(row && row.repo);
+    var pr = safePrUrl(row && row.pr_url || "");
+    if (!repo && !pr) return null;
+    var best = null;
+    (data && data.sections || []).forEach(function (sec) {{
+      var sid = String(sec && sec.id || "");
+      if (sid === "controls" || sid === "features" || sid === "abilities") return;
+      (sec && sec.projects || []).forEach(function (p) {{
+        if (!p || typeof p !== "object") return;
+        if (p.control_action) return;
+        var prep = repoFromAny(p.repo || p.repo_url || p.url || "");
+        if (repo && prep && prep === repo) {{
+          if (pr && safePrUrl(p.open_pr_url || "") === pr) best = p;
+          else if (!best) best = p;
+        }}
+      }});
+    }});
+    return best;
+  }}
+  function noteText(item) {{
+    if (!item || typeof item !== "object") return "";
+    if (item.notes) return String(item.notes).trim();
+    if (item.goal) return String(item.goal).trim();
+    return "";
+  }}
+  function statusSections(data) {{
+    var out = [];
+    (data && data.sections || []).forEach(function (sec) {{
+      if (!sec || typeof sec !== "object") return;
+      var sid = String(sec.id || "");
+      (sec.projects || []).forEach(function (p) {{
+        if (!p || typeof p !== "object") return;
+        var key = focusKey("project", p.name);
+        if (!key) return;
+        out.push({{
+          token: key,
+          section: sid,
+          sectionTitle: String(sec.title || sid),
+          item: p
+        }});
+      }});
+    }});
+    return out;
+  }}
+  function eventRow(text, href) {{
+    var msg = String(text || "").trim();
+    if (!msg) return null;
+    var safe = workHref(href || "");
+    return safe ? {{ text: msg, href: safe }} : {{ text: msg, href: "" }};
+  }}
+  function historyItem(text, href, at) {{
+    var row = eventRow(text, href);
+    if (!row) return null;
+    row.at = parseCheckedAt(at);
+    if (row.at) row.when = sinceLabel(at);
+    return row;
+  }}
+  function stackLabel(p) {{
+    var stack = p && p.open_pr_stack;
+    if (!Array.isArray(stack) || stack.length < 2 || p.open_prs !== stack.length) return "";
+    var numbers = [];
+    var seen = {{}};
+    for (var i = 0; i < stack.length; i += 1) {{
+      var row = stack[i];
+      var number = row && row.number;
+      if (typeof number !== "number" || !isFinite(number) || number <= 0 || Math.floor(number) !== number || seen[number]) return "";
+      var url = String(row.url || "");
+      var match = url.match(/^https:\/\/github\.com\/rupret007\/[A-Za-z0-9._-]+\/pull\/([1-9][0-9]*)$/i);
+      if (!match || Number(match[1]) !== number) return "";
+      seen[number] = true;
+      numbers.push("#" + number);
+    }}
+    return numbers.length <= 4 ? ("Stack " + numbers.join(" -> ")) : (numbers.length + "-PR stack");
+  }}
+  function projectEvents(p) {{
+    if (!p || typeof p !== "object" || laneIsHighLevel(p)) return [];
+    var out = [];
+    var signal = compactSignal(p);
+    if (signal) out.push(eventRow("Signal: " + signal, signalHref(p)));
+    var lease = coordSignal(p);
+    if (lease && signal !== lease) out.push(eventRow("Coordination: " + lease, coordPrUrl(p)));
+    return out.filter(Boolean).slice(0, 3);
+  }}
+  function projectHistory(p) {{
+    if (!p || typeof p !== "object" || laneIsHighLevel(p)) return [];
+    var out = [];
+    var ci = p.ci && typeof p.ci === "object" ? p.ci : {{}};
+    var concl = String(ci.conclusion || "").trim().toLowerCase();
+    if (concl && concl !== "skipped" && concl !== "cancelled") {{
+      var ciName = String(ci.name || "CI").trim() || "CI";
+      out.push(historyItem(ciName + ": " + concl + (ci.sha ? " (" + shortSha(ci.sha) + ")" : ""), ci.html_url || p.ci_url, ci.created));
+    }}
+    if (shortSha(p.tip_sha)) {{
+      out.push(historyItem("Tip " + shortSha(p.tip_sha), p.repo_url || p.url, p.tip_date));
+    }}
+    var rel = String(p.release || "").trim();
+    if (rel) {{
+      var relHref = latestReleaseUrlFromRepo(p.repo_url || p.url || "") || safeReleaseUrl(p.release_url || "");
+      var relText = releaseMatchesTip(p) === false ? ("Latest " + rel + " != source") : ("Latest " + rel);
+      out.push(historyItem(relText, relHref, ""));
+    }}
+    var prs = (typeof p.open_prs === "number" && isFinite(p.open_prs)) ? p.open_prs : 0;
+    if (prs > 0) {{
+      var review = stackLabel(p) || (prs === 1 ? "1 open PR" : prs + " open PRs");
+      out.push(historyItem("Review: " + review, prs === 1 ? p.open_pr_url : pullsUrlFromRepo(p.repo_url || p.url || ""), ""));
+    }}
+    var lease = coordSignal(p);
+    if (lease) out.push(historyItem("Coordination: " + lease, coordPrUrl(p), ""));
+    if (p.agent_url) out.push(historyItem("Agent attached", p.agent_url, ""));
+    return sortHistoryEntries(out, 8);
+  }}
+  function addProjectFacts(meta, project, sectionTitle) {{
+    if (laneIsHighLevel(project)) {{
+      addFact(meta, "Visibility", "High-level only", "");
+      addFact(meta, "Type", sectionTitle, "");
+      return;
+    }}
+    addFact(meta, "Type", sectionTitle, "");
+    var repo = String(project.repo || "").trim();
+    addFact(meta, "Repo", repo, project.repo_url || project.url || "");
+    addFact(meta, "Default branch", project.default_branch, "");
+    addFact(meta, "Tip SHA", shortSha(project.tip_sha), "");
+    if (project.tip_date) {{
+      var tipAge = sinceLabel(project.tip_date);
+      addFact(meta, "Tip date", tipAge ? (project.tip_date + " (" + tipAge + ")") : String(project.tip_date), "");
+    }}
+    var ci = project.ci && typeof project.ci === "object" ? project.ci : {{}};
+    var concl = String(ci.conclusion || "").trim().toLowerCase();
+    if (concl && concl !== "skipped" && concl !== "cancelled") {{
+      var ciLabel = (ci.name ? String(ci.name) + ": " : "") + concl + (ci.sha ? " (" + shortSha(ci.sha) + ")" : "");
+      addFact(meta, "CI", ciLabel, safeActionsUrl(ci.html_url || project.ci_url || ""));
+    }}
+    var signal = compactSignal(project);
+    if (signal) addFact(meta, "Signal", signal, signalHref(project));
+    var prs = (typeof project.open_prs === "number" && isFinite(project.open_prs)) ? project.open_prs : 0;
+    var review = stackLabel(project);
+    if (review) addFact(meta, "Review", review, pullsUrlFromRepo(project.repo_url || project.url || ""));
+    else if (prs > 0) addFact(meta, "Open PRs", String(prs), prs === 1 ? project.open_pr_url : pullsUrlFromRepo(project.repo_url || project.url || ""));
+    var rel = String(project.release || "").trim();
+    if (rel) addFact(meta, "Release", rel, latestReleaseUrlFromRepo(project.repo_url || project.url || "") || project.release_url || "");
+    if (releaseMatchesTip(project) === false) {{
+      addFact(meta, "Latest vs source", "Latest != source", latestReleaseUrlFromRepo(project.repo_url || project.url || ""));
+    }}
+    var coord = project.coord && typeof project.coord === "object" ? project.coord : {{}};
+    var leaseState = String(coord.lease_state || "").trim();
+    if (leaseState && leaseState.toLowerCase() !== "none") addFact(meta, "Lease", leaseState, "");
+    if (coord.next) addFact(meta, "Next action", safeSnippetText(coord.next), "");
+  }}
+  function relatedForWork(row, data) {{
+    var project = matchProjectForWork(row, data);
+    if (!project || laneIsHighLevel(project)) return [];
+    var key = focusKey("project", project.name);
+    if (!key) return [];
+    return [{{ token: key, label: String(project.name || "Lane"), kind: "project" }}];
+  }}
+  function relatedForProject(project, data) {{
+    if (!project || laneIsHighLevel(project)) return [];
+    var out = [];
+    var rows = normalizeLlmWork((data && data.llm_work) || []);
+    for (var i = 0; i < rows.length; i += 1) {{
+      var row = rows[i];
+      var matched = matchProjectForWork(row, data);
+      if (!matched || String(matched.name || "") !== String(project.name || "")) continue;
+      var id = String(row.id || "").trim().toLowerCase();
+      if (!/^[a-z0-9-]{{1,64}}$/.test(id)) continue;
+      out.push({{ token: "work:" + id, label: String(row.name || id), kind: "work" }});
+    }}
+    return out.slice(0, 6);
+  }}
+  function workEvents(row, data) {{
+    if (!row || typeof row !== "object") return [];
+    var out = [];
+    var probes = (data && data.agents) || [];
+    for (var i = 0; i < probes.length; i += 1) {{
+      var probe = probes[i];
+      if (!probe || String(probe.id || "") !== String(row.id || "")) continue;
+      var state = detailStatusLabel(probe.state || "unknown");
+      out.push(eventRow("Probe state: " + state, ""));
+      break;
+    }}
+    var clouds = (data && data.cloud_agents) || [];
+    for (var j = 0; j < clouds.length; j += 1) {{
+      var cloud = clouds[j];
+      if (!cloud || !safeAgentUrl(cloud.url)) continue;
+      if (row.pr_url && safePrUrl(cloud.pr_url || "") === safePrUrl(row.pr_url || "")) {{
+        out.push(eventRow("Cloud handoff: " + String(cloud.name || "Agent"), cloud.url));
+        break;
+      }}
+    }}
+    return out.filter(Boolean).slice(0, 4);
+  }}
+  function workHistory(row, project, cloud) {{
+    var out = [];
+    function add(text, href, at) {{
+      var clean = safeSnippetText(text);
+      if (!clean) return;
+      var item = historyItem(clean, href, at);
+      if (item) out.push(item);
+    }}
+    add(row && row.why);
+    add(row && row.note);
+    add(row && row.last_task);
+    if (project && !laneIsHighLevel(project) && project.coord && project.coord.next) {{
+      add(project.coord.next);
+    }}
+    add(cloud && cloud.detail, cloud && cloud.url, cloud && cloud.checked_at);
+    if (project && !laneIsHighLevel(project)) {{
+      var more = projectHistory(project);
+      for (var k = 0; k < more.length; k += 1) out.push(more[k]);
+    }}
+    return sortHistoryEntries(out, 8);
+  }}
+  function detailLinks(item, kind) {{
+    var links = [];
+    if (kind === "project") {{
+      var hrefs = laneHrefs(item);
+      if (hrefs.pr) links.push({{ label: "Open PR", href: hrefs.pr }});
+      if (hrefs.ci) links.push({{ label: "Open CI", href: hrefs.ci }});
+      if (hrefs.agent) links.push({{ label: "Open agent", href: hrefs.agent }});
+      if (hrefs.repo) links.push({{ label: "Open repo", href: hrefs.repo }});
+      if (hrefs.game) links.push({{ label: "Play game", href: hrefs.game }});
+    }} else {{
+      var agent = safeAgentUrl(item.agent_url || "");
+      var pr = safePrUrl(item.pr_url || "");
+      var repo = item.repo ? safeRepoUrl("https://github.com/" + item.repo) : "";
+      if (agent) links.push({{ label: "Open agent", href: agent }});
+      if (pr) links.push({{ label: "Open PR", href: pr }});
+      if (repo) links.push({{ label: "Open repo", href: repo }});
+    }}
+    return links;
+  }}
+  function addFact(meta, label, value, href) {{
+    var text = String(value || "").trim();
+    if (!text) return;
+    var row = {{ label: String(label || "").trim(), value: text, href: workHref(href || "") }};
+    if (!row.label) return;
+    meta.facts.push(row);
+  }}
+  function detailLookup(token, data) {{
+    if (!token) return null;
+    if (token.indexOf("work:") === 0) {{
+      var workId = token.slice(5);
+      var rows = normalizeLlmWork((data && data.llm_work) || []);
+      for (var i = 0; i < rows.length; i += 1) {{
+        if (String(rows[i].id || "") === workId) {{
+          var row = rows[i];
+          var project = matchProjectForWork(row, data);
+          var cloud = null;
+          var clouds = (data && data.cloud_agents) || [];
+          for (var c = 0; c < clouds.length; c += 1) {{
+            var candidate = clouds[c];
+            if (!candidate) continue;
+            var cUrl = safeAgentUrl(candidate.url || "");
+            if (!cUrl) continue;
+            if (row.agent_url && cUrl === safeAgentUrl(row.agent_url || "")) {{ cloud = candidate; break; }}
+            if (row.pr_url && safePrUrl(candidate.pr_url || "") === safePrUrl(row.pr_url || "")) {{ cloud = candidate; }}
+          }}
+          var meta = {{
+            token: token,
+            kind: "work",
+            title: row.name || laneName(workId),
+            status: detailStatusLabel(row.status || "idle"),
+            generated: (data && data.generated_at_display) || "",
+            task: String(row.task_full || row.task_title || "").trim(),
+            goal: String(row.goal_full || row.goal || "").trim(),
+            note: safeSnippetText(row.note_full || row.note || row.why || row.last_task_full || row.last_task) || "",
+            links: detailLinks(row, "work"),
+            events: workEvents(row, data),
+            history: workHistory(row, project, cloud),
+            related: relatedForWork(row, data),
+            facts: []
+          }};
+          addFact(meta, "Model", safeModelId(row.model) || "Unknown", "");
+          var spendSession = String(row.spend_session || "").trim();
+          var spendDay = String(row.spend_day || "").trim();
+          if (spendSession) addFact(meta, "Session spend", spendSession, "");
+          if (spendDay) addFact(meta, "Today spend", spendDay, "");
+          var source = String(row.source || "").trim().toLowerCase();
+          if (/^[a-z0-9._-]{{1,32}}$/.test(source)) addFact(meta, "Source", source, "");
+          if (project && !laneIsHighLevel(project)) {{
+            var ci = project.ci && typeof project.ci === "object" ? project.ci : {{}};
+            var ciConcl = String(ci.conclusion || "").trim().toLowerCase();
+            if (ciConcl && ciConcl !== "skipped" && ciConcl !== "cancelled") {{
+              var ciHref = safeActionsUrl(ci.html_url || "");
+              if (ciHref && meta.links.filter(function (entry) {{ return entry && entry.label === "Open CI"; }}).length === 0) {{
+                meta.links.push({{ label: "Open CI", href: ciHref }});
+              }}
+              var ciLabel = (safePrUrl(project.open_pr_url || "") && safePrUrl(project.open_pr_url || "") === safePrUrl(row.pr_url || ""))
+                ? "CI (linked PR)" : "CI (repo)";
+              addFact(meta, ciLabel, ciConcl + (ci.sha ? " (" + shortSha(ci.sha) + ")" : ""), ciHref);
+            }}
+            addFact(meta, "Tip SHA", shortSha(project.tip_sha), "");
+            var coord = project.coord && typeof project.coord === "object" ? project.coord : {{}};
+            if (coord.lease_state && String(coord.lease_state).toLowerCase() !== "none") {{
+              addFact(meta, "Lease", String(coord.lease_state), "");
+            }}
+            if (coord.next) addFact(meta, "Next action", safeSnippetText(coord.next), "");
+          }}
+          addFact(meta, "Repo", row.repo || "", row.repo ? "https://github.com/" + row.repo : "");
+          addFact(meta, "Branch", row.branch || "", "");
+          if (row.pr_number || row.pr_url) addFact(meta, "PR", row.pr_number ? ("#" + row.pr_number) : "Open PR", row.pr_url || "");
+          var agentUrl = safeAgentUrl(row.agent_url || (cloud && cloud.url) || "");
+          var agentId = agentUrl ? agentUrl.split("/").pop() : "";
+          if (agentUrl && meta.links.filter(function (entry) {{ return entry && entry.label === "Open agent"; }}).length === 0) {{
+            meta.links.push({{ label: "Open agent", href: agentUrl }});
+          }}
+          addFact(meta, "Cloud agent", agentId, agentUrl);
+          var checked = (cloud && cloud.checked_at) || "";
+          if (checked) {{
+            var age = sinceLabel(checked);
+            addFact(meta, "Last update", age ? (checked + " (" + age + ")") : checked, "");
+          }} else if (meta.generated) {{
+            addFact(meta, "Last update", meta.generated, "");
+          }}
+          if (!meta.note && row.last_task) meta.note = safeSnippetText(row.last_task);
+          return meta;
+        }}
+      }}
+      return null;
+    }}
+    var sections = statusSections(data);
+    for (var j = 0; j < sections.length; j += 1) {{
+      if (sections[j].token !== token) continue;
+      var project = sections[j].item || {{}};
+      var meta = {{
+        token: token,
+        kind: "project",
+        title: String(project.name || "Project"),
+        status: detailStatusLabel(project.chip || project.status || ""),
+        task: "",
+        goal: "",
+        note: noteText(project),
+        links: laneIsHighLevel(project) ? [] : detailLinks(project, "project"),
+        events: projectEvents(project),
+        history: projectHistory(project),
+        related: relatedForProject(project, data),
+        facts: [],
+        generated: (data && data.generated_at_display) || ""
+      }};
+      addProjectFacts(meta, project, sections[j].sectionTitle || sections[j].section || "");
+      return meta;
+    }}
+    return null;
+  }}
+  function paintEntryList(el, titleEl, rows) {{
+    if (!el || !titleEl) return;
+    el.innerHTML = "";
+    var list = rows || [];
+    var shown = 0;
+    list.forEach(function (entry) {{
+      if (!entry || !entry.text) return;
+      var li = document.createElement("li");
+      if (entry.when) {{
+        var when = document.createElement("span");
+        when.className = "detail-when";
+        when.textContent = entry.when;
+        li.appendChild(when);
+        li.appendChild(document.createTextNode(" "));
+      }}
+      var href = workHref(entry.href || "");
+      if (href) {{
+        var a = document.createElement("a");
+        a.href = href;
+        a.target = "_blank";
+        a.rel = "noopener noreferrer";
+        a.setAttribute("data-open", "work");
+        a.textContent = entry.text;
+        li.appendChild(a);
+      }} else if (entry.nav) {{
+        var nav = document.createElement("button");
+        nav.type = "button";
+        nav.setAttribute("data-detail-nav", entry.nav);
+        nav.textContent = entry.text;
+        li.appendChild(nav);
+      }} else {{
+        li.appendChild(document.createTextNode(entry.text));
+      }}
+      el.appendChild(li);
+      shown += 1;
+    }});
+    titleEl.hidden = shown === 0;
+  }}
+  function paintDetail(meta) {{
+    if (!meta || !detailSheet) return;
+    detailTitleEl.textContent = meta.title || "Details";
+    var kindLabel = meta.kind === "work" ? "Work now" : "Lane";
+    detailMetaEl.textContent = kindLabel + " \\u00b7 Status: " + (meta.status || "Unknown");
+    detailTimeEl.textContent = meta.generated ? ("Snapshot: " + meta.generated) : "";
+    detailTaskEl.textContent = meta.task ? ("Task: " + meta.task) : "";
+    detailGoalEl.textContent = meta.goal ? ("Goal: " + meta.goal) : "";
+    if (detailBackEl) detailBackEl.hidden = detailTrail.length === 0;
+    detailFactsEl.innerHTML = "";
+    (meta.facts || []).forEach(function (fact) {{
+      if (!fact || !fact.label || !fact.value) return;
+      var dt = document.createElement("dt");
+      dt.textContent = fact.label;
+      var dd = document.createElement("dd");
+      if (fact.href) {{
+        var a = document.createElement("a");
+        a.href = fact.href;
+        a.target = "_blank";
+        a.rel = "noopener noreferrer";
+        a.setAttribute("data-open", "work");
+        a.textContent = fact.value;
+        dd.appendChild(a);
+      }} else {{
+        dd.textContent = fact.value;
+      }}
+      detailFactsEl.appendChild(dt);
+      detailFactsEl.appendChild(dd);
+    }});
+    detailNoteEl.textContent = meta.note || "No additional notes.";
+    detailLinksEl.innerHTML = "";
+    (meta.links || []).forEach(function (entry) {{
+      var href = workHref(entry && entry.href || "");
+      if (!href) return;
+      var a = document.createElement("a");
+      a.href = href;
+      a.target = "_blank";
+      a.rel = "noopener noreferrer";
+      a.setAttribute("data-open", "work");
+      a.textContent = String(entry.label || "Open");
+      detailLinksEl.appendChild(a);
+    }});
+    if (detailRelatedEl && detailRelatedTitleEl) {{
+      detailRelatedEl.innerHTML = "";
+      var related = meta.related || [];
+      related.forEach(function (entry) {{
+        if (!entry || !entry.token || !entry.label) return;
+        var btn = document.createElement("button");
+        btn.type = "button";
+        btn.setAttribute("data-detail-nav", entry.token);
+        btn.textContent = (entry.kind === "work" ? "Work: " : "Lane: ") + entry.label;
+        detailRelatedEl.appendChild(btn);
+      }});
+      detailRelatedTitleEl.hidden = detailRelatedEl.childNodes.length === 0;
+    }}
+    paintEntryList(detailEventsEl, detailEventsTitleEl, meta.events || []);
+    paintEntryList(detailHistoryEl, detailHistoryTitleEl, meta.history || []);
+  }}
+  function setDetailVisibility(open) {{
+    if (!detailSheet || !detailScrim) return;
+    detailOpen = !!open;
+    if (detailOpen) {{
+      detailScrim.hidden = false;
+      detailSheet.hidden = false;
+      detailScrim.classList.add("show");
+      detailSheet.classList.add("show");
+      try {{ document.body.classList.add("detail-open"); }} catch (e) {{}}
+      return;
+    }}
+    detailScrim.classList.remove("show");
+    detailSheet.classList.remove("show");
+    detailScrim.hidden = true;
+    detailSheet.hidden = true;
+    try {{ document.body.classList.remove("detail-open"); }} catch (e2) {{}}
+  }}
+  function closeDetail(fromHistory) {{
+    if (!detailOpen) return false;
+    if (fromHistory && detailHistoryDepth > 0) {{
+      history.back();
+      return true;
+    }}
+    detailToken = "";
+    detailTrail = [];
+    setDetailVisibility(false);
+    return true;
+  }}
+  function openDetail(token, pushHistory) {{
+    var data = lastStatusData || bootstrapStatus();
+    var meta = detailLookup(token, data);
+    if (!meta) return false;
+    var already = detailOpen;
+    if (already && detailToken && detailToken !== token) {{
+      detailTrail.push(detailToken);
+    }} else if (!already) {{
+      detailTrail = [];
+    }}
+    detailToken = token;
+    paintDetail(meta);
+    setDetailVisibility(true);
+    if (pushHistory && !already) {{
+      try {{
+        history.pushState({{ detailSheet: token }}, "", location.href);
+        detailHistoryDepth += 1;
+      }} catch (e) {{}}
+    }}
+    return true;
+  }}
+  function backDetail() {{
+    var prev = detailTrail.pop();
+    if (!prev) return closeDetail(true);
+    var meta = detailLookup(prev, lastStatusData || bootstrapStatus());
+    if (!meta) return closeDetail(true);
+    detailToken = prev;
+    paintDetail(meta);
+    return true;
+  }}
+  function refreshOpenDetail() {{
+    if (!detailOpen || !detailToken) return;
+    var meta = detailLookup(detailToken, lastStatusData || bootstrapStatus());
+    if (!meta) return;
+    paintDetail(meta);
   }}
   function tapLink(href, label) {{
     if (!href) return "";
@@ -2247,6 +3050,7 @@ function focusKey(kind, raw) {{
       if (want) history.replaceState(null, "", "#" + want);
       else if ((location.hash || "").length > 1) history.replaceState(null, "", location.pathname + location.search);
     }} catch (e) {{}}
+    if (detailOpen) closeDetail(false);
   }}
   var glanceTargetTimer = null;
   function validFocusKey(raw) {{
@@ -2327,6 +3131,14 @@ function focusKey(kind, raw) {{
   window.addEventListener("hashchange", function () {{
     applyTypeTab(tabFromHash());
   }});
+  window.addEventListener("popstate", function () {{
+    if (detailOpen) {{
+      if (detailHistoryDepth > 0) detailHistoryDepth -= 1;
+      closeDetail(false);
+      return;
+    }}
+    applyTypeTab(tabFromHash());
+  }});
   function pendingShell(items) {{
     var rank = {{ high: 0, medium: 1, low: 2 }};
     var rows = (items || []).filter(function (it) {{
@@ -2402,7 +3214,8 @@ function focusKey(kind, raw) {{
     var linksHtml = links ? '<div class="lane-links">' + links + "</div>" : "";
     var focus = focusKey("project", p.name);
     var focusAttr = focus ? ' data-focus-key="' + esc(focus) + '" tabindex="-1"' : "";
-    return '<article class="lane' + quiet + '"' + focusAttr + '><h3>' + titleHtml + '</h3><div class="lane-end">' +
+    var detailAttr = focus ? ' data-detail-kind="project" data-detail-key="' + esc(focus) + '"' : "";
+    return '<article class="lane' + quiet + '"' + focusAttr + detailAttr + '><h3>' + titleHtml + '</h3><div class="lane-end">' +
       chip + signalHtml + "</div>" + linksHtml + notesHtml + "</article>";
   }}
   function lanesHtml(projects, sortAttn) {{
@@ -2529,6 +3342,21 @@ function focusKey(kind, raw) {{
     if (/[/.]$/.test(branch)) return "";
     return branch;
   }}
+  function safeModelId(value) {{
+    var model = String(value || "").trim();
+    if (!model || model.length > 80) return "";
+    if (!/^[A-Za-z0-9][A-Za-z0-9._:-]{{1,79}}$/.test(model)) return "";
+    return model;
+  }}
+  function safeSpend(value) {{
+    if (typeof value === "number" && isFinite(value) && value >= 0) {{
+      return value < 1000 ? ("$" + value.toFixed(2)) : ("$" + String(Math.round(value)));
+    }}
+    var text = String(value == null ? "" : value).trim();
+    if (!text || text.length > 20) return "";
+    if (!/^\$?[0-9,.]+$/.test(text)) return "";
+    return text.charAt(0) === "$" ? text : ("$" + text);
+  }}
   function repoFromPrUrl(url) {{
     var safe = safePrUrl(url);
     if (!safe) return "";
@@ -2548,20 +3376,28 @@ function focusKey(kind, raw) {{
     var pr = safePrUrl(raw.pr_url || raw.pr);
     var status = String(raw.status || "").toLowerCase();
     if (status !== "running" && status !== "finished" && status !== "blocked" && status !== "idle") status = "idle";
+    var model = safeModelId(raw.model) || safeModelId(raw.model_id) || safeModelId(raw.resource_model) || safeModelId(raw.runner_model);
     return {{
       id: id,
       name: laneName(id),
       task_title: compactText(raw.task_title || raw.title, 120),
+      task_full: compactText(raw.task_title || raw.title, 600),
       repo: compactText(raw.repo || repoFromPrUrl(pr), 96),
       pr_url: pr,
       pr_number: String(raw.pr_number || prNumber(pr)),
       branch: safeBranch(raw.branch),
       goal: compactText(raw.goal || raw.notes, 220),
+      goal_full: compactText(raw.goal || raw.notes, 1200),
       status: status,
+      model: model,
+      spend_session: safeSpend(raw.spend_session),
+      spend_day: safeSpend(raw.spend_day),
       agent_url: safeAgentUrl(raw.agent_url || raw.url),
       why: compactText(raw.why || raw.lane_why, 120),
       note: compactText(raw.note || raw.detail, 160),
+      note_full: compactText(raw.note || raw.detail, 900),
       last_task: compactText(raw.last_task, 120),
+      last_task_full: compactText(raw.last_task, 900),
       source: compactText(raw.source, 48)
     }};
   }}
@@ -2578,16 +3414,23 @@ function focusKey(kind, raw) {{
         id: id,
         name: laneName(id),
         task_title: row.task_title || "idle - needs assignment",
+        task_full: row.task_full || row.task_title || "idle - needs assignment",
         repo: row.repo || "",
         pr_url: row.pr_url || "",
         pr_number: row.pr_number || "",
         branch: row.branch || "",
         goal: row.goal || "",
+        goal_full: row.goal_full || row.goal || "",
         status: row.status || "idle",
+        model: safeModelId(row.model),
+        spend_session: safeSpend(row.spend_session),
+        spend_day: safeSpend(row.spend_day),
         agent_url: row.agent_url || "",
         why: row.why || "",
         note: row.note || "",
+        note_full: row.note_full || row.note || "",
         last_task: row.last_task || "",
+        last_task_full: row.last_task_full || row.last_task || "",
         source: row.source || "idle"
       }};
     }});
@@ -2618,6 +3461,9 @@ function focusKey(kind, raw) {{
     var lane = row || {{}};
     var name = lane.name || laneName(lane.id || "");
     var task = lane.task_title || "idle - needs assignment";
+    var model = safeModelId(lane.model) || "Unknown";
+    var spendSession = String(lane.spend_session || "").trim();
+    var spendDay = String(lane.spend_day || "").trim();
     var metaHtml = workMetaHtml(lane);
     var links = "";
     if (lane.agent_url) links += tapLink(lane.agent_url, "Open agent");
@@ -2629,9 +3475,17 @@ function focusKey(kind, raw) {{
     var goal = lane.goal ? '<p class="goal">' + esc(lane.goal) + "</p>" : "";
     var note = lane.note ? '<p class="note">' + esc(lane.note) + "</p>" : "";
     var lastTask = lane.last_task ? '<p class="last-task">Last: ' + esc(lane.last_task) + "</p>" : "";
-    return '<article class="agent-row" data-lane-id="' + esc(lane.id || "") + '" data-lane-status="' + esc(lane.status || "idle") + '">' +
+    var spendBits = [];
+    if (spendSession) spendBits.push("Session: " + esc(spendSession));
+    if (spendDay) spendBits.push("Today: " + esc(spendDay));
+    var spendHtml = spendBits.length > 0 ? '<p class="spend">' + spendBits.join(" \\u00b7 ") + "</p>" : "";
+    var detailKey = lane.id ? "work:" + lane.id : "";
+    var detailAttr = detailKey ? ' data-detail-kind="work" data-detail-key="' + esc(detailKey) + '"' : "";
+    return '<article class="agent-row" data-lane-id="' + esc(lane.id || "") + '" data-lane-status="' + esc(lane.status || "idle") + '"' + detailAttr + '>' +
       '<div class="agent-head"><h3>' + esc(name) + '</h3>' + workChip(lane.status) + "</div>" +
       '<p class="task">' + esc(task) + "</p>" +
+      '<p class="model">Model: ' + esc(model) + "</p>" +
+      spendHtml +
       '<p class="meta">' + metaHtml + "</p>" +
       goal + note + lastTask +
       (links ? '<div class="agent-links">' + links + "</div>" : "") +
@@ -2793,6 +3647,7 @@ function focusKey(kind, raw) {{
         status: el.getAttribute("data-lane-status") || "idle",
         name: ((el.querySelector("h3") || {{}}).textContent) || "",
         task_title: ((el.querySelector(".task") || {{}}).textContent) || "",
+        model: ((((el.querySelector(".model") || {{}}).textContent) || "").replace(/^Model:\\s*/i, "")),
         goal: ((el.querySelector(".goal") || {{}}).textContent) || "",
         note: ((el.querySelector(".note") || {{}}).textContent) || "",
         last_task: (((el.querySelector(".last-task") || {{}}).textContent) || "").replace(/^Last:\s*/i, "")
@@ -2802,6 +3657,7 @@ function focusKey(kind, raw) {{
 
   function renderBoard(data) {{
     if (!boardEl || !data || !Array.isArray(data.sections)) return;
+    lastStatusData = data;
     lastCloud = sanitizeCloudAgents((data && data.cloud_agents) || lastCloud);
     paintAgents((data && data.llm_work) || []);
     paintHardenWindow((data && data.harden_window) || lastHarden || {{}});
@@ -2846,6 +3702,7 @@ function focusKey(kind, raw) {{
     boardEl.setAttribute("data-fp", html);
     restoreOpen(open);
     applyTypeTab(currentTypeTab);
+    refreshOpenDetail();
     window.dispatchEvent(new CustomEvent("bob-ops-painted"));
   }}
 
@@ -2895,6 +3752,7 @@ function focusKey(kind, raw) {{
   }}
   lastAgents = readDomLlmWork();
   lastCloud = [];
+  lastStatusData = bootstrapStatus();
   function signalHref(p) {{
     var signal = compactSignal(p);
     if (!signal) return "";
@@ -2947,6 +3805,60 @@ function focusKey(kind, raw) {{
   window.workHref = workHref;
   window.openWorkLink = openWorkLink;
   document.addEventListener("click", handleWorkClick);
+  function detailTokenForRow(row) {{
+    if (!row) return "";
+    var kind = String(row.getAttribute("data-detail-kind") || "");
+    var token = String(row.getAttribute("data-detail-key") || "");
+    if ((kind !== "project" && kind !== "work") || !token) return "";
+    return token;
+  }}
+  function handleDetailTap(ev) {{
+    if (!ev || ev.defaultPrevented) return false;
+    if (ev.metaKey || ev.ctrlKey || ev.shiftKey || ev.altKey) return false;
+    var target = ev.target;
+    if (!target || !target.closest) return false;
+    if (target.closest("a,button,summary,[data-dec],[data-action],[data-tab],[data-detail-nav]")) return false;
+    var row = target.closest("[data-detail-key]");
+    if (!row) return false;
+    var token = detailTokenForRow(row);
+    if (!token) return false;
+    if (ev.preventDefault) ev.preventDefault();
+    return openDetail(token, true);
+  }}
+  function handleDetailNav(ev) {{
+    if (!ev || ev.defaultPrevented) return false;
+    if (ev.metaKey || ev.ctrlKey || ev.shiftKey || ev.altKey) return false;
+    var target = ev.target;
+    if (!target || !target.closest) return false;
+    var nav = target.closest("[data-detail-nav]");
+    if (!nav || (detailSheet && !detailSheet.contains(nav))) return false;
+    var token = String(nav.getAttribute("data-detail-nav") || "");
+    if (!token) return false;
+    if (ev.preventDefault) ev.preventDefault();
+    return openDetail(token, false);
+  }}
+  document.addEventListener("click", handleDetailTap);
+  document.addEventListener("click", handleDetailNav);
+  document.addEventListener("keydown", function (ev) {{
+    if (!ev) return;
+    if (ev.key !== "Escape") return;
+    if (detailOpen) closeDetail(true);
+  }});
+  if (detailBackEl) {{
+    detailBackEl.addEventListener("click", function () {{
+      backDetail();
+    }});
+  }}
+  if (detailCloseEl) {{
+    detailCloseEl.addEventListener("click", function () {{
+      closeDetail(true);
+    }});
+  }}
+  if (detailScrim) {{
+    detailScrim.addEventListener("click", function () {{
+      closeDetail(true);
+    }});
+  }}
   function poll() {{
     var seq = ++pollSeq;
     setRetryBusy(true);
@@ -2966,6 +3878,7 @@ function focusKey(kind, raw) {{
       }})
       .then(function (data) {{
         if (!pollFailureCounts(seq, pollSeq)) return;
+        lastStatusData = data;
         var fp = boardFingerprint(data);
         var decision = pollPaintDecision(data && data.generated_at, known, lastFp, fp);
         if (decision === "ignore") {{
