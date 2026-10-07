@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-10-06T21:40:30.677249-05:00",
-  "generated_at_display": "Tue Oct 6, 2026 \u00b7 9:40 PM CDT",
+  "generated_at": "2026-10-07T04:22:18.820001-05:00",
+  "generated_at_display": "Wed Oct 7, 2026 \u00b7 4:22 AM CDT",
   "timezone": "America/Chicago",
   "owner": "rupret007",
   "dashboard": "bob-ops-dashboard",
@@ -46,11 +46,11 @@
           "url": "https://github.com/rupret007/webjam",
           "repo_url": "https://github.com/rupret007/webjam",
           "private": false,
-          "status": "green",
-          "chip": "Green",
+          "status": "red",
+          "chip": "Red",
           "default_branch": "master",
-          "tip_sha": "7aa74be",
-          "tip_date": "2026-09-30T04:48:50Z",
+          "tip_sha": "79e89b8",
+          "tip_date": "2026-10-07T08:11:45Z",
           "open_prs": 0,
           "open_pr_url": null,
           "open_pr_number": null,
@@ -60,11 +60,11 @@
           "agent_url": null,
           "ci": {
             "name": "WebJam CI",
-            "conclusion": "success",
+            "conclusion": "failure",
             "branch": "master",
-            "sha": "7aa74be",
-            "created": "2026-09-30T04:48:54Z",
-            "html_url": "https://github.com/rupret007/webjam/actions/runs/36670539518"
+            "sha": "79e89b8",
+            "created": "2026-10-07T08:11:48Z",
+            "html_url": "https://github.com/rupret007/webjam/actions/runs/37592156894"
           },
           "release": "v0.29.0",
           "release_sha": "7aa74be",
@@ -126,8 +126,8 @@
           "status": "green",
           "chip": "Green",
           "default_branch": "main",
-          "tip_sha": "1f75ca2",
-          "tip_date": "2026-09-25T12:29:00Z",
+          "tip_sha": "ec090b4",
+          "tip_date": "2026-10-07T06:19:13Z",
           "open_prs": 0,
           "open_pr_url": null,
           "open_pr_number": null,
@@ -139,9 +139,9 @@
             "name": "Quality",
             "conclusion": "success",
             "branch": "main",
-            "sha": "1f75ca2",
-            "created": "2026-09-25T12:29:03Z",
-            "html_url": "https://github.com/rupret007/StoryBoard/actions/runs/36135172359"
+            "sha": "ec090b4",
+            "created": "2026-10-07T06:19:16Z",
+            "html_url": "https://github.com/rupret007/StoryBoard/actions/runs/37580860394"
           },
           "release": null,
           "release_sha": null,
@@ -203,8 +203,8 @@
           "status": "green",
           "chip": "Green",
           "default_branch": "main",
-          "tip_sha": "236c397",
-          "tip_date": "2026-10-05T05:25:16Z",
+          "tip_sha": "08e69e5",
+          "tip_date": "2026-10-07T05:51:43Z",
           "open_prs": 0,
           "open_pr_url": null,
           "open_pr_number": null,
@@ -216,9 +216,9 @@
             "name": "Test, Package, and Deploy Site",
             "conclusion": "success",
             "branch": "main",
-            "sha": "236c397",
-            "created": "2026-10-05T05:25:19Z",
-            "html_url": "https://github.com/rupret007/RadDadSite/actions/runs/37267713614"
+            "sha": "08e69e5",
+            "created": "2026-10-07T05:51:46Z",
+            "html_url": "https://github.com/rupret007/RadDadSite/actions/runs/37578428378"
           },
           "release": null,
           "release_sha": null,
@@ -278,7 +278,9 @@
           "chip": "Yellow",
           "notes": "Private catalog spine for StoryBoard / Show Night. Do not publish catalog content.",
           "accessible": true,
-          "ci": {},
+          "ci": {
+            "conclusion": "success"
+          },
           "coord": {
             "repo": "AI-Music-Vault",
             "agent": "none",
@@ -295,8 +297,8 @@
           "status": "green",
           "chip": "Green",
           "default_branch": "main",
-          "tip_sha": "a60d53c",
-          "tip_date": "2026-10-05T05:24:57Z",
+          "tip_sha": "28d9014",
+          "tip_date": "2026-10-07T06:10:37Z",
           "open_prs": 0,
           "open_pr_url": null,
           "open_pr_number": null,
@@ -308,9 +310,9 @@
             "name": "CI",
             "conclusion": "success",
             "branch": "main",
-            "sha": "a60d53c",
-            "created": "2026-10-05T05:25:00Z",
-            "html_url": "https://github.com/rupret007/Turdanoid/actions/runs/37267688201"
+            "sha": "28d9014",
+            "created": "2026-10-07T06:10:42Z",
+            "html_url": "https://github.com/rupret007/Turdanoid/actions/runs/37580103557"
           },
           "release": null,
           "release_sha": null,
@@ -494,8 +496,8 @@
           "status": "green",
           "chip": "Green",
           "default_branch": "main",
-          "tip_sha": "6fd0fcf",
-          "tip_date": "2026-10-06T23:20:55Z",
+          "tip_sha": "b7cf0ec",
+          "tip_date": "2026-10-07T02:40:45Z",
           "open_prs": 0,
           "open_pr_url": null,
           "open_pr_number": null,
@@ -523,7 +525,9 @@
           "chip": "Yellow",
           "notes": "Private macOS virtual-display / Cast prototype. Software validation only; Screen Recording and device steps stay owner-only.",
           "accessible": true,
-          "ci": {}
+          "ci": {
+            "conclusion": "success"
+          }
         },
         {
           "name": "OpenClaw Runtime",
@@ -668,8 +672,8 @@
             "conclusion": "failure",
             "branch": "main",
             "sha": "b2856e7",
-            "created": "2026-10-05T15:27:39Z",
-            "html_url": "https://github.com/rupret007/Andrea_NanoBot/actions/runs/37333003144"
+            "created": "2026-09-28T14:50:02Z",
+            "html_url": "https://github.com/rupret007/Andrea_NanoBot/actions/runs/36438948501"
           },
           "release": null,
           "release_sha": null,
@@ -877,7 +881,7 @@
     "barker"
   ],
   "publish_notes": "Public board -- no secrets or customer paths. Private repositories stay high-level; AI Music Vault stays private-content-boundary only.",
-  "refresh_started_ms": 1791340792533,
+  "refresh_started_ms": 1791364893136,
   "agents_source": "file:stale->unknown",
   "agents": [
     {
@@ -1033,7 +1037,7 @@
     }
   ],
   "llm_work_now_freshness": {
-    "generated_at": "2026-10-06 21:40 CT",
+    "generated_at": "2026-10-07 04:22 CT",
     "warn_ttl_sec": 1200,
     "warnings": [],
     "ok": true
