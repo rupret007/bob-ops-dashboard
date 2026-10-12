@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-10-12T10:59:08.910755-05:00",
-  "generated_at_display": "Mon Oct 12, 2026 \u00b7 10:59 AM CDT",
+  "generated_at": "2026-10-12T18:42:26.981782-05:00",
+  "generated_at_display": "Mon Oct 12, 2026 \u00b7 6:42 PM CDT",
   "timezone": "America/Chicago",
   "owner": "rupret007",
   "dashboard": "bob-ops-dashboard",
@@ -46,11 +46,11 @@
           "url": "https://github.com/rupret007/webjam",
           "repo_url": "https://github.com/rupret007/webjam",
           "private": false,
-          "status": "green",
-          "chip": "Green",
+          "status": "yellow",
+          "chip": "Yellow",
           "default_branch": "master",
-          "tip_sha": "8c55089",
-          "tip_date": "2026-10-11T16:44:50Z",
+          "tip_sha": "220eb52",
+          "tip_date": "2026-10-12T19:22:42Z",
           "open_prs": 0,
           "open_pr_url": null,
           "open_pr_number": null,
@@ -60,11 +60,11 @@
           "agent_url": null,
           "ci": {
             "name": "WebJam CI",
-            "conclusion": "success",
+            "conclusion": "queued",
             "branch": "master",
-            "sha": "8c55089",
-            "created": "2026-10-11T16:44:53Z",
-            "html_url": "https://github.com/rupret007/webjam/actions/runs/38156742951"
+            "sha": "220eb52",
+            "created": "2026-10-12T19:22:46Z",
+            "html_url": "https://github.com/rupret007/webjam/actions/runs/38297253895"
           },
           "release": "v0.29.0",
           "release_sha": "7aa74be",
@@ -123,11 +123,11 @@
           "url": "https://github.com/rupret007/StoryBoard",
           "repo_url": "https://github.com/rupret007/StoryBoard",
           "private": false,
-          "status": "green",
-          "chip": "Green",
+          "status": "yellow",
+          "chip": "Yellow",
           "default_branch": "main",
-          "tip_sha": "2643a9f",
-          "tip_date": "2026-10-11T15:45:11Z",
+          "tip_sha": "4202e15",
+          "tip_date": "2026-10-12T22:52:35Z",
           "open_prs": 0,
           "open_pr_url": null,
           "open_pr_number": null,
@@ -137,11 +137,11 @@
           "agent_url": null,
           "ci": {
             "name": "Quality",
-            "conclusion": "success",
+            "conclusion": "queued",
             "branch": "main",
-            "sha": "2643a9f",
-            "created": "2026-10-11T15:45:14Z",
-            "html_url": "https://github.com/rupret007/StoryBoard/actions/runs/38152598288"
+            "sha": "4202e15",
+            "created": "2026-10-12T22:52:38Z",
+            "html_url": "https://github.com/rupret007/StoryBoard/actions/runs/38319121052"
           },
           "release": null,
           "release_sha": null,
@@ -203,8 +203,8 @@
           "status": "green",
           "chip": "Green",
           "default_branch": "main",
-          "tip_sha": "160f81b",
-          "tip_date": "2026-10-11T15:45:29Z",
+          "tip_sha": "1fd4e13",
+          "tip_date": "2026-10-12T20:19:28Z",
           "open_prs": 0,
           "open_pr_url": null,
           "open_pr_number": null,
@@ -216,9 +216,9 @@
             "name": "Test, Package, and Deploy Site",
             "conclusion": "success",
             "branch": "main",
-            "sha": "160f81b",
-            "created": "2026-10-11T15:45:32Z",
-            "html_url": "https://github.com/rupret007/RadDadSite/actions/runs/38152621121"
+            "sha": "1fd4e13",
+            "created": "2026-10-12T20:19:31Z",
+            "html_url": "https://github.com/rupret007/RadDadSite/actions/runs/38303466277"
           },
           "release": null,
           "release_sha": null,
@@ -294,11 +294,11 @@
           "url": "https://github.com/rupret007/Turdanoid",
           "repo_url": "https://github.com/rupret007/Turdanoid",
           "private": false,
-          "status": "green",
-          "chip": "Green",
+          "status": "yellow",
+          "chip": "Yellow",
           "default_branch": "main",
-          "tip_sha": "ea0aeb5",
-          "tip_date": "2026-10-11T15:39:55Z",
+          "tip_sha": "14c77d7",
+          "tip_date": "2026-10-12T23:36:37Z",
           "open_prs": 0,
           "open_pr_url": null,
           "open_pr_number": null,
@@ -308,11 +308,11 @@
           "agent_url": null,
           "ci": {
             "name": "CI",
-            "conclusion": "success",
+            "conclusion": "in_progress",
             "branch": "main",
-            "sha": "ea0aeb5",
-            "created": "2026-10-11T15:39:58Z",
-            "html_url": "https://github.com/rupret007/Turdanoid/actions/runs/38152223964"
+            "sha": "14c77d7",
+            "created": "2026-10-12T23:36:39Z",
+            "html_url": "https://github.com/rupret007/Turdanoid/actions/runs/38323038878"
           },
           "release": null,
           "release_sha": null,
@@ -496,8 +496,8 @@
           "status": "green",
           "chip": "Green",
           "default_branch": "main",
-          "tip_sha": "bcaf6b8",
-          "tip_date": "2026-10-12T06:25:23Z",
+          "tip_sha": "f219d3f",
+          "tip_date": "2026-10-12T15:59:23Z",
           "open_prs": 0,
           "open_pr_url": null,
           "open_pr_number": null,
@@ -672,8 +672,8 @@
             "conclusion": "failure",
             "branch": "main",
             "sha": "b2856e7",
-            "created": "2026-10-05T15:27:39Z",
-            "html_url": "https://github.com/rupret007/Andrea_NanoBot/actions/runs/37333003144"
+            "created": "2026-10-12T16:22:57Z",
+            "html_url": "https://github.com/rupret007/Andrea_NanoBot/actions/runs/38276995817"
           },
           "release": null,
           "release_sha": null,
@@ -881,7 +881,7 @@
     "barker"
   ],
   "publish_notes": "Public board -- no secrets or customer paths. Private repositories stay high-level; AI Music Vault stays private-content-boundary only.",
-  "refresh_started_ms": 1791820707489,
+  "refresh_started_ms": 1791848513143,
   "agents_source": "file:stale->unknown",
   "agents": [
     {
@@ -1037,7 +1037,7 @@
     }
   ],
   "llm_work_now_freshness": {
-    "generated_at": "2026-10-12 10:59 CT",
+    "generated_at": "2026-10-12 18:42 CT",
     "warn_ttl_sec": 1200,
     "warnings": [],
     "ok": true
