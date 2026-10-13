@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-10-12T22:29:17.171524-05:00",
-  "generated_at_display": "Mon Oct 12, 2026 \u00b7 10:29 PM CDT",
+  "generated_at": "2026-10-13T06:02:18.498102-05:00",
+  "generated_at_display": "Tue Oct 13, 2026 \u00b7 6:02 AM CDT",
   "timezone": "America/Chicago",
   "owner": "rupret007",
   "dashboard": "bob-ops-dashboard",
@@ -46,11 +46,11 @@
           "url": "https://github.com/rupret007/webjam",
           "repo_url": "https://github.com/rupret007/webjam",
           "private": false,
-          "status": "red",
-          "chip": "Red",
+          "status": "green",
+          "chip": "Green",
           "default_branch": "master",
-          "tip_sha": "220eb52",
-          "tip_date": "2026-10-12T19:22:42Z",
+          "tip_sha": "580a257",
+          "tip_date": "2026-10-13T07:53:16Z",
           "open_prs": 0,
           "open_pr_url": null,
           "open_pr_number": null,
@@ -60,11 +60,11 @@
           "agent_url": null,
           "ci": {
             "name": "WebJam CI",
-            "conclusion": "failure",
+            "conclusion": "success",
             "branch": "master",
-            "sha": "220eb52",
-            "created": "2026-10-12T19:22:46Z",
-            "html_url": "https://github.com/rupret007/webjam/actions/runs/38297253895"
+            "sha": "580a257",
+            "created": "2026-10-13T07:53:19Z",
+            "html_url": "https://github.com/rupret007/webjam/actions/runs/38365569297"
           },
           "release": "v0.29.0",
           "release_sha": "7aa74be",
@@ -126,8 +126,8 @@
           "status": "green",
           "chip": "Green",
           "default_branch": "main",
-          "tip_sha": "cffa5e2",
-          "tip_date": "2026-10-13T03:01:36Z",
+          "tip_sha": "3191bfe",
+          "tip_date": "2026-10-13T09:11:48Z",
           "open_prs": 0,
           "open_pr_url": null,
           "open_pr_number": null,
@@ -139,9 +139,9 @@
             "name": "Quality",
             "conclusion": "success",
             "branch": "main",
-            "sha": "cffa5e2",
-            "created": "2026-10-13T03:01:39Z",
-            "html_url": "https://github.com/rupret007/StoryBoard/actions/runs/38339720357"
+            "sha": "3191bfe",
+            "created": "2026-10-13T09:11:51Z",
+            "html_url": "https://github.com/rupret007/StoryBoard/actions/runs/38374579737"
           },
           "release": null,
           "release_sha": null,
@@ -203,8 +203,8 @@
           "status": "green",
           "chip": "Green",
           "default_branch": "main",
-          "tip_sha": "1fd4e13",
-          "tip_date": "2026-10-12T20:19:28Z",
+          "tip_sha": "6c8eb81",
+          "tip_date": "2026-10-13T05:00:24Z",
           "open_prs": 0,
           "open_pr_url": null,
           "open_pr_number": null,
@@ -216,9 +216,9 @@
             "name": "Test, Package, and Deploy Site",
             "conclusion": "success",
             "branch": "main",
-            "sha": "1fd4e13",
-            "created": "2026-10-12T20:19:31Z",
-            "html_url": "https://github.com/rupret007/RadDadSite/actions/runs/38303466277"
+            "sha": "6c8eb81",
+            "created": "2026-10-13T05:00:27Z",
+            "html_url": "https://github.com/rupret007/RadDadSite/actions/runs/38349216872"
           },
           "release": null,
           "release_sha": null,
@@ -239,18 +239,18 @@
           "url": "https://github.com/rupret007/rad-dad-show-night",
           "repo_url": "https://github.com/rupret007/rad-dad-show-night",
           "private": false,
-          "status": "yellow",
-          "chip": "Yellow",
+          "status": "green",
+          "chip": "Green",
           "default_branch": "main",
           "tip_sha": "9516223",
           "tip_date": "2026-10-13T00:04:59Z",
-          "open_prs": 1,
-          "open_pr_url": "https://github.com/rupret007/rad-dad-show-night/pull/36",
-          "open_pr_number": 36,
+          "open_prs": 0,
+          "open_pr_url": null,
+          "open_pr_number": null,
           "open_pr_draft": false,
           "open_pr_stack": [],
           "pr_listing_complete": true,
-          "agent_url": "https://cursor.com/agents/bc-6d1aff2e-9727-586f-b98f-37d8f65e1bac",
+          "agent_url": null,
           "ci": {
             "name": "leftover-honesty",
             "conclusion": "success",
@@ -297,8 +297,8 @@
           "status": "green",
           "chip": "Green",
           "default_branch": "main",
-          "tip_sha": "14c77d7",
-          "tip_date": "2026-10-12T23:36:37Z",
+          "tip_sha": "1e3edd1",
+          "tip_date": "2026-10-13T07:10:57Z",
           "open_prs": 0,
           "open_pr_url": null,
           "open_pr_number": null,
@@ -310,9 +310,9 @@
             "name": "CI",
             "conclusion": "success",
             "branch": "main",
-            "sha": "14c77d7",
-            "created": "2026-10-12T23:36:39Z",
-            "html_url": "https://github.com/rupret007/Turdanoid/actions/runs/38323038878"
+            "sha": "1e3edd1",
+            "created": "2026-10-13T07:11:00Z",
+            "html_url": "https://github.com/rupret007/Turdanoid/actions/runs/38361066880"
           },
           "release": null,
           "release_sha": null,
@@ -496,8 +496,8 @@
           "status": "green",
           "chip": "Green",
           "default_branch": "main",
-          "tip_sha": "1e90584",
-          "tip_date": "2026-10-12T23:42:41Z",
+          "tip_sha": "ed93937",
+          "tip_date": "2026-10-13T03:29:30Z",
           "open_prs": 0,
           "open_pr_url": null,
           "open_pr_number": null,
@@ -881,7 +881,7 @@
     "barker"
   ],
   "publish_notes": "Public board -- no secrets or customer paths. Private repositories stay high-level; AI Music Vault stays private-content-boundary only.",
-  "refresh_started_ms": 1791862118224,
+  "refresh_started_ms": 1791889290168,
   "agents_source": "file:stale->unknown",
   "agents": [
     {
@@ -927,17 +927,7 @@
       "checked_at": null
     }
   ],
-  "cloud_agents": [
-    {
-      "id": "bc-6d1aff2e-9727-586f-b98f-37d8f65e1bac",
-      "name": "PR #36",
-      "state": "unknown",
-      "detail": "fix(deps): clear tip-of-main high-severity audit failure (sharp/miniflare)",
-      "url": "https://cursor.com/agents/bc-6d1aff2e-9727-586f-b98f-37d8f65e1bac",
-      "pr_url": "https://github.com/rupret007/rad-dad-show-night/pull/36",
-      "checked_at": null
-    }
-  ],
+  "cloud_agents": [],
   "llm_work": [
     {
       "id": "codex",
@@ -1037,7 +1027,7 @@
     }
   ],
   "llm_work_now_freshness": {
-    "generated_at": "2026-10-12 22:29 CT",
+    "generated_at": "2026-10-13 06:02 CT",
     "warn_ttl_sec": 1200,
     "warnings": [],
     "ok": true
