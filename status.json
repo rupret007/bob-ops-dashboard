@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-10-14T08:03:27.000935-05:00",
-  "generated_at_display": "Wed Oct 14, 2026 \u00b7 8:03 AM CDT",
+  "generated_at": "2026-10-14T13:19:20.876916-05:00",
+  "generated_at_display": "Wed Oct 14, 2026 \u00b7 1:19 PM CDT",
   "timezone": "America/Chicago",
   "owner": "rupret007",
   "dashboard": "bob-ops-dashboard",
@@ -49,11 +49,11 @@
           "status": "yellow",
           "chip": "Yellow",
           "default_branch": "master",
-          "tip_sha": "1c09430",
-          "tip_date": "2026-10-14T12:41:52Z",
-          "open_prs": 0,
-          "open_pr_url": null,
-          "open_pr_number": null,
+          "tip_sha": "871901e",
+          "tip_date": "2026-10-14T17:53:19Z",
+          "open_prs": 1,
+          "open_pr_url": "https://github.com/rupret007/webjam/pull/368",
+          "open_pr_number": 368,
           "open_pr_draft": false,
           "open_pr_stack": [],
           "pr_listing_complete": true,
@@ -62,9 +62,9 @@
             "name": "WebJam CI",
             "conclusion": "pending",
             "branch": "master",
-            "sha": "1c09430",
-            "created": "2026-10-14T12:41:56Z",
-            "html_url": "https://github.com/rupret007/webjam/actions/runs/38565805435"
+            "sha": "871901e",
+            "created": "2026-10-14T17:53:22Z",
+            "html_url": "https://github.com/rupret007/webjam/actions/runs/38610480386"
           },
           "release": "v0.29.0",
           "release_sha": "7aa74be",
@@ -239,25 +239,25 @@
           "url": "https://github.com/rupret007/rad-dad-show-night",
           "repo_url": "https://github.com/rupret007/rad-dad-show-night",
           "private": false,
-          "status": "green",
-          "chip": "Green",
+          "status": "yellow",
+          "chip": "Yellow",
           "default_branch": "main",
-          "tip_sha": "ed1c56f",
-          "tip_date": "2026-10-14T00:16:21Z",
-          "open_prs": 0,
-          "open_pr_url": null,
-          "open_pr_number": null,
+          "tip_sha": "d6bd20f",
+          "tip_date": "2026-10-14T14:12:43Z",
+          "open_prs": 1,
+          "open_pr_url": "https://github.com/rupret007/rad-dad-show-night/pull/55",
+          "open_pr_number": 55,
           "open_pr_draft": false,
           "open_pr_stack": [],
           "pr_listing_complete": true,
-          "agent_url": null,
+          "agent_url": "https://cursor.com/agents/bc-7f1be261-5dbe-5b3a-a1e1-e57ba020ba3d",
           "ci": {
             "name": "leftover-honesty",
             "conclusion": "success",
             "branch": "main",
-            "sha": "ed1c56f",
-            "created": "2026-10-14T00:16:24Z",
-            "html_url": "https://github.com/rupret007/rad-dad-show-night/actions/runs/38489208539"
+            "sha": "d6bd20f",
+            "created": "2026-10-14T14:12:46Z",
+            "html_url": "https://github.com/rupret007/rad-dad-show-night/actions/runs/38578490005"
           },
           "release": null,
           "release_sha": null,
@@ -496,8 +496,8 @@
           "status": "green",
           "chip": "Green",
           "default_branch": "main",
-          "tip_sha": "3c1651b",
-          "tip_date": "2026-10-14T07:28:21Z",
+          "tip_sha": "a53f6f2",
+          "tip_date": "2026-10-14T13:03:40Z",
           "open_prs": 0,
           "open_pr_url": null,
           "open_pr_number": null,
@@ -655,25 +655,25 @@
           "url": "https://github.com/rupret007/Andrea_NanoBot",
           "repo_url": "https://github.com/rupret007/Andrea_NanoBot",
           "private": false,
-          "status": "red",
-          "chip": "Red",
+          "status": "yellow",
+          "chip": "Yellow",
           "default_branch": "main",
-          "tip_sha": "b2856e7",
-          "tip_date": "2026-09-11T03:17:56Z",
-          "open_prs": 0,
-          "open_pr_url": null,
-          "open_pr_number": null,
+          "tip_sha": "c202b74",
+          "tip_date": "2026-10-14T18:00:59Z",
+          "open_prs": 1,
+          "open_pr_url": "https://github.com/rupret007/Andrea_NanoBot/pull/51",
+          "open_pr_number": 51,
           "open_pr_draft": false,
           "open_pr_stack": [],
           "pr_listing_complete": true,
           "agent_url": null,
           "ci": {
-            "name": "Security",
-            "conclusion": "failure",
+            "name": "AGI Layer CI",
+            "conclusion": "in_progress",
             "branch": "main",
-            "sha": "b2856e7",
-            "created": "2026-10-12T16:22:57Z",
-            "html_url": "https://github.com/rupret007/Andrea_NanoBot/actions/runs/38276995817"
+            "sha": "c202b74",
+            "created": "2026-10-14T18:01:02Z",
+            "html_url": "https://github.com/rupret007/Andrea_NanoBot/actions/runs/38611567480"
           },
           "release": null,
           "release_sha": null,
@@ -881,7 +881,7 @@
     "barker"
   ],
   "publish_notes": "Public board -- no secrets or customer paths. Private repositories stay high-level; AI Music Vault stays private-content-boundary only.",
-  "refresh_started_ms": 1791982953853,
+  "refresh_started_ms": 1792001919196,
   "agents_source": "file:stale->unknown",
   "agents": [
     {
@@ -927,7 +927,17 @@
       "checked_at": null
     }
   ],
-  "cloud_agents": [],
+  "cloud_agents": [
+    {
+      "id": "bc-7f1be261-5dbe-5b3a-a1e1-e57ba020ba3d",
+      "name": "PR #55",
+      "state": "unknown",
+      "detail": "Land acoustic TBD slot helper on main (from #35 stack)",
+      "url": "https://cursor.com/agents/bc-7f1be261-5dbe-5b3a-a1e1-e57ba020ba3d",
+      "pr_url": "https://github.com/rupret007/rad-dad-show-night/pull/55",
+      "checked_at": null
+    }
+  ],
   "llm_work": [
     {
       "id": "codex",
@@ -1027,7 +1037,7 @@
     }
   ],
   "llm_work_now_freshness": {
-    "generated_at": "2026-10-14 08:03 CT",
+    "generated_at": "2026-10-14 13:19 CT",
     "warn_ttl_sec": 1200,
     "warnings": [],
     "ok": true
