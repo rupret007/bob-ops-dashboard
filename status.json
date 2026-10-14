@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-10-14T02:28:10.238924-05:00",
-  "generated_at_display": "Wed Oct 14, 2026 \u00b7 2:28 AM CDT",
+  "generated_at": "2026-10-14T08:03:27.000935-05:00",
+  "generated_at_display": "Wed Oct 14, 2026 \u00b7 8:03 AM CDT",
   "timezone": "America/Chicago",
   "owner": "rupret007",
   "dashboard": "bob-ops-dashboard",
@@ -49,8 +49,8 @@
           "status": "yellow",
           "chip": "Yellow",
           "default_branch": "master",
-          "tip_sha": "4d149c2",
-          "tip_date": "2026-10-14T07:13:13Z",
+          "tip_sha": "1c09430",
+          "tip_date": "2026-10-14T12:41:52Z",
           "open_prs": 0,
           "open_pr_url": null,
           "open_pr_number": null,
@@ -62,9 +62,9 @@
             "name": "WebJam CI",
             "conclusion": "pending",
             "branch": "master",
-            "sha": "4d149c2",
-            "created": "2026-10-14T07:13:16Z",
-            "html_url": "https://github.com/rupret007/webjam/actions/runs/38526919433"
+            "sha": "1c09430",
+            "created": "2026-10-14T12:41:56Z",
+            "html_url": "https://github.com/rupret007/webjam/actions/runs/38565805435"
           },
           "release": "v0.29.0",
           "release_sha": "7aa74be",
@@ -203,8 +203,8 @@
           "status": "green",
           "chip": "Green",
           "default_branch": "main",
-          "tip_sha": "1ee2fc7",
-          "tip_date": "2026-10-14T01:20:03Z",
+          "tip_sha": "704ec6b",
+          "tip_date": "2026-10-14T12:41:58Z",
           "open_prs": 0,
           "open_pr_url": null,
           "open_pr_number": null,
@@ -216,9 +216,9 @@
             "name": "Test, Package, and Deploy Site",
             "conclusion": "success",
             "branch": "main",
-            "sha": "1ee2fc7",
-            "created": "2026-10-14T01:20:06Z",
-            "html_url": "https://github.com/rupret007/RadDadSite/actions/runs/38495146262"
+            "sha": "704ec6b",
+            "created": "2026-10-14T12:42:01Z",
+            "html_url": "https://github.com/rupret007/RadDadSite/actions/runs/38565816220"
           },
           "release": null,
           "release_sha": null,
@@ -496,8 +496,8 @@
           "status": "green",
           "chip": "Green",
           "default_branch": "main",
-          "tip_sha": "8f71e5a",
-          "tip_date": "2026-10-13T23:03:55Z",
+          "tip_sha": "3c1651b",
+          "tip_date": "2026-10-14T07:28:21Z",
           "open_prs": 0,
           "open_pr_url": null,
           "open_pr_number": null,
@@ -881,7 +881,7 @@
     "barker"
   ],
   "publish_notes": "Public board -- no secrets or customer paths. Private repositories stay high-level; AI Music Vault stays private-content-boundary only.",
-  "refresh_started_ms": 1791962849573,
+  "refresh_started_ms": 1791982953853,
   "agents_source": "file:stale->unknown",
   "agents": [
     {
@@ -1027,7 +1027,7 @@
     }
   ],
   "llm_work_now_freshness": {
-    "generated_at": "2026-10-14 02:28 CT",
+    "generated_at": "2026-10-14 08:03 CT",
     "warn_ttl_sec": 1200,
     "warnings": [],
     "ok": true
