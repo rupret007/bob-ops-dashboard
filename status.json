@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-10-14T18:38:57.962673-05:00",
-  "generated_at_display": "Wed Oct 14, 2026 \u00b7 6:38 PM CDT",
+  "generated_at": "2026-10-14T18:54:00.550618-05:00",
+  "generated_at_display": "Wed Oct 14, 2026 \u00b7 6:54 PM CDT",
   "timezone": "America/Chicago",
   "owner": "rupret007",
   "dashboard": "bob-ops-dashboard",
@@ -51,9 +51,9 @@
           "default_branch": "master",
           "tip_sha": "a9ff817",
           "tip_date": "2026-10-14T22:44:50Z",
-          "open_prs": 1,
-          "open_pr_url": "https://github.com/rupret007/webjam/pull/238",
-          "open_pr_number": 238,
+          "open_prs": 2,
+          "open_pr_url": "https://github.com/rupret007/webjam/pull/227",
+          "open_pr_number": 227,
           "open_pr_draft": false,
           "open_pr_stack": [],
           "pr_listing_complete": true,
@@ -73,10 +73,9 @@
           "accessible": true,
           "coord": {
             "repo": "webjam",
-            "agent": "none",
-            "lease_state": "expired",
-            "next": "",
-            "sha": "88a9c31"
+            "agent": "grok",
+            "lease_state": "active",
+            "next": ""
           }
         },
         {
@@ -496,8 +495,8 @@
           "status": "green",
           "chip": "Green",
           "default_branch": "main",
-          "tip_sha": "1d5c26e",
-          "tip_date": "2026-10-14T23:23:55Z",
+          "tip_sha": "50ca2df",
+          "tip_date": "2026-10-14T23:39:10Z",
           "open_prs": 0,
           "open_pr_url": null,
           "open_pr_number": null,
@@ -881,7 +880,7 @@
     "barker"
   ],
   "publish_notes": "Public board -- no secrets or customer paths. Private repositories stay high-level; AI Music Vault stays private-content-boundary only.",
-  "refresh_started_ms": 1792021098281,
+  "refresh_started_ms": 1792022000569,
   "agents_source": "file:stale->unknown",
   "agents": [
     {
@@ -1027,7 +1026,7 @@
     }
   ],
   "llm_work_now_freshness": {
-    "generated_at": "2026-10-14 18:38 CT",
+    "generated_at": "2026-10-14 18:54 CT",
     "warn_ttl_sec": 1200,
     "warnings": [],
     "ok": true
