@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-10-14T23:24:48.792062-05:00",
-  "generated_at_display": "Wed Oct 14, 2026 \u00b7 11:24 PM CDT",
+  "generated_at": "2026-10-14T23:39:39.238186-05:00",
+  "generated_at_display": "Wed Oct 14, 2026 \u00b7 11:39 PM CDT",
   "timezone": "America/Chicago",
   "owner": "rupret007",
   "dashboard": "bob-ops-dashboard",
@@ -49,8 +49,8 @@
           "status": "yellow",
           "chip": "Yellow",
           "default_branch": "master",
-          "tip_sha": "dfb44da",
-          "tip_date": "2026-10-15T04:04:23Z",
+          "tip_sha": "6b9670c",
+          "tip_date": "2026-10-15T04:38:06Z",
           "open_prs": 0,
           "open_pr_url": null,
           "open_pr_number": null,
@@ -60,11 +60,11 @@
           "agent_url": null,
           "ci": {
             "name": "WebJam CI",
-            "conclusion": "in_progress",
+            "conclusion": "pending",
             "branch": "master",
-            "sha": "dfb44da",
-            "created": "2026-10-15T04:07:34Z",
-            "html_url": "https://github.com/rupret007/webjam/actions/runs/38679816807"
+            "sha": "6b9670c",
+            "created": "2026-10-15T04:38:10Z",
+            "html_url": "https://github.com/rupret007/webjam/actions/runs/38682497958"
           },
           "release": "v0.29.0",
           "release_sha": "7aa74be",
@@ -495,8 +495,8 @@
           "status": "green",
           "chip": "Green",
           "default_branch": "main",
-          "tip_sha": "6b63bb1",
-          "tip_date": "2026-10-15T04:09:42Z",
+          "tip_sha": "3e1f646",
+          "tip_date": "2026-10-15T04:25:03Z",
           "open_prs": 0,
           "open_pr_url": null,
           "open_pr_number": null,
@@ -880,7 +880,7 @@
     "barker"
   ],
   "publish_notes": "Public board -- no secrets or customer paths. Private repositories stay high-level; AI Music Vault stays private-content-boundary only.",
-  "refresh_started_ms": 1792038237688,
+  "refresh_started_ms": 1792039138905,
   "agents_source": "file:stale->unknown",
   "agents": [
     {
@@ -1026,7 +1026,7 @@
     }
   ],
   "llm_work_now_freshness": {
-    "generated_at": "2026-10-14 23:24 CT",
+    "generated_at": "2026-10-14 23:39 CT",
     "warn_ttl_sec": 1200,
     "warnings": [],
     "ok": true
