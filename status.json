@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-10-15T12:56:34.509211-05:00",
-  "generated_at_display": "Thu Oct 15, 2026 \u00b7 12:56 PM CDT",
+  "generated_at": "2026-10-15T13:11:30.326288-05:00",
+  "generated_at_display": "Thu Oct 15, 2026 \u00b7 1:11 PM CDT",
   "timezone": "America/Chicago",
   "owner": "rupret007",
   "dashboard": "bob-ops-dashboard",
@@ -52,12 +52,12 @@
           "tip_sha": "f4a8ed9",
           "tip_date": "2026-10-15T17:20:04Z",
           "open_prs": 3,
-          "open_pr_url": "https://github.com/rupret007/webjam/pull/378",
-          "open_pr_number": 378,
+          "open_pr_url": "https://github.com/rupret007/webjam/pull/373",
+          "open_pr_number": 373,
           "open_pr_draft": false,
           "open_pr_stack": [],
           "pr_listing_complete": true,
-          "agent_url": "https://cursor.com/agents/bc-7ca17dc2-c3a6-52bf-9333-9fc495f6838b",
+          "agent_url": "https://cursor.com/agents/bc-0094b20f-0b59-5c08-9574-65e8068faf64",
           "ci": {
             "name": "WebJam CI",
             "conclusion": "success",
@@ -495,8 +495,8 @@
           "status": "green",
           "chip": "Green",
           "default_branch": "main",
-          "tip_sha": "a1f98ce",
-          "tip_date": "2026-10-15T17:41:53Z",
+          "tip_sha": "285c15f",
+          "tip_date": "2026-10-15T17:56:48Z",
           "open_prs": 0,
           "open_pr_url": null,
           "open_pr_number": null,
@@ -880,7 +880,7 @@
     "barker"
   ],
   "publish_notes": "Public board -- no secrets or customer paths. Private repositories stay high-level; AI Music Vault stays private-content-boundary only.",
-  "refresh_started_ms": 1792086959923,
+  "refresh_started_ms": 1792087859205,
   "agents_source": "file:stale->unknown",
   "agents": [
     {
@@ -928,12 +928,12 @@
   ],
   "cloud_agents": [
     {
-      "id": "bc-7ca17dc2-c3a6-52bf-9333-9fc495f6838b",
-      "name": "PR #378",
+      "id": "bc-0094b20f-0b59-5c08-9574-65e8068faf64",
+      "name": "PR #373",
       "state": "unknown",
-      "detail": "One-invite signaling mailbox",
-      "url": "https://cursor.com/agents/bc-7ca17dc2-c3a6-52bf-9333-9fc495f6838b",
-      "pr_url": "https://github.com/rupret007/webjam/pull/378",
+      "detail": "Proof-only cross-network acceptance (real webjam-fabric peers)",
+      "url": "https://cursor.com/agents/bc-0094b20f-0b59-5c08-9574-65e8068faf64",
+      "pr_url": "https://github.com/rupret007/webjam/pull/373",
       "checked_at": null
     }
   ],
@@ -1036,7 +1036,7 @@
     }
   ],
   "llm_work_now_freshness": {
-    "generated_at": "2026-10-15 12:56 CT",
+    "generated_at": "2026-10-15 13:11 CT",
     "warn_ttl_sec": 1200,
     "warnings": [],
     "ok": true
