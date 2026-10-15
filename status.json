@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-10-15T02:10:01.562053-05:00",
-  "generated_at_display": "Thu Oct 15, 2026 \u00b7 2:10 AM CDT",
+  "generated_at": "2026-10-15T02:24:57.760514-05:00",
+  "generated_at_display": "Thu Oct 15, 2026 \u00b7 2:24 AM CDT",
   "timezone": "America/Chicago",
   "owner": "rupret007",
   "dashboard": "bob-ops-dashboard",
@@ -49,8 +49,8 @@
           "status": "yellow",
           "chip": "Yellow",
           "default_branch": "master",
-          "tip_sha": "6b9670c",
-          "tip_date": "2026-10-15T04:38:06Z",
+          "tip_sha": "9248c5b",
+          "tip_date": "2026-10-15T07:16:34Z",
           "open_prs": 1,
           "open_pr_url": "https://github.com/rupret007/webjam/pull/373",
           "open_pr_number": 373,
@@ -60,11 +60,11 @@
           "agent_url": "https://cursor.com/agents/bc-0094b20f-0b59-5c08-9574-65e8068faf64",
           "ci": {
             "name": "WebJam CI",
-            "conclusion": "success",
+            "conclusion": "in_progress",
             "branch": "master",
-            "sha": "6b9670c",
-            "created": "2026-10-15T04:38:10Z",
-            "html_url": "https://github.com/rupret007/webjam/actions/runs/38682497958"
+            "sha": "9248c5b",
+            "created": "2026-10-15T07:16:37Z",
+            "html_url": "https://github.com/rupret007/webjam/actions/runs/38697663495"
           },
           "release": "v0.29.0",
           "release_sha": "7aa74be",
@@ -495,8 +495,8 @@
           "status": "green",
           "chip": "Green",
           "default_branch": "main",
-          "tip_sha": "2a47406",
-          "tip_date": "2026-10-15T06:55:14Z",
+          "tip_sha": "b4ca720",
+          "tip_date": "2026-10-15T07:10:17Z",
           "open_prs": 0,
           "open_pr_url": null,
           "open_pr_number": null,
@@ -880,7 +880,7 @@
     "barker"
   ],
   "publish_notes": "Public board -- no secrets or customer paths. Private repositories stay high-level; AI Music Vault stays private-content-boundary only.",
-  "refresh_started_ms": 1792048160047,
+  "refresh_started_ms": 1792049060054,
   "agents_source": "file:stale->unknown",
   "agents": [
     {
@@ -1036,7 +1036,7 @@
     }
   ],
   "llm_work_now_freshness": {
-    "generated_at": "2026-10-15 02:10 CT",
+    "generated_at": "2026-10-15 02:24 CT",
     "warn_ttl_sec": 1200,
     "warnings": [],
     "ok": true
