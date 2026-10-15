@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-10-15T16:11:58.102133-05:00",
-  "generated_at_display": "Thu Oct 15, 2026 \u00b7 4:11 PM CDT",
+  "generated_at": "2026-10-15T16:27:09.626667-05:00",
+  "generated_at_display": "Thu Oct 15, 2026 \u00b7 4:27 PM CDT",
   "timezone": "America/Chicago",
   "owner": "rupret007",
   "dashboard": "bob-ops-dashboard",
@@ -49,22 +49,22 @@
           "status": "yellow",
           "chip": "Yellow",
           "default_branch": "master",
-          "tip_sha": "96bed41",
-          "tip_date": "2026-10-15T19:51:19Z",
-          "open_prs": 1,
-          "open_pr_url": "https://github.com/rupret007/webjam/pull/382",
-          "open_pr_number": 382,
+          "tip_sha": "5c26331",
+          "tip_date": "2026-10-15T21:16:24Z",
+          "open_prs": 0,
+          "open_pr_url": null,
+          "open_pr_number": null,
           "open_pr_draft": false,
           "open_pr_stack": [],
           "pr_listing_complete": true,
-          "agent_url": "https://cursor.com/agents/bc-f11eec55-0841-5fa9-b1cc-5404abb99ce3",
+          "agent_url": null,
           "ci": {
-            "name": "Cross-network acceptance",
-            "conclusion": "success",
+            "name": "WebJam CI",
+            "conclusion": "in_progress",
             "branch": "master",
-            "sha": "96bed41",
-            "created": "2026-10-15T19:51:22Z",
-            "html_url": "https://github.com/rupret007/webjam/actions/runs/38797252463"
+            "sha": "5c26331",
+            "created": "2026-10-15T21:16:27Z",
+            "html_url": "https://github.com/rupret007/webjam/actions/runs/38808596276"
           },
           "release": "v0.29.0",
           "release_sha": "7aa74be",
@@ -495,8 +495,8 @@
           "status": "green",
           "chip": "Green",
           "default_branch": "main",
-          "tip_sha": "2d67e56",
-          "tip_date": "2026-10-15T20:57:15Z",
+          "tip_sha": "0d04c30",
+          "tip_date": "2026-10-15T21:12:12Z",
           "open_prs": 0,
           "open_pr_url": null,
           "open_pr_number": null,
@@ -880,7 +880,7 @@
     "barker"
   ],
   "publish_notes": "Public board -- no secrets or customer paths. Private repositories stay high-level; AI Music Vault stays private-content-boundary only.",
-  "refresh_started_ms": 1792098686230,
+  "refresh_started_ms": 1792099589247,
   "agents_source": "file:stale->unknown",
   "agents": [
     {
@@ -926,17 +926,7 @@
       "checked_at": null
     }
   ],
-  "cloud_agents": [
-    {
-      "id": "bc-f11eec55-0841-5fa9-b1cc-5404abb99ce3",
-      "name": "PR #382",
-      "state": "unknown",
-      "detail": "Record R13 cross-network lab PASS receipt",
-      "url": "https://cursor.com/agents/bc-f11eec55-0841-5fa9-b1cc-5404abb99ce3",
-      "pr_url": "https://github.com/rupret007/webjam/pull/382",
-      "checked_at": null
-    }
-  ],
+  "cloud_agents": [],
   "llm_work": [
     {
       "id": "codex",
@@ -1036,7 +1026,7 @@
     }
   ],
   "llm_work_now_freshness": {
-    "generated_at": "2026-10-15 16:11 CT",
+    "generated_at": "2026-10-15 16:27 CT",
     "warn_ttl_sec": 1200,
     "warnings": [],
     "ok": true
