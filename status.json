@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-10-14T23:39:39.238186-05:00",
-  "generated_at_display": "Wed Oct 14, 2026 \u00b7 11:39 PM CDT",
+  "generated_at": "2026-10-14T23:47:57.648316-05:00",
+  "generated_at_display": "Wed Oct 14, 2026 \u00b7 11:47 PM CDT",
   "timezone": "America/Chicago",
   "owner": "rupret007",
   "dashboard": "bob-ops-dashboard",
@@ -51,13 +51,13 @@
           "default_branch": "master",
           "tip_sha": "6b9670c",
           "tip_date": "2026-10-15T04:38:06Z",
-          "open_prs": 0,
-          "open_pr_url": null,
-          "open_pr_number": null,
+          "open_prs": 1,
+          "open_pr_url": "https://github.com/rupret007/webjam/pull/373",
+          "open_pr_number": 373,
           "open_pr_draft": false,
           "open_pr_stack": [],
           "pr_listing_complete": true,
-          "agent_url": null,
+          "agent_url": "https://cursor.com/agents/bc-0094b20f-0b59-5c08-9574-65e8068faf64",
           "ci": {
             "name": "WebJam CI",
             "conclusion": "pending",
@@ -495,8 +495,8 @@
           "status": "green",
           "chip": "Green",
           "default_branch": "main",
-          "tip_sha": "3e1f646",
-          "tip_date": "2026-10-15T04:25:03Z",
+          "tip_sha": "8b9bc45",
+          "tip_date": "2026-10-15T04:39:52Z",
           "open_prs": 0,
           "open_pr_url": null,
           "open_pr_number": null,
@@ -880,7 +880,7 @@
     "barker"
   ],
   "publish_notes": "Public board -- no secrets or customer paths. Private repositories stay high-level; AI Music Vault stays private-content-boundary only.",
-  "refresh_started_ms": 1792039138905,
+  "refresh_started_ms": 1792039637466,
   "agents_source": "file:stale->unknown",
   "agents": [
     {
@@ -926,7 +926,17 @@
       "checked_at": null
     }
   ],
-  "cloud_agents": [],
+  "cloud_agents": [
+    {
+      "id": "bc-0094b20f-0b59-5c08-9574-65e8068faf64",
+      "name": "PR #373",
+      "state": "unknown",
+      "detail": "Optional two-NAT Host/Join acceptance harness",
+      "url": "https://cursor.com/agents/bc-0094b20f-0b59-5c08-9574-65e8068faf64",
+      "pr_url": "https://github.com/rupret007/webjam/pull/373",
+      "checked_at": null
+    }
+  ],
   "llm_work": [
     {
       "id": "codex",
@@ -1026,7 +1036,7 @@
     }
   ],
   "llm_work_now_freshness": {
-    "generated_at": "2026-10-14 23:39 CT",
+    "generated_at": "2026-10-14 23:47 CT",
     "warn_ttl_sec": 1200,
     "warnings": [],
     "ok": true
