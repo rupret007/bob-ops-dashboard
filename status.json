@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-10-15T13:11:30.326288-05:00",
-  "generated_at_display": "Thu Oct 15, 2026 \u00b7 1:11 PM CDT",
+  "generated_at": "2026-10-15T13:26:31.791479-05:00",
+  "generated_at_display": "Thu Oct 15, 2026 \u00b7 1:26 PM CDT",
   "timezone": "America/Chicago",
   "owner": "rupret007",
   "dashboard": "bob-ops-dashboard",
@@ -49,9 +49,9 @@
           "status": "yellow",
           "chip": "Yellow",
           "default_branch": "master",
-          "tip_sha": "f4a8ed9",
-          "tip_date": "2026-10-15T17:20:04Z",
-          "open_prs": 3,
+          "tip_sha": "f32298d",
+          "tip_date": "2026-10-15T18:25:02Z",
+          "open_prs": 1,
           "open_pr_url": "https://github.com/rupret007/webjam/pull/373",
           "open_pr_number": 373,
           "open_pr_draft": false,
@@ -60,11 +60,11 @@
           "agent_url": "https://cursor.com/agents/bc-0094b20f-0b59-5c08-9574-65e8068faf64",
           "ci": {
             "name": "WebJam CI",
-            "conclusion": "success",
+            "conclusion": "pending",
             "branch": "master",
-            "sha": "f4a8ed9",
-            "created": "2026-10-15T17:20:07Z",
-            "html_url": "https://github.com/rupret007/webjam/actions/runs/38776458171"
+            "sha": "f32298d",
+            "created": "2026-10-15T18:25:05Z",
+            "html_url": "https://github.com/rupret007/webjam/actions/runs/38785441718"
           },
           "release": "v0.29.0",
           "release_sha": "7aa74be",
@@ -495,8 +495,8 @@
           "status": "green",
           "chip": "Green",
           "default_branch": "main",
-          "tip_sha": "285c15f",
-          "tip_date": "2026-10-15T17:56:48Z",
+          "tip_sha": "2461d8b",
+          "tip_date": "2026-10-15T18:11:45Z",
           "open_prs": 0,
           "open_pr_url": null,
           "open_pr_number": null,
@@ -880,7 +880,7 @@
     "barker"
   ],
   "publish_notes": "Public board -- no secrets or customer paths. Private repositories stay high-level; AI Music Vault stays private-content-boundary only.",
-  "refresh_started_ms": 1792087859205,
+  "refresh_started_ms": 1792088761544,
   "agents_source": "file:stale->unknown",
   "agents": [
     {
@@ -1036,7 +1036,7 @@
     }
   ],
   "llm_work_now_freshness": {
-    "generated_at": "2026-10-15 13:11 CT",
+    "generated_at": "2026-10-15 13:26 CT",
     "warn_ttl_sec": 1200,
     "warnings": [],
     "ok": true
