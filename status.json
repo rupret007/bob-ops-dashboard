@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-10-14T21:24:10.839847-05:00",
-  "generated_at_display": "Wed Oct 14, 2026 \u00b7 9:24 PM CDT",
+  "generated_at": "2026-10-14T21:39:16.507173-05:00",
+  "generated_at_display": "Wed Oct 14, 2026 \u00b7 9:39 PM CDT",
   "timezone": "America/Chicago",
   "owner": "rupret007",
   "dashboard": "bob-ops-dashboard",
@@ -49,22 +49,22 @@
           "status": "yellow",
           "chip": "Yellow",
           "default_branch": "master",
-          "tip_sha": "ada72fa",
-          "tip_date": "2026-10-15T01:42:54Z",
+          "tip_sha": "710db53",
+          "tip_date": "2026-10-15T02:38:06Z",
           "open_prs": 3,
-          "open_pr_url": "https://github.com/rupret007/webjam/pull/205",
-          "open_pr_number": 205,
+          "open_pr_url": "https://github.com/rupret007/webjam/pull/238",
+          "open_pr_number": 238,
           "open_pr_draft": false,
           "open_pr_stack": [],
           "pr_listing_complete": true,
           "agent_url": null,
           "ci": {
             "name": "WebJam CI",
-            "conclusion": "success",
+            "conclusion": "in_progress",
             "branch": "master",
-            "sha": "ada72fa",
-            "created": "2026-10-15T01:42:58Z",
-            "html_url": "https://github.com/rupret007/webjam/actions/runs/38667140317"
+            "sha": "710db53",
+            "created": "2026-10-15T02:38:09Z",
+            "html_url": "https://github.com/rupret007/webjam/actions/runs/38672028027"
           },
           "release": "v0.29.0",
           "release_sha": "7aa74be",
@@ -495,8 +495,8 @@
           "status": "green",
           "chip": "Green",
           "default_branch": "main",
-          "tip_sha": "1db007f",
-          "tip_date": "2026-10-15T02:09:30Z",
+          "tip_sha": "4a911c5",
+          "tip_date": "2026-10-15T02:24:25Z",
           "open_prs": 0,
           "open_pr_url": null,
           "open_pr_number": null,
@@ -880,7 +880,7 @@
     "barker"
   ],
   "publish_notes": "Public board -- no secrets or customer paths. Private repositories stay high-level; AI Music Vault stays private-content-boundary only.",
-  "refresh_started_ms": 1792031021180,
+  "refresh_started_ms": 1792031927067,
   "agents_source": "file:stale->unknown",
   "agents": [
     {
@@ -1026,7 +1026,7 @@
     }
   ],
   "llm_work_now_freshness": {
-    "generated_at": "2026-10-14 21:24 CT",
+    "generated_at": "2026-10-14 21:39 CT",
     "warn_ttl_sec": 1200,
     "warnings": [],
     "ok": true
