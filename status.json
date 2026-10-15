@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-10-15T11:41:28.204610-05:00",
-  "generated_at_display": "Thu Oct 15, 2026 \u00b7 11:41 AM CDT",
+  "generated_at": "2026-10-15T11:56:35.938286-05:00",
+  "generated_at_display": "Thu Oct 15, 2026 \u00b7 11:56 AM CDT",
   "timezone": "America/Chicago",
   "owner": "rupret007",
   "dashboard": "bob-ops-dashboard",
@@ -52,8 +52,8 @@
           "tip_sha": "fa3625d",
           "tip_date": "2026-10-15T14:58:45Z",
           "open_prs": 4,
-          "open_pr_url": "https://github.com/rupret007/webjam/pull/376",
-          "open_pr_number": 376,
+          "open_pr_url": "https://github.com/rupret007/webjam/pull/377",
+          "open_pr_number": 377,
           "open_pr_draft": false,
           "open_pr_stack": [],
           "pr_listing_complete": true,
@@ -495,8 +495,8 @@
           "status": "green",
           "chip": "Green",
           "default_branch": "main",
-          "tip_sha": "cd874c3",
-          "tip_date": "2026-10-15T16:26:33Z",
+          "tip_sha": "eb3ad3a",
+          "tip_date": "2026-10-15T16:41:40Z",
           "open_prs": 0,
           "open_pr_url": null,
           "open_pr_number": null,
@@ -880,7 +880,7 @@
     "barker"
   ],
   "publish_notes": "Public board -- no secrets or customer paths. Private repositories stay high-level; AI Music Vault stays private-content-boundary only.",
-  "refresh_started_ms": 1792082444610,
+  "refresh_started_ms": 1792083352029,
   "agents_source": "file:stale->unknown",
   "agents": [
     {
@@ -929,11 +929,11 @@
   "cloud_agents": [
     {
       "id": "bc-7ca17dc2-c3a6-52bf-9333-9fc495f6838b",
-      "name": "PR #376",
+      "name": "PR #377",
       "state": "unknown",
-      "detail": "Direct-stun Host/Join wiring",
+      "detail": "First-run musician copy, HUD, and start-here docs (stacked on #378)",
       "url": "https://cursor.com/agents/bc-7ca17dc2-c3a6-52bf-9333-9fc495f6838b",
-      "pr_url": "https://github.com/rupret007/webjam/pull/376",
+      "pr_url": "https://github.com/rupret007/webjam/pull/377",
       "checked_at": null
     }
   ],
@@ -1036,7 +1036,7 @@
     }
   ],
   "llm_work_now_freshness": {
-    "generated_at": "2026-10-15 11:41 CT",
+    "generated_at": "2026-10-15 11:56 CT",
     "warn_ttl_sec": 1200,
     "warnings": [],
     "ok": true
