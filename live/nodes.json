@@ -1,0 +1,5 @@
+[
+  {"id": "nuc", "label": "NucBox K6", "os": "linux", "max_lanes": 6},
+  {"id": "mini", "label": "Mac mini", "os": "darwin", "max_lanes": 3},
+  {"id": "mbp", "label": "MacBook Pro", "os": "darwin", "max_lanes": 0}
+]
