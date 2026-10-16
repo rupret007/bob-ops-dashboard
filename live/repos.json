@@ -1,10 +1,15 @@
-[
-  "bob-brain",
-  "Turdanoid",
-  "StalemateSite",
-  "bob-ops-dashboard",
-  "webjam",
-  "Andrea_NanoBot",
-  "StoryBoard",
-  "AdoptIQ"
-]
+{
+  "repos": [
+    "bob-brain",
+    "Turdanoid",
+    "StalemateSite",
+    "bob-ops-dashboard",
+    "webjam",
+    "Andrea_NanoBot",
+    "StoryBoard",
+    "AdoptIQ"
+  ],
+  "gate_default_repo": {
+    "default": "bob-brain"
+  }
+}

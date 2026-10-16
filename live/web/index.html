@@ -141,7 +141,8 @@ function render(state){
     const g=document.createElement('div');
     g.className='gauge-card'+(n.online?'':' offline');
     const sc=n.speed?.score??'—';
-    g.innerHTML=`<small>${n.label}</small><b>${n.online?sc:'offline'}</b>`;
+    const offLabel=n.optional?'not connected yet':'offline';
+    g.innerHTML=`<small>${n.label}</small><b>${n.online?sc:offLabel}</b>`;
     g.onclick=()=>openSheet(n.label,n.speed||state.speed_index);
     gauges.appendChild(g);
   });
@@ -154,7 +155,10 @@ function render(state){
 
   const mach=document.getElementById('machines');
   mach.innerHTML=(state.nodes||[]).map(n=>{
-    if(!n.online)return `<div class="mc"><b>${esc(n.label)}</b> <span class="pill unk">offline</span></div>`;
+    if(!n.online){
+      const pill=n.optional?'<span class="pill unk">not connected yet (optional)</span>':'<span class="pill bad">offline</span>';
+      return `<div class="mc"><b>${esc(n.label)}</b> ${pill}</div>`;
+    }
     const l1=n.load?.l1??0;
     const memT=n.memory?.total||1, memU=n.memory?.used||0;
     const swU=n.swap?.used||0;
@@ -175,11 +179,22 @@ function render(state){
   }).join(''):'<div class="row"><div class="m">No AI capacity reports</div></div>';
 
   const lanesEl=document.getElementById('lanes');
-  let laneHtml='';
+  const nodeById={};
+  (state.nodes||[]).forEach(n=>{nodeById[n.id]=n;});
+  const buckets={};
   (state.nodes||[]).forEach(n=>{
-    if(!n.online||!(n.lanes||[]).length)return;
-    laneHtml+=`<small class="unk">${esc(n.label).toUpperCase()}</small>`;
-    n.lanes.forEach(l=>{
+    if(!n.online)return;
+    (n.lanes||[]).forEach(l=>{
+      const host=l.runs_on||n.id;
+      if(!buckets[host])buckets[host]=[];
+      buckets[host].push(l);
+    });
+  });
+  let laneHtml='';
+  Object.keys(buckets).forEach(host=>{
+    const label=(nodeById[host]&&nodeById[host].label)||host;
+    laneHtml+=`<small class="unk">${esc(label).toUpperCase()}</small>`;
+    buckets[host].forEach(l=>{
       laneHtml+=`<div class="row"><span class="pill info">${esc(l.name)}</span><div class="m">${esc(l.repo||l.name)}<small>${esc(l.status||'running')}</small></div></div>`;
     });
   });
