@@ -50,3 +50,16 @@ class ScreenRcTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class GateTotalsTests(unittest.TestCase):
+    def test_dedupes_by_pr_and_sha_latest_wins(self):
+        from live import aggregator
+        gates = [
+            {"pr": 142, "sha": "60aa507b", "verdict": "FAIL"},
+            {"pr": 142, "sha": "0c0128c2", "verdict": "PASS"},
+            {"pr": 142, "sha": "0c0128c2", "verdict": "PASS"},
+            {"pr": 146, "sha": "513c2e5b", "verdict": "REQUESTED"},
+        ]
+        out = aggregator.gate_totals({"merged_today": 3}, gates)
+        self.assertEqual((out["gates_pass"], out["gates_fail"], out["merged_today"]), (1, 1, 3))

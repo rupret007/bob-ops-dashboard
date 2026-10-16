@@ -123,9 +123,11 @@ def _throughput_counts(owner: str, clock=time.time) -> dict:
     prev_end = start_today
     prev_start = start_today - timedelta(days=7)
     merged_prev = 0
+    opened_prev = 0
     try:
         prev_range = f"{_utc_iso(prev_start)}..{_utc_iso(prev_end)}"
         merged_prev = len(_dedupe_prs(_gh_search_prs(owner, prev_range)))
+        opened_prev = len(_dedupe_prs(_gh_search_opened(owner, prev_range)))
     except (subprocess.SubprocessError, json.JSONDecodeError, OSError):
         pass
 
@@ -133,7 +135,7 @@ def _throughput_counts(owner: str, clock=time.time) -> dict:
         "merged_today": merged_today,
         "opened_today": opened_today,
         "merged_7d_avg": round(merged_prev / 7.0, 1),
-        "opened_7d_avg": 0.0,
+        "opened_7d_avg": round(opened_prev / 7.0, 1),
         "gates_pass": 0,
         "gates_fail": 0,
     }
@@ -169,6 +171,20 @@ def _resolve_gate_repo(gate: dict, prs: list[dict], gate_map: dict) -> str | Non
         if p.get("number") == pr_num:
             return p.get("repo")
     return default_repo
+
+
+def gate_totals(throughput: dict, gates: list[dict]) -> dict:
+    """Fill gates_pass/gates_fail from parsed Karen verdicts (deduped by pr+sha)."""
+    out = dict(throughput or {})
+    seen: dict = {}
+    for g in gates or []:
+        key = (g.get("pr"), str(g.get("sha") or "")[:8])
+        v = str(g.get("verdict") or "").upper()
+        if v in ("PASS", "FAIL"):
+            seen[key] = v
+    out["gates_pass"] = sum(1 for v in seen.values() if v == "PASS")
+    out["gates_fail"] = sum(1 for v in seen.values() if v == "FAIL")
+    return out
 
 
 def _collect_gates(node_reports: dict) -> list[dict]:
@@ -404,7 +420,7 @@ class LiveStore:
                     "needs_you": needs,
                     "pipeline": self.github.get("stages", {}),
                     "pipeline_rows": self.github.get("prs", []),
-                    "throughput": self.github.get("throughput", {}),
+                    "throughput": gate_totals(self.github.get("throughput", {}), gates),
                     "throughput_history": list(self.merge_history),
                     "events": list(self.events)[:30],
                     "routines": routines,
