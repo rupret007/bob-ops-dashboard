@@ -32,6 +32,21 @@ Some free text with Jeff's phone 312-555-0199 should not appear in structured fi
         sanitized = sanitize(str(out))
         self.assertNotIn("312-555-0199", sanitized)
 
+    def test_karen_heading_and_note_times(self):
+        text = """## Karen nightly 2026-10-16 16:18 CT
+NOTE 16:40 CT
+KAREN_GATE_REQUEST pr=79 sha=abcdef0123456789
+- #79 abcdef01 PASS
+"""
+        out = parse_progress_text(text)
+        self.assertEqual("4:40 PM", out[0]["at_display"])
+        self.assertEqual("4:40 PM", out[1]["at_display"])
+
+    def test_unknown_time_not_now(self):
+        text = "KAREN_GATE_REQUEST pr=1 sha=1234567890abcdef"
+        out = parse_progress_text(text)
+        self.assertEqual("time unknown", out[0]["at_display"])
+
 
 if __name__ == "__main__":
     unittest.main()
