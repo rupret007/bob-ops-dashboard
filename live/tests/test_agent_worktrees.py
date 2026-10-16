@@ -24,7 +24,8 @@ class ActiveWorktreeTests(unittest.TestCase):
             (root / "not-a-repo").mkdir()
             old = time.time() - 10 * 3600
             os.utime(root / "lane-b", (old, old))
-            os.utime(root / "lane-b" / ".git", (old, old))
+            for f in [root / "lane-b" / ".git", *(root / "lane-b" / ".git").rglob("*")]:
+                os.utime(f, (old, old))
             found = {p.name for p in agent.active_worktrees([root])}
             self.assertEqual(found, {"lane-a"})
 
@@ -63,3 +64,15 @@ class GateTotalsTests(unittest.TestCase):
         ]
         out = aggregator.gate_totals({"merged_today": 3}, gates)
         self.assertEqual((out["gates_pass"], out["gates_fail"], out["merged_today"]), (1, 1, 3))
+
+
+class ReadHeadTests(unittest.TestCase):
+    def test_reads_head_without_git_subprocess(self):
+        with tempfile.TemporaryDirectory() as td:
+            r = Path(td)
+            _git(r, "init", "-q")
+            _git(r, "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-q", "--allow-empty", "-m", "a")
+            want = subprocess.check_output(["git", "-C", td, "rev-parse", "HEAD"], text=True).strip()
+            self.assertEqual(agent.read_head_sha(r), want)
+            _git(r, "pack-refs", "--all")
+            self.assertEqual(agent.read_head_sha(r), want)

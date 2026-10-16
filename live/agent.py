@@ -111,7 +111,7 @@ def lane_log_stem(screen_name: str) -> str:
 
 
 
-ACTIVE_WORKTREE_MAX_AGE_SEC = 6 * 3600
+ACTIVE_WORKTREE_MAX_AGE_SEC = int(os.environ.get("LIVE_WORKTREE_MAX_AGE_SEC", "1800"))
 
 
 def active_worktrees(roots, now=None, max_age=ACTIVE_WORKTREE_MAX_AGE_SEC):
@@ -132,19 +132,57 @@ def active_worktrees(roots, now=None, max_age=ACTIVE_WORKTREE_MAX_AGE_SEC):
         for c in cands:
             try:
                 g = c / ".git"
-                if g.exists() and now - max(c.stat().st_mtime, g.stat().st_mtime) <= max_age:
+                if not g.exists():
+                    continue
+                stamps = [c.stat().st_mtime, g.stat().st_mtime]
+                if g.is_dir():
+                    for sub in ("index", "HEAD", "logs/HEAD"):
+                        try:
+                            stamps.append((g / sub).stat().st_mtime)
+                        except OSError:
+                            pass
+                if now - max(stamps) <= max_age:
                     found.append(c)
             except OSError:
                 continue
     return found
 
 
+def read_head_sha(root):
+    """Resolve HEAD by reading files (no git subprocess); handles worktrees and packed refs."""
+    try:
+        g = root / ".git"
+        gitdir = g
+        if g.is_file():
+            ref = g.read_text().strip()
+            if ref.startswith("gitdir:"):
+                gitdir = (root / ref.split(":", 1)[1].strip()).resolve()
+        head = (gitdir / "HEAD").read_text().strip()
+        if not head.startswith("ref:"):
+            return head
+        name = head.split(":", 1)[1].strip()
+        common = gitdir
+        cd = gitdir / "commondir"
+        if cd.is_file():
+            common = (gitdir / cd.read_text().strip()).resolve()
+        for base in (gitdir, common):
+            f = base / name
+            if f.is_file():
+                return f.read_text().strip()
+        packed = common / "packed-refs"
+        if packed.is_file():
+            for line in packed.read_text().splitlines():
+                if line.endswith(" " + name):
+                    return line.split(" ", 1)[0]
+    except OSError:
+        return None
+    return None
+
+
 def committed_delta(head_prev, root):
     """Lines changed by commits since the last sample (keeps LOC when a lane commits)."""
-    try:
-        head = subprocess.check_output(["git", "-C", str(root), "rev-parse", "HEAD"],
-                                       text=True, timeout=10, stderr=subprocess.DEVNULL).strip()
-    except (OSError, subprocess.SubprocessError):
+    head = read_head_sha(root)
+    if not head:
         return 0, 0
     prev = head_prev.get(str(root))
     head_prev[str(root)] = head
@@ -612,7 +650,7 @@ class Agent:
             self.slow_lanes()
             self._tail_logs_metrics()
             self._last_lanes = now
-        if now - self._last_loc >= 15.0:
+        if now - self._last_loc >= 30.0:
             self.slow_loc()
             self._last_loc = now
         if now - self._last_extras >= 45.0:
