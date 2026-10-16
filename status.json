@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-10-15T19:27:27.742858-05:00",
-  "generated_at_display": "Thu Oct 15, 2026 \u00b7 7:27 PM CDT",
+  "generated_at": "2026-10-15T19:42:32.943390-05:00",
+  "generated_at_display": "Thu Oct 15, 2026 \u00b7 7:42 PM CDT",
   "timezone": "America/Chicago",
   "owner": "rupret007",
   "dashboard": "bob-ops-dashboard",
@@ -46,8 +46,8 @@
           "url": "https://github.com/rupret007/webjam",
           "repo_url": "https://github.com/rupret007/webjam",
           "private": false,
-          "status": "yellow",
-          "chip": "Yellow",
+          "status": "green",
+          "chip": "Green",
           "default_branch": "master",
           "tip_sha": "d29bcee",
           "tip_date": "2026-10-16T00:15:39Z",
@@ -59,12 +59,12 @@
           "pr_listing_complete": true,
           "agent_url": null,
           "ci": {
-            "name": "WebJam CI",
-            "conclusion": "in_progress",
+            "name": "Cross-network acceptance",
+            "conclusion": "success",
             "branch": "master",
             "sha": "d29bcee",
             "created": "2026-10-16T00:15:42Z",
-            "html_url": "https://github.com/rupret007/webjam/actions/runs/38828468589"
+            "html_url": "https://github.com/rupret007/webjam/actions/runs/38828468650"
           },
           "release": "v0.29.0",
           "release_sha": "7aa74be",
@@ -495,8 +495,8 @@
           "status": "green",
           "chip": "Green",
           "default_branch": "main",
-          "tip_sha": "4791fea",
-          "tip_date": "2026-10-16T00:14:26Z",
+          "tip_sha": "34f0050",
+          "tip_date": "2026-10-16T00:27:42Z",
           "open_prs": 0,
           "open_pr_url": null,
           "open_pr_number": null,
@@ -880,7 +880,7 @@
     "barker"
   ],
   "publish_notes": "Public board -- no secrets or customer paths. Private repositories stay high-level; AI Music Vault stays private-content-boundary only.",
-  "refresh_started_ms": 1792110414520,
+  "refresh_started_ms": 1792111319222,
   "agents_source": "file:stale->unknown",
   "agents": [
     {
@@ -1026,7 +1026,7 @@
     }
   ],
   "llm_work_now_freshness": {
-    "generated_at": "2026-10-15 19:27 CT",
+    "generated_at": "2026-10-15 19:42 CT",
     "warn_ttl_sec": 1200,
     "warnings": [],
     "ok": true
