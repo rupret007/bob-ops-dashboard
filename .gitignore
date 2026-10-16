@@ -2,3 +2,6 @@
 __pycache__/
 *.pyc
 node_modules/
+.config/bob-cluster/tokens.env
+**/.config/bob-cluster/tokens.env
+cluster/**/tokens.env

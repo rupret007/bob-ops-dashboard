@@ -1,0 +1,30 @@
+name: Cluster tests
+
+on:
+  pull_request:
+  push:
+
+permissions:
+  contents: read
+
+jobs:
+  cluster:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Install Python dependencies
+        run: pip install -r cluster/requirements.txt
+      - name: Install nats-server
+        run: |
+          set -euo pipefail
+          NAT_DIR="${RUNNER_TEMP}/nats-bin"
+          mkdir -p "${NAT_DIR}"
+          bash cluster/install-nats.sh --ci "${NAT_DIR}"
+          echo "${NAT_DIR}" >> "${GITHUB_PATH}"
+      - name: Run cluster unit tests
+        env:
+          PYTHONPATH: .
+        run: python3 -m unittest discover -s cluster/tests -v
