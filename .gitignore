@@ -6,3 +6,6 @@ node_modules/
 live.env
 .config/bob-live/
 live/token
+.config/bob-cluster/tokens.env
+**/.config/bob-cluster/tokens.env
+cluster/**/tokens.env
