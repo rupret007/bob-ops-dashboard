@@ -5,31 +5,42 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Bob Ops Live</title>
 <style>
-:root{--bg:#0b0f14;--card:#141a22;--line:#232c38;--tx:#e6edf3;--mu:#8b98a8;--ok:#3fb950;--warn:#d29922;--bad:#f85149;--info:#58a6ff;--unk:#6e7681}
-*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--tx);font:14px/1.4 -apple-system,system-ui,Segoe UI,Roboto,sans-serif}
+:root{--bg:#0b0f14;--card:#141a22;--line:#232c38;--tx:#e6edf3;--mu:#8b98a8;--ok:#3fb950;--warn:#d29922;--bad:#f85149;--info:#58a6ff;--unk:#6e7681;--idle:#5c6f82}
+*{box-sizing:border-box}
+html,body{overflow-x:hidden;max-width:100%}
+body{margin:0;background:var(--bg);color:var(--tx);font:14px/1.4 -apple-system,system-ui,Segoe UI,Roboto,sans-serif;overflow-wrap:anywhere;word-break:break-word}
 body.stale{opacity:.55}
-header{position:sticky;top:0;z-index:5;background:#0b0f14ee;backdrop-filter:blur(6px);border-bottom:1px solid var(--line);padding:10px 14px;display:flex;align-items:center;gap:10px}
-header h1{font-size:17px;margin:0;flex:1}.fresh{font-size:12px;color:var(--mu)}.dot{width:10px;height:10px;border-radius:50%;display:inline-block}
-nav{display:flex;gap:6px;overflow-x:auto;padding:8px 14px;border-bottom:1px solid var(--line)}nav a{flex:none;color:var(--mu);text-decoration:none;border:1px solid var(--line);border-radius:999px;padding:6px 12px;font-size:13px;min-height:44px;display:flex;align-items:center}
-main{padding:12px;display:grid;gap:12px;grid-template-columns:1fr;max-width:1400px;margin:auto}
-section{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px}section h2{font-size:13px;letter-spacing:.06em;text-transform:uppercase;color:var(--mu);margin:0 0 10px;display:flex;justify-content:space-between}
-.row{display:flex;gap:10px;align-items:center;padding:10px 0;border-top:1px solid var(--line);min-height:44px}.row:first-of-type{border-top:0}.row .m{flex:1;min-width:0}.row small{color:var(--mu);display:block}
-.pill{font-size:11px;padding:2px 8px;border-radius:999px;border:1px solid;white-space:nowrap}.ok{color:var(--ok)}.warn{color:var(--warn)}.bad{color:var(--bad)}.info{color:var(--info)}.unk{color:var(--unk)}
+header{position:sticky;top:0;z-index:5;background:#0b0f14ee;backdrop-filter:blur(6px);border-bottom:1px solid var(--line);padding:10px 14px;display:flex;align-items:center;gap:10px;min-width:0;max-width:100%}
+header h1{font-size:17px;margin:0;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fresh{font-size:12px;color:var(--mu);flex-shrink:1;min-width:0;text-align:right}
+.dot{width:10px;height:10px;border-radius:50%;display:inline-block;flex:none}
+nav{display:flex;gap:6px;overflow-x:auto;overflow-y:hidden;-webkit-overflow-scrolling:touch;padding:8px 14px;border-bottom:1px solid var(--line);max-width:100%}
+nav a{flex:none;color:var(--mu);text-decoration:none;border:1px solid var(--line);border-radius:999px;padding:6px 12px;font-size:13px;min-height:44px;display:flex;align-items:center}
+main{padding:12px;display:grid;gap:12px;grid-template-columns:minmax(0,1fr);max-width:100%;width:100%;margin:auto}
+@media(min-width:900px){main{max-width:1400px;grid-template-columns:repeat(12,1fr)}}
+section{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px;min-width:0;max-width:100%}
+section h2{font-size:13px;letter-spacing:.06em;text-transform:uppercase;color:var(--mu);margin:0 0 10px;display:flex;justify-content:space-between;gap:8px;min-width:0}
+.row{display:flex;gap:10px;align-items:center;padding:10px 0;border-top:1px solid var(--line);min-height:44px;min-width:0}.row:first-of-type{border-top:0}.row .m{flex:1;min-width:0}.row small{color:var(--mu);display:block}
+.pill{font-size:11px;padding:2px 8px;border-radius:999px;border:1px solid;white-space:nowrap;max-width:100%;overflow:hidden;text-overflow:ellipsis}.ok{color:var(--ok)}.warn{color:var(--warn)}.bad{color:var(--bad)}.info{color:var(--info)}.unk{color:var(--unk)}
 .btn{background:var(--info);color:#001;border:0;border-radius:8px;padding:10px 14px;font-weight:600;min-height:44px}
-.mach{display:grid;grid-template-columns:1fr 1fr;gap:8px}.mc{border:1px solid var(--line);border-radius:10px;padding:10px}
+.mach{display:grid;grid-template-columns:repeat(auto-fit,minmax(0,1fr));gap:8px}.mc{border:1px solid var(--line);border-radius:10px;padding:10px;min-width:0}
 .bar{height:6px;background:#0d1117;border-radius:4px;overflow:hidden;margin:4px 0 8px}.bar i{display:block;height:100%}
 .bar.unknown{background:repeating-linear-gradient(45deg,#30363d 0 6px,#161b22 6px 12px)}
-.pipe{display:grid;grid-template-columns:repeat(5,1fr);gap:4px;font-size:11px;text-align:center}.pipe div{border:1px solid var(--line);border-radius:8px;padding:6px 2px}.pipe b{display:block;font-size:16px}
+.pipe{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:4px;font-size:11px;text-align:center;min-width:0}.pipe div{border:1px solid var(--line);border-radius:8px;padding:6px 2px;min-width:0}.pipe b{display:block;font-size:16px}
 .tl .row{align-items:flex-start}.tl time{color:var(--mu);font-size:12px;width:72px;flex:none}
-svg{display:block}.mc small{display:block;color:var(--mu);margin-top:4px}
-#hero{text-align:center;padding:8px 0 4px}
-#gauges{display:flex;gap:8px;overflow-x:auto;padding:4px 0}
-.gauge-card{flex:0 0 100px;border:1px solid var(--line);border-radius:10px;padding:8px;text-align:center;min-height:44px;cursor:pointer}
-.gauge-card.offline{opacity:.5}
-.sheet{position:fixed;left:0;right:0;bottom:0;background:var(--card);border-top:1px solid var(--line);border-radius:16px 16px 0 0;padding:16px;max-height:70vh;overflow:auto;transform:translateY(100%);transition:transform .25s;z-index:20}
+svg{display:block;max-width:100%}.mc small{display:block;color:var(--mu);margin-top:4px}
+#hero{text-align:center;padding:8px 0 4px;min-width:0}
+#gauges{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;padding:4px 0;width:100%;max-width:100%}
+.gauge-card{border:1px solid var(--line);border-radius:10px;padding:8px 6px;text-align:center;min-height:44px;cursor:pointer;min-width:0;max-width:100%;display:flex;flex-direction:column;align-items:center;gap:2px}
+.gauge-card.offline{opacity:.55}
+.gauge-card .gauge-arc{width:100%;height:auto}
+.gauge-label{font-size:11px;color:var(--mu);line-height:1.2;display:block;width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.gauge-value{font-size:15px;font-weight:700;display:block;line-height:1.2}
+.gauge-lanes{font-size:10px;color:var(--mu);display:block}
+.sheet{position:fixed;left:0;right:0;bottom:0;background:var(--card);border-top:1px solid var(--line);border-radius:16px 16px 0 0;padding:16px;max-height:70vh;overflow:auto;transform:translateY(100%);transition:transform .25s;z-index:20;max-width:100%}
 .sheet.open{transform:translateY(0)}
 .sheet h3{margin:0 0 8px}
-@media(min-width:900px){main{grid-template-columns:repeat(12,1fr)}
+@media(min-width:900px){
 #hero{grid-column:1/-1}#gauges{grid-column:1/-1}
 #needs{grid-column:1/6}#health{grid-column:6/13}#live{grid-column:1/8}#thru{grid-column:8/13}#pipe{grid-column:1/8}#events{grid-column:8/13}#routines{grid-column:1/-1}nav{display:none}}
 </style>
@@ -50,7 +61,7 @@ svg{display:block}.mc small{display:block;color:var(--mu);margin-top:4px}
 </nav>
 <main>
 <section id="hero">
-<svg id="tacho" viewBox="0 0 240 140" width="100%" height="160" aria-label="Speed index"></svg>
+<svg id="tacho" viewBox="0 0 280 150" width="100%" height="auto" aria-label="Cluster speed"></svg>
 <svg id="heroSpark" viewBox="0 0 300 40" width="100%" height="40"></svg>
 </section>
 <div id="gauges"></div>
@@ -71,6 +82,12 @@ svg{display:block}.mc small{display:block;color:var(--mu);margin-top:4px}
 <script>
 (function(){
 const CT='America/Chicago';
+const ARC_START=Math.PI, ARC_END=0;
+const BANDS=[[0,30,'var(--idle)'],[30,75,'var(--ok)'],[75,100,'var(--bad)']];
+const TICK_LABELS=[0,25,50,75,100];
+const SPEED_W={loc_per_min:.30,test_runs_per_min:.20,actions_per_min:.20,cpu_pct:.15,active_lanes:.15};
+const SPEED_FS={loc_per_min:500,test_runs_per_min:6,actions_per_min:60,cpu_pct:100,active_lanes:12};
+
 let lastState=null,lastMsg=0,needleTarget=0,needleCurrent=0,animId=null,pauseAnim=false;
 const freshEl=document.getElementById('fresh');
 const healthDot=document.getElementById('healthDot');
@@ -85,33 +102,71 @@ function fmtCt(iso){
 
 function ago(sec){return sec<60?Math.round(sec)+'s ago':Math.round(sec/60)+'m ago';}
 
-function bandColor(v){
-  if(v<25)return 'var(--unk)';
-  if(v<70)return 'var(--ok)';
-  return 'var(--bad)';
+function valueToAngle(v){return ARC_START+(ARC_END-ARC_START)*(v/100);}
+
+function polarToXY(cx,cy,r,ang){return [cx+r*Math.cos(ang), cy-r*Math.sin(ang)];}
+
+function describeArc(cx,cy,r,a0,a1){
+  const [x0,y0]=polarToXY(cx,cy,r,a0);
+  const [x1,y1]=polarToXY(cx,cy,r,a1);
+  const delta=a1-a0;
+  const large=Math.abs(delta)>Math.PI?1:0;
+  const sweep=delta<0?1:0;
+  return `M ${x0.toFixed(2)} ${y0.toFixed(2)} A ${r} ${r} 0 ${large} ${sweep} ${x1.toFixed(2)} ${y1.toFixed(2)}`;
+}
+
+function arcBandPaths(cx,cy,r,strokeW){
+  return BANDS.map(b=>{
+    const a0=valueToAngle(b[0]), a1=valueToAngle(b[1]);
+    return `<path d="${describeArc(cx,cy,r,a0,a1)}" fill="none" stroke="${b[2]}" stroke-width="${strokeW}" stroke-linecap="butt"/>`;
+  }).join('');
+}
+
+function tickMarks(cx,cy,r,inner,outer,labels){
+  let s='';
+  for(let t=0;t<=100;t+=10){
+    const a=valueToAngle(t);
+    const [x0,y0]=polarToXY(cx,cy,inner,a);
+    const [x1,y1]=polarToXY(cx,cy,outer,a);
+    s+=`<line x1="${x0}" y1="${y0}" x2="${x1}" y2="${y1}" stroke="var(--line)" stroke-width="1"/>`;
+  }
+  labels.forEach(t=>{
+    const a=valueToAngle(t);
+    const [lx,ly]=polarToXY(cx,cy,outer+10,a);
+    s+=`<text x="${lx}" y="${ly}" text-anchor="middle" dominant-baseline="middle" fill="var(--mu)" font-size="9">${t}</text>`;
+  });
+  return s;
+}
+
+function needleSvg(cx,cy,r,v){
+  const a=valueToAngle(v);
+  const [nx,ny]=polarToXY(cx,cy,r-4,a);
+  return `<line x1="${cx}" y1="${cy}" x2="${nx}" y2="${ny}" stroke="var(--tx)" stroke-width="2.5" stroke-linecap="round"/>`+
+    `<circle cx="${cx}" cy="${cy}" r="4" fill="var(--tx)"/>`;
 }
 
 function drawTacho(score,target){
   const svg=document.getElementById('tacho');
-  const cx=120,cy=120,r=90;
-  const start=Math.PI, end=0;
-  function pt(ang){return [cx+r*Math.cos(ang), cy-r*Math.sin(ang)];}
-  let arcs='';
-  [[0,25,'idle','#6e7681'],[25,70,'cruising','#3fb950'],[70,100,'redline','#f85149']].forEach(b=>{
-    const a1=start+(end-start)*(1-b[1]/100);
-    const a0=start+(end-start)*(1-b[0]/100);
-    const p0=pt(a0),p1=pt(a1);
-    arcs+=`<path d="M ${p0[0]} ${p0[1]} A ${r} ${r} 0 0 1 ${p1[0]} ${p1[1]}" fill="none" stroke="${b[3]}" stroke-width="14" opacity=".35"/>`;
-  });
-  const tickAng=start+(end-start)*(1-70/100);
-  const tp=pt(tickAng);
-  const needleAng=start+(end-start)*(1-needleCurrent/100);
-  const np=pt(needleAng);
-  svg.innerHTML=arcs+
-    `<text x="${cx}" y="${cy-20}" text-anchor="middle" fill="var(--tx)" font-size="28" font-weight="700">${Math.round(needleCurrent)}</text>`+
-    `<text x="${cx}" y="${cy}" text-anchor="middle" fill="var(--mu)" font-size="11">speed index</text>`+
-    `<line x1="${cx}" y1="${cy}" x2="${np[0]}" y2="${np[1]}" stroke="var(--tx)" stroke-width="3"/>`+
-    `<circle cx="${tp[0]}" cy="${tp[1]}" r="3" fill="var(--warn)"/>`;
+  const cx=140,cy=128,r=96,sw=16;
+  const inner=r-sw/2-2, outer=r+sw/2;
+  const targetA=valueToAngle(target);
+  const [tx,ty]=polarToXY(cx,cy,outer+2,targetA);
+  const val=Math.round(needleCurrent);
+  svg.innerHTML=
+    arcBandPaths(cx,cy,r,sw)+
+    tickMarks(cx,cy,r,inner,outer,TICK_LABELS)+
+    `<line x1="${tx}" y1="${ty}" x2="${polarToXY(cx,cy,inner-6,targetA)[0]}" y2="${polarToXY(cx,cy,inner-6,targetA)[1]}" stroke="var(--warn)" stroke-width="2"/>`+
+    `<circle cx="${tx}" cy="${ty}" r="3" fill="var(--warn)"/>`+
+    needleSvg(cx,cy,r,needleCurrent)+
+    `<text x="${cx}" y="${cy-28}" text-anchor="middle" fill="var(--tx)" font-size="32" font-weight="700">${val}</text>`+
+    `<text x="${cx}" y="${cy-8}" text-anchor="middle" fill="var(--mu)" font-size="11">cluster speed</text>`;
+}
+
+function miniGaugeSvg(score,online){
+  const cx=40,cy=38,r=28,sw=6;
+  let body=arcBandPaths(cx,cy,r,sw);
+  if(online)body+=needleSvg(cx,cy,r,score);
+  return `<svg class="gauge-arc" viewBox="0 0 80 48" aria-hidden="true">${body}</svg>`;
 }
 
 function sparkline(svgId, points, color){
@@ -127,6 +182,55 @@ function sparkline(svgId, points, color){
   el.innerHTML=`<polyline fill="none" stroke="${color||'#3fb950'}" stroke-width="2" points="${poly}"/>`;
 }
 
+function hostedLaneCount(state,hostId){
+  let c=0;
+  (state.nodes||[]).forEach(n=>{
+    if(!n.online)return;
+    (n.lanes||[]).forEach(l=>{if((l.runs_on||n.id)===hostId)c++;});
+  });
+  return c;
+}
+
+function lanesByHost(state){
+  const buckets={};
+  (state.nodes||[]).forEach(n=>{
+    if(!n.online)return;
+    (n.lanes||[]).forEach(l=>{
+      const host=l.runs_on||n.id;
+      if(!buckets[host])buckets[host]=[];
+      buckets[host].push(l);
+    });
+  });
+  return buckets;
+}
+
+function computeSpeedFromInputs(inp){
+  const loc=inp.loc_per_min||0, test=inp.test_runs_per_min||0, act=inp.actions_per_min||0;
+  const cpu=inp.cpu_pct||0, lanes=inp.active_lanes||0;
+  const parts={
+    loc_per_min:loc<=0?0:Math.min(1,Math.log1p(loc)/Math.log1p(SPEED_FS.loc_per_min)),
+    test_runs_per_min:Math.min(1,Math.max(0,test/SPEED_FS.test_runs_per_min)),
+    actions_per_min:Math.min(1,Math.max(0,act/SPEED_FS.actions_per_min)),
+    cpu_pct:Math.min(1,Math.max(0,cpu/SPEED_FS.cpu_pct)),
+    active_lanes:Math.min(1,Math.max(0,lanes/SPEED_FS.active_lanes)),
+  };
+  let score=0;
+  Object.keys(SPEED_W).forEach(k=>{score+=SPEED_W[k]*parts[k];});
+  score=Math.max(0,Math.min(100,score*100));
+  return {score:Math.round(score*10)/10,inputs:inp,weights:SPEED_W,components:Object.fromEntries(Object.keys(parts).map(k=>[k,Math.round(parts[k]*1000)/10]))};
+}
+
+function nodeSpeedDisplay(n,state){
+  if(!n.online||!n.speed)return null;
+  const hosted=hostedLaneCount(state,n.id);
+  const inp={...(n.speed.inputs||{})};
+  if(hosted!==(inp.active_lanes||0)){
+    inp.active_lanes=hosted;
+    return computeSpeedFromInputs(inp);
+  }
+  return n.speed;
+}
+
 function render(state){
   lastState=state;
   const score=state.speed_index?.score??0;
@@ -140,10 +244,18 @@ function render(state){
   (state.nodes||[]).forEach(n=>{
     const g=document.createElement('div');
     g.className='gauge-card'+(n.online?'':' offline');
-    const sc=n.speed?.score??'—';
+    const disp=nodeSpeedDisplay(n,state);
+    const sc=disp?.score??0;
+    const lanes=hostedLaneCount(state,n.id);
+    const maxL=n.max_lanes??'—';
     const offLabel=n.optional?'not connected yet':'offline';
-    g.innerHTML=`<small>${n.label}</small><b>${n.online?sc:offLabel}</b>`;
-    g.onclick=()=>openSheet(n.label,n.speed||state.speed_index);
+    const valueText=n.online?String(Math.round(sc)):offLabel;
+    g.innerHTML=
+      miniGaugeSvg(n.online?sc:0,n.online)+
+      `<span class="gauge-label">${esc(n.label)}</span>`+
+      `<span class="gauge-value">${esc(valueText)}</span>`+
+      (n.online?`<span class="gauge-lanes">${lanes}/${maxL} lanes</span>`:'');
+    g.onclick=()=>openSheet(n.label,disp||n.speed||state.speed_index);
     gauges.appendChild(g);
   });
 
@@ -181,17 +293,11 @@ function render(state){
   const lanesEl=document.getElementById('lanes');
   const nodeById={};
   (state.nodes||[]).forEach(n=>{nodeById[n.id]=n;});
-  const buckets={};
-  (state.nodes||[]).forEach(n=>{
-    if(!n.online)return;
-    (n.lanes||[]).forEach(l=>{
-      const host=l.runs_on||n.id;
-      if(!buckets[host])buckets[host]=[];
-      buckets[host].push(l);
-    });
-  });
+  const buckets=lanesByHost(state);
+  const hostOrder=(state.nodes||[]).map(n=>n.id).filter(id=>buckets[id]?.length);
+  Object.keys(buckets).forEach(h=>{if(!hostOrder.includes(h))hostOrder.push(h);});
   let laneHtml='';
-  Object.keys(buckets).forEach(host=>{
+  hostOrder.forEach(host=>{
     const label=(nodeById[host]&&nodeById[host].label)||host;
     laneHtml+=`<small class="unk">${esc(label).toUpperCase()}</small>`;
     buckets[host].forEach(l=>{
@@ -245,6 +351,7 @@ document.getElementById('sheetClose').onclick=()=>document.getElementById('sheet
 function animLoop(){
   if(!pauseAnim){
     needleCurrent+=(needleTarget-needleCurrent)*0.15;
+    if(Math.abs(needleTarget-needleCurrent)<0.05)needleCurrent=needleTarget;
     if(lastState)drawTacho(lastState.speed_index?.score??0,70);
   }
   animId=requestAnimationFrame(animLoop);
