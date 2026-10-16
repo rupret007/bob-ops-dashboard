@@ -1,4 +1,5 @@
 """Parse Karen gate lines from progress.md — structured fields only."""
+from __future__ import annotations
 import re
 from datetime import datetime
 from zoneinfo import ZoneInfo

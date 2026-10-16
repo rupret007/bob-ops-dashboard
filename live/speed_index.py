@@ -1,4 +1,5 @@
 """Speed index 0–100: shared formula and weights."""
+from __future__ import annotations
 import math
 
 WEIGHTS = {

@@ -1,4 +1,5 @@
 """Strip secrets and PII from strings before they leave the aggregator."""
+from __future__ import annotations
 import re
 
 _MAX_LEN = 120
