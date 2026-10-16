@@ -21,6 +21,13 @@ jobs:
           persist-credentials: false
       - name: Test source-only boundary
         run: python3 -m unittest -v test_pr_source_only
+      - name: Live dashboard tests
+        run: |
+          set -euo pipefail
+          python3 -m unittest discover -s live/tests -v
+          if compgen -G "live/**/*.js" > /dev/null; then
+            while IFS= read -r f; do node --check "$f"; done < <(find live -name '*.js' -print)
+          fi
       - name: Enforce source-only feature PRs
         if: github.event_name == 'pull_request'
         env:
