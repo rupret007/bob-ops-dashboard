@@ -16,11 +16,11 @@ class TestWorkerLogic(unittest.TestCase):
             "v": 1,
             "id": "j1",
             "class": "test",
-            "repo": "o/r",
+            "repo": "rupret007/bob-ops-dashboard",
             "ref": "abc",
-            "cmd": ["true"],
+            "cmd": ["npm", "test"],
             "timeout_s": 10,
-            "load_ceiling": 99,
+            "load_ceiling": 8,
         }
         base.update(overrides)
         return json.dumps(base).encode()
@@ -30,7 +30,7 @@ class TestWorkerLogic(unittest.TestCase):
         self.assertEqual(d.action, JobAction.TERM)
 
     def test_skip_unsupported_class(self):
-        spec, d = parse_job_payload(self.spec_bytes(**{"class": "render"}), {"test"})
+        spec, d = parse_job_payload(self.spec_bytes(**{"class": "render", "cmd": ["npm", "run", "render"]}), {"test"})
         self.assertEqual(d.action, JobAction.SKIP)
 
     def test_load_ceiling_nak(self):

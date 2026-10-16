@@ -12,7 +12,7 @@ class TestJobSpec(unittest.TestCase):
             "class": "test",
             "repo": "rupret007/bob-ops-dashboard",
             "ref": "main",
-            "cmd": ["echo", "hi"],
+            "cmd": ["npm", "test"],
             "timeout_s": 60,
             "load_ceiling": 4.0,
         }
@@ -36,7 +36,8 @@ class TestJobSpec(unittest.TestCase):
     def test_argv_only_no_shell(self):
         data = self.base()
         data["cmd"] = ["bash", "-c", "echo hi"]
-        validate_job_spec(data)
+        with self.assertRaises(SpecError):
+            validate_job_spec(data)
         data["cmd"] = [123]
         with self.assertRaises(SpecError):
             validate_job_spec(data)

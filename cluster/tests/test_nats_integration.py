@@ -35,9 +35,9 @@ class TestFakeJobSource(unittest.TestCase):
                 "v": 1,
                 "id": "x",
                 "class": "test",
-                "repo": "a/b",
+                "repo": "rupret007/bob-ops-dashboard",
                 "ref": "main",
-                "cmd": ["false"],
+                "cmd": ["npm", "test"],
                 "timeout_s": 1,
                 "load_ceiling": 9,
             }
@@ -102,9 +102,9 @@ class TestNatsIntegration(unittest.TestCase):
                 "v": 1,
                 "id": "it-1",
                 "class": "test",
-                "repo": "o/r",
+                "repo": "rupret007/bob-ops-dashboard",
                 "ref": "deadbeef",
-                "cmd": ["true"],
+                "cmd": ["npm", "test"],
                 "timeout_s": 30,
                 "load_ceiling": 8,
             }
@@ -115,6 +115,63 @@ class TestNatsIntegration(unittest.TestCase):
         self.assertEqual(len(msgs), 1)
         await msgs[0].ack()
         await nc.close()
+
+
+@unittest.skipUnless(find_nats_binary(), "nats-server binary not installed")
+class TestWorkerPermissions(unittest.TestCase):
+    def test_template_allows_work_and_denies_administration(self):
+        server = EphemeralNats(secured=True)
+        server.start()
+        try:
+            asyncio.run(self.check_permissions(server))
+        finally:
+            server.stop()
+
+    async def check_permissions(self, server):
+        import nats
+        from cluster.setup_streams import setup
+
+        await setup(server.url, server.passwords["nucbox"], "nucbox")
+        admin = await nats.connect(server.url, user="nucbox", password=server.passwords["nucbox"])
+        try:
+            for node in ("mini", "macbook"):
+                errors = asyncio.Queue()
+
+                async def error_cb(error):
+                    await errors.put(error)
+
+                worker = await nats.connect(server.url, user=node, password=server.passwords[node], error_cb=error_cb)
+                try:
+                    js = worker.jetstream()
+                    sub = await js.pull_subscribe("", durable="workers", stream="JOBS")
+                    await admin.jetstream().publish(f"jobs.test.{node}", b"test-only-job")
+                    messages = await sub.fetch(1, timeout=3)
+                    await messages[0].in_progress()
+                    await messages[0].nak()
+                    messages = await sub.fetch(1, timeout=3)
+                    await messages[0].ack_sync()
+                    await admin.jetstream().publish(f"jobs.test.{node}-term", b"test-only-job")
+                    messages = await sub.fetch(1, timeout=3)
+                    await messages[0].term()
+                    await js.publish(f"results.{node}", b"test-only-result")
+                    await worker.publish(f"metrics.{node}", b"{}")
+                    await worker.flush()
+                    self.assertTrue(errors.empty())
+                    for subject in ("$JS.API.STREAM.LIST", "$JS.API.STREAM.DELETE.JOBS",
+                                    "$JS.API.STREAM.PURGE.JOBS", "$JS.API.CONSUMER.DELETE.JOBS.workers",
+                                    "$JS.API.CONSUMER.CREATE.JOBS.untrusted",
+                                    "$JS.API.CONSUMER.MSG.NEXT.OTHER.workers",
+                                    "jobs.test.injected", "metrics.nucbox"):
+                        await worker.publish(subject, b"{}")
+                        await worker.flush()
+                        error = await asyncio.wait_for(errors.get(), timeout=3)
+                        self.assertIn("permissions violation", str(error).lower())
+                    self.assertEqual((await admin.jetstream().stream_info("JOBS")).config.name, "JOBS")
+                    await admin.jetstream().consumer_info("JOBS", "workers")
+                finally:
+                    await worker.close()
+        finally:
+            await admin.close()
 
 
 if __name__ == "__main__":

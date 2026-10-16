@@ -38,15 +38,34 @@ NATS JetStream-backed job queue for distributed test/build/render work across Mi
   "v": 1,
   "id": "unique-id",
   "class": "test",
-  "repo": "owner/name",
+  "repo": "rupret007/bob-ops-dashboard",
   "ref": "<sha or branch>",
-  "cmd": ["argv", "only", "no-shell"],
+  "cmd": ["python3", "-m", "unittest", "discover", "-s", "cluster/tests", "-v"],
   "timeout_s": 1800,
   "load_ceiling": 4.0
 }
 ```
 
-Optional `env` object (string values). Specs are rejected if `cmd`/`env` match common secret patterns (`AKIA…`, `xox…`, `sk-…`, `ghp_…`, `github_pat_…`).
+Policy lives in `cluster/config.py`. Only the explicitly listed repository is accepted.
+Each class has an exact argv allowlist: test runs unittest discovery or `npm test`,
+build runs `npm run build`, and render runs `npm run render`. Extra arguments and
+shell commands are rejected. The selected repository must provide the requested
+entry point; adding repositories or commands requires a policy change.
+
+IDs match `[A-Za-z0-9_-]{1,64}`. Refs are full 40-hex SHAs or strict branch/tag
+names (alphanumeric, dot, underscore, hyphen, and slash-separated components;
+no option prefixes, `..`, trailing dots, or `.lock` components). Timeout is capped
+at 7200 seconds and load ceiling at 32; both must be finite and positive.
+
+Optional `env` accepts only `CI=true/1`, `LANG`/`LC_ALL=C/C.UTF-8`, and `TZ=UTC`.
+Commands and Git receive a fresh minimal environment with a worker-owned PATH
+and isolated HOME; worker credentials and tool/loader configuration are not
+inherited. Secret detection also rejects common provider keys, Telegram bot
+credentials, Brave keys, long base64 strings, and keys split across argv items.
+
+Checkouts live under `~/work/cluster-jobs/jobs/<id>`; mirrors are outside that
+jobs root. Cleanup rejects paths resolving to the root, outside it, or through
+job-directory symlinks.
 
 ## Join a machine
 
@@ -83,7 +102,11 @@ Install `cluster/nuc-verify-queue` ahead of `~/bin/nuc-verify` on the PATH (or s
 
 - Tailscale-only exposure of `100.93.165.1:4222`; bind address remains loopback on NucBox.
 - Per-node passwords in `~/.config/bob-cluster/tokens.env` (never committed).
-- Workers publish only `metrics.<self>` and `results.>`; dashboard is subscribe-only on `metrics.>` and `results.>`.
+- Mini/MacBook publish metrics, results, consumer-info/pull requests for `JOBS.workers`,
+  and acknowledgements for that consumer. They cannot administer streams or consumers.
+  Run `setup_streams.py` with the NucBox credential before starting workers.
+- Monitoring binds only to `127.0.0.1:8232` (8222 is reserved for Vaultwarden).
+- Dashboard is subscribe-only on `metrics.>` and `results.>`.
 - Job specs must not contain credentials; result tails are sanitized (2KB).
 
 ## Tests

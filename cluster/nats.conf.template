@@ -2,8 +2,7 @@
 port: 4222
 host: "127.0.0.1"
 
-http: 8222
-http_port: 8222
+http: "127.0.0.1:8232"
 
 jetstream {
   store_dir: "{{JS_STORE_DIR}}"
@@ -17,7 +16,7 @@ authorization {
       user: mini
       password: "{{MINI_TOKEN}}"
       permissions: {
-        publish: ["metrics.mini", "results.>", "$JS.API.>", "_INBOX.>"]
+        publish: ["metrics.mini", "results.>", "$JS.API.CONSUMER.INFO.JOBS.workers", "$JS.API.CONSUMER.MSG.NEXT.JOBS.workers", "$JS.ACK.JOBS.workers.>"]
         subscribe: ["$JS.API.>", "$JS.ACK.>", "$JS.FC.>", "_INBOX.>"]
       }
     }
@@ -33,7 +32,7 @@ authorization {
       user: macbook
       password: "{{MACBOOK_TOKEN}}"
       permissions: {
-        publish: ["metrics.macbook", "results.>", "$JS.API.>", "_INBOX.>"]
+        publish: ["metrics.macbook", "results.>", "$JS.API.CONSUMER.INFO.JOBS.workers", "$JS.API.CONSUMER.MSG.NEXT.JOBS.workers", "$JS.ACK.JOBS.workers.>"]
         subscribe: ["$JS.API.>", "$JS.ACK.>", "$JS.FC.>", "_INBOX.>"]
       }
     }

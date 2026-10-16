@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import unittest
 import os
+import re
+import secrets
 import shutil
 import socket
 import subprocess
@@ -30,7 +32,9 @@ def free_port() -> int:
 
 
 class EphemeralNats:
-    def __init__(self) -> None:
+    def __init__(self, secured: bool = False) -> None:
+        self.secured = secured
+        self.passwords = {node: secrets.token_urlsafe(24) for node in ("mini", "macbook", "nucbox", "dashboard")}
         self.bin = find_nats_binary()
         self.proc: subprocess.Popen | None = None
         self.tmp: tempfile.TemporaryDirectory | None = None
@@ -60,6 +64,14 @@ jetstream {{
 """,
             encoding="utf-8",
         )
+        if self.secured:
+            template = (Path(__file__).resolve().parents[1] / "nats.conf.template").read_text()
+            template = re.sub(r"(?m)^port:.*$", f"port: {self.port}", template)
+            template = re.sub(r"(?m)^http:.*$", f'http: "127.0.0.1:{self.http_port}"', template)
+            template = template.replace("{{JS_STORE_DIR}}", str(store))
+            for node, password in self.passwords.items():
+                template = template.replace("{{" + node.upper() + "_TOKEN}}", password)
+            conf.write_text(template, encoding="utf-8")
         self.proc = subprocess.Popen(
             [self.bin, "-c", str(conf)],
             stdout=subprocess.DEVNULL,
