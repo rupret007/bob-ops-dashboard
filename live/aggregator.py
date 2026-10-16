@@ -26,12 +26,14 @@ if str(_ROOT) not in sys.path:
 
 from live.sanitize import sanitize_obj
 from live.speed_index import compute_speed_index
+from live.view_codes import DEFAULT_TTL, mint_view_code, redeem_view_code, view_codes_path
 
 CT = ZoneInfo("America/Chicago")
 NODE_OFFLINE_SEC = 15.0
 RING_SECONDS = 600
 MAX_BODY_BYTES = 256 * 1024
 COOKIE_NAME = "bob_live_session"
+SESSION_MAX_AGE = 12 * 60 * 60
 # Construct the shared address range without publishing a tailnet IP literal.
 TAILNET = ipaddress.ip_network((int.from_bytes(bytes([100, 64, 0, 0]), "big"), 10))
 OWNER = "rupret007"
@@ -44,6 +46,8 @@ def validate_bind(host):
         address = ipaddress.ip_address(host)
     except ValueError:
         raise ValueError("LIVE_BIND must be a loopback or Tailscale IP address") from None
+    if address.version == 6 and address.ipv4_mapped is not None:
+        raise ValueError("LIVE_BIND must be a loopback or Tailscale IP address")
     if not (address.is_loopback or address in TAILNET):
         raise ValueError("LIVE_BIND must be a loopback or Tailscale IP address")
     return host
@@ -639,11 +643,14 @@ class AggregatorServer:
         token=None,
         store: LiveStore | None = None,
         github_fetcher=None,
+        clock=time.time,
     ):
         self.host = validate_bind(host)
         self.port = port
         self.token = validate_token(token)
-        self.session_token = hmac.digest(self.token.encode(), b"bob-live browser session v1", "sha256").hex()
+        self.session_key = hmac.digest(self.token.encode(), b"bob-live browser session v2", "sha256")
+        self.clock = clock
+        self.view_codes_path = view_codes_path()
         live_dir = Path(__file__).resolve().parent
         nodes = json.loads((live_dir / "nodes.json").read_text(encoding="utf-8"))
         needs_path = live_dir / "needs.json"
@@ -659,6 +666,21 @@ class AggregatorServer:
         self._sse_clients: list[threading.Condition] = []
         self._stop = threading.Event()
         self.web_root = live_dir / "web"
+
+    def mint_session(self):
+        issued = str(int(self.clock()))
+        signature = hmac.digest(self.session_key, issued.encode(), "sha256").hex()
+        return issued + "." + signature
+
+    def session_expiry(self, value):
+        issued, separator, signature = value.partition(".")
+        if not separator or not issued.isascii() or not issued.isdecimal() or len(issued) > 12:
+            return None
+        expected = hmac.digest(self.session_key, issued.encode(), "sha256").hex()
+        if not hmac.compare_digest(signature.encode("utf-8"), expected.encode()):
+            return None
+        expiry = int(issued) + SESSION_MAX_AGE
+        return expiry if int(issued) <= self.clock() < expiry else None
 
     def _notify_sse(self):
         for cond in self._sse_clients:
@@ -688,13 +710,21 @@ class AggregatorServer:
                 legacy = self.headers.get("X-Live-Token")
                 if legacy is not None:
                     return self._matches(legacy, server.token)
+                return False
+
+            def _check_viewer(self):
+                self._session_expires = None
+                if self.headers.get("Authorization") or self.headers.get("X-Live-Token") is not None:
+                    return self._check_token()
                 cookie = SimpleCookie()
                 try:
                     cookie.load(self.headers.get("Cookie", ""))
                 except CookieError:
                     return False
                 session = cookie.get(COOKIE_NAME)
-                return session is not None and self._matches(session.value, server.session_token)
+                if session is not None:
+                    self._session_expires = server.session_expiry(session.value)
+                return self._session_expires is not None
 
             def _reject(self, status):
                 self.close_connection = True
@@ -718,16 +748,16 @@ class AggregatorServer:
                         return
                     if "k" in query:
                         keys = query["k"]
-                        if len(keys) != 1 or not self._matches(keys[0], server.token):
+                        if len(keys) != 1 or not redeem_view_code(keys[0], path=server.view_codes_path, clock=server.clock):
                             self._reject(401)
                             return
                         self.send_response(303)
-                        self.send_header("Set-Cookie", f"{COOKIE_NAME}={server.session_token}; HttpOnly; SameSite=Strict; Path=/")
+                        self.send_header("Set-Cookie", f"{COOKIE_NAME}={server.mint_session()}; Max-Age={SESSION_MAX_AGE}; HttpOnly; SameSite=Strict; Path=/")
                         self.send_header("Location", "/")
                         self.send_header("Content-Length", "0")
                         self.end_headers()
                         return
-                if not self._check_token():
+                if not self._check_viewer():
                     self._reject(401)
                     return
                 if path == "/api/state":
@@ -746,7 +776,9 @@ class AggregatorServer:
                     cond = threading.Condition()
                     server._sse_clients.append(cond)
                     try:
-                        while not server._stop.is_set():
+                        while not server._stop.is_set() and (
+                            self._session_expires is None or server.clock() < self._session_expires
+                        ):
                             state = server.store.build_state()
                             payload = json.dumps(state)
                             self.wfile.write(
@@ -840,7 +872,17 @@ class AggregatorServer:
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--check-config", action="store_true", help="validate without starting services")
+    commands = parser.add_subparsers(dest="command")
+    mint = commands.add_parser("mint-view-code", help="mint a single-use browser code on stdout")
+    mint.add_argument("--ttl", type=int, default=DEFAULT_TTL, help="validity in seconds (1–3600; default 300)")
     args = parser.parse_args()
+    if args.command == "mint-view-code":
+        try:
+            code = mint_view_code(args.ttl)
+        except (OSError, ValueError):
+            parser.exit(2, "live aggregator: cannot mint view code; check TTL (1–3600) and private store permissions/location\n")
+        print(code)
+        return
     host = os.environ.get("LIVE_BIND", "127.0.0.1")
     token = os.environ.get("LIVE_TOKEN")
     try:

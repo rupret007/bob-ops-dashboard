@@ -39,7 +39,7 @@ Public Pages board (`index.html` / `refresh.sh`) is unchanged. Access the live U
 }
 ```
 
-Authentication is required: `Authorization: Bearer <token>` (or the agent-compatible `X-Live-Token` header). POST bodies are limited to 256 KiB; oversized bodies return 413, and malformed or negative Content-Length returns 400.
+Authentication is required: `Authorization: Bearer <token>` (or the agent-compatible `X-Live-Token` header). Browser session cookies cannot authorize uploads. POST bodies are limited to 256 KiB; oversized bodies return 413, and malformed or negative Content-Length returns 400.
 
 ### state/v1 (`GET /api/state`, SSE `event: state`)
 
@@ -92,17 +92,40 @@ never be used or published. `nodes.json` contains labels and capacities only.
 `LIVE_BIND` defaults to `127.0.0.1`. To listen on a tailnet interface, set its
 numeric Tailscale address explicitly in private config. Only loopback and the
 Tailscale shared address range (prefix length 10) are allowed; wildcard, LAN,
-public addresses and hostnames are refused. The local NucBox agent uses the same
-bind address unless `BOB_LIVE_PUSH` overrides it. `LIVE_PORT` defaults to 8787.
+public addresses, hostnames, and IPv4-mapped IPv6 addresses are refused. The
+local NucBox agent uses the same bind address unless `BOB_LIVE_PUSH` overrides it.
+`LIVE_PORT` defaults to 8787.
 
-In a browser, visit `http://<private-host>:8787/?k=<URL-encoded-token>` once.
-The server validates with `hmac.compare_digest`, sets an HttpOnly,
-SameSite=Strict session cookie, then redirects to `/` to strip the query string.
-Later HTML, `/api/state`, and `/api/stream` requests authenticate with this cookie;
-API clients can use the Authorization header. The cookie is derived from the
-shared token, so changing that token invalidates existing cookies. Responses
-are not cached, do not send referrers, and request URLs are not logged. Keep the
-initial token URL private. Only `/healthz` is unauthenticated and returns `ok`.
+Mint a single-use view code on the aggregator machine, under the same OS user
+as the server. The command does not need the upload token. Capture its stdout
+privately rather than printing the credential into logs:
+
+```bash
+view_code=$(python3 live/aggregator.py mint-view-code --ttl 300)
+```
+
+The default lifetime is 300 seconds; `--ttl` accepts 1 through 3600 seconds.
+Codes are random and separate from `LIVE_TOKEN`. Their hashes and expiries live
+in `~/.config/bob-live/view-codes.json`, owned by you with mode 600 and outside
+the checkout. `LIVE_VIEW_CODES_FILE` overrides this path; set it identically
+for the CLI and server. The running server reads this file on redemption, so
+minting does not require a restart. File locking makes redemption single-use
+even across simultaneous requests. Missing or unsafe stores fail closed.
+
+Use the captured code privately in `http://<private-host>:8787/?k=<view-code>`.
+Never put `LIVE_TOKEN` in a URL: it is rejected by this login route. The server
+validates the code hash with `hmac.compare_digest`, consumes the code, sets an
+HttpOnly, SameSite=Strict cookie with Max-Age of 12 hours, then redirects to `/`
+to strip the query string. Reused or expired codes are rejected; mint a new code
+when needed. Clear the local shell variable afterward with `unset view_code`.
+
+Later HTML, `/api/state`, and `/api/stream` requests authenticate with this cookie.
+The cookie contains a signed issue time, and the server enforces its 12 hours
+of validity, including closing expired browser streams. Its HMAC key is derived
+from `LIVE_TOKEN`, so token rotation invalidates existing cookies. API clients
+can use token headers; `/api/node` requires them. Responses are not cached, do
+not send referrers, and request URLs are not logged. Keep the initial code URL
+private. Only `/healthz` is unauthenticated and returns `ok`.
 HTTP is intended for loopback or encrypted Tailscale transport.
 
 ## Run
