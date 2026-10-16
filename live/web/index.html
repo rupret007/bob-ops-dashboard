@@ -1,0 +1,253 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Bob Ops Live</title>
+<style>
+:root{--bg:#0b0f14;--card:#141a22;--line:#232c38;--tx:#e6edf3;--mu:#8b98a8;--ok:#3fb950;--warn:#d29922;--bad:#f85149;--info:#58a6ff;--unk:#6e7681}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--tx);font:14px/1.4 -apple-system,system-ui,Segoe UI,Roboto,sans-serif}
+body.stale{opacity:.55}
+header{position:sticky;top:0;z-index:5;background:#0b0f14ee;backdrop-filter:blur(6px);border-bottom:1px solid var(--line);padding:10px 14px;display:flex;align-items:center;gap:10px}
+header h1{font-size:17px;margin:0;flex:1}.fresh{font-size:12px;color:var(--mu)}.dot{width:10px;height:10px;border-radius:50%;display:inline-block}
+nav{display:flex;gap:6px;overflow-x:auto;padding:8px 14px;border-bottom:1px solid var(--line)}nav a{flex:none;color:var(--mu);text-decoration:none;border:1px solid var(--line);border-radius:999px;padding:6px 12px;font-size:13px;min-height:44px;display:flex;align-items:center}
+main{padding:12px;display:grid;gap:12px;grid-template-columns:1fr;max-width:1400px;margin:auto}
+section{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px}section h2{font-size:13px;letter-spacing:.06em;text-transform:uppercase;color:var(--mu);margin:0 0 10px;display:flex;justify-content:space-between}
+.row{display:flex;gap:10px;align-items:center;padding:10px 0;border-top:1px solid var(--line);min-height:44px}.row:first-of-type{border-top:0}.row .m{flex:1;min-width:0}.row small{color:var(--mu);display:block}
+.pill{font-size:11px;padding:2px 8px;border-radius:999px;border:1px solid;white-space:nowrap}.ok{color:var(--ok)}.warn{color:var(--warn)}.bad{color:var(--bad)}.info{color:var(--info)}.unk{color:var(--unk)}
+.btn{background:var(--info);color:#001;border:0;border-radius:8px;padding:10px 14px;font-weight:600;min-height:44px}
+.mach{display:grid;grid-template-columns:1fr 1fr;gap:8px}.mc{border:1px solid var(--line);border-radius:10px;padding:10px}
+.bar{height:6px;background:#0d1117;border-radius:4px;overflow:hidden;margin:4px 0 8px}.bar i{display:block;height:100%}
+.bar.unknown{background:repeating-linear-gradient(45deg,#30363d 0 6px,#161b22 6px 12px)}
+.pipe{display:grid;grid-template-columns:repeat(5,1fr);gap:4px;font-size:11px;text-align:center}.pipe div{border:1px solid var(--line);border-radius:8px;padding:6px 2px}.pipe b{display:block;font-size:16px}
+.tl .row{align-items:flex-start}.tl time{color:var(--mu);font-size:12px;width:72px;flex:none}
+svg{display:block}.mc small{display:block;color:var(--mu);margin-top:4px}
+#hero{text-align:center;padding:8px 0 4px}
+#gauges{display:flex;gap:8px;overflow-x:auto;padding:4px 0}
+.gauge-card{flex:0 0 100px;border:1px solid var(--line);border-radius:10px;padding:8px;text-align:center;min-height:44px;cursor:pointer}
+.gauge-card.offline{opacity:.5}
+.sheet{position:fixed;left:0;right:0;bottom:0;background:var(--card);border-top:1px solid var(--line);border-radius:16px 16px 0 0;padding:16px;max-height:70vh;overflow:auto;transform:translateY(100%);transition:transform .25s;z-index:20}
+.sheet.open{transform:translateY(0)}
+.sheet h3{margin:0 0 8px}
+@media(min-width:900px){main{grid-template-columns:repeat(12,1fr)}
+#hero{grid-column:1/-1}#gauges{grid-column:1/-1}
+#needs{grid-column:1/6}#health{grid-column:6/13}#live{grid-column:1/8}#thru{grid-column:8/13}#pipe{grid-column:1/8}#events{grid-column:8/13}#routines{grid-column:1/-1}nav{display:none}}
+</style>
+</head>
+<body>
+<header>
+<span class="dot" id="healthDot" style="background:var(--unk)"></span>
+<h1>Bob Ops</h1>
+<span class="fresh" id="fresh">Connecting… (CT)</span>
+</header>
+<nav>
+<a href="#needs">Needs you</a>
+<a href="#health">Health</a>
+<a href="#live">Live work</a>
+<a href="#pipe">Pipeline</a>
+<a href="#thru">Throughput</a>
+<a href="#events">Events</a>
+</nav>
+<main>
+<section id="hero">
+<svg id="tacho" viewBox="0 0 240 140" width="100%" height="160" aria-label="Speed index"></svg>
+<svg id="heroSpark" viewBox="0 0 300 40" width="100%" height="40"></svg>
+</section>
+<div id="gauges"></div>
+<section id="needs"><h2>Needs you <span id="needsCount">0</span></h2><div id="needsList"></div></section>
+<section id="health"><h2>Health</h2><div class="mach" id="machines"></div>
+<h2 style="margin-top:12px">AI capacity</h2><div id="aiCap"></div></section>
+<section id="live"><h2>Live work</h2><div id="lanes"></div></section>
+<section id="pipe"><h2>Pipeline</h2><div class="pipe" id="pipeCounts"></div><div id="pipeRows"></div></section>
+<section id="thru"><h2>Throughput</h2><svg id="thruSpark" viewBox="0 0 300 80" width="100%" height="80"></svg><div id="thruRows"></div></section>
+<section id="events" class="tl"><h2>Recent events</h2><div id="eventList"></div></section>
+<section id="routines"><h2>Routines</h2><div id="routineList"></div></section>
+</main>
+<div class="sheet" id="sheet" role="dialog" aria-hidden="true">
+<h3 id="sheetTitle">Speed index</h3>
+<div id="sheetBody"></div>
+<button class="btn" id="sheetClose" type="button">Close</button>
+</div>
+<script>
+(function(){
+const CT='America/Chicago';
+let lastState=null,lastMsg=0,needleTarget=0,needleCurrent=0,animId=null,pauseAnim=false;
+const freshEl=document.getElementById('fresh');
+const healthDot=document.getElementById('healthDot');
+
+function fmtCt(iso){
+  if(!iso)return '';
+  try{
+    const d=new Date(iso);
+    return d.toLocaleString('en-US',{timeZone:CT,hour:'numeric',minute:'2-digit',hour12:true})+' CT';
+  }catch(e){return iso;}
+}
+
+function ago(sec){return sec<60?Math.round(sec)+'s ago':Math.round(sec/60)+'m ago';}
+
+function bandColor(v){
+  if(v<25)return 'var(--unk)';
+  if(v<70)return 'var(--ok)';
+  return 'var(--bad)';
+}
+
+function drawTacho(score,target){
+  const svg=document.getElementById('tacho');
+  const cx=120,cy=120,r=90;
+  const start=Math.PI, end=0;
+  function pt(ang){return [cx+r*Math.cos(ang), cy-r*Math.sin(ang)];}
+  let arcs='';
+  [[0,25,'idle','#6e7681'],[25,70,'cruising','#3fb950'],[70,100,'redline','#f85149']].forEach(b=>{
+    const a1=start+(end-start)*(1-b[1]/100);
+    const a0=start+(end-start)*(1-b[0]/100);
+    const p0=pt(a0),p1=pt(a1);
+    arcs+=`<path d="M ${p0[0]} ${p0[1]} A ${r} ${r} 0 0 1 ${p1[0]} ${p1[1]}" fill="none" stroke="${b[3]}" stroke-width="14" opacity=".35"/>`;
+  });
+  const tickAng=start+(end-start)*(1-70/100);
+  const tp=pt(tickAng);
+  const needleAng=start+(end-start)*(1-needleCurrent/100);
+  const np=pt(needleAng);
+  svg.innerHTML=arcs+
+    `<text x="${cx}" y="${cy-20}" text-anchor="middle" fill="var(--tx)" font-size="28" font-weight="700">${Math.round(needleCurrent)}</text>`+
+    `<text x="${cx}" y="${cy}" text-anchor="middle" fill="var(--mu)" font-size="11">speed index</text>`+
+    `<line x1="${cx}" y1="${cy}" x2="${np[0]}" y2="${np[1]}" stroke="var(--tx)" stroke-width="3"/>`+
+    `<circle cx="${tp[0]}" cy="${tp[1]}" r="3" fill="var(--warn)"/>`;
+}
+
+function sparkline(svgId, points, color){
+  const el=document.getElementById(svgId);
+  if(!el||!points||!points.length){if(el)el.innerHTML='';return;}
+  const w=300,h=el.getAttribute('viewBox').split(' ')[3]|0||40;
+  const xs=points.map((p,i)=>i*(w/(points.length-1||1)));
+  const ys=points.map(p=>{
+    const v=typeof p==='object'?(p.score??p.merged??0):p;
+    return h-v/100*h;
+  });
+  const poly=xs.map((x,i)=>`${x},${ys[i]}`).join(' ');
+  el.innerHTML=`<polyline fill="none" stroke="${color||'#3fb950'}" stroke-width="2" points="${poly}"/>`;
+}
+
+function render(state){
+  lastState=state;
+  const score=state.speed_index?.score??0;
+  needleTarget=score;
+  const hist=(state.speed_history||[]).map(h=>h.score);
+  sparkline('heroSpark',hist,'#58a6ff');
+  drawTacho(score,70);
+
+  const gauges=document.getElementById('gauges');
+  gauges.innerHTML='';
+  (state.nodes||[]).forEach(n=>{
+    const g=document.createElement('div');
+    g.className='gauge-card'+(n.online?'':' offline');
+    const sc=n.speed?.score??'—';
+    g.innerHTML=`<small>${n.label}</small><b>${n.online?sc:'offline'}</b>`;
+    g.onclick=()=>openSheet(n.label,n.speed||state.speed_index);
+    gauges.appendChild(g);
+  });
+
+  const needs=state.needs_you||[];
+  document.getElementById('needsCount').textContent=needs.length;
+  document.getElementById('needsList').innerHTML=needs.length?needs.map(n=>
+    `<div class="row"><span class="pill ${n.severity==='bad'?'bad':n.severity==='warn'?'warn':'unk'}">${n.kind||'item'}</span><div class="m">${esc(n.title)}<small>${esc(n.detail||'')}</small></div></div>`
+  ).join(''):'<div class="row"><div class="m">Nothing needs you</div></div>';
+
+  const mach=document.getElementById('machines');
+  mach.innerHTML=(state.nodes||[]).map(n=>{
+    if(!n.online)return `<div class="mc"><b>${esc(n.label)}</b> <span class="pill unk">offline</span></div>`;
+    const l1=n.load?.l1??0;
+    const memT=n.memory?.total||1, memU=n.memory?.used||0;
+    const swU=n.swap?.used||0;
+    const free=n.disk?.free_gb??'?';
+    return `<div class="mc"><b>${esc(n.label)}</b> <span class="pill ok">online</span>
+      <small>Load ${l1} / 14</small><div class="bar"><i style="width:${Math.min(100,l1/14*100)}%;background:${l1>14?'var(--bad)':'var(--ok)'}"></i></div>
+      <small>Memory ${fmtGb(memU)}/${fmtGb(memT)} · swap ${fmtGb(swU)}</small><div class="bar"><i style="width:${memU/memT*100}%;background:var(--warn)"></i></div>
+      <small>Disk ${free} GB free</small></div>`;
+  }).join('');
+
+  const ai=document.getElementById('aiCap');
+  const caps=state.ai_capacity||[];
+  ai.innerHTML=caps.length?caps.map(a=>{
+    const unk=a.remaining_pct==null;
+    const pct=unk?0:a.remaining_pct;
+    return `<div class="row"><div class="m">${esc(a.provider)}<div class="bar ${unk?'unknown':''}">${unk?'':`<i style="width:${pct}%;background:${pct<10?'var(--bad)':'var(--ok)'}"></i>`}</div></div>
+      <span class="${unk?'unk':pct<10?'bad':'ok'}">${unk?'unknown':pct+'%'} · ${esc(a.reset_ct||'')}</span></div>`;
+  }).join(''):'<div class="row"><div class="m">No AI capacity reports</div></div>';
+
+  const lanesEl=document.getElementById('lanes');
+  let laneHtml='';
+  (state.nodes||[]).forEach(n=>{
+    if(!n.online||!(n.lanes||[]).length)return;
+    laneHtml+=`<small class="unk">${esc(n.label).toUpperCase()}</small>`;
+    n.lanes.forEach(l=>{
+      laneHtml+=`<div class="row"><span class="pill info">${esc(l.name)}</span><div class="m">${esc(l.repo||l.name)}<small>${esc(l.status||'running')}</small></div></div>`;
+    });
+  });
+  lanesEl.innerHTML=laneHtml||'<div class="row"><div class="m">No active lanes</div></div>';
+
+  const st=state.pipeline||{};
+  document.getElementById('pipeCounts').innerHTML=
+    ['draft','ci','karen','ready','merged_today'].map(k=>`<div>${k.replace('_',' ')}<b>${st[k]??0}</b></div>`).join('');
+  document.getElementById('pipeRows').innerHTML=(state.pipeline_rows||[]).slice(0,12).map(p=>
+    `<div class="row"><span class="pill info">${esc(p.stage)}</span><div class="m">${esc(p.repo)} #${p.number}<small>${esc(p.title)}</small></div></div>`
+  ).join('');
+
+  const th=state.throughput||{};
+  sparkline('thruSpark',(state.throughput_history||[]).map(h=>h.merged*10),'#3fb950');
+  document.getElementById('thruRows').innerHTML=
+    `<div class="row"><div class="m">PRs merged<small>7d avg ${th.merged_7d_avg??'—'}</small></div><b class="ok">${th.merged_today??0}</b></div>`;
+
+  document.getElementById('eventList').innerHTML=(state.events||[]).map(e=>
+    `<div class="row"><time>${esc(e.at||'')}</time><div class="m">${esc(e.message)}</div></div>`
+  ).join('')||'<div class="row"><div class="m">No events yet</div></div>';
+
+  document.getElementById('routineList').innerHTML=(state.routines||[]).map(r=>
+    `<div class="row"><div class="m">${esc(r.name)}<small>${esc(r.node||'')}</small></div><span>${esc(r.status)}</span></div>`
+  ).join('')||'<div class="row"><div class="m">No svc routines detected</div></div>';
+
+  const updated=state.updated_at;
+  const staleSec=(Date.now()-lastMsg)/1000;
+  document.body.classList.toggle('stale',staleSec>10);
+  freshEl.textContent=`Updated ${fmtCt(updated)} · ${ago((Date.now()-new Date(updated).getTime())/1000)}${staleSec>10?' · stale '+Math.round(staleSec)+'s':''}`;
+  healthDot.style.background=staleSec>10?'var(--bad)':(needs.length?'var(--warn)':'var(--ok)');
+}
+
+function fmtGb(b){return b?(b/1e9).toFixed(1)+' GB':'—';}
+function esc(s){return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;');}
+
+function openSheet(title, speed){
+  document.getElementById('sheetTitle').textContent=title+' — speed';
+  const w=speed?.weights||{};
+  const c=speed?.components||{};
+  const inp=speed?.inputs||{};
+  document.getElementById('sheetBody').innerHTML=
+    `<p>Score: <b>${speed?.score??'—'}</b></p>`+
+    Object.keys(w).map(k=>`<div class="row"><div class="m">${k} (weight ${(w[k]*100).toFixed(0)}%)<small>input ${inp[k]??'—'} · component ${c[k]??'—'}%</small></div></div>`).join('');
+  document.getElementById('sheet').classList.add('open');
+}
+document.getElementById('sheetClose').onclick=()=>document.getElementById('sheet').classList.remove('open');
+
+function animLoop(){
+  if(!pauseAnim){
+    needleCurrent+=(needleTarget-needleCurrent)*0.15;
+    if(lastState)drawTacho(lastState.speed_index?.score??0,70);
+  }
+  animId=requestAnimationFrame(animLoop);
+}
+animLoop();
+
+document.addEventListener('visibilitychange',()=>{pauseAnim=document.hidden;});
+
+function connect(){
+  const es=new EventSource('/api/stream');
+  es.addEventListener('state',e=>{
+    lastMsg=Date.now();
+    try{render(JSON.parse(e.data));}catch(err){}
+  });
+  es.onerror=()=>{es.close();setTimeout(connect,2000);};
+}
+connect();
+})();
+</script>
+</body>
+</html>
