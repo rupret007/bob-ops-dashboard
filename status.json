@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-10-16T18:19:34.086800-05:00",
-  "generated_at_display": "Fri Oct 16, 2026 \u00b7 6:19 PM CDT",
+  "generated_at": "2026-10-16T18:34:31.579978-05:00",
+  "generated_at_display": "Fri Oct 16, 2026 \u00b7 6:34 PM CDT",
   "timezone": "America/Chicago",
   "owner": "rupret007",
   "dashboard": "bob-ops-dashboard",
@@ -495,8 +495,8 @@
           "status": "green",
           "chip": "Green",
           "default_branch": "main",
-          "tip_sha": "1da9cd9",
-          "tip_date": "2026-10-16T23:04:39Z",
+          "tip_sha": "828692f",
+          "tip_date": "2026-10-16T23:26:34Z",
           "open_prs": 0,
           "open_pr_url": null,
           "open_pr_number": null,
@@ -504,7 +504,14 @@
           "open_pr_stack": [],
           "pr_listing_complete": true,
           "agent_url": null,
-          "ci": null,
+          "ci": {
+            "name": "Cluster tests",
+            "conclusion": "success",
+            "branch": "main",
+            "sha": "828692f",
+            "created": "2026-10-16T23:26:37Z",
+            "html_url": "https://github.com/rupret007/bob-ops-dashboard/actions/runs/38981461221"
+          },
           "release": null,
           "release_sha": null,
           "release_url": null,
@@ -880,7 +887,7 @@
     "barker"
   ],
   "publish_notes": "Public board -- no secrets or customer paths. Private repositories stay high-level; AI Music Vault stays private-content-boundary only.",
-  "refresh_started_ms": 1792192740897,
+  "refresh_started_ms": 1792193638206,
   "agents_source": "file:stale->unknown",
   "agents": [
     {
@@ -1026,7 +1033,7 @@
     }
   ],
   "llm_work_now_freshness": {
-    "generated_at": "2026-10-16 18:19 CT",
+    "generated_at": "2026-10-16 18:34 CT",
     "warn_ttl_sec": 1200,
     "warnings": [],
     "ok": true
