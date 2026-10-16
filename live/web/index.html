@@ -198,7 +198,7 @@ function hostedLaneCount(state,hostId){
 }
 
 function lanesByHost(state){
-  const buckets={};
+  const buckets=Object.create(null);
   (state.nodes||[]).forEach(n=>{
     if(!n.online)return;
     (n.lanes||[]).forEach(l=>{
@@ -260,7 +260,7 @@ function render(state){
       miniGaugeSvg(n.online?sc:0,n.online)+
       `<span class="gauge-label">${esc(n.label)}</span>`+
       `<span class="gauge-value">${esc(valueText)}</span>`+
-      (n.online?`<span class="gauge-lanes">${lanes}/${maxL} lanes</span>`:'');
+      (n.online?`<span class="gauge-lanes">${lanes}/${esc(maxL)} lanes</span>`:'');
     g.onclick=()=>openSheet(n.label,disp||n.speed||state.speed_index);
     gauges.appendChild(g);
   });
@@ -268,7 +268,7 @@ function render(state){
   const needs=state.needs_you||[];
   document.getElementById('needsCount').textContent=needs.length;
   document.getElementById('needsList').innerHTML=needs.length?needs.map(n=>
-    `<div class="row"><span class="pill ${n.severity==='bad'?'bad':n.severity==='warn'?'warn':'unk'}">${n.kind||'item'}</span><div class="m">${esc(n.title)}<small>${esc(n.detail||'')}</small></div></div>`
+    `<div class="row"><span class="pill ${n.severity==='bad'?'bad':n.severity==='warn'?'warn':'unk'}">${esc(n.kind||'item')}</span><div class="m">${esc(n.title)}<small>${esc(n.detail||'')}</small></div></div>`
   ).join(''):'<div class="row"><div class="m">Nothing needs you</div></div>';
 
   const mach=document.getElementById('machines');
@@ -282,22 +282,22 @@ function render(state){
     const swU=n.swap?.used||0;
     const free=n.disk?.free_gb??'?';
     return `<div class="mc"><b>${esc(n.label)}</b> <span class="pill ok">online</span>
-      <small>Load ${l1} / 14</small><div class="bar"><i style="width:${Math.min(100,l1/14*100)}%;background:${l1>14?'var(--bad)':'var(--ok)'}"></i></div>
+      <small>Load ${esc(l1)} / 14</small><div class="bar"><i style="width:${Math.min(100,l1/14*100)}%;background:${l1>14?'var(--bad)':'var(--ok)'}"></i></div>
       <small>Memory ${fmtGb(memU)}/${fmtGb(memT)} · swap ${fmtGb(swU)}</small><div class="bar"><i style="width:${memU/memT*100}%;background:var(--warn)"></i></div>
-      <small>Disk ${free} GB free</small></div>`;
+      <small>Disk ${esc(free)} GB free</small></div>`;
   }).join('');
 
   const ai=document.getElementById('aiCap');
   const caps=state.ai_capacity||[];
   ai.innerHTML=caps.length?caps.map(a=>{
     const unk=a.remaining_pct==null;
-    const pct=unk?0:a.remaining_pct;
+    const pct=unk?0:Math.max(0,Math.min(100,Number(a.remaining_pct)||0));
     return `<div class="row"><div class="m">${esc(a.provider)}<div class="bar ${unk?'unknown':''}">${unk?'':`<i style="width:${pct}%;background:${pct<10?'var(--bad)':'var(--ok)'}"></i>`}</div></div>
       <span class="${unk?'unk':pct<10?'bad':'ok'}">${unk?'unknown':pct+'%'} · ${esc(a.reset_ct||'')}</span></div>`;
   }).join(''):'<div class="row"><div class="m">No AI capacity reports</div></div>';
 
   const lanesEl=document.getElementById('lanes');
-  const nodeById={};
+  const nodeById=Object.create(null);
   (state.nodes||[]).forEach(n=>{nodeById[n.id]=n;});
   const buckets=lanesByHost(state);
   const hostOrder=(state.nodes||[]).map(n=>n.id).filter(id=>buckets[id]?.length);
@@ -305,7 +305,7 @@ function render(state){
   let laneHtml='';
   hostOrder.forEach(host=>{
     const label=(nodeById[host]&&nodeById[host].label)||host;
-    laneHtml+=`<small class="unk">${esc(label).toUpperCase()}</small>`;
+    laneHtml+=`<small class="unk">${esc(String(label).toUpperCase())}</small>`;
     buckets[host].forEach(l=>{
       laneHtml+=`<div class="row"><span class="pill info">${esc(l.name)}</span><div class="m">${esc(l.repo||l.name)}<small>${esc(l.status||'running')}</small></div></div>`;
     });
@@ -314,15 +314,15 @@ function render(state){
 
   const st=state.pipeline||{};
   document.getElementById('pipeCounts').innerHTML=
-    ['draft','ci','karen','ready','merged_today'].map(k=>`<div>${k.replace('_',' ')}<b>${st[k]??0}</b></div>`).join('');
+    ['draft','ci','karen','ready','merged_today'].map(k=>`<div>${k.replace('_',' ')}<b>${esc(st[k]??0)}</b></div>`).join('');
   document.getElementById('pipeRows').innerHTML=(state.pipeline_rows||[]).slice(0,12).map(p=>
-    `<div class="row"><span class="pill info">${esc(p.stage)}</span><div class="m">${esc(p.repo)} #${p.number}<small>${esc(p.title)}</small></div></div>`
+    `<div class="row"><span class="pill info">${esc(p.stage)}</span><div class="m">${esc(p.repo)} #${esc(p.number)}<small>${esc(p.title)}</small></div></div>`
   ).join('');
 
   const th=state.throughput||{};
   sparkline('thruSpark',(state.throughput_history||[]).map(h=>h.merged*10),'#3fb950');
   document.getElementById('thruRows').innerHTML=
-    `<div class="row"><div class="m">PRs merged<small>7d avg ${th.merged_7d_avg??'—'}</small></div><b class="ok">${th.merged_today??0}</b></div>`;
+    `<div class="row"><div class="m">PRs merged<small>7d avg ${esc(th.merged_7d_avg??'—')}</small></div><b class="ok">${esc(th.merged_today??0)}</b></div>`;
 
   document.getElementById('eventList').innerHTML=(state.events||[]).map(e=>
     `<div class="row"><time>${esc(e.at||'')}</time><div class="m">${esc(e.message)}</div></div>`
@@ -340,7 +340,7 @@ function render(state){
 }
 
 function fmtGb(b){return b?(b/1e9).toFixed(1)+' GB':'—';}
-function esc(s){return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;');}
+function esc(s){return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');}
 
 function closeSheet(){
   const sheet=document.getElementById('sheet');
@@ -359,8 +359,8 @@ function openSheet(title, speed){
   const c=speed?.components||{};
   const inp=speed?.inputs||{};
   document.getElementById('sheetBody').innerHTML=
-    `<p>Score: <b>${speed?.score??'—'}</b></p>`+
-    Object.keys(w).map(k=>`<div class="row"><div class="m">${k} (weight ${(w[k]*100).toFixed(0)}%)<small>input ${inp[k]??'—'} · component ${c[k]??'—'}%</small></div></div>`).join('');
+    `<p>Score: <b>${esc(speed?.score??'—')}</b></p>`+
+    Object.keys(w).map(k=>`<div class="row"><div class="m">${esc(k)} (weight ${(w[k]*100).toFixed(0)}%)<small>input ${esc(inp[k]??'—')} · component ${esc(c[k]??'—')}%</small></div></div>`).join('');
   backdrop.removeAttribute('hidden');
   sheet.removeAttribute('hidden');
   sheet.setAttribute('aria-hidden','false');

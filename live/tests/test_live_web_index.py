@@ -1,5 +1,6 @@
 """Static checks on live/web/index.html (no browser)."""
 import re
+import subprocess
 import unittest
 from pathlib import Path
 
@@ -11,6 +12,9 @@ class LiveWebIndexTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.html = INDEX.read_text(encoding="utf-8")
+
+    def test_server_strings_are_escaped_at_runtime(self):
+        subprocess.run(["node", str(ROOT / "live/tests/test_web_security.js")], check=True, timeout=10)
 
     def test_viewport_meta(self):
         self.assertIn('name="viewport"', self.html)

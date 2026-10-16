@@ -2,3 +2,7 @@
 __pycache__/
 *.pyc
 node_modules/
+# Private live configuration belongs outside the repo; ignore accidental copies.
+live.env
+.config/bob-live/
+live/token

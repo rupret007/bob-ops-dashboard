@@ -2,7 +2,7 @@
 
 Real-time ops dashboard: thin **node agents** POST metrics; **aggregator** on the NucBox merges GitHub + fleet state and serves the web UI over SSE.
 
-Public Pages board (`index.html` / `refresh.sh`) is unchanged. Access live UI only on Tailscale, e.g. `http://100.93.165.1:8787` (userspace `tailscaled` forwards to `127.0.0.1:8787`).
+Public Pages board (`index.html` / `refresh.sh`) is unchanged. Access the live UI through your private Tailscale address or loopback. Keep addresses and credentials outside this repository: GitHub Pages publishes the root of `main`.
 
 ## Architecture
 
@@ -39,7 +39,7 @@ Public Pages board (`index.html` / `refresh.sh`) is unchanged. Access live UI on
 }
 ```
 
-Optional header: `X-Live-Token` when `LIVE_TOKEN` is set on the aggregator.
+Authentication is required: `Authorization: Bearer <token>` (or the agent-compatible `X-Live-Token` header). POST bodies are limited to 256 KiB; oversized bodies return 413, and malformed or negative Content-Length returns 400.
 
 ### state/v1 (`GET /api/state`, SSE `event: state`)
 
@@ -61,6 +61,50 @@ Optional header: `X-Live-Token` when `LIVE_TOKEN` is set on the aggregator.
 
 Speed index: 30% LOC/min (log, 500=full) + 20% tests/min (6=full) + 20% actions/min (60=full) + 15% CPU% + 15% active lanes (12=full).
 
+## Private configuration and browser access
+
+The aggregator refuses to start without a non-empty `LIVE_TOKEN`. Both launchers
+load it from `~/.config/bob-live/token` (override with `LIVE_TOKEN_FILE`) and fail
+if it is missing, empty, inside the repository, or not owned by you with mode 600.
+An existing environment token does not bypass this file requirement.
+
+Prepare each machine locally (do not commit the generated token):
+
+```bash
+mkdir -p ~/.config/bob-live
+chmod 700 ~/.config/bob-live
+(umask 077; python3 -c 'import secrets; print(secrets.token_urlsafe(32))' > ~/.config/bob-live/token)
+chmod 600 ~/.config/bob-live/token
+cp live/live.env.example ~/.config/bob-live/live.env
+chmod 600 ~/.config/bob-live/live.env
+```
+
+Use the same token on the aggregator and agents, transferring it privately.
+Edit the private `live.env` with your addresses; the launchers source this trusted
+shell file before startup. Set `BOB_LIVE_PUSH` to the aggregator's private
+`http://<host>:8787/api/node` URL on remote agents. It can also come from the
+environment. `LIVE_CONFIG` overrides the optional config path; set
+`LIVE_CONFIG_REQUIRED=1` to fail if that config file is absent. Config files must
+also be outside the checkout, owned by you, and mode 600. Accidental in-repo
+`live.env`, `live/token`, and `.config/bob-live/` copies are gitignored, but must
+never be used or published. `nodes.json` contains labels and capacities only.
+
+`LIVE_BIND` defaults to `127.0.0.1`. To listen on a tailnet interface, set its
+numeric Tailscale address explicitly in private config. Only loopback and the
+Tailscale shared address range (prefix length 10) are allowed; wildcard, LAN,
+public addresses and hostnames are refused. The local NucBox agent uses the same
+bind address unless `BOB_LIVE_PUSH` overrides it. `LIVE_PORT` defaults to 8787.
+
+In a browser, visit `http://<private-host>:8787/?k=<URL-encoded-token>` once.
+The server validates with `hmac.compare_digest`, sets an HttpOnly,
+SameSite=Strict session cookie, then redirects to `/` to strip the query string.
+Later HTML, `/api/state`, and `/api/stream` requests authenticate with this cookie;
+API clients can use the Authorization header. The cookie is derived from the
+shared token, so changing that token invalidates existing cookies. Responses
+are not cached, do not send referrers, and request URLs are not logged. Keep the
+initial token URL private. Only `/healthz` is unauthenticated and returns `ok`.
+HTTP is intended for loopback or encrypted Tailscale transport.
+
 ## Run
 
 **NucBox (aggregator + local agent)**
@@ -75,8 +119,6 @@ chmod +x live/run-nucbox.sh
 ```bash
 chmod +x live/run-mini.sh
 ./live/run-mini.sh
-# or explicitly:
-python3 live/agent.py --node-id mini --push http://100.93.165.1:8787/api/node --interval 2
 ```
 
 **MacBook Pro** — add `mbp` to `live/nodes.json`, run agent with `--node-id mbp`.
@@ -87,7 +129,7 @@ Env: `LIVE_BIND`, `LIVE_PORT`, `LIVE_TOKEN`, `BOB_LANE_LOG_GLOB`, `BOB_WORKTREE_
 
 ```bash
 python3 -m unittest discover -s live/tests -v
-node --check live/web/index.html 2>/dev/null || true
+python3 qa-offline.py
 ```
 
 Design reference: `live/ops-live-mockup.html`, notes: `live/RESEARCH.md`.

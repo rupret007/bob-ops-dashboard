@@ -28,6 +28,7 @@ class AggregatorHttpTests(unittest.TestCase):
         self.server = AggregatorServer(
             host="127.0.0.1",
             port=0,
+            token="synthetic-test-token",
             store=self.store,
             github_fetcher=lambda repos: {
                 "prs": [],
@@ -45,6 +46,8 @@ class AggregatorHttpTests(unittest.TestCase):
     def tearDown(self):
         self.server._stop.set()
         self.httpd.shutdown()
+        self.httpd.server_close()
+        self.thread.join()
 
     def _url(self, path):
         return f"http://127.0.0.1:{self.port}{path}"
@@ -61,12 +64,12 @@ class AggregatorHttpTests(unittest.TestCase):
         req = urllib.request.Request(
             self._url("/api/node"),
             data=json.dumps(payload).encode(),
-            headers={"Content-Type": "application/json"},
+            headers={"Content-Type": "application/json", "Authorization": "Bearer synthetic-test-token"},
             method="POST",
         )
         with urllib.request.urlopen(req) as resp:
             self.assertEqual(204, resp.status)
-        with urllib.request.urlopen(self._url("/api/state")) as resp:
+        with urllib.request.urlopen(urllib.request.Request(self._url("/api/state"), headers={"Authorization": "Bearer synthetic-test-token"})) as resp:
             state = json.loads(resp.read().decode())
         self.assertEqual("state/v1", state["version"])
         self.assertTrue(state["nodes"][0]["online"])
@@ -83,11 +86,11 @@ class AggregatorHttpTests(unittest.TestCase):
             urllib.request.Request(
                 self._url("/api/node"),
                 data=json.dumps(payload).encode(),
-                headers={"Content-Type": "application/json"},
+                headers={"Content-Type": "application/json", "Authorization": "Bearer synthetic-test-token"},
                 method="POST",
             )
         )
-        req = urllib.request.Request(self._url("/api/stream"))
+        req = urllib.request.Request(self._url("/api/stream"), headers={"Authorization": "Bearer synthetic-test-token"})
         resp = urllib.request.urlopen(req, timeout=5)
         chunk = resp.read(4096).decode("utf-8", errors="replace")
         self.assertIn("event: state", chunk)
@@ -106,12 +109,12 @@ class AggregatorHttpTests(unittest.TestCase):
             urllib.request.Request(
                 self._url("/api/node"),
                 data=json.dumps(payload).encode(),
-                headers={"Content-Type": "application/json"},
+                headers={"Content-Type": "application/json", "Authorization": "Bearer synthetic-test-token"},
                 method="POST",
             )
         )
         self.clock.advance(20)
-        with urllib.request.urlopen(self._url("/api/state")) as resp:
+        with urllib.request.urlopen(urllib.request.Request(self._url("/api/state"), headers={"Authorization": "Bearer synthetic-test-token"})) as resp:
             state = json.loads(resp.read().decode())
         self.assertFalse(state["nodes"][0]["online"])
 

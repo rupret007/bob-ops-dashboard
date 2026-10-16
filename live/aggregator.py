@@ -2,17 +2,22 @@
 """Live ops aggregator — stdlib HTTP + SSE."""
 from __future__ import annotations
 
+import argparse
+import hmac
+import ipaddress
 import json
 import os
+import socket
 import subprocess
 import sys
 import threading
 import time
 from collections import deque
 from datetime import datetime, timedelta, timezone
+from http.cookies import SimpleCookie, CookieError
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import urlparse
+from urllib.parse import urlparse, parse_qs
 from zoneinfo import ZoneInfo
 
 _ROOT = Path(__file__).resolve().parent.parent
@@ -25,9 +30,29 @@ from live.speed_index import compute_speed_index
 CT = ZoneInfo("America/Chicago")
 NODE_OFFLINE_SEC = 15.0
 RING_SECONDS = 600
+MAX_BODY_BYTES = 256 * 1024
+COOKIE_NAME = "bob_live_session"
+# Construct the shared address range without publishing a tailnet IP literal.
+TAILNET = ipaddress.ip_network((int.from_bytes(bytes([100, 64, 0, 0]), "big"), 10))
 OWNER = "rupret007"
 _THROUGHPUT_CACHE: dict = {"at": 0.0, "owner": "", "data": {}}
 _THROUGHPUT_TTL = 60.0
+
+
+def validate_bind(host):
+    try:
+        address = ipaddress.ip_address(host)
+    except ValueError:
+        raise ValueError("LIVE_BIND must be a loopback or Tailscale IP address") from None
+    if not (address.is_loopback or address in TAILNET):
+        raise ValueError("LIVE_BIND must be a loopback or Tailscale IP address")
+    return host
+
+
+def validate_token(token):
+    if not token or not token.strip():
+        raise ValueError("LIVE_TOKEN must be set and non-empty")
+    return token
 
 
 def load_repos_config(raw) -> tuple[list[str], dict]:
@@ -615,9 +640,10 @@ class AggregatorServer:
         store: LiveStore | None = None,
         github_fetcher=None,
     ):
-        self.host = host
+        self.host = validate_bind(host)
         self.port = port
-        self.token = token
+        self.token = validate_token(token)
+        self.session_token = hmac.digest(self.token.encode(), b"bob-live browser session v1", "sha256").hex()
         live_dir = Path(__file__).resolve().parent
         nodes = json.loads((live_dir / "nodes.json").read_text(encoding="utf-8"))
         needs_path = live_dir / "needs.json"
@@ -646,17 +672,63 @@ class AggregatorServer:
             def log_message(self, fmt, *args):
                 pass
 
+            def end_headers(self):
+                self.send_header("Cache-Control", "no-store")
+                self.send_header("Referrer-Policy", "no-referrer")
+                super().end_headers()
+
+            def _matches(self, candidate, expected):
+                return hmac.compare_digest(candidate.encode("utf-8"), expected.encode("utf-8"))
+
             def _check_token(self):
-                if not server.token:
-                    return True
-                return self.headers.get("X-Live-Token") == server.token
+                auth = self.headers.get("Authorization", "")
+                if auth:
+                    scheme, _, candidate = auth.partition(" ")
+                    return scheme.lower() == "bearer" and self._matches(candidate, server.token)
+                legacy = self.headers.get("X-Live-Token")
+                if legacy is not None:
+                    return self._matches(legacy, server.token)
+                cookie = SimpleCookie()
+                try:
+                    cookie.load(self.headers.get("Cookie", ""))
+                except CookieError:
+                    return False
+                session = cookie.get(COOKIE_NAME)
+                return session is not None and self._matches(session.value, server.session_token)
+
+            def _reject(self, status):
+                self.close_connection = True
+                self.send_response(status)
+                self.send_header("Content-Length", "0")
+                self.end_headers()
 
             def do_GET(self):
-                path = urlparse(self.path).path
+                url = urlparse(self.path)
+                path = url.path
                 if path == "/healthz":
                     self.send_response(200)
                     self.end_headers()
                     self.wfile.write(b"ok")
+                    return
+                if path == "/":
+                    try:
+                        query = parse_qs(url.query, keep_blank_values=True, max_num_fields=20)
+                    except ValueError:
+                        self._reject(400)
+                        return
+                    if "k" in query:
+                        keys = query["k"]
+                        if len(keys) != 1 or not self._matches(keys[0], server.token):
+                            self._reject(401)
+                            return
+                        self.send_response(303)
+                        self.send_header("Set-Cookie", f"{COOKIE_NAME}={server.session_token}; HttpOnly; SameSite=Strict; Path=/")
+                        self.send_header("Location", "/")
+                        self.send_header("Content-Length", "0")
+                        self.end_headers()
+                        return
+                if not self._check_token():
+                    self._reject(401)
                     return
                 if path == "/api/state":
                     body = json.dumps(server.store.build_state()).encode("utf-8")
@@ -669,7 +741,6 @@ class AggregatorServer:
                 if path == "/api/stream":
                     self.send_response(200)
                     self.send_header("Content-Type", "text/event-stream")
-                    self.send_header("Cache-Control", "no-cache")
                     self.send_header("Connection", "keep-alive")
                     self.end_headers()
                     cond = threading.Condition()
@@ -706,25 +777,34 @@ class AggregatorServer:
 
             def do_POST(self):
                 path = urlparse(self.path).path
+                if not self._check_token():
+                    self._reject(401)
+                    return
                 if path != "/api/node":
                     self.send_response(404)
                     self.end_headers()
                     return
-                if not self._check_token():
-                    self.send_response(401)
-                    self.end_headers()
+                lengths = self.headers.get_all("Content-Length", [])
+                if self.headers.get("Transfer-Encoding") or len(lengths) != 1:
+                    self._reject(400)
                     return
-                length = int(self.headers.get("Content-Length", 0))
-                raw = self.rfile.read(length)
+                length_text = lengths[0]
+                if not length_text.isascii() or not length_text.isdecimal():
+                    self._reject(400)
+                    return
+                digits = length_text.lstrip("0") or "0"
+                if len(digits) > len(str(MAX_BODY_BYTES)) or int(digits) > MAX_BODY_BYTES:
+                    self._reject(413)
+                    return
+                length = int(digits)
                 try:
+                    raw = self.rfile.read(length)
                     payload = json.loads(raw.decode("utf-8"))
-                except json.JSONDecodeError:
-                    self.send_response(400)
-                    self.end_headers()
+                except (ValueError, OSError, RecursionError):
+                    self._reject(400)
                     return
-                if payload.get("version") != "node/v1":
-                    self.send_response(400)
-                    self.end_headers()
+                if not isinstance(payload, dict) or payload.get("version") != "node/v1":
+                    self._reject(400)
                     return
                 server.store.ingest_node(payload)
                 server._notify_sse()
@@ -745,7 +825,9 @@ class AggregatorServer:
 
     def serve_forever(self):
         handler = self.make_handler()
-        httpd = ThreadingHTTPServer((self.host, self.port), handler)
+        class Server(ThreadingHTTPServer):
+            address_family = socket.AF_INET6 if ":" in self.host else socket.AF_INET
+        httpd = Server((self.host, self.port), handler)
         t = threading.Thread(target=self._github_loop, daemon=True)
         t.start()
         try:
@@ -756,9 +838,21 @@ class AggregatorServer:
 
 
 def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--check-config", action="store_true", help="validate without starting services")
+    args = parser.parse_args()
     host = os.environ.get("LIVE_BIND", "127.0.0.1")
-    port = int(os.environ.get("LIVE_PORT", "8787"))
     token = os.environ.get("LIVE_TOKEN")
+    try:
+        validate_token(token)
+        validate_bind(host)
+        port = int(os.environ.get("LIVE_PORT", "8787"))
+        if not 1 <= port <= 65535:
+            raise ValueError("LIVE_PORT must be between 1 and 65535")
+    except ValueError as error:
+        parser.exit(2, f"live aggregator: {error}\n")
+    if args.check_config:
+        return
     server = AggregatorServer(host=host, port=port, token=token)
     print(f"live aggregator on http://{host}:{port}", flush=True)
     server.serve_forever()
