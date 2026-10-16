@@ -4,7 +4,9 @@ set -euo pipefail
 
 ORIG="${HOME}/bin/nuc-verify"
 REPO_ROOT=""
-NATS_URL="${BOB_NATS_URL:-nats://100.93.165.1:4222}"
+# Tailnet address is private: set BOB_NATS_URL or put the URL in
+# ~/.config/bob-cluster/nats-url (never commit it).
+NATS_URL="${BOB_NATS_URL:-$(cat "${HOME}/.config/bob-cluster/nats-url" 2>/dev/null || true)}"
 NATS_TIMEOUT=2
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
@@ -59,6 +61,11 @@ REF="$(git rev-parse HEAD)"
 git fetch origin --quiet 2>/dev/null || true
 if ! git branch -r --contains "${REF}" 2>/dev/null | grep -q .; then
   echo "HEAD ${REF} not on origin; falling back to SSH nuc-verify" >&2
+  fallback "$@"
+fi
+
+if [[ -z "${NATS_URL}" ]]; then
+  echo "BOB_NATS_URL not configured; falling back to SSH nuc-verify" >&2
   fallback "$@"
 fi
 

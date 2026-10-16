@@ -184,7 +184,7 @@ async def run_worker(args: argparse.Namespace) -> None:
 def main() -> int:
     parser = argparse.ArgumentParser(description="Bob cluster worker")
     parser.add_argument("--node-id", required=True)
-    parser.add_argument("--nats", default="nats://100.93.165.1:4222")
+    parser.add_argument("--nats", default=os.environ.get("BOB_NATS_URL", "nats://127.0.0.1:4222"))
     parser.add_argument("--token-file", default=os.path.expanduser("~/.config/bob-cluster/tokens.env"))
     parser.add_argument("--classes", default="test,build,render")
     parser.add_argument("--max-parallel", type=int, default=2)

@@ -1,0 +1,904 @@
+#!/usr/bin/env python3
+"""Live ops aggregator — stdlib HTTP + SSE."""
+from __future__ import annotations
+
+import argparse
+import hmac
+import ipaddress
+import json
+import os
+import socket
+import subprocess
+import sys
+import threading
+import time
+from collections import deque
+from datetime import datetime, timedelta, timezone
+from http.cookies import SimpleCookie, CookieError
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
+from urllib.parse import urlparse, parse_qs
+from zoneinfo import ZoneInfo
+
+_ROOT = Path(__file__).resolve().parent.parent
+if str(_ROOT) not in sys.path:
+    sys.path.insert(0, str(_ROOT))
+
+from live.sanitize import sanitize_obj
+from live.speed_index import compute_speed_index
+from live.view_codes import DEFAULT_TTL, mint_view_code, redeem_view_code, view_codes_path
+
+CT = ZoneInfo("America/Chicago")
+NODE_OFFLINE_SEC = 15.0
+RING_SECONDS = 600
+MAX_BODY_BYTES = 256 * 1024
+COOKIE_NAME = "bob_live_session"
+SESSION_MAX_AGE = 12 * 60 * 60
+# Construct the shared address range without publishing a tailnet IP literal.
+TAILNET = ipaddress.ip_network((int.from_bytes(bytes([100, 64, 0, 0]), "big"), 10))
+OWNER = "rupret007"
+_THROUGHPUT_CACHE: dict = {"at": 0.0, "owner": "", "data": {}}
+_THROUGHPUT_TTL = 60.0
+
+
+def validate_bind(host):
+    try:
+        address = ipaddress.ip_address(host)
+    except ValueError:
+        raise ValueError("LIVE_BIND must be a loopback or Tailscale IP address") from None
+    if address.version == 6 and address.ipv4_mapped is not None:
+        raise ValueError("LIVE_BIND must be a loopback or Tailscale IP address")
+    if not (address.is_loopback or address in TAILNET):
+        raise ValueError("LIVE_BIND must be a loopback or Tailscale IP address")
+    return host
+
+
+def validate_token(token):
+    if not token or not token.strip():
+        raise ValueError("LIVE_TOKEN must be set and non-empty")
+    return token
+
+
+def load_repos_config(raw) -> tuple[list[str], dict]:
+    if isinstance(raw, list):
+        return raw, {"default": "bob-brain"}
+    repos = raw.get("repos") or []
+    gate_map = raw.get("gate_default_repo") or {"default": "bob-brain"}
+    return repos, gate_map
+
+
+def _utc_iso(dt: datetime) -> str:
+    return dt.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def _ct_day_bounds(now_ct: datetime) -> tuple[datetime, datetime]:
+    start = now_ct.replace(hour=0, minute=0, second=0, microsecond=0)
+    end = start + timedelta(days=1)
+    return start, end
+
+
+def _dedupe_prs(rows: list[dict]) -> list[dict]:
+    seen: set[tuple[str, int]] = set()
+    out: list[dict] = []
+    for row in rows:
+        repo = row.get("repository") or {}
+        name = repo.get("name") if isinstance(repo, dict) else str(repo)
+        num = int(row.get("number") or 0)
+        key = (name, num)
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(row)
+    return out
+
+
+def _gh_search_prs(owner: str, merged_range: str, created_range: str | None = None) -> list[dict]:
+    cmd = [
+        "gh",
+        "search",
+        "prs",
+        "--owner",
+        owner,
+        f"--merged-at={merged_range}",
+        "--json",
+        "number,repository,closedAt",
+        "--limit",
+        "500",
+    ]
+    out = subprocess.check_output(cmd, text=True, timeout=90)
+    return json.loads(out or "[]")
+
+
+def _gh_search_opened(owner: str, created_range: str) -> list[dict]:
+    cmd = [
+        "gh",
+        "search",
+        "prs",
+        "--owner",
+        owner,
+        f"--created={created_range}",
+        "--json",
+        "number,repository,createdAt",
+        "--limit",
+        "500",
+    ]
+    out = subprocess.check_output(cmd, text=True, timeout=90)
+    return json.loads(out or "[]")
+
+
+def _throughput_counts(owner: str, clock=time.time) -> dict:
+    global _THROUGHPUT_CACHE
+    now = clock()
+    if (
+        _THROUGHPUT_CACHE.get("owner") == owner
+        and now - float(_THROUGHPUT_CACHE.get("at") or 0) < _THROUGHPUT_TTL
+        and _THROUGHPUT_CACHE.get("data")
+    ):
+        return dict(_THROUGHPUT_CACHE["data"])
+
+    now_ct = datetime.fromtimestamp(now, CT)
+    start_today, end_today = _ct_day_bounds(now_ct)
+    merged_range = f"{_utc_iso(start_today)}..{_utc_iso(end_today)}"
+    created_range = f"{_utc_iso(start_today)}..{_utc_iso(end_today)}"
+
+    merged_today = 0
+    opened_today = 0
+    try:
+        merged_today = len(_dedupe_prs(_gh_search_prs(owner, merged_range)))
+        opened_today = len(_dedupe_prs(_gh_search_opened(owner, created_range)))
+    except (subprocess.SubprocessError, json.JSONDecodeError, OSError):
+        pass
+
+    prev_end = start_today
+    prev_start = start_today - timedelta(days=7)
+    merged_prev = 0
+    opened_prev = 0
+    try:
+        prev_range = f"{_utc_iso(prev_start)}..{_utc_iso(prev_end)}"
+        merged_prev = len(_dedupe_prs(_gh_search_prs(owner, prev_range)))
+        opened_prev = len(_dedupe_prs(_gh_search_opened(owner, prev_range)))
+    except (subprocess.SubprocessError, json.JSONDecodeError, OSError):
+        pass
+
+    data = {
+        "merged_today": merged_today,
+        "opened_today": opened_today,
+        "merged_7d_avg": round(merged_prev / 7.0, 1),
+        "opened_7d_avg": round(opened_prev / 7.0, 1),
+        "gates_pass": 0,
+        "gates_fail": 0,
+    }
+    _THROUGHPUT_CACHE = {"at": now, "owner": owner, "data": data}
+    return dict(data)
+
+
+def _sha_matches(head: str, gate_sha: str) -> bool:
+    h = (head or "").lower()
+    g = (gate_sha or "").lower()
+    if not h or not g:
+        return False
+    return h.startswith(g) or g.startswith(h)
+
+
+def _resolve_gate_repo(gate: dict, prs: list[dict], gate_map: dict) -> str | None:
+    if gate.get("repo"):
+        return gate["repo"]
+    sha = str(gate.get("sha") or "")
+    pr_num = int(gate.get("pr") or 0)
+    matches = [
+        p
+        for p in prs
+        if _sha_matches(str(p.get("headRefOid") or ""), sha)
+    ]
+    if len(matches) == 1:
+        return matches[0].get("repo")
+    default_repo = gate_map.get("default") or gate_map.get(str(pr_num)) or "bob-brain"
+    for p in prs:
+        if p.get("number") == pr_num and p.get("repo") == default_repo:
+            return default_repo
+    for p in prs:
+        if p.get("number") == pr_num:
+            return p.get("repo")
+    return default_repo
+
+
+def gate_totals(throughput: dict, gates: list[dict]) -> dict:
+    """Fill gates_pass/gates_fail from parsed Karen verdicts (deduped by pr+sha)."""
+    out = dict(throughput or {})
+    seen: dict = {}
+    for g in gates or []:
+        key = (g.get("pr"), str(g.get("sha") or "")[:8])
+        v = str(g.get("verdict") or "").upper()
+        if v in ("PASS", "FAIL"):
+            seen[key] = v
+    out["gates_pass"] = sum(1 for v in seen.values() if v == "PASS")
+    out["gates_fail"] = sum(1 for v in seen.values() if v == "FAIL")
+    return out
+
+
+def _collect_gates(node_reports: dict) -> list[dict]:
+    gates: list[dict] = []
+    for rep in node_reports.values():
+        gates.extend(rep.get("gates") or [])
+    return gates
+
+
+def _verdict_for_head(gates: list[dict], pr_num: int, head: str) -> str | None:
+    verdict = None
+    for g in gates:
+        if int(g.get("pr") or 0) != pr_num:
+            continue
+        if not _sha_matches(head, str(g.get("sha") or "")):
+            continue
+        verdict = str(g.get("verdict") or "").upper()
+    return verdict
+
+
+def apply_karen_to_prs(prs: list[dict], gates: list[dict], gate_map: dict) -> None:
+    for pr in prs:
+        pr_num = int(pr.get("number") or 0)
+        head = str(pr.get("headRefOid") or "").lower()
+        verdict = _verdict_for_head(gates, pr_num, head)
+        pr["karen_pass"] = verdict == "PASS"
+        pr["karen_fail"] = verdict == "FAIL"
+        if pr.get("isDraft"):
+            pr["stage"] = "draft"
+            continue
+        if verdict == "FAIL":
+            pr["stage"] = "karen_fail"
+            continue
+        if verdict == "REQUESTED" or (verdict is None and _has_gate_request(gates, pr_num, head)):
+            pr["stage"] = "karen"
+            continue
+        ci_state = pr.get("ci_state") or "unknown"
+        if verdict == "PASS" and ci_state == "success":
+            pr["stage"] = "ready"
+            continue
+        if ci_state in ("pending", "unknown"):
+            pr["stage"] = "ci"
+            continue
+        if ci_state == "success" and verdict != "PASS":
+            pr["stage"] = "ci"
+            continue
+        pr["stage"] = "ci"
+
+
+def _has_gate_request(gates: list[dict], pr_num: int, head: str) -> bool:
+    for g in gates:
+        if int(g.get("pr") or 0) != pr_num:
+            continue
+        if str(g.get("verdict") or "").upper() != "REQUESTED":
+            continue
+        if _sha_matches(head, str(g.get("sha") or "")):
+            return True
+    return False
+
+
+def _stage_counts(prs: list[dict], merged_today: int) -> dict:
+    stages = {"draft": 0, "ci": 0, "karen": 0, "ready": 0, "merged_today": merged_today}
+    for p in prs:
+        st = p.get("stage", "ci")
+        if st == "karen_fail":
+            continue
+        if st in stages:
+            stages[st] += 1
+    return stages
+
+
+def _now_mono(clock):
+    return clock()
+
+
+def _now_wall(clock):
+    return datetime.now(CT)
+
+
+class LiveStore:
+    def __init__(self, clock=time.time, nodes_config=None, needs_manual=None):
+        self.clock = clock
+        self._lock = threading.Lock()
+        self.nodes_config = nodes_config or []
+        self.needs_manual = needs_manual or []
+        self.gate_default_repo: dict = {"default": "bob-brain"}
+        self.node_reports: dict[str, dict] = {}
+        self.github: dict = {"prs": [], "stages": {}, "throughput": {}, "fetched_at": None}
+        self.events: deque = deque(maxlen=100)
+        self.speed_history: deque = deque(maxlen=RING_SECONDS // 2)
+        self.merge_history: deque = deque(maxlen=RING_SECONDS // 2)
+        self._seen_gates: set[tuple] = set()
+
+    def ingest_node(self, payload: dict):
+        nid = payload.get("node_id")
+        if not nid:
+            return
+        with self._lock:
+            prev = self.node_reports.get(nid)
+            was_offline = prev and (self.clock() - prev.get("_received_at", 0)) > NODE_OFFLINE_SEC
+            payload["_received_at"] = self.clock()
+            self.node_reports[nid] = payload
+            if was_offline:
+                self._push_event("node_online", f"Node {nid} back online")
+            for g in payload.get("gates") or []:
+                key = (g.get("pr"), g.get("sha"), g.get("verdict"))
+                if key not in self._seen_gates:
+                    self._seen_gates.add(key)
+                    at_show = g.get("at_display") or g.get("at_ct") or "time unknown"
+                    self._push_event(
+                        "gate",
+                        f"PR #{g.get('pr')} {g.get('verdict')} {g.get('sha', '')}",
+                        at=at_show,
+                    )
+
+    def _push_event(self, kind: str, message: str, at: str | None = None):
+        when = at if at else _now_wall(self.clock).strftime("%I:%M %p").lstrip("0")
+        self.events.appendleft(
+            {
+                "kind": kind,
+                "message": message,
+                "at": when,
+                "ts": self.clock(),
+            }
+        )
+
+    def _node_online(self, report: dict | None) -> bool:
+        if not report:
+            return False
+        return (self.clock() - report.get("_received_at", 0)) <= NODE_OFFLINE_SEC
+
+    def _cluster_metrics(self):
+        loc = test = actions = 0.0
+        cpu_sum = 0.0
+        cpu_n = 0
+        lanes = 0
+        for nid, rep in self.node_reports.items():
+            if not self._node_online(rep):
+                continue
+            tp = rep.get("throughput") or {}
+            loc += float(tp.get("loc_per_min") or 0)
+            test += float(tp.get("test_runs_per_min") or 0)
+            actions += float(tp.get("actions_per_min") or 0)
+            lanes += len(rep.get("lanes") or [])
+            cpu_sum += float((rep.get("cpu") or {}).get("pct") or 0)
+            cpu_n += 1
+        cpu_avg = cpu_sum / cpu_n if cpu_n else 0.0
+        return loc, test, actions, cpu_avg, lanes
+
+    def build_state(self) -> dict:
+        with self._lock:
+            loc, test, actions, cpu_avg, lanes = self._cluster_metrics()
+            speed = compute_speed_index(loc, test, actions, cpu_avg, lanes)
+            self.speed_history.append(
+                {"ts": self.clock(), "score": speed["score"]}
+            )
+            nodes_out = []
+            for meta in self.nodes_config:
+                nid = meta["id"]
+                rep = self.node_reports.get(nid)
+                online = self._node_online(rep)
+                if rep and online:
+                    tp = rep.get("throughput") or {}
+                    nspeed = compute_speed_index(
+                        float(tp.get("loc_per_min") or 0),
+                        float(tp.get("test_runs_per_min") or 0),
+                        float(tp.get("actions_per_min") or 0),
+                        float((rep.get("cpu") or {}).get("pct") or 0),
+                        len(rep.get("lanes") or []),
+                    )
+                    nodes_out.append(
+                        {
+                            "id": nid,
+                            "label": meta.get("label", nid),
+                            "online": True,
+                            "optional": bool(meta.get("optional")),
+                            "last_seen_sec": round(
+                                self.clock() - rep.get("_received_at", self.clock()), 1
+                            ),
+                            "load": rep.get("load"),
+                            "cpu": rep.get("cpu"),
+                            "memory": rep.get("memory"),
+                            "swap": rep.get("swap"),
+                            "disk": rep.get("disk"),
+                            "max_lanes": meta.get("max_lanes"),
+                            "lanes": rep.get("lanes") or [],
+                            "routines": rep.get("routines") or [],
+                            "speed": nspeed,
+                            "ai_capacity": rep.get("ai_capacity") or [],
+                        }
+                    )
+                else:
+                    nodes_out.append(
+                        {
+                            "id": nid,
+                            "label": meta.get("label", nid),
+                            "online": False,
+                            "optional": bool(meta.get("optional")),
+                            "max_lanes": meta.get("max_lanes"),
+                            "speed": None,
+                        }
+                    )
+
+            gates = _collect_gates(self.node_reports)
+            apply_karen_to_prs(
+                self.github.get("prs") or [], gates, self.gate_default_repo
+            )
+            merged_today = int(
+                (self.github.get("throughput") or {}).get("merged_today") or 0
+            )
+            self.github["stages"] = _stage_counts(
+                self.github.get("prs") or [], merged_today
+            )
+            needs = list(self.needs_manual)
+            needs.extend(self._derive_needs(nodes_out))
+
+            ai_all = []
+            for n in nodes_out:
+                if n.get("online"):
+                    for a in n.get("ai_capacity") or []:
+                        ai_all.append({**a, "node": n["id"]})
+
+            routines = self._derive_routines(nodes_out)
+
+            return sanitize_obj(
+                {
+                    "version": "state/v1",
+                    "updated_at": _now_wall(self.clock).isoformat(),
+                    "timezone": "America/Chicago",
+                    "speed_index": speed,
+                    "speed_history": list(self.speed_history),
+                    "nodes": nodes_out,
+                    "needs_you": needs,
+                    "pipeline": self.github.get("stages", {}),
+                    "pipeline_rows": self.github.get("prs", []),
+                    "throughput": gate_totals(self.github.get("throughput", {}), gates),
+                    "throughput_history": list(self.merge_history),
+                    "events": sorted(
+                        list(self.events), key=lambda e: float(e.get("ts") or 0), reverse=True
+                    )[:30],
+                    "routines": routines,
+                    "ai_capacity": ai_all,
+                    "formula": {
+                        "description": "Speed index 0-100",
+                        "weights": speed["weights"],
+                        "full_scale": speed["full_scale"],
+                    },
+                }
+            )
+
+    def _derive_needs(self, nodes_out: list[dict]) -> list[dict]:
+        items = []
+        for n in nodes_out:
+            if not n.get("online") and not n.get("optional"):
+                items.append(
+                    {
+                        "severity": "warn",
+                        "kind": "node_offline",
+                        "title": f"{n.get('label')} offline",
+                    }
+                )
+            load = (n.get("load") or {}).get("l5")
+            if load is not None and load > 14:
+                items.append(
+                    {
+                        "severity": "bad",
+                        "kind": "load",
+                        "title": f"{n.get('label')} load5 {load} > 14",
+                    }
+                )
+            disk = n.get("disk") or {}
+            free = disk.get("free_gb")
+            if free is not None and free < 15:
+                items.append(
+                    {
+                        "severity": "bad",
+                        "kind": "disk",
+                        "title": f"{n.get('label')} disk {free} GB free (<15)",
+                    }
+                )
+            for a in n.get("ai_capacity") or []:
+                pct = a.get("remaining_pct")
+                if pct is not None and float(pct) < 10:
+                    prov = str(a.get("provider") or "AI")
+                    label = prov
+                    if "codex" in prov.lower():
+                        label = "Codex nearly out"
+                    else:
+                        label = f"{prov} nearly out"
+                    items.append(
+                        {
+                            "severity": "bad",
+                            "kind": "ai_capacity",
+                            "title": label,
+                        }
+                    )
+
+        for pr in self.github.get("prs") or []:
+            if pr.get("karen_pass") and pr.get("isDraft"):
+                items.append(
+                    {
+                        "severity": "warn",
+                        "kind": "decision",
+                        "title": f"Decision: undraft {pr.get('repo')}#{pr.get('number')}?",
+                        "detail": "Karen PASS · still draft",
+                    }
+                )
+            if pr.get("karen_pass") and pr.get("ci_failing"):
+                items.append(
+                    {
+                        "severity": "bad",
+                        "kind": "ci",
+                        "title": f"CI failing on {pr.get('repo')} #{pr.get('number')}",
+                    }
+                )
+        return items
+
+    def _derive_routines(self, nodes_out: list[dict]) -> list[dict]:
+        routines = []
+        for n in nodes_out:
+            for routine in n.get("routines") or []:
+                routines.append(
+                    {
+                        "name": routine.get("name", ""),
+                        "node": n.get("label"),
+                        "status": routine.get("status", "running"),
+                    }
+                )
+            for lane in n.get("lanes") or []:
+                name = lane.get("name", "")
+                if name.startswith("svc-"):
+                    routines.append(
+                        {
+                            "name": name,
+                            "node": n.get("label"),
+                            "status": lane.get("status", "running"),
+                        }
+                    )
+        return routines
+
+    def update_github(self, data: dict):
+        with self._lock:
+            self.github = data
+            merged_today = data.get("throughput", {}).get("merged_today", 0)
+            self.merge_history.append({"ts": self.clock(), "merged": merged_today})
+
+
+def fetch_github_state(
+    repos: list[str], owner: str = OWNER, clock=time.time
+) -> dict:
+    """Call gh CLI; return empty structure on failure."""
+    prs: list[dict] = []
+    try:
+        for repo in repos:
+            out = subprocess.check_output(
+                [
+                    "gh",
+                    "pr",
+                    "list",
+                    "--repo",
+                    f"{owner}/{repo}",
+                    "--state",
+                    "open",
+                    "--json",
+                    "number,title,isDraft,headRefOid,statusCheckRollup,updatedAt",
+                    "--limit",
+                    "50",
+                ],
+                text=True,
+                timeout=60,
+            )
+            for row in json.loads(out or "[]"):
+                checks = row.get("statusCheckRollup") or []
+                ci_state = "unknown"
+                ci_failing = False
+                for c in checks:
+                    st = (c or {}).get("state", "").upper()
+                    if st == "FAILURE":
+                        ci_failing = True
+                        ci_state = "failure"
+                    elif st == "PENDING" and ci_state != "failure":
+                        ci_state = "pending"
+                    elif st == "SUCCESS" and ci_state not in ("failure", "pending"):
+                        ci_state = "success"
+                prs.append(
+                    {
+                        "repo": repo,
+                        "number": row["number"],
+                        "title": row.get("title", ""),
+                        "isDraft": row.get("isDraft"),
+                        "headRefOid": (row.get("headRefOid") or "")[:8],
+                        "updatedAt": row.get("updatedAt"),
+                        "ci_state": ci_state,
+                        "ci_failing": ci_failing,
+                        "karen_pass": False,
+                        "stage": _stage_for_pr(row, ci_state),
+                    }
+                )
+    except (subprocess.SubprocessError, json.JSONDecodeError, OSError):
+        pass
+
+    throughput = _throughput_counts(owner, clock=clock)
+    stages = _stage_counts(prs, throughput["merged_today"])
+    return {
+        "prs": prs,
+        "stages": stages,
+        "throughput": throughput,
+        "fetched_at": clock(),
+    }
+
+
+def _stage_for_pr(row: dict, ci_state: str) -> str:
+    if row.get("isDraft"):
+        return "draft"
+    if ci_state in ("pending", "unknown"):
+        return "ci"
+    if ci_state == "success":
+        return "ready"
+    return "ci"
+
+
+class AggregatorServer:
+    def __init__(
+        self,
+        host="127.0.0.1",
+        port=8787,
+        token=None,
+        store: LiveStore | None = None,
+        github_fetcher=None,
+        clock=time.time,
+    ):
+        self.host = validate_bind(host)
+        self.port = port
+        self.token = validate_token(token)
+        self.session_key = hmac.digest(self.token.encode(), b"bob-live browser session v2", "sha256")
+        self.clock = clock
+        self.view_codes_path = view_codes_path()
+        live_dir = Path(__file__).resolve().parent
+        nodes = json.loads((live_dir / "nodes.json").read_text(encoding="utf-8"))
+        needs_path = live_dir / "needs.json"
+        needs = json.loads(needs_path.read_text(encoding="utf-8")) if needs_path.is_file() else []
+        self.store = store or LiveStore(nodes_config=nodes, needs_manual=needs)
+        repos_raw = json.loads((live_dir / "repos.json").read_text(encoding="utf-8"))
+        self.repos, gate_map = load_repos_config(repos_raw)
+        self.store.gate_default_repo = gate_map
+        def _default_fetch(repos, clock=time.time):
+            return fetch_github_state(repos, clock=clock)
+
+        self.github_fetcher = github_fetcher or _default_fetch
+        self._sse_clients: list[threading.Condition] = []
+        self._stop = threading.Event()
+        self.web_root = live_dir / "web"
+
+    def mint_session(self):
+        issued = str(int(self.clock()))
+        signature = hmac.digest(self.session_key, issued.encode(), "sha256").hex()
+        return issued + "." + signature
+
+    def session_expiry(self, value):
+        issued, separator, signature = value.partition(".")
+        if not separator or not issued.isascii() or not issued.isdecimal() or len(issued) > 12:
+            return None
+        expected = hmac.digest(self.session_key, issued.encode(), "sha256").hex()
+        if not hmac.compare_digest(signature.encode("utf-8"), expected.encode()):
+            return None
+        expiry = int(issued) + SESSION_MAX_AGE
+        return expiry if int(issued) <= self.clock() < expiry else None
+
+    def _notify_sse(self):
+        for cond in self._sse_clients:
+            with cond:
+                cond.notify_all()
+
+    def make_handler(self):
+        server = self
+
+        class Handler(BaseHTTPRequestHandler):
+            def log_message(self, fmt, *args):
+                pass
+
+            def end_headers(self):
+                self.send_header("Cache-Control", "no-store")
+                self.send_header("Referrer-Policy", "no-referrer")
+                super().end_headers()
+
+            def _matches(self, candidate, expected):
+                return hmac.compare_digest(candidate.encode("utf-8"), expected.encode("utf-8"))
+
+            def _check_token(self):
+                auth = self.headers.get("Authorization", "")
+                if auth:
+                    scheme, _, candidate = auth.partition(" ")
+                    return scheme.lower() == "bearer" and self._matches(candidate, server.token)
+                legacy = self.headers.get("X-Live-Token")
+                if legacy is not None:
+                    return self._matches(legacy, server.token)
+                return False
+
+            def _check_viewer(self):
+                self._session_expires = None
+                if self.headers.get("Authorization") or self.headers.get("X-Live-Token") is not None:
+                    return self._check_token()
+                cookie = SimpleCookie()
+                try:
+                    cookie.load(self.headers.get("Cookie", ""))
+                except CookieError:
+                    return False
+                session = cookie.get(COOKIE_NAME)
+                if session is not None:
+                    self._session_expires = server.session_expiry(session.value)
+                return self._session_expires is not None
+
+            def _reject(self, status):
+                self.close_connection = True
+                self.send_response(status)
+                self.send_header("Content-Length", "0")
+                self.end_headers()
+
+            def do_GET(self):
+                url = urlparse(self.path)
+                path = url.path
+                if path == "/healthz":
+                    self.send_response(200)
+                    self.end_headers()
+                    self.wfile.write(b"ok")
+                    return
+                if path == "/":
+                    try:
+                        query = parse_qs(url.query, keep_blank_values=True, max_num_fields=20)
+                    except ValueError:
+                        self._reject(400)
+                        return
+                    if "k" in query:
+                        keys = query["k"]
+                        if len(keys) != 1 or not redeem_view_code(keys[0], path=server.view_codes_path, clock=server.clock):
+                            self._reject(401)
+                            return
+                        self.send_response(303)
+                        self.send_header("Set-Cookie", f"{COOKIE_NAME}={server.mint_session()}; Max-Age={SESSION_MAX_AGE}; HttpOnly; SameSite=Strict; Path=/")
+                        self.send_header("Location", "/")
+                        self.send_header("Content-Length", "0")
+                        self.end_headers()
+                        return
+                if not self._check_viewer():
+                    self._reject(401)
+                    return
+                if path == "/api/state":
+                    body = json.dumps(server.store.build_state()).encode("utf-8")
+                    self.send_response(200)
+                    self.send_header("Content-Type", "application/json")
+                    self.send_header("Content-Length", str(len(body)))
+                    self.end_headers()
+                    self.wfile.write(body)
+                    return
+                if path == "/api/stream":
+                    self.send_response(200)
+                    self.send_header("Content-Type", "text/event-stream")
+                    self.send_header("Connection", "keep-alive")
+                    self.end_headers()
+                    cond = threading.Condition()
+                    server._sse_clients.append(cond)
+                    try:
+                        while not server._stop.is_set() and (
+                            self._session_expires is None or server.clock() < self._session_expires
+                        ):
+                            state = server.store.build_state()
+                            payload = json.dumps(state)
+                            self.wfile.write(
+                                f"event: state\ndata: {payload}\n\n".encode("utf-8")
+                            )
+                            self.wfile.flush()
+                            with cond:
+                                cond.wait(timeout=2.0)
+                            self.wfile.write(b": heartbeat\n\n")
+                            self.wfile.flush()
+                    except (BrokenPipeError, ConnectionResetError):
+                        pass
+                    finally:
+                        if cond in server._sse_clients:
+                            server._sse_clients.remove(cond)
+                    return
+                if path == "/" or path == "/index.html":
+                    index = server.web_root / "index.html"
+                    body = index.read_bytes() if index.is_file() else b""
+                    self.send_response(200)
+                    self.send_header("Content-Type", "text/html; charset=utf-8")
+                    self.send_header("Content-Length", str(len(body)))
+                    self.end_headers()
+                    self.wfile.write(body)
+                    return
+                self.send_response(404)
+                self.end_headers()
+
+            def do_POST(self):
+                path = urlparse(self.path).path
+                if not self._check_token():
+                    self._reject(401)
+                    return
+                if path != "/api/node":
+                    self.send_response(404)
+                    self.end_headers()
+                    return
+                lengths = self.headers.get_all("Content-Length", [])
+                if self.headers.get("Transfer-Encoding") or len(lengths) != 1:
+                    self._reject(400)
+                    return
+                length_text = lengths[0]
+                if not length_text.isascii() or not length_text.isdecimal():
+                    self._reject(400)
+                    return
+                digits = length_text.lstrip("0") or "0"
+                if len(digits) > len(str(MAX_BODY_BYTES)) or int(digits) > MAX_BODY_BYTES:
+                    self._reject(413)
+                    return
+                length = int(digits)
+                try:
+                    raw = self.rfile.read(length)
+                    payload = json.loads(raw.decode("utf-8"))
+                except (ValueError, OSError, RecursionError):
+                    self._reject(400)
+                    return
+                if not isinstance(payload, dict) or payload.get("version") != "node/v1":
+                    self._reject(400)
+                    return
+                server.store.ingest_node(payload)
+                server._notify_sse()
+                self.send_response(204)
+                self.end_headers()
+
+        return Handler
+
+    def _github_loop(self):
+        while not self._stop.is_set():
+            try:
+                data = self.github_fetcher(self.repos, clock=self.store.clock)
+            except TypeError:
+                data = self.github_fetcher(self.repos)
+            self.store.update_github(data)
+            self._notify_sse()
+            self._stop.wait(60.0)
+
+    def serve_forever(self):
+        handler = self.make_handler()
+        class Server(ThreadingHTTPServer):
+            address_family = socket.AF_INET6 if ":" in self.host else socket.AF_INET
+        httpd = Server((self.host, self.port), handler)
+        t = threading.Thread(target=self._github_loop, daemon=True)
+        t.start()
+        try:
+            httpd.serve_forever()
+        finally:
+            self._stop.set()
+            httpd.shutdown()
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--check-config", action="store_true", help="validate without starting services")
+    commands = parser.add_subparsers(dest="command")
+    mint = commands.add_parser("mint-view-code", help="mint a single-use browser code on stdout")
+    mint.add_argument("--ttl", type=int, default=DEFAULT_TTL, help="validity in seconds (1–3600; default 300)")
+    args = parser.parse_args()
+    if args.command == "mint-view-code":
+        try:
+            code = mint_view_code(args.ttl)
+        except (OSError, ValueError):
+            parser.exit(2, "live aggregator: cannot mint view code; check TTL (1–3600) and private store permissions/location\n")
+        print(code)
+        return
+    host = os.environ.get("LIVE_BIND", "127.0.0.1")
+    token = os.environ.get("LIVE_TOKEN")
+    try:
+        validate_token(token)
+        validate_bind(host)
+        port = int(os.environ.get("LIVE_PORT", "8787"))
+        if not 1 <= port <= 65535:
+            raise ValueError("LIVE_PORT must be between 1 and 65535")
+    except ValueError as error:
+        parser.exit(2, f"live aggregator: {error}\n")
+    if args.check_config:
+        return
+    server = AggregatorServer(host=host, port=port, token=token)
+    print(f"live aggregator on http://{host}:{port}", flush=True)
+    server.serve_forever()
+
+
+if __name__ == "__main__":
+    main()
