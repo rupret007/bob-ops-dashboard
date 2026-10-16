@@ -110,6 +110,58 @@ def lane_log_stem(screen_name: str) -> str:
     return screen_name
 
 
+
+ACTIVE_WORKTREE_MAX_AGE_SEC = 6 * 3600
+
+
+def active_worktrees(roots, now=None, max_age=ACTIVE_WORKTREE_MAX_AGE_SEC):
+    """Git worktrees directly under each root (or the root itself) touched recently.
+
+    Lane roots like ~/lane-wt hold one checkout per lane, so `git -C root` alone
+    is not a repo. Only recently modified checkouts are scanned to keep it cheap.
+    """
+    now = time.time() if now is None else now
+    found = []
+    for root in roots:
+        try:
+            if not root.is_dir():
+                continue
+            cands = [root] if (root / ".git").exists() else [c for c in root.iterdir() if c.is_dir()]
+        except OSError:
+            continue
+        for c in cands:
+            try:
+                g = c / ".git"
+                if g.exists() and now - max(c.stat().st_mtime, g.stat().st_mtime) <= max_age:
+                    found.append(c)
+            except OSError:
+                continue
+    return found
+
+
+def committed_delta(head_prev, root):
+    """Lines changed by commits since the last sample (keeps LOC when a lane commits)."""
+    try:
+        head = subprocess.check_output(["git", "-C", str(root), "rev-parse", "HEAD"],
+                                       text=True, timeout=10, stderr=subprocess.DEVNULL).strip()
+    except (OSError, subprocess.SubprocessError):
+        return 0, 0
+    prev = head_prev.get(str(root))
+    head_prev[str(root)] = head
+    if not prev or prev == head:
+        return 0, 0
+    try:
+        out = subprocess.check_output(["git", "-C", str(root), "diff", "--numstat", prev, head],
+                                      text=True, timeout=30, stderr=subprocess.DEVNULL)
+    except (OSError, subprocess.SubprocessError):
+        return 0, 0
+    a = d = 0
+    for line in out.splitlines():
+        parts = line.split("\t")
+        if len(parts) >= 2 and parts[0].isdigit() and parts[1].isdigit():
+            a += int(parts[0]); d += int(parts[1])
+    return a, d
+
 def runs_on_for_session(screen_name: str, node_id: str) -> str:
     if screen_name.startswith("nlane-"):
         return "nuc"
@@ -268,6 +320,8 @@ class Agent:
         self._linux_cpu = LinuxCpuSampler() if self.is_linux else None
         self._ncpu = os.cpu_count() or 4
         self._loc_prev: dict[str, tuple[int, int]] = {}
+        self._head_prev: dict = {}
+        self._commit_carry: dict = {}
         self._loc_last_sample = 0.0
         self._loc_per_min = 0.0
         self._log_offsets: dict[str, int] = {}
@@ -363,9 +417,11 @@ class Agent:
         routines: list[dict] = []
         screen_text = ""
         try:
-            screen_text = subprocess.check_output(
-                ["screen", "-ls"], text=True, timeout=10, stderr=subprocess.STDOUT
-            )
+            # macOS `screen -ls` exits 1 even when sessions exist; ignore rc.
+            screen_text = subprocess.run(
+                ["screen", "-ls"], text=True, timeout=10,
+                stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+            ).stdout or ""
         except (OSError, subprocess.SubprocessError):
             screen_text = ""
         lane_names = parse_screen_ls(screen_text)
@@ -403,18 +459,17 @@ class Agent:
 
     def slow_loc(self):
         added, deleted = 0, 0
-        for root in self.worktree_roots:
-            if not root.is_dir():
-                continue
+        for root in active_worktrees(self.worktree_roots):
             try:
                 out = subprocess.check_output(
                     ["git", "-C", str(root), "diff", "--numstat", "HEAD"],
-                    text=True,
-                    timeout=30,
+                    text=True, timeout=30, stderr=subprocess.DEVNULL,
                 )
             except (OSError, subprocess.SubprocessError):
                 continue
-            a, d = 0, 0
+            a, d = committed_delta(self._head_prev, root)
+            a, d = a + self._commit_carry.get(str(root), (0, 0))[0], d + self._commit_carry.get(str(root), (0, 0))[1]
+            self._commit_carry[str(root)] = (a, d)
             for line in out.splitlines():
                 parts = line.split("\t")
                 if len(parts) >= 2 and parts[0] != "-" and parts[1] != "-":
