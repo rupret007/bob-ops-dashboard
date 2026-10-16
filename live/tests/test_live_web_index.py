@@ -38,6 +38,22 @@ class LiveWebIndexTests(unittest.TestCase):
         self.assertIn('class="gauge-label"', self.html)
         self.assertIn('class="gauge-value"', self.html)
 
+    def test_speed_sheet_hidden_until_open(self):
+        self.assertIn('id="sheet"', self.html)
+        self.assertIn('id="sheetBackdrop"', self.html)
+        self.assertIn("sheet-backdrop", self.html)
+        self.assertRegex(self.html, r'id="sheet"[^>]*\bhidden\b')
+        self.assertIn("function closeSheet", self.html)
+        self.assertIn("Escape", self.html)
+        self.assertIn("sheetBackdrop", self.html)
+
+    def test_sparkline_only_on_hero_and_throughput(self):
+        self.assertRegex(
+            self.html,
+            r"svgId!=='heroSpark'&&svgId!=='thruSpark'",
+        )
+        self.assertNotRegex(self.html, r"sparkline\([^)]*gauge")
+
 
 if __name__ == "__main__":
     unittest.main()

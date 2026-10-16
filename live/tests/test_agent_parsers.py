@@ -21,6 +21,14 @@ class AgentParserTests(unittest.TestCase):
         self.assertGreater(m["mem_total_bytes"], 0)
         self.assertGreater(m["mem_used_bytes"], 0)
 
+    def test_vm_stat_16k_page_size_and_hw_memsize(self):
+        text = (FIX / "vm_stat_16k.txt").read_text(encoding="utf-8")
+        memsize = 8 * 1024 ** 3
+        m = parse_vm_stat(text, memsize_bytes=memsize)
+        self.assertEqual(memsize, m["mem_total_bytes"])
+        used_pages = 120000 + 80000 + 5000
+        self.assertEqual(used_pages * 16384, m["mem_used_bytes"])
+
     def test_meminfo(self):
         text = (FIX / "meminfo.txt").read_text(encoding="utf-8")
         m = parse_meminfo(text)

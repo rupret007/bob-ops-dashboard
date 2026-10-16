@@ -16,8 +16,8 @@ _KAREN_LINE = re.compile(
     re.IGNORECASE,
 )
 _REPO_IN_LINE = re.compile(r"\brepo=([^\s]+)", re.IGNORECASE)
-_KAREN_HEADING = re.compile(
-    r"^##\s+Karen\b.*?(\d{4}-\d{2}-\d{2})\s+(\d{1,2}):(\d{2})\s+CT",
+_SECTION_HEADING = re.compile(
+    r"^##\s+.*?(\d{4}-\d{2}-\d{2})\s+(\d{1,2}):(\d{2})\s+CT",
     re.IGNORECASE,
 )
 _NOTE_TIME = re.compile(r"\bNOTE\s+(\d{1,2}):(\d{2})\s+CT\b", re.IGNORECASE)
@@ -30,13 +30,36 @@ def _display_ct(hour: int, minute: int, day: datetime | None = None) -> str:
 
 
 def _heading_day(line: str) -> datetime | None:
-    m = _KAREN_HEADING.match(line.strip())
+    m = _SECTION_HEADING.match(line.strip())
     if not m:
         return None
     try:
         return datetime.strptime(m.group(1), "%Y-%m-%d").replace(tzinfo=CT)
     except ValueError:
         return None
+
+
+def _mtime_display_ct(file_mtime: float | None) -> str | None:
+    if file_mtime is None:
+        return None
+    dt = datetime.fromtimestamp(file_mtime, CT)
+    return "~" + dt.strftime("%I:%M %p CT").lstrip("0")
+
+
+def _resolve_at_display(
+    line: str,
+    section_day: datetime | None,
+    last_note_display: str | None,
+    section_display: str | None,
+    file_mtime: float | None,
+) -> str:
+    at_display = (
+        _parse_ct_time(line, section_day)
+        or last_note_display
+        or section_display
+        or _mtime_display_ct(file_mtime)
+    )
+    return at_display or "time unknown"
 
 
 def _parse_ct_time(line: str, section_day: datetime | None) -> str | None:
@@ -65,7 +88,7 @@ def _parse_ct_time(line: str, section_day: datetime | None) -> str | None:
     return None
 
 
-def parse_progress_text(text: str) -> list[dict]:
+def parse_progress_text(text: str, file_mtime: float | None = None) -> list[dict]:
     """
     Extract gate events from progress.md content.
     Only structured fields; never copies arbitrary free text from lines.
@@ -77,41 +100,42 @@ def parse_progress_text(text: str) -> list[dict]:
     last_note_display: str | None = None
     for line in text.splitlines():
         stripped = line.strip()
-        if stripped.startswith("## ") and "karen" in stripped.lower():
-            in_karen = True
-            section_day = _heading_day(stripped) or section_day
-            hm = _KAREN_HEADING.match(stripped)
-            if hm and section_day:
-                section_display = _display_ct(int(hm.group(2)), int(hm.group(3)), section_day)
-            else:
-                section_display = _parse_ct_time(stripped, section_day)
-            last_note_display = None
+        if stripped.startswith("## "):
+            if "karen" in stripped.lower():
+                in_karen = True
+            elif in_karen:
+                in_karen = False
+
+            hm = _SECTION_HEADING.match(stripped)
+            if hm:
+                section_day = _heading_day(stripped) or section_day
+                if section_day:
+                    section_display = _display_ct(
+                        int(hm.group(2)), int(hm.group(3)), section_day
+                    )
+                else:
+                    section_display = _parse_ct_time(stripped, section_day)
             continue
-        if stripped.startswith("## ") and in_karen:
-            in_karen = False
-            section_day = None
-            section_display = None
-            last_note_display = None
 
         note_m = _NOTE_TIME.search(stripped)
         if note_m and section_day:
-            last_note_display = _display_ct(int(note_m.group(1)), int(note_m.group(2)), section_day)
+            last_note_display = _display_ct(
+                int(note_m.group(1)), int(note_m.group(2)), section_day
+            )
 
         m = _GATE_REQUEST.search(line)
         if m:
             pr, sha = m.group(1), m.group(2)
             repo_m = _REPO_IN_LINE.search(line)
-            at_display = (
-                _parse_ct_time(line, section_day)
-                or last_note_display
-                or section_display
+            at_display = _resolve_at_display(
+                line, section_day, last_note_display, section_display, file_mtime
             )
             entry = {
                 "pr": int(pr),
                 "sha": sha[:8].lower(),
                 "verdict": "REQUESTED",
                 "at_ct": at_display,
-                "at_display": at_display or "time unknown",
+                "at_display": at_display,
                 "repo": repo_m.group(1) if repo_m else None,
             }
             results.append(entry)
@@ -122,10 +146,8 @@ def parse_progress_text(text: str) -> list[dict]:
             if km:
                 pr, sha, verdict = km.group(1), km.group(2), km.group(3).upper()
                 repo_m = _REPO_IN_LINE.search(line)
-                at_display = (
-                    _parse_ct_time(line, section_day)
-                    or last_note_display
-                    or section_display
+                at_display = _resolve_at_display(
+                    line, section_day, last_note_display, section_display, file_mtime
                 )
                 results.append(
                     {
@@ -133,7 +155,7 @@ def parse_progress_text(text: str) -> list[dict]:
                         "sha": sha[:8].lower(),
                         "verdict": verdict,
                         "at_ct": at_display,
-                        "at_display": at_display or "time unknown",
+                        "at_display": at_display,
                         "repo": repo_m.group(1) if repo_m else None,
                     }
                 )

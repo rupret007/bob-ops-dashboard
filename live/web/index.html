@@ -29,16 +29,20 @@ section h2{font-size:13px;letter-spacing:.06em;text-transform:uppercase;color:va
 .pipe{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:4px;font-size:11px;text-align:center;min-width:0}.pipe div{border:1px solid var(--line);border-radius:8px;padding:6px 2px;min-width:0}.pipe b{display:block;font-size:16px}
 .tl .row{align-items:flex-start}.tl time{color:var(--mu);font-size:12px;width:72px;flex:none}
 svg{display:block;max-width:100%}.mc small{display:block;color:var(--mu);margin-top:4px}
-#hero{text-align:center;padding:8px 0 4px;min-width:0}
-#gauges{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;padding:4px 0;width:100%;max-width:100%}
+#hero{text-align:center;padding:8px 0 4px;min-width:0;overflow:hidden}
+#heroSpark{display:block;margin:0 auto 10px;max-height:40px}
+#gauges{position:relative;z-index:1;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;padding:4px 0;width:100%;max-width:100%}
+.sheet-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:19;opacity:0;pointer-events:none;transition:opacity .25s}
+.sheet-backdrop.open{opacity:1;pointer-events:auto}
+.sheet{position:fixed;left:0;right:0;bottom:0;background:var(--card);border-top:1px solid var(--line);border-radius:16px 16px 0 0;padding:16px;max-height:70vh;overflow:auto;transform:translateY(100%);transition:transform .25s;z-index:20;max-width:100%;visibility:hidden;pointer-events:none}
+.sheet.open{transform:translateY(0);visibility:visible;pointer-events:auto}
+.sheet[hidden],.sheet-backdrop[hidden]{display:none!important}
 .gauge-card{border:1px solid var(--line);border-radius:10px;padding:8px 6px;text-align:center;min-height:44px;cursor:pointer;min-width:0;max-width:100%;display:flex;flex-direction:column;align-items:center;gap:2px}
 .gauge-card.offline{opacity:.55}
 .gauge-card .gauge-arc{width:100%;height:auto}
 .gauge-label{font-size:11px;color:var(--mu);line-height:1.2;display:block;width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .gauge-value{font-size:15px;font-weight:700;display:block;line-height:1.2}
 .gauge-lanes{font-size:10px;color:var(--mu);display:block}
-.sheet{position:fixed;left:0;right:0;bottom:0;background:var(--card);border-top:1px solid var(--line);border-radius:16px 16px 0 0;padding:16px;max-height:70vh;overflow:auto;transform:translateY(100%);transition:transform .25s;z-index:20;max-width:100%}
-.sheet.open{transform:translateY(0)}
 .sheet h3{margin:0 0 8px}
 @media(min-width:900px){
 #hero{grid-column:1/-1}#gauges{grid-column:1/-1}
@@ -74,7 +78,8 @@ svg{display:block;max-width:100%}.mc small{display:block;color:var(--mu);margin-
 <section id="events" class="tl"><h2>Recent events</h2><div id="eventList"></div></section>
 <section id="routines"><h2>Routines</h2><div id="routineList"></div></section>
 </main>
-<div class="sheet" id="sheet" role="dialog" aria-hidden="true">
+<div id="sheetBackdrop" class="sheet-backdrop" hidden></div>
+<div class="sheet" id="sheet" role="dialog" aria-modal="true" aria-hidden="true" hidden>
 <h3 id="sheetTitle">Speed index</h3>
 <div id="sheetBody"></div>
 <button class="btn" id="sheetClose" type="button">Close</button>
@@ -170,6 +175,7 @@ function miniGaugeSvg(score,online){
 }
 
 function sparkline(svgId, points, color){
+  if(svgId!=='heroSpark'&&svgId!=='thruSpark')return;
   const el=document.getElementById(svgId);
   if(!el||!points||!points.length){if(el)el.innerHTML='';return;}
   const w=300,h=el.getAttribute('viewBox').split(' ')[3]|0||40;
@@ -336,7 +342,18 @@ function render(state){
 function fmtGb(b){return b?(b/1e9).toFixed(1)+' GB':'—';}
 function esc(s){return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;');}
 
+function closeSheet(){
+  const sheet=document.getElementById('sheet');
+  const backdrop=document.getElementById('sheetBackdrop');
+  sheet.classList.remove('open');
+  sheet.setAttribute('hidden','');
+  sheet.setAttribute('aria-hidden','true');
+  backdrop.classList.remove('open');
+  backdrop.setAttribute('hidden','');
+}
 function openSheet(title, speed){
+  const sheet=document.getElementById('sheet');
+  const backdrop=document.getElementById('sheetBackdrop');
   document.getElementById('sheetTitle').textContent=title+' — speed';
   const w=speed?.weights||{};
   const c=speed?.components||{};
@@ -344,9 +361,19 @@ function openSheet(title, speed){
   document.getElementById('sheetBody').innerHTML=
     `<p>Score: <b>${speed?.score??'—'}</b></p>`+
     Object.keys(w).map(k=>`<div class="row"><div class="m">${k} (weight ${(w[k]*100).toFixed(0)}%)<small>input ${inp[k]??'—'} · component ${c[k]??'—'}%</small></div></div>`).join('');
-  document.getElementById('sheet').classList.add('open');
+  backdrop.removeAttribute('hidden');
+  sheet.removeAttribute('hidden');
+  sheet.setAttribute('aria-hidden','false');
+  requestAnimationFrame(()=>{
+    backdrop.classList.add('open');
+    sheet.classList.add('open');
+  });
 }
-document.getElementById('sheetClose').onclick=()=>document.getElementById('sheet').classList.remove('open');
+document.getElementById('sheetClose').onclick=closeSheet;
+document.getElementById('sheetBackdrop').onclick=closeSheet;
+document.addEventListener('keydown',e=>{if(e.key==='Escape')closeSheet();});
+document.getElementById('tacho').style.cursor='pointer';
+document.getElementById('tacho').onclick=()=>{if(lastState)openSheet('Cluster',lastState.speed_index);};
 
 function animLoop(){
   if(!pauseAnim){

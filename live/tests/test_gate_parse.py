@@ -47,6 +47,20 @@ KAREN_GATE_REQUEST pr=79 sha=abcdef0123456789
         out = parse_progress_text(text)
         self.assertEqual("time unknown", out[0]["at_display"])
 
+    def test_heading_carry_for_gate_outside_karen(self):
+        text = """## Progress 2026-10-16 16:18 CT
+KAREN_GATE_REQUEST pr=79 sha=abcdef0123456789
+"""
+        out = parse_progress_text(text)
+        self.assertEqual("4:18 PM", out[0]["at_display"])
+
+    def test_mtime_fallback_tilde_ct(self):
+        text = "KAREN_GATE_REQUEST pr=1 sha=1234567890abcdef"
+        # 2026-10-16 21:30:00 UTC -> 4:30 PM CT (CDT)
+        out = parse_progress_text(text, file_mtime=1760644200.0)
+        self.assertTrue(out[0]["at_display"].startswith("~"))
+        self.assertIn("CT", out[0]["at_display"])
+
 
 if __name__ == "__main__":
     unittest.main()

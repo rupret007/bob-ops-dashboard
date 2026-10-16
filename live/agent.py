@@ -48,25 +48,31 @@ def load_nodes_config(path: Path) -> list[dict]:
         return json.load(f)
 
 
-def parse_vm_stat(text: str) -> dict:
-    """Parse macOS vm_stat output into approximate memory stats (bytes)."""
+def parse_vm_stat(text: str, memsize_bytes: int | None = None) -> dict:
+    """Parse macOS vm_stat output into memory stats (bytes)."""
     page_size = 4096
     pages: dict[str, int] = {}
     for line in text.splitlines():
+        ps = re.search(r"page size of (\d+) bytes", line, re.IGNORECASE)
+        if ps:
+            page_size = int(ps.group(1))
         m = re.match(r"^([^:]+):\s+(\d+)", line.strip())
         if m:
             pages[m.group(1).strip()] = int(m.group(2))
-    free = pages.get("Pages free", 0) * page_size
-    inactive = pages.get("Pages inactive", 0) * page_size
     active = pages.get("Pages active", 0) * page_size
     wired = pages.get("Pages wired down", pages.get("Pages wired", 0)) * page_size
     compressed = pages.get("Pages occupied by compressor", 0) * page_size
     used = active + wired + compressed
-    total_est = used + free + inactive
+    free = pages.get("Pages free", 0) * page_size
+    inactive = pages.get("Pages inactive", 0) * page_size
+    if memsize_bytes is not None and memsize_bytes > 0:
+        total = memsize_bytes
+    else:
+        total = used + free + inactive
     return {
-        "mem_total_bytes": total_est,
+        "mem_total_bytes": total,
         "mem_used_bytes": used,
-        "mem_free_bytes": free + inactive,
+        "mem_free_bytes": max(0, total - used),
     }
 
 
@@ -385,6 +391,8 @@ class Agent:
         self._last_lanes = 0.0
         self._last_loc = 0.0
         self._last_extras = 0.0
+        self.slow_extras()
+        self._last_extras = time.time()
 
     def _read_file(self, path: Path) -> str:
         try:
@@ -423,7 +431,12 @@ class Agent:
         else:
             try:
                 vm = subprocess.check_output(["vm_stat"], text=True, timeout=5)
-                parsed = parse_vm_stat(vm)
+                memsize = int(
+                    subprocess.check_output(
+                        ["sysctl", "-n", "hw.memsize"], text=True, timeout=5
+                    ).strip()
+                )
+                parsed = parse_vm_stat(vm, memsize_bytes=memsize)
                 self._mem = {
                     "total": parsed["mem_total_bytes"],
                     "used": parsed["mem_used_bytes"],
@@ -564,43 +577,62 @@ class Agent:
         self._test_runs_per_min = sum(c for _, c in self._test_window)
         self._actions_per_min = sum(c for _, c in self._action_window)
 
+    def _ai_capacity_row(self, info: dict) -> dict | None:
+        if not isinstance(info, dict):
+            return None
+        provider = info.get("provider")
+        if not provider:
+            return None
+        return {
+            "provider": str(provider),
+            "remaining_pct": info.get("remaining_pct"),
+            "used_pct": info.get("used_pct"),
+            "reset_ct": info.get("reset_ct"),
+            "freshness": info.get("freshness"),
+            "status": info.get("status"),
+        }
+
+    def _load_ai_capacity(self):
+        self._ai_capacity = []
+        if not self.ai_capacity_path.is_file():
+            return
+        try:
+            raw = json.loads(self._read_file(self.ai_capacity_path))
+        except json.JSONDecodeError:
+            return
+        if not isinstance(raw, dict):
+            return
+        rows = raw.get("rows")
+        if isinstance(rows, list) and raw.get("schema") == "ai-capacity/v1":
+            for info in rows:
+                row = self._ai_capacity_row(info)
+                if row:
+                    self._ai_capacity.append(row)
+            return
+        providers = raw.get("providers", raw)
+        if isinstance(providers, dict):
+            for name, info in providers.items():
+                if not isinstance(info, dict):
+                    continue
+                row = self._ai_capacity_row({**info, "provider": name})
+                if row:
+                    self._ai_capacity.append(row)
+        elif isinstance(providers, list):
+            for info in providers:
+                row = self._ai_capacity_row(info)
+                if row:
+                    self._ai_capacity.append(row)
+
     def slow_extras(self):
         self._gates = []
         for path in glob.glob(self.progress_glob):
-            self._gates.extend(parse_progress_text(self._read_file(Path(path))))
-        self._ai_capacity = []
-        if self.ai_capacity_path.is_file():
+            p = Path(path)
             try:
-                raw = json.loads(self._read_file(self.ai_capacity_path))
-                if isinstance(raw, dict):
-                    providers = raw.get("providers", raw)
-                    if isinstance(providers, dict):
-                        for name, info in providers.items():
-                            if not isinstance(info, dict):
-                                continue
-                            self._ai_capacity.append(
-                                {
-                                    "provider": str(name),
-                                    "remaining_pct": info.get("remaining_pct"),
-                                    "reset_ct": info.get("reset_ct"),
-                                    "freshness": info.get("freshness"),
-                                    "status": info.get("status"),
-                                }
-                            )
-                    elif isinstance(providers, list):
-                        for info in providers:
-                            if isinstance(info, dict) and "provider" in info:
-                                self._ai_capacity.append(
-                                    {
-                                        "provider": info.get("provider"),
-                                        "remaining_pct": info.get("remaining_pct"),
-                                        "reset_ct": info.get("reset_ct"),
-                                        "freshness": info.get("freshness"),
-                                        "status": info.get("status"),
-                                    }
-                                )
-            except json.JSONDecodeError:
-                pass
+                mtime = p.stat().st_mtime
+            except OSError:
+                mtime = None
+            self._gates.extend(parse_progress_text(self._read_file(p), file_mtime=mtime))
+        self._load_ai_capacity()
 
     def build_payload(self) -> dict:
         return {

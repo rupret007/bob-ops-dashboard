@@ -422,7 +422,9 @@ class LiveStore:
                     "pipeline_rows": self.github.get("prs", []),
                     "throughput": gate_totals(self.github.get("throughput", {}), gates),
                     "throughput_history": list(self.merge_history),
-                    "events": list(self.events)[:30],
+                    "events": sorted(
+                        list(self.events), key=lambda e: float(e.get("ts") or 0), reverse=True
+                    )[:30],
                     "routines": routines,
                     "ai_capacity": ai_all,
                     "formula": {
