@@ -96,6 +96,8 @@ Enqueue requires a user with `jobs.>` publish (default **nucbox** token on the o
 
 ## nuc-verify migration
 
+Set `BOB_NATS_URL` (or write it to `~/.config/bob-cluster/nats-url`); with neither set the wrapper falls back to SSH.
+
 Install `cluster/nuc-verify-queue` ahead of `~/bin/nuc-verify` on the PATH (or symlink). When NATS is reachable and the repo is **clean** with **HEAD on origin**, it enqueues a `test` class job instead of rsync+SSH. Otherwise it `exec`s the original `~/bin/nuc-verify` unchanged.
 
 ## Security
