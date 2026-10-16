@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-10-16T17:00:49.865103-05:00",
-  "generated_at_display": "Fri Oct 16, 2026 \u00b7 5:00 PM CDT",
+  "generated_at": "2026-10-16T17:34:20.934442-05:00",
+  "generated_at_display": "Fri Oct 16, 2026 \u00b7 5:34 PM CDT",
   "timezone": "America/Chicago",
   "owner": "rupret007",
   "dashboard": "bob-ops-dashboard",
@@ -241,8 +241,8 @@
           "status": "green",
           "chip": "Green",
           "default_branch": "main",
-          "tip_sha": "3172f8a",
-          "tip_date": "2026-10-14T19:40:37Z",
+          "tip_sha": "4b4d2d7",
+          "tip_date": "2026-10-16T22:31:21Z",
           "open_prs": 0,
           "open_pr_url": null,
           "open_pr_number": null,
@@ -254,9 +254,9 @@
             "name": "leftover-honesty",
             "conclusion": "success",
             "branch": "main",
-            "sha": "3172f8a",
-            "created": "2026-10-14T19:40:40Z",
-            "html_url": "https://github.com/rupret007/rad-dad-show-night/actions/runs/38625677805"
+            "sha": "4b4d2d7",
+            "created": "2026-10-16T22:31:25Z",
+            "html_url": "https://github.com/rupret007/rad-dad-show-night/actions/runs/38976256809"
           },
           "release": null,
           "release_sha": null,
@@ -495,8 +495,8 @@
           "status": "green",
           "chip": "Green",
           "default_branch": "main",
-          "tip_sha": "0b0f71d",
-          "tip_date": "2026-10-16T21:45:52Z",
+          "tip_sha": "ae93150",
+          "tip_date": "2026-10-16T22:01:03Z",
           "open_prs": 0,
           "open_pr_url": null,
           "open_pr_number": null,
@@ -880,7 +880,7 @@
     "barker"
   ],
   "publish_notes": "Public board -- no secrets or customer paths. Private repositories stay high-level; AI Music Vault stays private-content-boundary only.",
-  "refresh_started_ms": 1792188007662,
+  "refresh_started_ms": 1792190030522,
   "agents_source": "file:stale->unknown",
   "agents": [
     {
@@ -1026,7 +1026,7 @@
     }
   ],
   "llm_work_now_freshness": {
-    "generated_at": "2026-10-16 17:00 CT",
+    "generated_at": "2026-10-16 17:34 CT",
     "warn_ttl_sec": 1200,
     "warnings": [],
     "ok": true
