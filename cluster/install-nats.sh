@@ -1,0 +1,86 @@
+#!/usr/bin/env bash
+# Idempotently install pinned nats-server (linux-amd64) and cluster config.
+set -euo pipefail
+
+NAT_VERSION="v2.15.1"
+NAT_TARBALL="nats-server-${NAT_VERSION}-linux-amd64.tar.gz"
+NAT_URL="https://github.com/nats-io/nats-server/releases/download/${NAT_VERSION}/${NAT_TARBALL}"
+NAT_SHA256="bf5edc7b1ce98e885c368cb43a886eb148dc5d0551d99f3cf6141fb5e1954c70"
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+CI_MODE=0
+INSTALL_BIN="${HOME}/.local/bin"
+CONFIG_DIR="${HOME}/.config/bob-cluster"
+STATE_DIR="${HOME}/.local/state/bob-cluster/js"
+
+usage() {
+  echo "Usage: $0 [--ci DEST_BIN_DIR]" >&2
+  exit 1
+}
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --ci)
+      CI_MODE=1
+      INSTALL_BIN="${2:?--ci requires destination directory}"
+      shift 2
+      ;;
+    -h|--help)
+      usage
+      ;;
+    *)
+      echo "Unknown argument: $1" >&2
+      usage
+      ;;
+  esac
+done
+
+mkdir -p "${INSTALL_BIN}"
+TMP="$(mktemp -d)"
+trap 'rm -rf "${TMP}"' EXIT
+
+echo "Downloading ${NAT_URL}..."
+curl -fsSL -o "${TMP}/${NAT_TARBALL}" "${NAT_URL}"
+(
+  cd "${TMP}"
+  echo "${NAT_SHA256}  ${NAT_TARBALL}" | sha256sum -c -
+)
+
+tar -xzf "${TMP}/${NAT_TARBALL}" -C "${TMP}"
+BIN_SRC="${TMP}/nats-server-${NAT_VERSION}-linux-amd64/nats-server"
+install -m 0755 "${BIN_SRC}" "${INSTALL_BIN}/nats-server"
+echo "Installed nats-server to ${INSTALL_BIN}/nats-server"
+
+if [[ "${CI_MODE}" -eq 1 ]]; then
+  echo "CI mode: skipping token and config generation."
+  exit 0
+fi
+
+mkdir -p "${CONFIG_DIR}" "${STATE_DIR}"
+TOKENS_FILE="${CONFIG_DIR}/tokens.env"
+if [[ ! -f "${TOKENS_FILE}" ]]; then
+  echo "Generating ${TOKENS_FILE}..."
+  gen_token() { openssl rand -hex 24; }
+  {
+    echo "# Bob cluster NATS tokens — never commit"
+    echo "MINI_TOKEN=$(gen_token)"
+    echo "NUCBOX_TOKEN=$(gen_token)"
+    echo "MACBOOK_TOKEN=$(gen_token)"
+    echo "DASHBOARD_TOKEN=$(gen_token)"
+  } > "${TOKENS_FILE}"
+  chmod 600 "${TOKENS_FILE}"
+fi
+
+# shellcheck disable=SC1090
+source "${TOKENS_FILE}"
+
+CONF_OUT="${CONFIG_DIR}/nats.conf"
+sed \
+  -e "s|{{JS_STORE_DIR}}|${STATE_DIR}|g" \
+  -e "s|{{MINI_TOKEN}}|${MINI_TOKEN}|g" \
+  -e "s|{{NUCBOX_TOKEN}}|${NUCBOX_TOKEN}|g" \
+  -e "s|{{MACBOOK_TOKEN}}|${MACBOOK_TOKEN}|g" \
+  -e "s|{{DASHBOARD_TOKEN}}|${DASHBOARD_TOKEN}|g" \
+  "${SCRIPT_DIR}/nats.conf.template" > "${CONF_OUT}"
+chmod 600 "${CONF_OUT}"
+echo "Wrote ${CONF_OUT}"
