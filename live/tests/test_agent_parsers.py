@@ -1,7 +1,15 @@
 import unittest
 from pathlib import Path
 
-from live.agent import parse_meminfo, parse_screen_ls, parse_vm_stat
+from live.agent import (
+    lane_log_stem,
+    parse_lane_log_tail,
+    parse_meminfo,
+    parse_screen_ls,
+    parse_screen_routines,
+    parse_vm_stat,
+    runs_on_for_session,
+)
 
 FIX = Path(__file__).resolve().parent / "fixtures"
 
@@ -23,8 +31,28 @@ class AgentParserTests(unittest.TestCase):
         text = (FIX / "screen_ls.txt").read_text(encoding="utf-8")
         names = parse_screen_ls(text)
         self.assertIn("lane-site-contact", names)
-        self.assertIn("svc-dashboard-refresh", names)
+        self.assertNotIn("svc-dashboard-refresh", names)
         self.assertNotIn("random-session", names)
+
+    def test_screen_ls_macos_tabs(self):
+        text = (FIX / "screen_ls_macos.txt").read_text(encoding="utf-8")
+        names = parse_screen_ls(text)
+        self.assertIn("lane-games-music2", names)
+        self.assertIn("nlane-site-contact", names)
+        self.assertIn("grok-explore-a", names)
+        self.assertIn("resume-hotfix-1", names)
+        self.assertNotIn("svc-dashboard-refresh", names)
+        routines = parse_screen_routines(text)
+        self.assertIn("svc-dashboard-refresh", routines)
+
+    def test_lane_log_and_runs_on(self):
+        tail = (FIX / "lane_games_music2.log").read_text(encoding="utf-8")
+        parsed = parse_lane_log_tail(tail)
+        self.assertEqual("bob-brain", parsed["repo"])
+        self.assertEqual("running", parsed["status"])
+        self.assertEqual("games-music2", lane_log_stem("lane-games-music2"))
+        self.assertEqual("nuc", runs_on_for_session("nlane-site-contact", "mini"))
+        self.assertEqual("mini", runs_on_for_session("lane-games-music2", "mini"))
 
 
 if __name__ == "__main__":

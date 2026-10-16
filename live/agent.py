@@ -22,7 +22,12 @@ if str(_ROOT) not in sys.path:
 
 from live.gate_parse import parse_progress_text
 
-LANE_PREFIXES = ("lane-", "nlane-", "svc-", "grok-")
+LANE_PREFIXES = ("lane-", "nlane-", "grok-", "resume-")
+ROUTINE_PREFIXES = ("svc-",)
+SCREEN_SESSION = re.compile(r"\d+\.([^\s(]+)\s*\(", re.IGNORECASE)
+LOG_PREFIXES = ("nlane-", "lane-", "grok-", "resume-")
+CLAIMED_PATH = re.compile(r"CLAIMED\s+(gate-\S+)", re.IGNORECASE)
+CLAIM_RC_LINE = re.compile(r"CLAIM\s+rc[=:\s]+(\S+)", re.IGNORECASE)
 TEST_LINE = re.compile(
     r"(npm test|pytest|unittest|playwright|nuc-verify|PASS|FAIL)", re.IGNORECASE
 )
@@ -88,18 +93,102 @@ def parse_meminfo(text: str) -> dict:
     }
 
 
+def _screen_session_name(line: str) -> str | None:
+    stripped = line.strip()
+    if not stripped or stripped.startswith("There") or "Sockets" in stripped:
+        return None
+    m = SCREEN_SESSION.search(stripped)
+    if not m:
+        return None
+    return m.group(1)
+
+
+def lane_log_stem(screen_name: str) -> str:
+    for prefix in LOG_PREFIXES:
+        if screen_name.startswith(prefix):
+            return screen_name[len(prefix) :]
+    return screen_name
+
+
+def runs_on_for_session(screen_name: str, node_id: str) -> str:
+    if screen_name.startswith("nlane-"):
+        return "nuc"
+    if screen_name.startswith(("lane-", "grok-", "resume-")):
+        return "mini"
+    return node_id
+
+
 def parse_screen_ls(text: str) -> list[str]:
+    """Active lane screen names (excludes svc-* routines)."""
     names: list[str] = []
     for line in text.splitlines():
-        line = line.strip()
-        if not line or line.startswith("There") or "Sockets" in line:
+        name = _screen_session_name(line)
+        if not name:
             continue
-        m = re.search(r"\d+\.(\S+)\s+\(", line)
-        if m:
-            name = m.group(1)
-            if any(name.startswith(p) for p in LANE_PREFIXES):
-                names.append(name)
+        if any(name.startswith(p) for p in LANE_PREFIXES):
+            names.append(name)
     return names
+
+
+def parse_screen_routines(text: str) -> list[str]:
+    names: list[str] = []
+    for line in text.splitlines():
+        name = _screen_session_name(line)
+        if name and any(name.startswith(p) for p in ROUTINE_PREFIXES):
+            names.append(name)
+    return names
+
+
+def repo_from_gate_path(path: str) -> str:
+    body = path[5:] if path.startswith("gate-") else path
+    bits = [b for b in body.split("-") if b]
+    if len(bits) >= 4:
+        return "-".join(bits[:-2])
+    if len(bits) == 3:
+        return "-".join(bits[:-1])
+    if bits:
+        return bits[0]
+    return ""
+
+
+def parse_lane_log_tail(tail: str) -> dict:
+    """Structured lane fields from log tail; no free-text copies."""
+    out: dict = {"repo": "", "status": "running"}
+    repo_m = CLAIMED_PATH.search(tail)
+    if repo_m:
+        out["repo"] = repo_from_gate_path(repo_m.group(1))
+    last_kind = None
+    for line in tail.splitlines():
+        rm = RESULT_LINE.search(line)
+        if rm:
+            val = rm.group(1).strip().lower()
+            if val in ("running", "done", "blocked", "queued"):
+                out["status"] = val
+            else:
+                out["status"] = val
+            last_kind = "result"
+            continue
+        em = EXIT_LINE.search(line)
+        if em:
+            out["status"] = "done" if em.group(1) == "0" else "blocked"
+            last_kind = "exit"
+            continue
+        if HOST_LINE.search(line):
+            if last_kind is None:
+                out["status"] = "running"
+            last_kind = "host"
+            continue
+        cm = CLAIM_RC_LINE.search(line)
+        if cm:
+            rc = cm.group(1).strip().lower()
+            if rc in ("0", "ok", "success"):
+                out["status"] = "running"
+            elif rc in ("queued", "queue", "wait"):
+                out["status"] = "queued"
+            else:
+                out["status"] = "blocked"
+            last_kind = "claim"
+    return out
 
 
 def parse_swapusage(text: str) -> dict:
@@ -188,6 +277,7 @@ class Agent:
         self._action_window: list[tuple[float, int]] = []
         self._disk = {}
         self._lanes: list[dict] = []
+        self._routines: list[dict] = []
         self._gates: list[dict] = []
         self._ai_capacity = []
         self._mem = {}
@@ -270,30 +360,46 @@ class Agent:
 
     def slow_lanes(self):
         lanes: list[dict] = []
+        routines: list[dict] = []
+        screen_text = ""
         try:
-            out = subprocess.check_output(
+            screen_text = subprocess.check_output(
                 ["screen", "-ls"], text=True, timeout=10, stderr=subprocess.STDOUT
             )
-            names = parse_screen_ls(out)
         except (OSError, subprocess.SubprocessError):
-            names = []
+            screen_text = ""
+        lane_names = parse_screen_ls(screen_text)
+        routine_names = parse_screen_routines(screen_text)
         log_dir = Path(self.lane_log_glob).parent
-        for name in names:
-            lane = {"name": name, "repo": "", "task": "", "status": "running"}
-            log_path = log_dir / f"{name}.log"
+        for name in lane_names:
+            stem = lane_log_stem(name)
+            lane = {
+                "name": name,
+                "repo": "",
+                "task": "",
+                "status": "running",
+                "runs_on": runs_on_for_session(name, self.node_id),
+            }
+            log_path = log_dir / f"{stem}.log"
             if log_path.is_file():
                 tail = self._read_file(log_path)[-4000:]
-                hm = HOST_LINE.search(tail)
-                if hm:
-                    lane["repo"] = hm.group(1)
-                rm = RESULT_LINE.search(tail)
-                if rm:
-                    lane["status"] = rm.group(1)
-                prompt = log_dir / f"{name}.prompt"
+                parsed = parse_lane_log_tail(tail)
+                lane["repo"] = parsed.get("repo") or ""
+                lane["status"] = parsed.get("status") or "running"
+                prompt = log_dir / f"{stem}.prompt"
                 if prompt.is_file():
                     lane["started_at"] = prompt.stat().st_mtime
             lanes.append(lane)
+        for name in routine_names:
+            stem = lane_log_stem(name)
+            routine = {"name": name, "status": "running"}
+            log_path = log_dir / f"{stem}.log"
+            if log_path.is_file():
+                parsed = parse_lane_log_tail(self._read_file(log_path)[-4000:])
+                routine["status"] = parsed.get("status") or "running"
+            routines.append(routine)
         self._lanes = lanes
+        self._routines = routines
 
     def slow_loc(self):
         added, deleted = 0, 0
@@ -416,6 +522,7 @@ class Agent:
             "disk": self._disk,
             "max_lanes": self.max_lanes,
             "lanes": self._lanes,
+            "routines": self._routines,
             "throughput": {
                 "loc_per_min": round(self._loc_per_min, 1),
                 "test_runs_per_min": round(self._test_runs_per_min, 1),
