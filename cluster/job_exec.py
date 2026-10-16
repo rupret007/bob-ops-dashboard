@@ -46,7 +46,9 @@ def ensure_mirror(repo: str, dry_run: bool) -> Path:
     remote = f"https://github.com/{repo}.git"
     if not (mp / "objects").is_dir():
         subprocess.run(
-            ["git", "clone", "--mirror", "--filter=blob:none", remote, str(mp)],
+            # Full mirror: job clones use --shared and cannot lazily fetch missing
+            # blobs from a partial (promisor) mirror, so checkout would fail.
+            ["git", "clone", "--mirror", remote, str(mp)],
             check=True,
             capture_output=True,
             text=True,
