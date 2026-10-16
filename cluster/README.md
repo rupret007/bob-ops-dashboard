@@ -19,7 +19,7 @@ NATS JetStream-backed job queue for distributed test/build/render work across Mi
  metrics.<node> ──► dashboard (read-only) / live aggregator (--also-post)
 ```
 
-- **NATS** runs on NucBox (`127.0.0.1:4222`), reachable on the tailnet via userspace Tailscale on `nuc-wsl` (`100.93.165.1`).
+- **NATS** runs on NucBox (`127.0.0.1:4222`), reachable on the tailnet via userspace Tailscale on `nuc-wsl` (tailnet IP from `tailscale ip -4`).
 - **Workers** are identical; filter job `class` with `--classes`.
 - **SSH** `nuc-run` / legacy `~/bin/nuc-verify` remain the fallback when the queue is unreachable or git is not clean/pushed.
 
@@ -100,7 +100,7 @@ Install `cluster/nuc-verify-queue` ahead of `~/bin/nuc-verify` on the PATH (or s
 
 ## Security
 
-- Tailscale-only exposure of `100.93.165.1:4222`; bind address remains loopback on NucBox.
+- Tailscale-only exposure of `<nucbox-tailnet-ip>:4222`; bind address remains loopback on NucBox.
 - Per-node passwords in `~/.config/bob-cluster/tokens.env` (never committed).
 - Mini/MacBook publish metrics, results, consumer-info/pull requests for `JOBS.workers`,
   and acknowledgements for that consumer. They cannot administer streams or consumers.
