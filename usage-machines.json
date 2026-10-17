@@ -10,16 +10,16 @@
       "date": "2026-10-12",
       "codex": {
         "total_tokens": 182000000,
-        "cached_tokens": 0,
-        "output_tokens": 0,
-        "reasoning_tokens": 0
+        "cached_tokens": null,
+        "output_tokens": null,
+        "reasoning_tokens": null
       },
       "codex_by_host": {
         "mini": {
           "total_tokens": 182000000,
-          "cached_tokens": 0,
-          "output_tokens": 0,
-          "reasoning_tokens": 0
+          "cached_tokens": null,
+          "output_tokens": null,
+          "reasoning_tokens": null
         }
       },
       "gemini": null,
@@ -42,16 +42,16 @@
       "date": "2026-10-13",
       "codex": {
         "total_tokens": 312000000,
-        "cached_tokens": 0,
-        "output_tokens": 0,
-        "reasoning_tokens": 0
+        "cached_tokens": null,
+        "output_tokens": null,
+        "reasoning_tokens": null
       },
       "codex_by_host": {
         "mini": {
           "total_tokens": 312000000,
-          "cached_tokens": 0,
-          "output_tokens": 0,
-          "reasoning_tokens": 0
+          "cached_tokens": null,
+          "output_tokens": null,
+          "reasoning_tokens": null
         }
       },
       "gemini": null,
@@ -74,16 +74,16 @@
       "date": "2026-10-14",
       "codex": {
         "total_tokens": 203000000,
-        "cached_tokens": 0,
-        "output_tokens": 0,
-        "reasoning_tokens": 0
+        "cached_tokens": null,
+        "output_tokens": null,
+        "reasoning_tokens": null
       },
       "codex_by_host": {
         "mini": {
           "total_tokens": 203000000,
-          "cached_tokens": 0,
-          "output_tokens": 0,
-          "reasoning_tokens": 0
+          "cached_tokens": null,
+          "output_tokens": null,
+          "reasoning_tokens": null
         }
       },
       "gemini": null,
@@ -106,16 +106,16 @@
       "date": "2026-10-15",
       "codex": {
         "total_tokens": 249000000,
-        "cached_tokens": 0,
-        "output_tokens": 0,
-        "reasoning_tokens": 0
+        "cached_tokens": null,
+        "output_tokens": null,
+        "reasoning_tokens": null
       },
       "codex_by_host": {
         "mini": {
           "total_tokens": 249000000,
-          "cached_tokens": 0,
-          "output_tokens": 0,
-          "reasoning_tokens": 0
+          "cached_tokens": null,
+          "output_tokens": null,
+          "reasoning_tokens": null
         }
       },
       "gemini": null,
@@ -138,16 +138,16 @@
       "date": "2026-10-16",
       "codex": {
         "total_tokens": 697000000,
-        "cached_tokens": 0,
+        "cached_tokens": null,
         "output_tokens": 3480000,
-        "reasoning_tokens": 0
+        "reasoning_tokens": null
       },
       "codex_by_host": {
         "mini": {
           "total_tokens": 697000000,
-          "cached_tokens": 0,
+          "cached_tokens": null,
           "output_tokens": 3480000,
-          "reasoning_tokens": 0
+          "reasoning_tokens": null
         }
       },
       "gemini": {
@@ -169,8 +169,8 @@
         "mini": {
           "load1": 1.602,
           "load5": 3.449,
-          "mem_used_gb": 3.806,
-          "swap_used_gb": 0.722,
+          "mem_used_gb": null,
+          "swap_used_gb": null,
           "disk_free_gb": 867.995
         }
       },

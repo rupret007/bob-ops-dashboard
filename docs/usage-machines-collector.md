@@ -21,6 +21,8 @@ The panel shows **Grok Bot (conserve-only)** with **unknown** and the note
 
 Host label: `USAGE_MACHINE_LABEL=mini|nucbox`, else Darwin → `mini`, Linux/WSL → `nucbox`.
 
+Optional Codex token counts are `null` when any contributing session or host omits the field or reports `null`. Explicit measured zeros remain zero. Memory and swap values without a measurement display as `unknown`, with no unit. Machine snapshots appear only on the latest date across all hosts.
+
 ## Commands
 
 ```bash

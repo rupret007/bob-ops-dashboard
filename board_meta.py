@@ -2895,7 +2895,7 @@ def _usage_gb_or_unknown(value: Any) -> str:
     if value is None:
         return "unknown"
     try:
-        return str(float(value))
+        return f"{float(value)}G"
     except (TypeError, ValueError):
         return "unknown"
 
@@ -3049,9 +3049,9 @@ def usage_machines_html(data: Any) -> str:
             + html_lib.escape(str(m.get("load1") or "?"))
             + " · mem "
             + html_lib.escape(_usage_gb_or_unknown(m.get("mem_used_gb")))
-            + "G · swap "
+            + " · swap "
             + html_lib.escape(_usage_gb_or_unknown(m.get("swap_used_gb")))
-            + "G · disk free "
+            + " · disk free "
             + html_lib.escape(str(m.get("disk_free_gb") or "?"))
             + "G</td></tr>"
         )

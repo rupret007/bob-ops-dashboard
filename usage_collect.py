@@ -54,9 +54,9 @@ def _optional_token_int(raw: dict[str, Any], key: str) -> int | None:
 
 
 def _sum_optional_tokens(a: int | None, b: int | None) -> int | None:
-    if a is None and b is None:
+    if a is None or b is None:
         return None
-    return int(a or 0) + int(b or 0)
+    return a + b
 
 
 @dataclass(frozen=True)
@@ -159,14 +159,15 @@ def collect_codex_for_day(sessions_root: Path, day: str) -> TokenTotals:
     day_dir = sessions_root / y / m / d
     if not day_dir.is_dir():
         return TokenTotals()
-    total = TokenTotals()
+    total = None
     for fp in sorted(day_dir.glob("*.jsonl")):
         if fp.name.startswith(".") or "auth" in fp.name.lower():
             continue
         row = last_codex_token_usage(fp)
         if row:
-            total += row
-    return total
+            # No observations is distinct from an observation with unknown fields.
+            total = row if total is None else total + row
+    return total if total is not None else TokenTotals()
 
 
 def collect_codex_by_day(
@@ -540,16 +541,17 @@ def merge_host_snapshots(snapshots: list[dict[str, Any]]) -> dict[str, Any]:
         codex_hosts = raw.get("codex_by_host") or {}
         codex_combined = None
         if codex_hosts:
-            combined = TokenTotals()
+            combined = None
             for metrics in codex_hosts.values():
                 if isinstance(metrics, dict):
-                    combined += TokenTotals(
+                    observed = TokenTotals(
                         total_tokens=int(metrics.get("total_tokens") or 0),
                         cached_tokens=_optional_token_int(metrics, "cached_tokens"),
                         output_tokens=_optional_token_int(metrics, "output_tokens"),
                         reasoning_tokens=_optional_token_int(metrics, "reasoning_tokens"),
                     )
-            codex_combined = combined.to_dict() if combined.total_tokens else None
+                    combined = observed if combined is None else combined + observed
+            codex_combined = combined.to_dict() if combined and combined.total_tokens else None
         days_out.append(
             {
                 "date": day,
