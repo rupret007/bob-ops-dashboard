@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-10-16T23:35:08.023512-05:00",
-  "generated_at_display": "Fri Oct 16, 2026 \u00b7 11:35 PM CDT",
+  "generated_at": "2026-10-16T23:50:03.067271-05:00",
+  "generated_at_display": "Fri Oct 16, 2026 \u00b7 11:50 PM CDT",
   "timezone": "America/Chicago",
   "owner": "rupret007",
   "dashboard": "bob-ops-dashboard",
@@ -46,8 +46,8 @@
           "url": "https://github.com/rupret007/webjam",
           "repo_url": "https://github.com/rupret007/webjam",
           "private": false,
-          "status": "yellow",
-          "chip": "Yellow",
+          "status": "green",
+          "chip": "Green",
           "default_branch": "master",
           "tip_sha": "723bfda",
           "tip_date": "2026-10-17T04:21:40Z",
@@ -59,12 +59,12 @@
           "pr_listing_complete": true,
           "agent_url": null,
           "ci": {
-            "name": "WebJam CI",
-            "conclusion": "in_progress",
+            "name": "Cross-network acceptance",
+            "conclusion": "success",
             "branch": "master",
             "sha": "723bfda",
             "created": "2026-10-17T04:21:43Z",
-            "html_url": "https://github.com/rupret007/webjam/actions/runs/39002275081"
+            "html_url": "https://github.com/rupret007/webjam/actions/runs/39002275036"
           },
           "release": "v0.29.0",
           "release_sha": "7aa74be",
@@ -241,8 +241,8 @@
           "status": "green",
           "chip": "Green",
           "default_branch": "main",
-          "tip_sha": "12d6a9e",
-          "tip_date": "2026-10-17T03:42:53Z",
+          "tip_sha": "4b8fd94",
+          "tip_date": "2026-10-17T04:39:07Z",
           "open_prs": 0,
           "open_pr_url": null,
           "open_pr_number": null,
@@ -254,9 +254,9 @@
             "name": "leftover-honesty",
             "conclusion": "success",
             "branch": "main",
-            "sha": "12d6a9e",
-            "created": "2026-10-17T03:42:56Z",
-            "html_url": "https://github.com/rupret007/rad-dad-show-night/actions/runs/38999838516"
+            "sha": "4b8fd94",
+            "created": "2026-10-17T04:39:09Z",
+            "html_url": "https://github.com/rupret007/rad-dad-show-night/actions/runs/39003363305"
           },
           "release": null,
           "release_sha": null,
@@ -495,8 +495,8 @@
           "status": "green",
           "chip": "Green",
           "default_branch": "main",
-          "tip_sha": "6543ca1",
-          "tip_date": "2026-10-17T04:26:26Z",
+          "tip_sha": "6b166e6",
+          "tip_date": "2026-10-17T04:35:22Z",
           "open_prs": 0,
           "open_pr_url": null,
           "open_pr_number": null,
@@ -504,14 +504,7 @@
           "open_pr_stack": [],
           "pr_listing_complete": true,
           "agent_url": null,
-          "ci": {
-            "name": "Cluster tests",
-            "conclusion": "success",
-            "branch": "main",
-            "sha": "6543ca1",
-            "created": "2026-10-17T04:26:29Z",
-            "html_url": "https://github.com/rupret007/bob-ops-dashboard/actions/runs/39002574610"
-          },
+          "ci": null,
           "release": null,
           "release_sha": null,
           "release_url": null,
@@ -887,7 +880,7 @@
     "barker"
   ],
   "publish_notes": "Public board -- no secrets or customer paths. Private repositories stay high-level; AI Music Vault stays private-content-boundary only.",
-  "refresh_started_ms": 1792211675109,
+  "refresh_started_ms": 1792212575120,
   "agents_source": "file:stale->unknown",
   "agents": [
     {
@@ -1033,7 +1026,7 @@
     }
   ],
   "llm_work_now_freshness": {
-    "generated_at": "2026-10-16 23:35 CT",
+    "generated_at": "2026-10-16 23:50 CT",
     "warn_ttl_sec": 1200,
     "warnings": [],
     "ok": true
