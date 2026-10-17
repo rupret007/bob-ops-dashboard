@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-10-17T00:05:17.397999-05:00",
-  "generated_at_display": "Sat Oct 17, 2026 \u00b7 12:05 AM CDT",
+  "generated_at": "2026-10-17T00:21:56.077564-05:00",
+  "generated_at_display": "Sat Oct 17, 2026 \u00b7 12:21 AM CDT",
   "timezone": "America/Chicago",
   "owner": "rupret007",
   "dashboard": "bob-ops-dashboard",
@@ -66,9 +66,9 @@
             "created": "2026-10-17T04:21:43Z",
             "html_url": "https://github.com/rupret007/webjam/actions/runs/39002275036"
           },
-          "release": "v0.29.0",
-          "release_sha": "7aa74be",
-          "release_url": "https://github.com/rupret007/webjam/releases/tag/v0.29.0",
+          "release": "v0.28.2",
+          "release_sha": "a51154e",
+          "release_url": "https://github.com/rupret007/webjam/releases/tag/untagged-4e0b8f08bc532f21605f",
           "notes": "Making room. Latest is the published test candidate; source can be ahead.",
           "accessible": true,
           "coord": {
@@ -372,43 +372,26 @@
         },
         {
           "name": "Ball Beacon",
-          "repo": "rupret007/ballbeacon",
-          "url": null,
-          "repo_url": null,
-          "private": null,
-          "status": "parked",
-          "chip": "Parked",
-          "default_branch": null,
-          "tip_sha": null,
-          "tip_date": null,
-          "open_prs": null,
-          "open_pr_url": null,
-          "open_pr_number": null,
-          "open_pr_draft": false,
-          "open_pr_stack": [],
-          "pr_listing_complete": null,
-          "agent_url": null,
-          "ci": null,
-          "release": null,
-          "release_sha": null,
-          "release_url": null,
+          "private": true,
+          "status": "yellow",
+          "chip": "Yellow",
           "notes": "Private iOS utility. Software validation only; device and signing steps stay owner-only.",
-          "accessible": false,
+          "accessible": true,
+          "ci": {},
           "coord": {
             "repo": "ballbeacon",
             "agent": "none",
             "lease_state": "none",
-            "next": "Jeff installs/selects full Xcode with iOS Simulator plus XcodeGen...",
-            "sha": "3f05fdc"
+            "next": "Jeff installs/selects full Xcode with iOS Simulator plus XcodeGen..."
           }
         },
         {
           "name": "CSS Conductor",
           "private": true,
-          "status": "parked",
-          "chip": "Parked",
+          "status": "yellow",
+          "chip": "Yellow",
           "notes": "Private developer utility. High-level only; hosted-job cause stays unconfirmed.",
-          "accessible": false,
+          "accessible": true,
           "ci": {},
           "coord": {
             "repo": "CSS_Conductor",
@@ -419,28 +402,12 @@
         },
         {
           "name": "Barker",
-          "repo": "rupret007/barker",
-          "url": null,
-          "repo_url": null,
-          "private": null,
-          "status": "parked",
-          "chip": "Parked",
-          "default_branch": null,
-          "tip_sha": null,
-          "tip_date": null,
-          "open_prs": null,
-          "open_pr_url": null,
-          "open_pr_number": null,
-          "open_pr_draft": false,
-          "open_pr_stack": [],
-          "pr_listing_complete": null,
-          "agent_url": null,
-          "ci": null,
-          "release": null,
-          "release_sha": null,
-          "release_url": null,
+          "private": true,
+          "status": "yellow",
+          "chip": "Yellow",
           "notes": "Private app. No live sends, production changes, or credential operations from this board.",
-          "accessible": false,
+          "accessible": true,
+          "ci": {},
           "coord": {
             "repo": "barker",
             "agent": "none",
@@ -495,8 +462,8 @@
           "status": "green",
           "chip": "Green",
           "default_branch": "main",
-          "tip_sha": "4966d0f",
-          "tip_date": "2026-10-17T04:55:15Z",
+          "tip_sha": "98fee79",
+          "tip_date": "2026-10-17T05:20:22Z",
           "open_prs": 0,
           "open_pr_url": null,
           "open_pr_number": null,
@@ -504,14 +471,7 @@
           "open_pr_stack": [],
           "pr_listing_complete": true,
           "agent_url": null,
-          "ci": {
-            "name": "QA claim smoke",
-            "conclusion": "success",
-            "branch": "main",
-            "sha": "4966d0f",
-            "created": "2026-10-17T04:55:18Z",
-            "html_url": "https://github.com/rupret007/bob-ops-dashboard/actions/runs/39004359302"
-          },
+          "ci": null,
           "release": null,
           "release_sha": null,
           "release_url": null,
@@ -544,6 +504,11 @@
       ]
     },
     {
+      "id": "usage-machines",
+      "title": "Usage & machines",
+      "projects": []
+    },
+    {
       "id": "active-agents",
       "title": "LLM work now",
       "projects": [
@@ -552,6 +517,7 @@
           "status": "parked",
           "chip": "Finished",
           "notes": "FINISHED \u2014 overnight Mini Working STRONG through R125 (06:06 CT) - Overnight Mini native Codex proofs closed with R125. Not a long-running Codex worker. Morning R126 = board-truth refresh, not new paste.",
+          "model": "",
           "agent_id": "codex",
           "agent_state": "finished",
           "url": "",
@@ -562,6 +528,7 @@
           "status": "parked",
           "chip": "Finished",
           "notes": "FINISHED \u2014 overnight Mini Claude paste proofs through R125 - Overnight Mini native Claude proofs. Not a standing Claude worker.",
+          "model": "",
           "agent_id": "claude",
           "agent_state": "finished",
           "url": "",
@@ -571,7 +538,8 @@
           "name": "Gemini",
           "status": "parked",
           "chip": "Idle",
-          "notes": "IDLE \u2014 overnight BYOK through R125 closed 06:06; morning R126 assess - Short Gemini API one-shots (3.1-pro heavy / flash light). No background Gemini worker.",
+          "notes": "Gemini lanes: status unknown (file not found)",
+          "model": "",
           "agent_id": "gemini",
           "agent_state": "idle",
           "url": "",
@@ -582,6 +550,7 @@
           "status": "parked",
           "chip": "Idle",
           "notes": "IDLE \u2014 overnight tips through R125; VERDICT contract holds - Silent capped MiniMax-M2.7 tip critiques. No standing Runner job.",
+          "model": "",
           "agent_id": "minimax",
           "agent_state": "idle",
           "url": "",
@@ -592,6 +561,7 @@
           "status": "parked",
           "chip": "Idle",
           "notes": "IDLE \u2014 Bob conducts only; Barker PARKED - Morning R126: local Cursor executor does heavy work. Bob thin conductor. Jeff reorder: RadDad+WashOps before Wildflower (finish-out HOLD).",
+          "model": "",
           "agent_id": "grok",
           "agent_state": "idle",
           "url": "",
@@ -602,6 +572,7 @@
           "status": "red",
           "chip": "Blocked",
           "notes": "BLOCKED_SPEND_WALL \u2014 zero new Cloud BA (forever this run) - Spend wall. No Cloud Background Agent relaunch.",
+          "model": "",
           "agent_id": "cursor-cloud",
           "agent_state": "blocked",
           "url": "",
@@ -612,6 +583,7 @@
           "status": "parked",
           "chip": "Idle",
           "notes": "Gemini lanes: status unknown (file not found)",
+          "model": "",
           "agent_id": "gemini-lanes",
           "agent_state": "idle",
           "url": null,
@@ -626,10 +598,10 @@
         {
           "name": "AdoptIQ",
           "private": true,
-          "status": "parked",
-          "chip": "Parked",
+          "status": "yellow",
+          "chip": "Yellow",
           "notes": "Private, draft, and offline-only; ready_for_live_cisco=false. No secrets or customer data on this page.",
-          "accessible": false,
+          "accessible": true,
           "ci": {},
           "coord": {
             "repo": "AdoptIQ",
@@ -641,10 +613,10 @@
         {
           "name": "TACTrack",
           "private": true,
-          "status": "parked",
-          "chip": "Parked",
+          "status": "yellow",
+          "chip": "Yellow",
           "notes": "Private. High-level only. No live-repo, CI, or PR taps on this board.",
-          "accessible": false,
+          "accessible": true,
           "ci": {},
           "coord": {
             "repo": "TACTrack",
@@ -880,24 +852,23 @@
     "Rad-Dad-Merch",
     "RadDadSite",
     "Turdanoid",
+    "AdoptIQ",
+    "TACTrack",
     "AI-Music-Vault",
     "rad-dad-show-night",
     "Andrea_NanoBot",
     "Bob-the-Bot",
     "StoryOps-AI",
+    "ballbeacon",
+    "CSS_Conductor",
+    "barker",
     "bob-ops-dashboard",
     "Cursor-OpenClaw-Integration",
     "StoryDesk"
   ],
-  "inaccessible": [
-    "AdoptIQ",
-    "TACTrack",
-    "ballbeacon",
-    "CSS_Conductor",
-    "barker"
-  ],
+  "inaccessible": [],
   "publish_notes": "Public board -- no secrets or customer paths. Private repositories stay high-level; AI Music Vault stays private-content-boundary only.",
-  "refresh_started_ms": 1792213479173,
+  "refresh_started_ms": 1792214464905,
   "agents_source": "file:stale->unknown",
   "agents": [
     {
@@ -955,6 +926,9 @@
       "branch": "",
       "goal": "Overnight Mini native Codex proofs closed with R125. Not a long-running Codex worker. Morning R126 = board-truth refresh, not new paste.",
       "status": "finished",
+      "model": "",
+      "spend_session": "",
+      "spend_day": "",
       "agent_url": "",
       "why": "R125 closed; paste proofs done \u2014 not Work-now Running",
       "note": "last tip: PR#56 merged; Mini Working STRONG on R125 scorecard",
@@ -971,6 +945,9 @@
       "branch": "",
       "goal": "Overnight Mini native Claude proofs. Not a standing Claude worker.",
       "status": "finished",
+      "model": "",
+      "spend_session": "",
+      "spend_day": "",
       "agent_url": "",
       "why": "R125 closed; paste proofs done \u2014 not Work-now Running",
       "note": "native paste proofs overnight; morning idle for new assign",
@@ -980,18 +957,21 @@
     {
       "id": "gemini",
       "name": "Gemini",
-      "task_title": "IDLE \u2014 overnight BYOK through R125 closed 06:06; morning R126 assess",
-      "repo": "rupret007/bob-ops-dashboard",
+      "task_title": "Gemini lanes: status unknown (file not found)",
+      "repo": "",
       "pr_url": "",
       "pr_number": "",
       "branch": "",
-      "goal": "Short Gemini API one-shots (3.1-pro heavy / flash light). No background Gemini worker.",
+      "goal": "",
       "status": "idle",
+      "model": "",
+      "spend_session": "",
+      "spend_day": "",
       "agent_url": "",
-      "why": "One-shots done; not Work-now Running",
-      "note": "R125 ASSESS_OK; OPEN residual = invent running-guard (REJECT)",
-      "last_task": "R125 Gemini heavy+light",
-      "source": "byok_oneshot"
+      "why": "",
+      "note": "",
+      "last_task": "",
+      "source": "idle"
     },
     {
       "id": "minimax",
@@ -1003,6 +983,9 @@
       "branch": "",
       "goal": "Silent capped MiniMax-M2.7 tip critiques. No standing Runner job.",
       "status": "idle",
+      "model": "",
+      "spend_session": "",
+      "spend_day": "",
       "agent_url": "",
       "why": "One-shots done; not Work-now Running",
       "note": "R125 VERDICT PASS 8.9s; invent running-guard = tip FAIL",
@@ -1019,6 +1002,9 @@
       "branch": "",
       "goal": "Morning R126: local Cursor executor does heavy work. Bob thin conductor. Jeff reorder: RadDad+WashOps before Wildflower (finish-out HOLD).",
       "status": "idle",
+      "model": "",
+      "spend_session": "",
+      "spend_day": "",
       "agent_url": "",
       "why": "Parked / conductor only \u2014 not Work-now Running",
       "note": "Barker FREE_PARKED_BILLING \u2014 no touch; CloudBA 0",
@@ -1035,6 +1021,9 @@
       "branch": "",
       "goal": "Spend wall. No Cloud Background Agent relaunch.",
       "status": "blocked",
+      "model": "",
+      "spend_session": "",
+      "spend_day": "",
       "agent_url": "",
       "why": "Spend wall \u2014 honest blocked, not Running",
       "note": "PR#56 merged; drafts held under wall",
@@ -1050,7 +1039,7 @@
     }
   ],
   "llm_work_now_freshness": {
-    "generated_at": "2026-10-17 00:05 CT",
+    "generated_at": "2026-10-17 00:21 CT",
     "warn_ttl_sec": 1200,
     "warnings": [],
     "ok": true
@@ -1071,6 +1060,202 @@
     "updated_at": "2026-09-25T07:24:02-05:00",
     "display_status": "closed",
     "idle": true
+  },
+  "usage_machines": {
+    "v": "usage-machines/v1",
+    "generated_at": "2026-10-17 00:20 CT",
+    "timezone": "America/Chicago",
+    "hosts": [
+      "mini"
+    ],
+    "days": [
+      {
+        "date": "2026-10-12",
+        "codex": {
+          "total_tokens": 182000000,
+          "cached_tokens": 0,
+          "output_tokens": 0,
+          "reasoning_tokens": 0
+        },
+        "codex_by_host": {
+          "mini": {
+            "total_tokens": 182000000,
+            "cached_tokens": 0,
+            "output_tokens": 0,
+            "reasoning_tokens": 0
+          }
+        },
+        "gemini": null,
+        "lanes": null,
+        "cursor": null,
+        "claude": null,
+        "minimax": null,
+        "machines": {
+          "mini": {
+            "load1": 8.089,
+            "load5": 7.143,
+            "mem_used_gb": 0.006,
+            "swap_used_gb": 0.001,
+            "disk_free_gb": 871.142
+          }
+        },
+        "merged_prs": {
+          "count": 130,
+          "tokens_total": 182000000,
+          "tokens_per_pr": 1400000
+        }
+      },
+      {
+        "date": "2026-10-13",
+        "codex": {
+          "total_tokens": 312000000,
+          "cached_tokens": 0,
+          "output_tokens": 0,
+          "reasoning_tokens": 0
+        },
+        "codex_by_host": {
+          "mini": {
+            "total_tokens": 312000000,
+            "cached_tokens": 0,
+            "output_tokens": 0,
+            "reasoning_tokens": 0
+          }
+        },
+        "gemini": null,
+        "lanes": null,
+        "cursor": null,
+        "claude": null,
+        "minimax": null,
+        "machines": {
+          "mini": {
+            "load1": 8.089,
+            "load5": 7.143,
+            "mem_used_gb": 0.006,
+            "swap_used_gb": 0.001,
+            "disk_free_gb": 871.142
+          }
+        },
+        "merged_prs": {
+          "count": 110,
+          "tokens_total": 312000000,
+          "tokens_per_pr": 2836364
+        }
+      },
+      {
+        "date": "2026-10-14",
+        "codex": {
+          "total_tokens": 203000000,
+          "cached_tokens": 0,
+          "output_tokens": 0,
+          "reasoning_tokens": 0
+        },
+        "codex_by_host": {
+          "mini": {
+            "total_tokens": 203000000,
+            "cached_tokens": 0,
+            "output_tokens": 0,
+            "reasoning_tokens": 0
+          }
+        },
+        "gemini": null,
+        "lanes": null,
+        "cursor": null,
+        "claude": null,
+        "minimax": null,
+        "machines": {
+          "mini": {
+            "load1": 8.089,
+            "load5": 7.143,
+            "mem_used_gb": 0.006,
+            "swap_used_gb": 0.001,
+            "disk_free_gb": 871.142
+          }
+        },
+        "merged_prs": {
+          "count": 72,
+          "tokens_total": 203000000,
+          "tokens_per_pr": 2819444
+        }
+      },
+      {
+        "date": "2026-10-15",
+        "codex": {
+          "total_tokens": 249000000,
+          "cached_tokens": 0,
+          "output_tokens": 0,
+          "reasoning_tokens": 0
+        },
+        "codex_by_host": {
+          "mini": {
+            "total_tokens": 249000000,
+            "cached_tokens": 0,
+            "output_tokens": 0,
+            "reasoning_tokens": 0
+          }
+        },
+        "gemini": null,
+        "lanes": null,
+        "cursor": null,
+        "claude": null,
+        "minimax": null,
+        "machines": {
+          "mini": {
+            "load1": 8.089,
+            "load5": 7.143,
+            "mem_used_gb": 0.006,
+            "swap_used_gb": 0.001,
+            "disk_free_gb": 871.142
+          }
+        },
+        "merged_prs": {
+          "count": 23,
+          "tokens_total": 249000000,
+          "tokens_per_pr": 10826087
+        }
+      },
+      {
+        "date": "2026-10-16",
+        "codex": {
+          "total_tokens": 697000000,
+          "cached_tokens": 0,
+          "output_tokens": 3480000,
+          "reasoning_tokens": 0
+        },
+        "codex_by_host": {
+          "mini": {
+            "total_tokens": 697000000,
+            "cached_tokens": 0,
+            "output_tokens": 3480000,
+            "reasoning_tokens": 0
+          }
+        },
+        "gemini": {
+          "tokens": 11600000,
+          "usd": 42.38
+        },
+        "lanes": {
+          "codex": 1,
+          "cursor": 3
+        },
+        "cursor": null,
+        "claude": null,
+        "minimax": null,
+        "machines": {
+          "mini": {
+            "load1": 8.089,
+            "load5": 7.143,
+            "mem_used_gb": 0.006,
+            "swap_used_gb": 0.001,
+            "disk_free_gb": 871.142
+          }
+        },
+        "merged_prs": {
+          "count": 75,
+          "tokens_total": 708600000,
+          "tokens_per_pr": 9448000
+        }
+      }
+    ]
   },
   "pending": [
     {
