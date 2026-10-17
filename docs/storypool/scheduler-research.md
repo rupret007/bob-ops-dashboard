@@ -6,7 +6,7 @@ Recommend a small StoryPool admission controller over NATS JetStream, with one l
 
 This is research, not an implementation or deployment approval. Host/provider limits below are operator requirements supplied for this study, not vendor plan guarantees. Survey conclusions are based on the primary sources listed below, opened during this research on 2026-10-17. Proposed timing values are tuning candidates.
 
-**LeaseService request/reply has an OPEN HIGH bug. Do not reuse its reply paths.** Capacity uses publish-only `metrics.capacity.<host>` subjects, following the existing `metrics.<host>` identity pattern. New grant and status events also use dedicated publish/subscribe subjects; no LeaseService calls, reply headers, shared inboxes, or fallback through that service. Native JetStream delivery/API traffic is a separate protocol and still requires independently tested permissions.
+**The LeaseService lease-reply HIGH issue is CLOSED by [bob-ops-dashboard #76](https://github.com/rupret007/bob-ops-dashboard/pull/76) (merged `c838b310`). StoryPool still must not reuse its reply paths.** Capacity uses publish-only `metrics.capacity.<host>` subjects, following the existing `metrics.<host>` identity pattern. New grant and status events also use dedicated publish/subscribe subjects; no LeaseService calls, reply headers, shared inboxes, or fallback through that service. Native JetStream delivery/API traffic is a separate protocol and still requires independently tested permissions.
 
 ## Survey
 
@@ -176,7 +176,7 @@ Record decision inputs, policy version, grant/epoch, queue age, budget window, d
 5. Approve strict Web Bob priority with possible lower-tier starvation, or specify an explicit lower-tier minimum share. Are the three middle-tier projects equally weighted?
 6. Confirm reserving two slots even for quota-blocked waiting Codex jobs. Which Cursor tasks can checkpoint/cancel within the stop bound? Unbounded work cannot borrow.
 7. Validate the proposed 10-second publication/tick, 30-second capacity TTL, 5-second local guard checks, 10-second stop bound, growth cooldown and recovery margins against measured workloads.
-8. Who signs off on the new publish-only permissions, separate authority, dashboard schema handling and one-lane canary? The OPEN HIGH LeaseService bug remains separate work and is not closed by this proposal.
+8. Who signs off on the new publish-only permissions, separate authority, dashboard schema handling and one-lane canary? The lease-reply HIGH fix is CLOSED on `main` via #76 (merged `c838b310`); this research does not replace permission review for StoryPool control paths.
 
 ## Sources
 
