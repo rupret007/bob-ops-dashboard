@@ -90,6 +90,18 @@ class TestReservedHostNames(unittest.TestCase):  # Karen S1
         for ok in ("nuc", "mini", "hubx", "xhub", "conductor2", "hub-1"):
             self.assertEqual(lanes.check_host(ok), ok)
 
+    def test_host_check_is_fullmatch_not_trailing_newline(self):  # Karen #72 soft
+        for bad in ("nuc\n", "hub\n", "conductor\n", "nuc\r", " nuc", "nuc ", "nuc\n\n"):
+            self.assertFalse(lanes.is_valid_host(bad), repr(bad))
+            with self.subTest(host=repr(bad)), self.assertRaises(ValueError):
+                lanes.check_host(bad)
+            with self.subTest(host=repr(bad)), self.assertRaises(ValueError):
+                lanes.inbox_prefix(bad)
+        svc = lanes.LeaseService(None, None)
+        body = json.dumps({"key": "o.r.pr.1", "owner": "nuc", "revision": 1}).encode()
+        r = asyncio.run(svc.handle("lanesvc.lease.nuc\n.holder", body))
+        self.assertEqual((r["ok"], r["error"]), (False, "forbidden"))
+
     def test_no_host_inbox_overlaps_a_role_inbox(self):
         from cluster import lanes_perms
 
@@ -229,6 +241,17 @@ class TestDeadLetterMove(unittest.TestCase):  # Karen S3
         self.assertTrue(lanes.dlq_msg_id(m1).startswith("dlq-sha-"))
         self.assertEqual(lanes.dlq_msg_id(m1), lanes.dlq_msg_id(_RawMsg("lanes.gemini.nuc.x", b'{"job":"x"}')))
         self.assertNotEqual(lanes.dlq_msg_id(m1), lanes.dlq_msg_id(m2))
+
+    def test_msg_id_same_subject_different_body_differs(self):  # Karen #72 soft
+        subj = "lanes.gemini.nuc.job-a"
+        a = _RawMsg(subj, b'{"job":"job-a","attempt":0}')
+        b = _RawMsg(subj, b'{"job":"job-a","attempt":1}')
+        self.assertNotEqual(lanes.dlq_msg_id(a), lanes.dlq_msg_id(b))
+        self.assertEqual(lanes.dlq_msg_id(a), lanes.dlq_msg_id(_RawMsg(subj, b'{"job":"job-a","attempt":0}')))
+        # With enqueue headers: same subject, different job body/attempt -> different ids.
+        ha = _RawMsg(subj, b"x", {"Nats-Msg-Id": lanes.dedupe_key("gemini", "job-a", "a", 0)})
+        hb = _RawMsg(subj, b"y", {"Nats-Msg-Id": lanes.dedupe_key("gemini", "job-a", "a", 1)})
+        self.assertNotEqual(lanes.dlq_msg_id(ha), lanes.dlq_msg_id(hb))
 
     def test_reserved_or_bad_host_subject_goes_to_unknown(self):
         raw = _RawMsg("lanes.gemini.hub.j", b'{"job":"j"}', {"Nats-Msg-Id": "gemini:j@a"})
