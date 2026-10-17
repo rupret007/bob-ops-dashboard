@@ -3240,5 +3240,109 @@ class GeminiLanePagesLeakTest(_ut_gem.TestCase):
             title = gemini_lane_rows({"generated_at": fresh, "cap_usd": good, "lanes": []}, now=now)[0]["task_title"]
             self.assertIn(" / " + label, title)
 
+
+class GeminiLaneRepoAllowlistTest(_ut_gem.TestCase):
+    """Karen FAIL r4 (#70): <repo> accepted any token-shaped string; pin to known repos."""
+
+    def _fresh(self):
+        import time as _t
+        from datetime import datetime as _dt, timezone as _tz
+        now = float(int(_t.time()))
+        return now, _dt.fromtimestamp(now - 60, tz=_tz.utc).isoformat()
+
+    def _leaky_repos(self):
+        # Built at runtime so no secret/tailnet-shaped literal is tracked in git.
+        b62 = "".join("aB3xY9kQ7mZ2"[i % 12] for i in range(40))
+        hex40 = "".join("0123456789abcdef"[(i * 7) % 16] for i in range(40))
+        seed = "SU" + "AM" + "".join("ABCDEFGHJKLMNPQRSTUVWXYZ234567"[(i * 11) % 30] for i in range(54))
+        key = "".join("Qw8Er5Ty2Ui"[i % 11] for i in range(32))
+        return {
+            "tail" + "1a2b": ("tail1a2b",),
+            b62: (b62, b62[:12]),
+            "r" + hex40: (hex40, hex40[:12]),
+            seed: (seed[:12], "SUAM"),
+            "x" + "sk-" + "proj-" + key: ("sk-proj", key[:12]),
+            "x" + "-".join(["100", "64", "1", "2"]): ("100-64", "x100"),
+        }
+
+    def test_leaky_repo_segments_never_published(self):
+        from board_meta import gemini_lane_rows, gemini_lane_public_job
+        now, fresh = self._fresh()
+        for idx, (repo, needles) in enumerate(self._leaky_repos().items()):
+            for kind in ("pr1", "pr7", "pr10", "iss5", "pr5.gat.2"):
+                for prefix in ("gemrev", "gemfix", "auto", "bl"):
+                    raw = f"{prefix}-{repo}-{kind}"
+                    self.assertEqual(gemini_lane_public_job(raw), "job", raw)
+            raw = f"gemrev-{repo}-pr{idx + 1}"
+            rows = gemini_lane_rows({"generated_at": fresh, "lanes": [{"job": raw, "mode": "review"}]}, now=now)
+            self.assertEqual(rows[1]["task_title"], "job (review)", raw)
+            self.assertEqual(rows[1]["id"], "gemini-lane-job-0", raw)
+            blob = json.dumps(rows)
+            for n in needles + (repo,):
+                self.assertNotIn(n, blob, (raw, n))
+
+    def test_well_formed_but_unknown_repo_is_placeholder(self):
+        from board_meta import gemini_lane_public_job
+        for raw in ("gemrev-hangout-pr1", "auto-secret-repo-pr2", "bl-bob-brain2-pr3", "gemrev-bobbrain-pr1",
+                    "gemfix-webjamx-pr4", "auto-x-webjam-pr5", "gemrev-mini-pr1", "auto-nuc-wsl-iss2"):
+            self.assertEqual(gemini_lane_public_job(raw), "job", raw)
+
+    def test_known_repos_still_shown(self):
+        from board_meta import gemini_lane_rows, gemini_lane_public_job, GEMINI_LANE_KNOWN_REPOS
+        now, fresh = self._fresh()
+        for repo in GEMINI_LANE_KNOWN_REPOS:
+            for raw in (f"gemrev-{repo}-pr12", f"auto-{repo}-iss3", f"bl-{repo}-pr4.gat.1"):
+                self.assertEqual(gemini_lane_public_job(raw), raw)
+        # Repo casing is canonicalized and numbers normalized; output is rebuilt, never echoed.
+        self.assertEqual(gemini_lane_public_job("auto-turdanoid-pr081"), "auto-Turdanoid-pr81")
+        self.assertEqual(gemini_lane_public_job("gemrev-BOB-BRAIN-pr151"), "gemrev-bob-brain-pr151")
+        rows = gemini_lane_rows({"generated_at": fresh, "lanes": [
+            {"job": "gemrev-bob-brain-pr151", "mode": "review"},
+            {"job": "auto-webjam-iss380", "mode": "code"}]}, now=now)
+        self.assertEqual(rows[1]["id"], "gemini-lane-gemrev-bob-brain-pr151")
+        self.assertEqual(rows[1]["task_title"], "gemrev-bob-brain-pr151 (review)")
+        self.assertEqual(rows[2]["id"], "gemini-lane-auto-webjam-iss380")
+        self.assertEqual(rows[2]["task_title"], "auto-webjam-iss380 (code)")
+        self.assertEqual(rows[1]["status"], "running")
+
+    def test_known_repos_cover_refresh_sh_repos(self):
+        import re as _re
+        from board_meta import GEMINI_LANE_REFRESH_REPOS, GEMINI_LANE_KNOWN_REPOS
+        text = (Path(__file__).resolve().parent / "refresh.sh").read_text()
+        m = _re.search(r"^REPOS=\(\n(.*?)^\)", text, _re.S | _re.M)
+        self.assertIsNotNone(m)
+        self.assertEqual(tuple(m.group(1).split()), GEMINI_LANE_REFRESH_REPOS)
+        self.assertIn("bob-brain", GEMINI_LANE_KNOWN_REPOS)
+        for repo in GEMINI_LANE_KNOWN_REPOS:
+            self.assertRegex(repo, r"^[A-Za-z][A-Za-z0-9_-]{0,63}$")
+        lowered = [r.lower() for r in GEMINI_LANE_KNOWN_REPOS]
+        self.assertEqual(len(lowered), len(set(lowered)))
+
+    def test_gat_suffix_junk_is_placeholder(self):
+        from board_meta import gemini_lane_public_job
+        self.assertEqual(gemini_lane_public_job("gemfix-Turdanoid-pr79.gat.2"), "gemfix-Turdanoid-pr79.gat.2")
+        self.assertEqual(gemini_lane_public_job("gemfix-Turdanoid-pr79.gat.999"), "gemfix-Turdanoid-pr79.gat.999")
+        for junk in (".gat.", ".gat.x", ".gat.1x", ".gat.1234", ".gat.1.2", ".gat.-1", ".gat.1 rm",
+                     ".gat." + "tail" + "1a2b", ".gat.2.gat.3", ".gat", ".gatx.1", ".GAT.1", ".gat.\u0661", ".gat.\uff11"):
+            raw = "gemfix-Turdanoid-pr79" + junk
+            self.assertEqual(gemini_lane_public_job(raw), "job", raw)
+        # Non-ASCII digits in the pr number are rejected too (no int() normalization).
+        for raw in ("gemfix-Turdanoid-pr\u0667\u0669", "gemrev-bob-brain-pr\uff11"):
+            self.assertEqual(gemini_lane_public_job(raw), "job", raw)
+
+    def test_mode_is_allowlisted(self):
+        from board_meta import gemini_lane_rows
+        now, fresh = self._fresh()
+        for bad in ("minitailabts", "aizasyleak", "reviewx", "re view", "rm", "x" * 12, 7, True,
+                    ["review"], {"m": "code"}, "", None):
+            rows = gemini_lane_rows({"generated_at": fresh, "lanes": [{"job": "gemrev-bob-brain-pr1", "mode": bad}]}, now=now)
+            self.assertEqual(rows[1]["task_title"], "gemrev-bob-brain-pr1", bad)
+            blob = json.dumps(rows)
+            self.assertNotIn("minitail", blob)
+            self.assertNotIn("aizasy", blob)
+        for good, shown in (("review", "review"), (" Code ", "code"), ("FIX", "fix")):
+            rows = gemini_lane_rows({"generated_at": fresh, "lanes": [{"job": "gemrev-bob-brain-pr1", "mode": good}]}, now=now)
+            self.assertEqual(rows[1]["task_title"], f"gemrev-bob-brain-pr1 ({shown})")
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

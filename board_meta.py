@@ -2869,8 +2869,28 @@ GEMINI_LANE_JOB_PLACEHOLDER = "job"
 # (gemini-feed.py gemrev-/gemfix-<repo>-pr<n>, fill-autoqueue.py auto-<repo>-pr|iss<n>,
 # backlog bl-<repo>-pr<n>, optional .gat.<n> retry suffix). Anything else is shown as "job".
 GEMINI_LANE_JOB_RE = re.compile(
-    r"(?:gemrev|gemfix|auto|bl)-[A-Za-z][A-Za-z0-9_-]{0,63}-(?:pr|iss)\d{1,6}(?:\.gat\.\d{1,3})?"
+    r"(?P<prefix>gemrev|gemfix|auto|bl)-(?P<repo>[A-Za-z][A-Za-z0-9_-]{0,63}?)"
+    r"-(?P<kind>pr|iss)(?P<num>\d{1,6})(?:\.gat\.(?P<gat>\d{1,3}))?",
+    re.ASCII,  # \d must not match non-ASCII digits (int() would normalize them)
 )
+# The <repo> segment is never trusted by shape alone (a dot-free host, tailnet id,
+# token or key fits [A-Za-z0-9_-]). It must name a known repo: the REPOS array in
+# refresh.sh (mirrored here; test_board_meta pins the two equal) plus the fixed
+# lane-only repos the Mini lanes work on. Unknown repos -> "job".
+GEMINI_LANE_REFRESH_REPOS = (
+    "webjam", "StoryLiner", "StoryBoard", "Rad-Dad-Merch", "RadDadSite", "Turdanoid",
+    "AdoptIQ", "TACTrack", "AI-Music-Vault", "rad-dad-show-night", "Andrea_NanoBot",
+    "Bob-the-Bot", "StoryOps-AI", "ballbeacon", "CSS_Conductor", "barker",
+    "bob-ops-dashboard", "Cursor-OpenClaw-Integration", "StoryDesk",
+)
+GEMINI_LANE_EXTRA_REPOS = (
+    "bob-brain", "StalemateSite", "TrailerParkDerby", "Storyland-Fantasy-Football",
+    "storyland-draft-and-season", "stalemate-media-merch", "Sliding-Glass-Door-PETG-Screw",
+)
+GEMINI_LANE_KNOWN_REPOS = GEMINI_LANE_REFRESH_REPOS + GEMINI_LANE_EXTRA_REPOS
+GEMINI_LANE_KNOWN_REPO_BY_LOWER = {r.lower(): r for r in GEMINI_LANE_KNOWN_REPOS}
+# Lane modes the scripts emit; anything else is dropped from the title.
+GEMINI_LANE_MODES = frozenset({"review", "code", "fix"})
 # Defense in depth: secret/host shapes that must never ride inside an allowlisted id.
 GEMINI_LANE_JOB_DENY_RE = re.compile(
     r"AIza|(?:^|[-_])sk-|ghp_|gho_|ghs_|github_pat|xox[abprs]-|AKIA|eyJ|ts-net|tailnet|[Tt]ailscale"
@@ -2911,11 +2931,20 @@ def gemini_lane_public_job(value: Any) -> str:
         return GEMINI_LANE_JOB_PLACEHOLDER
     if sanitize(raw) != raw:
         return GEMINI_LANE_JOB_PLACEHOLDER
-    if not GEMINI_LANE_JOB_RE.fullmatch(raw):
+    m = GEMINI_LANE_JOB_RE.fullmatch(raw)
+    if not m:
         return GEMINI_LANE_JOB_PLACEHOLDER
     if GEMINI_LANE_JOB_DENY_RE.search(raw):
         return GEMINI_LANE_JOB_PLACEHOLDER
-    return raw
+    repo = GEMINI_LANE_KNOWN_REPO_BY_LOWER.get(m.group("repo").lower())
+    if repo is None:
+        return GEMINI_LANE_JOB_PLACEHOLDER
+    # Rebuilt from parsed parts (canonical repo casing, int-normalized numbers),
+    # never echoed raw.
+    out = f"{m.group('prefix')}-{repo}-{m.group('kind')}{int(m.group('num'))}"
+    if m.group("gat") is not None:
+        out += f".gat.{int(m.group('gat'))}"
+    return out
 
 
 def gemini_lane_rows(snapshot: Any, *, now: float | None = None) -> list[dict[str, Any]]:
@@ -2996,7 +3025,10 @@ def gemini_lane_rows(snapshot: Any, *, now: float | None = None) -> list[dict[st
         safe_job = gemini_lane_public_job(lane.get("job"))
         row_id = f"gemini-lane-{safe_job}" if safe_job != GEMINI_LANE_JOB_PLACEHOLDER else f"gemini-lane-job-{idx}"
 
-        mode = re.sub(r"[^a-z]", "", str(lane.get("mode") or "").lower())[:12]
+        raw_mode = lane.get("mode")
+        mode = raw_mode.strip().lower() if isinstance(raw_mode, str) else ""
+        if mode not in GEMINI_LANE_MODES:
+            mode = ""
         task_title = safe_job + (f" ({mode})" if mode else "")
 
         row = {"id": row_id, "name": "Gemini lane",
