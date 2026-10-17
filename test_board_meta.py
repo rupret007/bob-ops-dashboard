@@ -2938,7 +2938,10 @@ class GeminiLaneRowsTest(_ut_gem.TestCase):
         assert rows[0]["id"] == "gemini-lanes" and rows[0]["status"] == "running"
         assert "$3.50 / $118" in rows[0]["task_title"]
         assert rows[1]["id"] == "gemini-lane-gemrev-bob-brain-pr118" and rows[1]["status"] == "running"
-        assert rows[2]["id"] == "gemini-lane-badjobrm"
+        # non-allowlisted job ids are never echoed (r4: allowlist replaced character stripping)
+        assert rows[2]["id"] == "gemini-lane-job-1"
+        assert rows[2]["task_title"] == "job (code)"
+        assert "rm" not in json.dumps(rows[2])
         kept = demote_stale_running_llm_work(rows, now=now)
         assert all(r["status"] == "running" for r in kept)
         stale = _dt.fromtimestamp(now - 3600, tz=_tz.utc).isoformat()
@@ -3108,6 +3111,128 @@ class GeminiPauseReasonBucketTest(_ut_gem.TestCase):
             self.assertTrue(title.startswith(f"PAUSED ({bucket})"), title)
             self.assertNotIn("10.0.0.9", title)
             self.assertNotIn("kernel", title)
+
+
+class GeminiLanePagesLeakTest(_ut_gem.TestCase):
+    """Karen FAIL r3 (#70): heartbeat_at raw, job scrub leaks, cap inf/True."""
+
+    def _fresh(self):
+        import time as _t
+        from datetime import datetime as _dt, timezone as _tz
+        now = float(int(_t.time()))
+        return now, _dt.fromtimestamp(now - 60, tz=_tz.utc).isoformat()
+
+    def test_heartbeat_at_raw_generated_at_never_published(self):
+        from board_meta import gemini_lane_rows
+        now, _ = self._fresh()
+        tok = "ghp_" + "A" * 40
+        for bad in (tok + " mini.tail1a2b.ts.net", "mini.tail1a2b.ts.net", "not-a-date",
+                    "2026-10-16T22:00:00+00:00 " + tok, "2026-10-16T22:00:00",  # naive -> rejected
+                    "x" * 500, 12345, True, ["2026-10-16T22:00:00+00:00"],
+                    "2026-10-16T22:00:00.123456+00:00:00.123456"):  # parseable but > 40 chars
+            rows = gemini_lane_rows({"generated_at": bad, "lanes": [{"job": "gemrev-bob-brain-pr1"}]}, now=now)
+            blob = json.dumps(rows)
+            self.assertNotIn("ghp_", blob)
+            self.assertNotIn("ts.net", blob)
+            self.assertNotIn("tail1a2b", blob)
+            self.assertNotIn("not-a-date", blob)
+            for r in rows:
+                self.assertNotIn("heartbeat_at", r, (bad, r))
+                self.assertNotEqual(r["status"], "running")
+
+    def test_heartbeat_at_is_normalized_iso(self):
+        from board_meta import gemini_lane_rows
+        from datetime import datetime as _dt
+        now, fresh = self._fresh()
+        z = _dt.fromisoformat(fresh).strftime("%Y-%m-%dT%H:%M:%SZ")
+        rows = gemini_lane_rows({"generated_at": "  " + z + "  ", "lanes": [{"job": "gemrev-bob-brain-pr1"}]}, now=now)
+        for r in rows:
+            self.assertEqual(r["heartbeat_at"], _dt.fromisoformat(z.replace("Z", "+00:00")).isoformat())
+            self.assertTrue(r["heartbeat_at"].endswith("+00:00"))
+        self.assertEqual(rows[0]["status"], "running")
+
+    def test_job_scrub_leak_cases_from_karen(self):
+        from board_meta import gemini_lane_rows
+        now, fresh = self._fresh()
+        aiza = "AIzaSy" + "B" * 33
+        cases = {
+            "mini.tail1a2b3c.ts.net": ("tail1a2b3c", "ts.net", "mini.tail"),
+            "gemrev-" + aiza + "-pr1": ("AIza", "BBBBBBBB"),
+            "key " + aiza + " 312-555-0199": ("AIza", "BBBBBBBB", "555-0199", "REDACTED"),
+            "sk-proj-abcdefghij": ("sk-proj", "abcdefghij"),
+            "gemrev-sk-proj-abcdefghij-pr1": ("sk-proj", "abcdefghij"),
+            "jeff@example.com": ("jeff", "example"),
+            "gemrev-jeff@example.com-pr1": ("jeff", "example"),
+            "fd7a:115c:a1e0::1": ("fd7a", "115c", "a1e0"),
+            "gemrev-fd7a:115c:a1e0::1-pr1": ("fd7a", "115c"),
+            "github.com/rupret007/secret-repo": ("github", "secret", "rupret007"),
+            "gemrev-github.com-pr1": ("github",),
+            "gemrev-mini.tail1a2b3c.ts.net-pr1": ("tail1a2b3c", "ts.net"),
+            "gemrev-ghp_" + "c" * 36 + "-pr1": ("ghp_", "cccccc"),
+            "gemrev-bob-brain-pr1; rm -rf /": ("rm", "rf"),
+            "100.93.165.1": ("93.165", "100.93"),
+        }
+        for raw, needles in cases.items():
+            rows = gemini_lane_rows({"generated_at": fresh, "lanes": [{"job": raw, "mode": "review"}]}, now=now)
+            lane = rows[1]
+            self.assertEqual(lane["task_title"], "job (review)", raw)
+            self.assertEqual(lane["id"], "gemini-lane-job-0", raw)
+            blob = json.dumps(rows)
+            for n in needles:
+                self.assertNotIn(n, blob, (raw, n))
+
+    def test_job_allowlist_keeps_real_ids(self):
+        from board_meta import gemini_lane_rows, gemini_lane_public_job
+        now, fresh = self._fresh()
+        real = ["gemrev-bob-brain-pr151", "gemfix-StalemateSite-pr23", "gemfix-Turdanoid-pr79.gat.2",
+                "auto-Storyland-Fantasy-Football-pr2", "auto-webjam-iss380", "auto-StoryDesk-pr2",
+                "bl-rad-dad-show-night-pr65", "auto-AI-Music-Vault-pr4"]
+        for j in real:
+            self.assertEqual(gemini_lane_public_job(j), j)
+        rows = gemini_lane_rows({"generated_at": fresh, "lanes": [{"job": j} for j in real]}, now=now)
+        self.assertEqual([r["id"] for r in rows[1:]], ["gemini-lane-" + j for j in real])
+        for bad in ("gemrev-bob-brain-pr", "gemrev--pr1", "xgemrev-bob-brain-pr1", "gemrev-bob-brain-pr1x",
+                    "gemrev-bob-brain-pr1234567", "gemrev-1bob-pr1", "other-bob-brain-pr1",
+                    "gemrev-bob.brain-pr1", "gemrev-" + "a" * 70 + "-pr1", None, 7, ["gemrev-bob-brain-pr1"],
+                    "gemrev-bob-brain-pr5551234567", "gemrev-AKIA" + "Q" * 16 + "-pr1", "gemrev-x-tailnet-pr1",
+                    "gemrev-eyJhbGciOi-pr1", "gemrev-xoxb-123-pr1", "gemrev-github_pat_x-pr1",
+                    "gemrev-AKIAQQQ-pr1", "gemrev-" + "a" * 64 + "-pr123456.gat.12"):
+            self.assertEqual(gemini_lane_public_job(bad), "job", bad)
+
+    def test_job_runs_live_sanitize_before_anything(self):
+        import board_meta
+        import live.sanitize as ls
+        seen = []
+        orig = ls.sanitize
+
+        def spy(v):
+            seen.append(v)
+            return orig(v)
+        ls.sanitize = spy
+        try:
+            board_meta.gemini_lane_public_job(" gemrev-bob-brain-pr1 ")
+        finally:
+            ls.sanitize = orig
+        self.assertTrue(seen and seen[0] == "gemrev-bob-brain-pr1", seen)
+
+    def test_duplicate_placeholder_ids_are_unique(self):
+        from board_meta import gemini_lane_rows
+        now, fresh = self._fresh()
+        rows = gemini_lane_rows({"generated_at": fresh, "lanes": [{"job": "a b"}, {"job": "c;d"}, {"job": ""}]}, now=now)
+        ids = [r["id"] for r in rows[1:]]
+        self.assertEqual(ids, ["gemini-lane-job-0", "gemini-lane-job-1"])
+
+    def test_cap_values(self):
+        from board_meta import gemini_lane_rows
+        now, fresh = self._fresh()
+        for bad in (float("inf"), "inf", "-inf", float("nan"), "nan", True, False, -5, 0, "abc", 1e300, [118]):
+            title = gemini_lane_rows({"generated_at": fresh, "spend_est_usd": 1, "cap_usd": bad, "lanes": []}, now=now)[0]["task_title"]
+            self.assertNotIn(" / $", title, bad)
+            self.assertNotIn("inf", title)
+            self.assertNotIn("nan", title)
+        for good, label in ((118, "$118"), ("118", "$118"), (48.4, "$48")):
+            title = gemini_lane_rows({"generated_at": fresh, "cap_usd": good, "lanes": []}, now=now)[0]["task_title"]
+            self.assertIn(" / " + label, title)
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

@@ -2863,6 +2863,59 @@ def merge_first_class(sections: list[Any] | None) -> list[dict[str, Any]]:
 # (job, mode, started_at; spend estimate; pause reason). Rows carry the snapshot
 # stamp as heartbeat_at so a stale snapshot is demoted by the normal TTL path.
 GEMINI_LANE_SOURCE = "mini_gemini_lane"
+GEMINI_LANE_MAX_CAP_USD = 100000.0
+GEMINI_LANE_JOB_PLACEHOLDER = "job"
+# Public job ids are allowlisted to the shapes the lane scripts generate
+# (gemini-feed.py gemrev-/gemfix-<repo>-pr<n>, fill-autoqueue.py auto-<repo>-pr|iss<n>,
+# backlog bl-<repo>-pr<n>, optional .gat.<n> retry suffix). Anything else is shown as "job".
+GEMINI_LANE_JOB_RE = re.compile(
+    r"(?:gemrev|gemfix|auto|bl)-[A-Za-z][A-Za-z0-9_-]{0,63}-(?:pr|iss)\d{1,6}(?:\.gat\.\d{1,3})?"
+)
+# Defense in depth: secret/host shapes that must never ride inside an allowlisted id.
+GEMINI_LANE_JOB_DENY_RE = re.compile(
+    r"AIza|(?:^|[-_])sk-|ghp_|gho_|ghs_|github_pat|xox[abprs]-|AKIA|eyJ|ts-net|tailnet|[Tt]ailscale"
+)
+
+
+def gemini_lane_iso_stamp(value: Any) -> str:
+    """Return a normalized ISO-8601 stamp, or "" when value is not one.
+
+    The published value is rebuilt from the parsed datetime, never echoed raw.
+    """
+    if value is None or isinstance(value, bool) or not isinstance(value, str):
+        return ""
+    raw = value.strip()
+    if not raw or len(raw) > 40:
+        return ""
+    try:
+        dt = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+    except ValueError:
+        return ""
+    if dt.tzinfo is None:
+        return ""
+    return dt.isoformat()
+
+
+def gemini_lane_public_job(value: Any) -> str:
+    """Return a job id safe for the public board, or the "job" placeholder.
+
+    live.sanitize runs on the raw value first; the result must be unchanged by
+    sanitize, fully match the allowlisted job-id shape and contain no secret shape.
+    """
+    from live.sanitize import sanitize
+
+    if not isinstance(value, str):
+        return GEMINI_LANE_JOB_PLACEHOLDER
+    raw = value.strip()
+    if not raw or len(raw) > 80:
+        return GEMINI_LANE_JOB_PLACEHOLDER
+    if sanitize(raw) != raw:
+        return GEMINI_LANE_JOB_PLACEHOLDER
+    if not GEMINI_LANE_JOB_RE.fullmatch(raw):
+        return GEMINI_LANE_JOB_PLACEHOLDER
+    if GEMINI_LANE_JOB_DENY_RE.search(raw):
+        return GEMINI_LANE_JOB_PLACEHOLDER
+    return raw
 
 
 def gemini_lane_rows(snapshot: Any, *, now: float | None = None) -> list[dict[str, Any]]:
@@ -2874,7 +2927,7 @@ def gemini_lane_rows(snapshot: Any, *, now: float | None = None) -> list[dict[st
     """
     if not isinstance(snapshot, dict):
         return []
-    stamp = str(snapshot.get("generated_at") or "").strip()
+    stamp = gemini_lane_iso_stamp(snapshot.get("generated_at"))
     lanes = [x for x in (snapshot.get("lanes") or []) if isinstance(x, dict)]
     raw_paused = str(snapshot.get("paused") or "").strip()
     paused = ""
@@ -2904,14 +2957,14 @@ def gemini_lane_rows(snapshot: Any, *, now: float | None = None) -> list[dict[st
             pass
 
     cap_str = ""
-    try:
-        cap_val = snapshot.get("cap_usd")
-        if cap_val is not None and str(cap_val).strip() != "":
+    cap_val = snapshot.get("cap_usd")
+    if cap_val is not None and not isinstance(cap_val, bool) and str(cap_val).strip() != "":
+        try:
             cap = float(cap_val)
-            if cap > 0:
+            if math.isfinite(cap) and 0 < cap <= GEMINI_LANE_MAX_CAP_USD:
                 cap_str = f" / ${cap:.0f}"
-    except (TypeError, ValueError):
-        pass
+        except (TypeError, ValueError, OverflowError):
+            pass
 
     clock = time.time() if now is None else float(now)
     proof = llm_work_proof_timestamp({"heartbeat_at": stamp})
@@ -2937,21 +2990,16 @@ def gemini_lane_rows(snapshot: Any, *, now: float | None = None) -> list[dict[st
 
     from live.sanitize import sanitize
 
-    for lane in lanes:
-        raw_job = str(lane.get("job") or "")
-        job_no_url = re.sub(r"https?://\S+", "[url]", raw_job)
-        job = re.sub(r"[^A-Za-z0-9._\[\]-]", "", job_no_url)[:80]
-        if not job:
+    for idx, lane in enumerate(lanes):
+        if not str(lane.get("job") or "").strip():
             continue
-        job = re.sub(r"\d{1,3}(?:\.\d{1,3}){3}", "[ip]", job)
-        safe_job = re.sub(r"[^A-Za-z0-9._\[\]-]", "", sanitize(job))[:80]
-        if not safe_job:
-            continue
+        safe_job = gemini_lane_public_job(lane.get("job"))
+        row_id = f"gemini-lane-{safe_job}" if safe_job != GEMINI_LANE_JOB_PLACEHOLDER else f"gemini-lane-job-{idx}"
 
         mode = re.sub(r"[^a-z]", "", str(lane.get("mode") or "").lower())[:12]
         task_title = safe_job + (f" ({mode})" if mode else "")
 
-        row = {"id": f"gemini-lane-{safe_job}", "name": "Gemini lane",
+        row = {"id": row_id, "name": "Gemini lane",
                "task_title": sanitize(task_title),
                "status": "running" if (is_fresh and not paused) else "idle",
                "source": GEMINI_LANE_SOURCE if (is_fresh and not paused) else "idle"}
