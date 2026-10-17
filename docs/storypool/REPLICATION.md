@@ -125,7 +125,7 @@ No milestone completion is claimed by this documentation. Pool rollout is gated 
 - What exact applications, versions, bridge behavior, and dashboard capabilities define parity with his entire current setup?
 - Which platforms and email providers are supported first, and what reduced capability is acceptable without a Mac/iPhone?
 - Who operates the shared broker, issues/revokes public identities, and verifies tenant-isolation evidence without accessing private data?
-- Who owns the HIGH LeaseService lease-reply fix ([bob-ops-dashboard #76](https://github.com/rupret007/bob-ops-dashboard/pull/76)) and the publish-only protocol review? The bug stays **open (HIGH)** until #76 merges; what evidence will establish closure?
+- Who owns the publish-only protocol review? Lease-reply redirection is **closed (HIGH)** by [bob-ops-dashboard #76](https://github.com/rupret007/bob-ops-dashboard/pull/76) (c838b310); what evidence will establish closure for that review?
 - Which workloads are explicitly shareable, which donor/API arrangements have been reviewed, and who sets resource/spending ceilings?
 - Which local approval UX and identity verification will each send adapter use? How will ambiguous delivery be reconciled?
 - Is there an authoritative, read-only Grok Bot usage source, who may read it, and what units/window does it report? Until answered, keep all quantities unknown and all lanes excluded.
@@ -144,4 +144,4 @@ Only provider/documentation URLs opened during this research are listed. Terms a
 - [xAI: Consumer Terms of Service](https://x.ai/legal/terms-of-service)
 - [xAI: Enterprise Terms of Service](https://x.ai/legal/terms-of-service-enterprise)
 
-Repository evidence inspected: `cluster/LANES.md`, `cluster/lanes.py`, `cluster/lanes_perms.py`, and the Grok status probe in `probe-agents-status.sh`. The HIGH lease-reply bug is tracked in [bob-ops-dashboard #76](https://github.com/rupret007/bob-ops-dashboard/pull/76) and remains **open (HIGH)** until that PR merges. Grok Bot terms are unverified (see Provider-terms risks).
+Repository evidence inspected: `cluster/LANES.md`, `cluster/lanes.py`, `cluster/lanes_perms.py`, and the Grok status probe in `probe-agents-status.sh`. The HIGH lease-reply bug is **closed** by [bob-ops-dashboard #76](https://github.com/rupret007/bob-ops-dashboard/pull/76) (c838b310). Grok Bot terms are unverified (see Provider-terms risks).
