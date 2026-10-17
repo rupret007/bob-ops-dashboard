@@ -244,6 +244,8 @@ from board_meta import (
     harden_window_html,
     normalize_harden_window,
     closed_harden_window,
+    normalize_usage_machines,
+    usage_machines_html,
     drop_leftover_verify,
     extract_cloud_agents_from_prs,
     focus_key,
@@ -508,6 +510,11 @@ status = {
         {"name": "Parked private catalog", "status": "parked", "chip": "Parked",
          "notes": "Private-content boundary. Parked catalog work stays private and owner-only."},
       ],
+    },
+    {
+      "id": "usage-machines",
+      "title": "Usage & machines",
+      "projects": [],
     },
     {
       "id": "active-agents",
@@ -920,6 +927,10 @@ if _hw_blob is None:
         except Exception:
             _hw_blob = None
 status["harden_window"] = normalize_harden_window(_hw_blob)
+
+from usage_collect import load_merged_usage
+
+status["usage_machines"] = normalize_usage_machines(load_merged_usage(root))
 
 # Pulse data only -- this section now reflects current work attribution.
 agent_projects = []
@@ -1409,6 +1420,18 @@ for sec in status["sections"]:
             f'<section id="{h(sid_raw)}" class="block foot">{body}</section>'
         )
         continue
+    if sid_raw == "usage-machines":
+        heading = f'<h2>{h(sec.get("title") or "Usage & machines")}</h2>'
+        body = usage_machines_html(status.get("usage_machines"))
+        cls = "secondary"
+        panel = (
+            f' data-tab-panel="{h(sid_raw)}" hidden role="tabpanel" '
+            f'aria-labelledby="tab-{h(sid_raw)}"'
+        )
+        sections_html.append(
+            f'<section id="{h(sid_raw)}" class="block {cls}"{panel}>{heading}{body}</section>'
+        )
+        continue
     heading = f'<h2>{h(sec.get("title") or "")}</h2>'
     sort_attn = kind == "primary"
     body = lanes_html(projects, sort_attention=sort_attn)
@@ -1626,6 +1649,31 @@ html = f'''<!DOCTYPE html>
   .harden-strip .hw-score {{
     color:var(--muted); flex:1 1 12rem; font-size:.74rem;
   }}
+  .usage-panel {{ display:grid; gap:.55rem; margin-top:.35rem; }}
+  .usage-day-label {{ margin:0; font-size:.78rem; color:var(--muted); }}
+  .usage-chart {{
+    display:flex; align-items:flex-end; gap:.28rem; min-height:5.5rem;
+    padding:.35rem .2rem .15rem; border:1px solid var(--border); border-radius:10px;
+    background:rgba(255,255,255,.02);
+  }}
+  .usage-bar {{
+    flex:1 1 0; display:flex; flex-direction:column; align-items:center; gap:.2rem;
+    min-width:0;
+  }}
+  .usage-bar i {{
+    display:block; width:100%; max-width:1.35rem; min-height:2px;
+    background:linear-gradient(180deg, var(--orange), #9a3412);
+    border-radius:4px 4px 2px 2px;
+  }}
+  .usage-bar span {{ font-size:.62rem; color:var(--muted); }}
+  .usage-table {{ width:100%; border-collapse:collapse; font-size:.78rem; }}
+  .usage-table th {{
+    text-align:left; color:var(--muted); font-weight:600; padding:.2rem .35rem .2rem 0;
+    vertical-align:top; white-space:nowrap;
+  }}
+  .usage-table td {{ padding:.2rem 0; }}
+  .usage-table .muted {{ color:var(--muted); }}
+  .usage-empty {{ font-size:.8rem; color:var(--muted); margin:0; }}
   .agent-row {{
     border:1px solid var(--border); border-radius:10px;
     padding:.58rem .62rem; background:rgba(255,255,255,.02);
@@ -2934,11 +2982,12 @@ function sortHistoryEntries(rows, limit) {{
     if (id === "abilities" || id === "features") return "footer";
     return "secondary";
   }}
-  var TYPE_TAB_IDS = ["controls", "live-shipping", "apps-utilities", "cisco", "messaging", "private-media", "parked"];
+  var TYPE_TAB_IDS = ["controls", "live-shipping", "apps-utilities", "usage-machines", "cisco", "messaging", "private-media", "parked"];
   var TYPE_TAB_LABELS = {{
     "controls": "Decisions",
     "live-shipping": "Live",
     "apps-utilities": "Apps",
+    "usage-machines": "Usage",
     "cisco": "Cisco",
     "messaging": "Bots",
     "private-media": "Media",
@@ -3611,7 +3660,12 @@ function sortHistoryEntries(rows, limit) {{
         hw.lanes_fired || [],
         hw.scorecard_line || "",
         hw.updated_at || ""
-      ]
+      ],
+      usage_machines: (data.usage_machines && data.usage_machines.days)
+        ? data.usage_machines.days.map(function (d) {{
+            return [d.date, d.codex && d.codex.total_tokens, d.gemini && d.gemini.tokens, d.merged_prs && d.merged_prs.count];
+          }})
+        : []
     }});
   }}
   function snapshotOpen() {{

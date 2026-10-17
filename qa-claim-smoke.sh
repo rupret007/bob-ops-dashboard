@@ -285,6 +285,9 @@ pass "refresh.sh guards present (XSS/races + public board)"
 [[ -f "$ROOT/test_board_meta.py" ]] || fail "missing test_board_meta.py"
 python3 "$ROOT/test_board_meta.py" -v || fail "board_meta unit tests"
 pass "board_meta unit tests"
+[[ -f "$ROOT/test_usage_collect.py" ]] || fail "missing test_usage_collect.py"
+python3 "$ROOT/test_usage_collect.py" -v || fail "usage_collect unit tests"
+pass "usage_collect unit tests"
 [[ -f "$ROOT/test_refresh_outage_guard.py" ]] || fail "missing test_refresh_outage_guard.py"
 python3 "$ROOT/test_refresh_outage_guard.py" -v || fail "refresh outage guard integration test"
 pass "refresh outage guard preserves generated artifacts"
@@ -938,7 +941,7 @@ if command -v gh >/dev/null; then
   PRIVATE_E2E="$TMP/private-e2e"
   MOCK_BIN="$PRIVATE_E2E/bin"
   mkdir -p "$MOCK_BIN"
-  cp "$ROOT/refresh.sh" "$ROOT/board_meta.py" "$ROOT/README.md" "$PRIVATE_E2E/"
+  cp "$ROOT/refresh.sh" "$ROOT/board_meta.py" "$ROOT/usage_collect.py" "$ROOT/README.md" "$PRIVATE_E2E/"
   chmod +x "$PRIVATE_E2E/refresh.sh"
   python3 - "$MOCK_BIN/gh" <<'PY' || fail "private fixture setup failed"
 from pathlib import Path
@@ -1273,7 +1276,7 @@ PY
 
   E2E="$TMP/refresh-e2e"
   mkdir -p "$E2E"
-  cp "$ROOT/refresh.sh" "$ROOT/board_meta.py" "$ROOT/README.md" "$E2E/"
+  cp "$ROOT/refresh.sh" "$ROOT/board_meta.py" "$ROOT/usage_collect.py" "$ROOT/README.md" "$E2E/"
   chmod +x "$E2E/refresh.sh"
   python3 - "$E2E/status.json" <<'PY' || fail "e2e seed failed"
 import json, sys
@@ -1519,6 +1522,7 @@ allowed_tabs = {
     "controls",
     "live-shipping",
     "apps-utilities",
+    "usage-machines",
     "cisco",
     "messaging",
     "private-media",
@@ -1529,7 +1533,10 @@ tab_ids = set(re.findall(r'data-tab="([^"]+)"', head))
 bad_tabs = sorted(tab_ids - allowed_tabs)
 if bad_tabs:
     raise SystemExit("invented type tab ids: " + ", ".join(bad_tabs))
-for sid in ("live-shipping", "apps-utilities", "cisco", "parked"):
+for needle in ("Grok Bot (conserve-only)", "unknown — no usage source; conserve-only"):
+    if needle not in head:
+        raise SystemExit("missing Grok budget placeholder: " + needle)
+for sid in ("live-shipping", "apps-utilities", "usage-machines", "cisco", "parked"):
     if not re.search(r'id="' + sid + r'"[^>]*\bhidden\b', html):
         raise SystemExit(sid + " must stay hidden on first paint")
 nav = html.split('id="type-tabs"', 1)[-1].split("</nav>", 1)[0] if 'id="type-tabs"' in html else ""
