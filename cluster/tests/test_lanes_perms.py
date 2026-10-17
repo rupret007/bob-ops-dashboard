@@ -155,6 +155,12 @@ class TestStage2Permissions(unittest.TestCase):
 
 
 class TestStage2PermissionShape(unittest.TestCase):
+    def test_operator_response_grant_is_limited_to_one(self):
+        perms = lanes_perms.operator()
+        self.assertEqual(perms["allow_responses"], {"max": 1})
+        rendered = lanes_perms.render_users({"hub": ("test-only", perms)})
+        self.assertIn("allow_responses: {\n        max: 1\n      }", rendered)
+
     def test_no_member_kv_or_shared_ack_grants(self):
         for host, provs in (("nuc", ["codex", "gemini"]), ("mini", ["codex"])):
             perms = lanes_perms.host(host, provs)
