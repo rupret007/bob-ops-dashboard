@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-10-17T01:35:21.246702-05:00",
-  "generated_at_display": "Sat Oct 17, 2026 \u00b7 1:35 AM CDT",
+  "generated_at": "2026-10-17T01:50:22.272439-05:00",
+  "generated_at_display": "Sat Oct 17, 2026 \u00b7 1:50 AM CDT",
   "timezone": "America/Chicago",
   "owner": "rupret007",
   "dashboard": "bob-ops-dashboard",
@@ -495,8 +495,8 @@
           "status": "green",
           "chip": "Green",
           "default_branch": "main",
-          "tip_sha": "ed42c46",
-          "tip_date": "2026-10-17T06:20:35Z",
+          "tip_sha": "68a63da",
+          "tip_date": "2026-10-17T06:41:20Z",
           "open_prs": 0,
           "open_pr_url": null,
           "open_pr_number": null,
@@ -504,7 +504,14 @@
           "open_pr_stack": [],
           "pr_listing_complete": true,
           "agent_url": null,
-          "ci": null,
+          "ci": {
+            "name": "QA claim smoke",
+            "conclusion": "success",
+            "branch": "main",
+            "sha": "68a63da",
+            "created": "2026-10-17T06:41:22Z",
+            "html_url": "https://github.com/rupret007/bob-ops-dashboard/actions/runs/39010836958"
+          },
           "release": null,
           "release_sha": null,
           "release_url": null,
@@ -535,6 +542,11 @@
           "notes": "Local runtime lane. No gateway restart, credential change, or live operation from this board."
         }
       ]
+    },
+    {
+      "id": "usage-machines",
+      "title": "Usage & machines",
+      "projects": []
     },
     {
       "id": "active-agents",
@@ -897,7 +909,7 @@
     "barker"
   ],
   "publish_notes": "Public board -- no secrets or customer paths. Private repositories stay high-level; AI Music Vault stays private-content-boundary only.",
-  "refresh_started_ms": 1792218889929,
+  "refresh_started_ms": 1792219792098,
   "agents_source": "file:stale->unknown",
   "agents": [
     {
@@ -1078,7 +1090,7 @@
     }
   ],
   "llm_work_now_freshness": {
-    "generated_at": "2026-10-17 01:35 CT",
+    "generated_at": "2026-10-17 01:50 CT",
     "warn_ttl_sec": 1200,
     "warnings": [],
     "ok": true
@@ -1099,6 +1111,190 @@
     "updated_at": "2026-09-25T07:24:02-05:00",
     "display_status": "closed",
     "idle": true
+  },
+  "usage_machines": {
+    "v": "usage-machines/v1",
+    "generated_at": "2026-10-17 01:00 CT",
+    "timezone": "America/Chicago",
+    "hosts": [
+      "mini"
+    ],
+    "days": [
+      {
+        "date": "2026-10-12",
+        "codex": {
+          "total_tokens": 182000000,
+          "cached_tokens": null,
+          "output_tokens": null,
+          "reasoning_tokens": null
+        },
+        "codex_by_host": {
+          "mini": {
+            "total_tokens": 182000000,
+            "cached_tokens": null,
+            "output_tokens": null,
+            "reasoning_tokens": null
+          }
+        },
+        "gemini": null,
+        "lanes": null,
+        "cursor": null,
+        "claude": null,
+        "minimax": null,
+        "grok_bot": {
+          "status": "unknown",
+          "source": null
+        },
+        "machines": null,
+        "merged_prs": {
+          "count": 130,
+          "tokens_total": 182000000,
+          "tokens_per_pr": 1400000
+        }
+      },
+      {
+        "date": "2026-10-13",
+        "codex": {
+          "total_tokens": 312000000,
+          "cached_tokens": null,
+          "output_tokens": null,
+          "reasoning_tokens": null
+        },
+        "codex_by_host": {
+          "mini": {
+            "total_tokens": 312000000,
+            "cached_tokens": null,
+            "output_tokens": null,
+            "reasoning_tokens": null
+          }
+        },
+        "gemini": null,
+        "lanes": null,
+        "cursor": null,
+        "claude": null,
+        "minimax": null,
+        "grok_bot": {
+          "status": "unknown",
+          "source": null
+        },
+        "machines": null,
+        "merged_prs": {
+          "count": 110,
+          "tokens_total": 312000000,
+          "tokens_per_pr": 2836364
+        }
+      },
+      {
+        "date": "2026-10-14",
+        "codex": {
+          "total_tokens": 203000000,
+          "cached_tokens": null,
+          "output_tokens": null,
+          "reasoning_tokens": null
+        },
+        "codex_by_host": {
+          "mini": {
+            "total_tokens": 203000000,
+            "cached_tokens": null,
+            "output_tokens": null,
+            "reasoning_tokens": null
+          }
+        },
+        "gemini": null,
+        "lanes": null,
+        "cursor": null,
+        "claude": null,
+        "minimax": null,
+        "grok_bot": {
+          "status": "unknown",
+          "source": null
+        },
+        "machines": null,
+        "merged_prs": {
+          "count": 72,
+          "tokens_total": 203000000,
+          "tokens_per_pr": 2819444
+        }
+      },
+      {
+        "date": "2026-10-15",
+        "codex": {
+          "total_tokens": 249000000,
+          "cached_tokens": null,
+          "output_tokens": null,
+          "reasoning_tokens": null
+        },
+        "codex_by_host": {
+          "mini": {
+            "total_tokens": 249000000,
+            "cached_tokens": null,
+            "output_tokens": null,
+            "reasoning_tokens": null
+          }
+        },
+        "gemini": null,
+        "lanes": null,
+        "cursor": null,
+        "claude": null,
+        "minimax": null,
+        "grok_bot": {
+          "status": "unknown",
+          "source": null
+        },
+        "machines": null,
+        "merged_prs": {
+          "count": 23,
+          "tokens_total": 249000000,
+          "tokens_per_pr": 10826087
+        }
+      },
+      {
+        "date": "2026-10-16",
+        "codex": {
+          "total_tokens": 697000000,
+          "cached_tokens": null,
+          "output_tokens": 3480000,
+          "reasoning_tokens": null
+        },
+        "codex_by_host": {
+          "mini": {
+            "total_tokens": 697000000,
+            "cached_tokens": null,
+            "output_tokens": 3480000,
+            "reasoning_tokens": null
+          }
+        },
+        "gemini": {
+          "tokens": 11600000,
+          "usd": 42.38
+        },
+        "lanes": {
+          "codex": 1,
+          "cursor": 3
+        },
+        "cursor": null,
+        "claude": null,
+        "minimax": null,
+        "grok_bot": {
+          "status": "unknown",
+          "source": null
+        },
+        "machines": {
+          "mini": {
+            "load1": 1.602,
+            "load5": 3.449,
+            "mem_used_gb": null,
+            "swap_used_gb": null,
+            "disk_free_gb": 867.995
+          }
+        },
+        "merged_prs": {
+          "count": 75,
+          "tokens_total": 708600000,
+          "tokens_per_pr": 9448000
+        }
+      }
+    ]
   },
   "pending": [
     {
