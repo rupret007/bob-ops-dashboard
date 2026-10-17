@@ -315,7 +315,7 @@ def collect_machine_snapshot() -> dict[str, float | None]:
     }
 
 
-GhSearchFn = Callable[[str, str], int]
+GhSearchFn = Callable[[str, str], int | None]
 
 
 def _default_gh_merged_count(owner: str, day: str) -> int:
@@ -332,15 +332,17 @@ def _default_gh_merged_count(owner: str, day: str) -> int:
         data = json.loads(out)
         return int(data.get("total_count") or 0)
     except (subprocess.SubprocessError, json.JSONDecodeError, ValueError, OSError):
-        return 0
+        return None
 
 
 def tokens_for_merged_prs(
-    merged_count: int,
+    merged_count: int | None,
     provider_usage: dict[str, dict[str, int]],
     gemini_day: dict[str, float | int] | None,
     codex_day: TokenTotals | None,
 ) -> dict[str, int | float | None]:
+    if merged_count is None:
+        return {"count": None, "tokens_total": None, "tokens_per_pr": None}
     if merged_count <= 0:
         return {"count": 0, "tokens_total": None, "tokens_per_pr": None}
     tokens_total = 0
@@ -400,7 +402,7 @@ def collect_host_snapshot(
         codex_totals = codex.get(day, TokenTotals())
         gemini_day = gemini.get(day)
         lane_day = lanes.get(day, {})
-        merged_count = gh_search(owner, day) if collect_merged else 0
+        merged_count = gh_search(owner, day) if collect_merged else None
         merged = tokens_for_merged_prs(
             merged_count,
             lane_day,

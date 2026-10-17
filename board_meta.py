@@ -2900,6 +2900,33 @@ def _usage_gb_or_unknown(value: Any) -> str:
         return "unknown"
 
 
+def usage_unknown_display(value: Any) -> str:
+    """Public-safe label for missing usage measurements (never the literal 'None')."""
+    if value is None:
+        return "unknown"
+    if isinstance(value, bool):
+        return "unknown"
+    if isinstance(value, (int, float)) and math.isfinite(value):
+        return str(int(value)) if float(value).is_integer() else str(value)
+    text = str(value).strip()
+    return text if text and text != "None" else "unknown"
+
+
+def _usage_day_display(row: dict[str, Any]) -> dict[str, str]:
+    codex = row.get("codex") if isinstance(row.get("codex"), dict) else {}
+    gemini = row.get("gemini") if isinstance(row.get("gemini"), dict) else {}
+    merged = row.get("merged_prs") if isinstance(row.get("merged_prs"), dict) else {}
+    gemini_usd = gemini.get("usd")
+    return {
+        "codex_total_tokens": _usage_millions_or_unknown(codex.get("total_tokens")),
+        "gemini_tokens": _usage_millions_or_unknown(gemini.get("tokens")),
+        "gemini_usd": (
+            f"{float(gemini_usd):.2f}" if gemini_usd is not None and not isinstance(gemini_usd, bool) else "unknown"
+        ),
+        "merged_prs_count": usage_unknown_display(merged.get("count")) if merged else "unknown",
+    }
+
+
 def normalize_usage_machines(raw: Any) -> dict[str, Any]:
     """Public-safe usage snapshot for status.json."""
     from scorecards import normalize_scorecards
@@ -2912,27 +2939,27 @@ def normalize_usage_machines(raw: Any) -> dict[str, Any]:
         day = str(row.get("date") or "")[:10]
         if len(day) != 10:
             continue
-        days_out.append(
-            {
-                "date": day,
-                "codex": row.get("codex") if isinstance(row.get("codex"), dict) else None,
-                "codex_by_host": row.get("codex_by_host")
-                if isinstance(row.get("codex_by_host"), dict)
-                else None,
-                "gemini": row.get("gemini") if isinstance(row.get("gemini"), dict) else None,
-                "lanes": row.get("lanes") if isinstance(row.get("lanes"), dict) else None,
-                "cursor": row.get("cursor") if isinstance(row.get("cursor"), dict) else None,
-                "claude": row.get("claude") if isinstance(row.get("claude"), dict) else None,
-                "minimax": row.get("minimax") if isinstance(row.get("minimax"), dict) else None,
-                "grok_bot": {"status": "unknown", "source": None},
-                "machines": row.get("machines")
-                if isinstance(row.get("machines"), dict)
-                else None,
-                "merged_prs": row.get("merged_prs")
-                if isinstance(row.get("merged_prs"), dict)
-                else None,
-            }
-        )
+        day_row = {
+            "date": day,
+            "codex": row.get("codex") if isinstance(row.get("codex"), dict) else None,
+            "codex_by_host": row.get("codex_by_host")
+            if isinstance(row.get("codex_by_host"), dict)
+            else None,
+            "gemini": row.get("gemini") if isinstance(row.get("gemini"), dict) else None,
+            "lanes": row.get("lanes") if isinstance(row.get("lanes"), dict) else None,
+            "cursor": row.get("cursor") if isinstance(row.get("cursor"), dict) else None,
+            "claude": row.get("claude") if isinstance(row.get("claude"), dict) else None,
+            "minimax": row.get("minimax") if isinstance(row.get("minimax"), dict) else None,
+            "grok_bot": {"status": "unknown", "source": None},
+            "machines": row.get("machines")
+            if isinstance(row.get("machines"), dict)
+            else None,
+            "merged_prs": row.get("merged_prs")
+            if isinstance(row.get("merged_prs"), dict)
+            else None,
+        }
+        day_row["display"] = _usage_day_display(day_row)
+        days_out.append(day_row)
     days_out.sort(key=lambda r: r.get("date") or "")
     if len(days_out) > USAGE_CHART_DAYS_MAX:
         days_out = days_out[-USAGE_CHART_DAYS_MAX :]
@@ -3031,16 +3058,24 @@ def _usage_machines_html(data: Any) -> str:
                 "<td class='muted'>no data</td></tr>"
             )
     rows.append(grok_row)
-    if merged.get("count"):
-        tpp = merged.get("tokens_per_pr")
-        tpp_s = html_lib.escape(_usage_millions(tpp)) if tpp else "no data"
-        rows.append(
-            "<tr><th>Merged PRs</th><td>"
-            + html_lib.escape(str(merged.get("count")))
-            + " · "
-            + tpp_s
-            + " tok/PR</td></tr>"
-        )
+    if merged:
+        count = merged.get("count")
+        if count is None:
+            rows.append(
+                "<tr><th>Merged PRs</th><td class='muted'>"
+                + html_lib.escape(usage_unknown_display(count))
+                + "</td></tr>"
+            )
+        elif count:
+            tpp = merged.get("tokens_per_pr")
+            tpp_s = html_lib.escape(_usage_millions(tpp)) if tpp else "no data"
+            rows.append(
+                "<tr><th>Merged PRs</th><td>"
+                + html_lib.escape(str(count))
+                + " · "
+                + tpp_s
+                + " tok/PR</td></tr>"
+            )
     machines = latest.get("machines") if isinstance(latest.get("machines"), dict) else {}
     for host in ("mini", "nucbox"):
         m = machines.get(host) if isinstance(machines.get(host), dict) else None
