@@ -41,14 +41,32 @@ _USD_RE = re.compile(r"\$?\s*(?P<usd>\d+(?:\.\d+)?)\s*$")
 _INT_FIELDS = re.compile(r"\b(?:in|out|tokens?)=(?P<n>\d+)\b", re.I)
 
 
+def _optional_token_int(raw: dict[str, Any], key: str) -> int | None:
+    if key not in raw:
+        return None
+    val = raw.get(key)
+    if val is None:
+        return None
+    try:
+        return int(val)
+    except (TypeError, ValueError):
+        return None
+
+
+def _sum_optional_tokens(a: int | None, b: int | None) -> int | None:
+    if a is None and b is None:
+        return None
+    return int(a or 0) + int(b or 0)
+
+
 @dataclass(frozen=True)
 class TokenTotals:
     total_tokens: int = 0
-    cached_tokens: int = 0
-    output_tokens: int = 0
-    reasoning_tokens: int = 0
+    cached_tokens: int | None = None
+    output_tokens: int | None = None
+    reasoning_tokens: int | None = None
 
-    def to_dict(self) -> dict[str, int]:
+    def to_dict(self) -> dict[str, int | None]:
         return {
             "total_tokens": self.total_tokens,
             "cached_tokens": self.cached_tokens,
@@ -59,9 +77,11 @@ class TokenTotals:
     def __add__(self, other: TokenTotals) -> TokenTotals:
         return TokenTotals(
             total_tokens=self.total_tokens + other.total_tokens,
-            cached_tokens=self.cached_tokens + other.cached_tokens,
-            output_tokens=self.output_tokens + other.output_tokens,
-            reasoning_tokens=self.reasoning_tokens + other.reasoning_tokens,
+            cached_tokens=_sum_optional_tokens(self.cached_tokens, other.cached_tokens),
+            output_tokens=_sum_optional_tokens(self.output_tokens, other.output_tokens),
+            reasoning_tokens=_sum_optional_tokens(
+                self.reasoning_tokens, other.reasoning_tokens
+            ),
         )
 
 
@@ -128,9 +148,9 @@ def last_codex_token_usage(session_path: Path) -> TokenTotals | None:
         return None
     return TokenTotals(
         total_tokens=int(last.get("total_tokens") or 0),
-        cached_tokens=int(last.get("cached_input_tokens") or 0),
-        output_tokens=int(last.get("output_tokens") or 0),
-        reasoning_tokens=int(last.get("reasoning_output_tokens") or 0),
+        cached_tokens=_optional_token_int(last, "cached_input_tokens"),
+        output_tokens=_optional_token_int(last, "output_tokens"),
+        reasoning_tokens=_optional_token_int(last, "reasoning_output_tokens"),
     )
 
 
@@ -261,7 +281,7 @@ def aggregate_provider_usage(path: Path) -> dict[str, dict[str, int]]:
     return out
 
 
-def _read_mem_linux() -> tuple[float, float]:
+def _read_mem_linux() -> tuple[float | None, float | None]:
     mem_total_kb = mem_avail_kb = swap_total_kb = swap_free_kb = 0
     try:
         with open("/proc/meminfo", encoding="utf-8") as f:
@@ -275,13 +295,16 @@ def _read_mem_linux() -> tuple[float, float]:
                 elif line.startswith("SwapFree:"):
                     swap_free_kb = int(line.split()[1])
     except OSError:
-        pass
-    swap_used_gb = max(0.0, (swap_total_kb - swap_free_kb) / (1024**3))
-    mem_used_gb = max(0.0, (mem_total_kb - mem_avail_kb) / (1024**3))
+        return None, None
+    if mem_total_kb <= 0:
+        return None, None
+    divisor = 1024**2
+    swap_used_gb = max(0.0, (swap_total_kb - swap_free_kb) / divisor)
+    mem_used_gb = max(0.0, (mem_total_kb - mem_avail_kb) / divisor)
     return round(mem_used_gb, 3), round(swap_used_gb, 3)
 
 
-def collect_machine_snapshot() -> dict[str, float]:
+def collect_machine_snapshot() -> dict[str, float | None]:
     load1, load5, _ = os.getloadavg()
     disk = shutil.disk_usage(os.path.expanduser("~"))
     mem_used_gb, swap_used_gb = _read_mem_linux()
@@ -369,6 +392,7 @@ def collect_host_snapshot(
         day_keys |= set(prov_map.keys())
     if days:
         day_keys |= set(days)
+    latest_day = max(day_keys) if day_keys else None
     day_rows: list[dict[str, Any]] = []
     for day in sorted(day_keys):
         codex_totals = codex.get(day, TokenTotals())
@@ -388,7 +412,7 @@ def collect_host_snapshot(
             # No direct source exists; lanes never consume this tracked budget.
             "grok_bot": {"status": "unknown", "source": None},
             "lanes": lane_day or None,
-            "machines": {host: machine},
+            "machines": {host: machine} if day == latest_day else None,
             "merged_prs": merged,
         }
         for prov in OPTIONAL_SPEND_PROVIDERS:
@@ -521,9 +545,9 @@ def merge_host_snapshots(snapshots: list[dict[str, Any]]) -> dict[str, Any]:
                 if isinstance(metrics, dict):
                     combined += TokenTotals(
                         total_tokens=int(metrics.get("total_tokens") or 0),
-                        cached_tokens=int(metrics.get("cached_tokens") or 0),
-                        output_tokens=int(metrics.get("output_tokens") or 0),
-                        reasoning_tokens=int(metrics.get("reasoning_tokens") or 0),
+                        cached_tokens=_optional_token_int(metrics, "cached_tokens"),
+                        output_tokens=_optional_token_int(metrics, "output_tokens"),
+                        reasoning_tokens=_optional_token_int(metrics, "reasoning_tokens"),
                     )
             codex_combined = combined.to_dict() if combined.total_tokens else None
         days_out.append(
@@ -541,6 +565,11 @@ def merge_host_snapshots(snapshots: list[dict[str, Any]]) -> dict[str, Any]:
                 "merged_prs": raw.get("merged_prs"),
             }
         )
+    if len(days_out) > 1:
+        latest = days_out[-1]["date"]
+        for row in days_out:
+            if row.get("date") != latest:
+                row["machines"] = None
     stamp = datetime.now(tz=BOARD_TZ).strftime("%Y-%m-%d %H:%M CT")
     return sanitize_usage_payload(
         {

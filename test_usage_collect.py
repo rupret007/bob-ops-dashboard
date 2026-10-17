@@ -3,13 +3,16 @@
 
 from __future__ import annotations
 
+import errno
 import json
 import unittest
 import tempfile
 from pathlib import Path
+from unittest.mock import mock_open, patch
 
 from usage_collect import (
     TokenTotals,
+    _read_mem_linux,
     aggregate_gemini_spend,
     aggregate_provider_usage,
     collect_codex_for_day,
@@ -124,6 +127,72 @@ class UsageCollectBaselineTests(unittest.TestCase):
         b = TokenTotals(total_tokens=3, output_tokens=4)
         self.assertEqual(4, (a + b).total_tokens)
 
+    def test_mem_linux_converts_kb_with_1024_squared(self):
+        meminfo = (
+            "MemTotal:       2097152 kB\n"
+            "MemAvailable:   1048576 kB\n"
+            "SwapTotal:       2097152 kB\n"
+            "SwapFree:        1048576 kB\n"
+        )
+        with patch("builtins.open", mock_open(read_data=meminfo)):
+            mem_used_gb, swap_used_gb = _read_mem_linux()
+        self.assertEqual(1.0, mem_used_gb)
+        self.assertEqual(1.0, swap_used_gb)
+
+    def test_mem_without_proc_meminfo_returns_none(self):
+        with patch("builtins.open", side_effect=FileNotFoundError(errno.ENOENT, "No such file")):
+            mem_used_gb, swap_used_gb = _read_mem_linux()
+        self.assertIsNone(mem_used_gb)
+        self.assertIsNone(swap_used_gb)
+
+    def test_codex_missing_optional_token_fields_stay_none(self):
+        with tempfile.TemporaryDirectory() as directory:
+            session = Path(directory) / "session.jsonl"
+            session.write_text(
+                json.dumps(
+                    {
+                        "type": "event_msg",
+                        "payload": {
+                            "type": "token_count",
+                            "info": {
+                                "total_token_usage": {"total_tokens": 42},
+                            },
+                        },
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            totals = last_codex_token_usage(session)
+        self.assertIsNotNone(totals)
+        self.assertEqual(42, totals.total_tokens)
+        self.assertIsNone(totals.cached_tokens)
+        self.assertIsNone(totals.output_tokens)
+        self.assertIsNone(totals.reasoning_tokens)
+        row = totals.to_dict()
+        self.assertIsNone(row["cached_tokens"])
+        self.assertIsNone(row["output_tokens"])
+        self.assertIsNone(row["reasoning_tokens"])
+
+    def test_host_snapshot_machines_only_on_latest_day(self):
+        snap = collect_host_snapshot(
+            host="mini",
+            sessions_root=FIX / "mini/codex/sessions",
+            lane_logs=FIX / "lane-wt/logs",
+            days=list(BASELINE_CODEX_MINI.keys()),
+            gh_search=_gh_baseline,
+            collect_merged=False,
+        )
+        by_day = {r["date"]: r for r in snap["days"]}
+        latest = max(BASELINE_CODEX_MINI.keys())
+        for day in BASELINE_CODEX_MINI:
+            machines = by_day[day].get("machines")
+            if day == latest:
+                self.assertIsInstance(machines, dict)
+                self.assertIn("mini", machines)
+            else:
+                self.assertIsNone(machines)
+
 
 class UsageMachinesPanelTests(unittest.TestCase):
     def test_usage_html_renders_no_data_for_optional_providers(self):
@@ -164,6 +233,66 @@ class UsageMachinesPanelTests(unittest.TestCase):
         data = json.loads(path.read_text(encoding="utf-8"))
         by_day = {d["date"]: d for d in data.get("days") or []}
         self.assertEqual(697_000_000, by_day["2026-10-16"]["codex_by_host"]["mini"]["total_tokens"])
+
+    def test_committed_usage_machines_not_copied_to_historical_days(self):
+        path = ROOT / "usage-machines.json"
+        data = json.loads(path.read_text(encoding="utf-8"))
+        days = data.get("days") or []
+        self.assertGreaterEqual(len(days), 2)
+        latest = max(str(d.get("date") or "") for d in days)
+        for row in days:
+            day = str(row.get("date") or "")
+            machines = row.get("machines")
+            if day == latest:
+                self.assertIsInstance(machines, dict)
+            else:
+                self.assertIsNone(machines)
+
+    def test_mac_mem_none_renders_unknown_in_panel(self):
+        from board_meta import normalize_usage_machines, usage_machines_html
+
+        blob = {
+            "v": "usage-machines/v1",
+            "days": [
+                {
+                    "date": "2026-10-16",
+                    "codex": {"total_tokens": 1, "output_tokens": None},
+                    "machines": {
+                        "mini": {
+                            "load1": 1.0,
+                            "mem_used_gb": None,
+                            "swap_used_gb": None,
+                            "disk_free_gb": 10.0,
+                        }
+                    },
+                }
+            ],
+        }
+        html = usage_machines_html(normalize_usage_machines(blob))
+        self.assertIn("mem unknown", html)
+        self.assertIn("swap unknown", html)
+        self.assertIn("unknown out", html)
+
+    def test_codex_optional_tokens_render_unknown_in_panel(self):
+        from board_meta import normalize_usage_machines, usage_machines_html
+
+        blob = {
+            "v": "usage-machines/v1",
+            "days": [
+                {
+                    "date": "2026-10-16",
+                    "codex": {
+                        "total_tokens": 100,
+                        "cached_tokens": None,
+                        "output_tokens": None,
+                        "reasoning_tokens": None,
+                    },
+                }
+            ],
+        }
+        html = usage_machines_html(normalize_usage_machines(blob))
+        self.assertIn("cached unknown", html)
+        self.assertIn("reasoning unknown", html)
 
 
 if __name__ == "__main__":

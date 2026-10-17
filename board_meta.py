@@ -2885,6 +2885,21 @@ def _usage_millions(value: Any) -> str:
     return str(n)
 
 
+def _usage_millions_or_unknown(value: Any) -> str:
+    if value is None:
+        return "unknown"
+    return _usage_millions(value)
+
+
+def _usage_gb_or_unknown(value: Any) -> str:
+    if value is None:
+        return "unknown"
+    try:
+        return str(float(value))
+    except (TypeError, ValueError):
+        return "unknown"
+
+
 def normalize_usage_machines(raw: Any) -> dict[str, Any]:
     """Public-safe usage snapshot for status.json."""
     if not isinstance(raw, dict):
@@ -2980,8 +2995,12 @@ def usage_machines_html(data: Any) -> str:
             "<tr><th>Codex</th><td>"
             + html_lib.escape(_usage_millions(codex.get("total_tokens")))
             + " total · "
-            + html_lib.escape(_usage_millions(codex.get("output_tokens")))
-            + " out</td></tr>"
+            + html_lib.escape(_usage_millions_or_unknown(codex.get("output_tokens")))
+            + " out · cached "
+            + html_lib.escape(_usage_millions_or_unknown(codex.get("cached_tokens")))
+            + " · reasoning "
+            + html_lib.escape(_usage_millions_or_unknown(codex.get("reasoning_tokens")))
+            + "</td></tr>"
         )
     else:
         rows.append("<tr><th>Codex</th><td class='muted'>no data</td></tr>")
@@ -3028,8 +3047,10 @@ def usage_machines_html(data: Any) -> str:
         rows.append(
             f"<tr><th>{html_lib.escape(host)}</th><td>load "
             + html_lib.escape(str(m.get("load1") or "?"))
-            + " · swap "
-            + html_lib.escape(str(m.get("swap_used_gb") or 0))
+            + " · mem "
+            + html_lib.escape(_usage_gb_or_unknown(m.get("mem_used_gb")))
+            + "G · swap "
+            + html_lib.escape(_usage_gb_or_unknown(m.get("swap_used_gb")))
             + "G · disk free "
             + html_lib.escape(str(m.get("disk_free_gb") or "?"))
             + "G</td></tr>"

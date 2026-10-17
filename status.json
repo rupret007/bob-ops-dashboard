@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-10-17T00:50:16.340514-05:00",
-  "generated_at_display": "Sat Oct 17, 2026 \u00b7 12:50 AM CDT",
+  "generated_at": "2026-10-17T01:01:35.403932-05:00",
+  "generated_at_display": "Sat Oct 17, 2026 \u00b7 1:01 AM CDT",
   "timezone": "America/Chicago",
   "owner": "rupret007",
   "dashboard": "bob-ops-dashboard",
@@ -66,9 +66,9 @@
             "created": "2026-10-17T04:21:43Z",
             "html_url": "https://github.com/rupret007/webjam/actions/runs/39002275036"
           },
-          "release": "v0.29.0",
-          "release_sha": "7aa74be",
-          "release_url": "https://github.com/rupret007/webjam/releases/tag/v0.29.0",
+          "release": "v0.28.2",
+          "release_sha": "a51154e",
+          "release_url": "https://github.com/rupret007/webjam/releases/tag/untagged-4e0b8f08bc532f21605f",
           "notes": "Making room. Latest is the published test candidate; source can be ahead.",
           "accessible": true,
           "coord": {
@@ -293,11 +293,11 @@
           "url": "https://github.com/rupret007/Turdanoid",
           "repo_url": "https://github.com/rupret007/Turdanoid",
           "private": false,
-          "status": "green",
-          "chip": "Green",
+          "status": "yellow",
+          "chip": "Yellow",
           "default_branch": "main",
-          "tip_sha": "892805d",
-          "tip_date": "2026-10-17T04:55:29Z",
+          "tip_sha": "3a730bd",
+          "tip_date": "2026-10-17T05:59:07Z",
           "open_prs": 0,
           "open_pr_url": null,
           "open_pr_number": null,
@@ -307,11 +307,11 @@
           "agent_url": null,
           "ci": {
             "name": "CI",
-            "conclusion": "success",
+            "conclusion": "in_progress",
             "branch": "main",
-            "sha": "892805d",
-            "created": "2026-10-17T04:55:31Z",
-            "html_url": "https://github.com/rupret007/Turdanoid/actions/runs/39004374491"
+            "sha": "3a730bd",
+            "created": "2026-10-17T05:59:10Z",
+            "html_url": "https://github.com/rupret007/Turdanoid/actions/runs/39008220222"
           },
           "release": null,
           "release_sha": null,
@@ -372,43 +372,26 @@
         },
         {
           "name": "Ball Beacon",
-          "repo": "rupret007/ballbeacon",
-          "url": null,
-          "repo_url": null,
-          "private": null,
-          "status": "parked",
-          "chip": "Parked",
-          "default_branch": null,
-          "tip_sha": null,
-          "tip_date": null,
-          "open_prs": null,
-          "open_pr_url": null,
-          "open_pr_number": null,
-          "open_pr_draft": false,
-          "open_pr_stack": [],
-          "pr_listing_complete": null,
-          "agent_url": null,
-          "ci": null,
-          "release": null,
-          "release_sha": null,
-          "release_url": null,
+          "private": true,
+          "status": "yellow",
+          "chip": "Yellow",
           "notes": "Private iOS utility. Software validation only; device and signing steps stay owner-only.",
-          "accessible": false,
+          "accessible": true,
+          "ci": {},
           "coord": {
             "repo": "ballbeacon",
             "agent": "none",
             "lease_state": "none",
-            "next": "Jeff installs/selects full Xcode with iOS Simulator plus XcodeGen...",
-            "sha": "3f05fdc"
+            "next": "Jeff installs/selects full Xcode with iOS Simulator plus XcodeGen..."
           }
         },
         {
           "name": "CSS Conductor",
           "private": true,
-          "status": "parked",
-          "chip": "Parked",
+          "status": "yellow",
+          "chip": "Yellow",
           "notes": "Private developer utility. High-level only; hosted-job cause stays unconfirmed.",
-          "accessible": false,
+          "accessible": true,
           "ci": {},
           "coord": {
             "repo": "CSS_Conductor",
@@ -419,28 +402,12 @@
         },
         {
           "name": "Barker",
-          "repo": "rupret007/barker",
-          "url": null,
-          "repo_url": null,
-          "private": null,
-          "status": "parked",
-          "chip": "Parked",
-          "default_branch": null,
-          "tip_sha": null,
-          "tip_date": null,
-          "open_prs": null,
-          "open_pr_url": null,
-          "open_pr_number": null,
-          "open_pr_draft": false,
-          "open_pr_stack": [],
-          "pr_listing_complete": null,
-          "agent_url": null,
-          "ci": null,
-          "release": null,
-          "release_sha": null,
-          "release_url": null,
+          "private": true,
+          "status": "yellow",
+          "chip": "Yellow",
           "notes": "Private app. No live sends, production changes, or credential operations from this board.",
-          "accessible": false,
+          "accessible": true,
+          "ci": {},
           "coord": {
             "repo": "barker",
             "agent": "none",
@@ -495,8 +462,8 @@
           "status": "green",
           "chip": "Green",
           "default_branch": "main",
-          "tip_sha": "4af8259",
-          "tip_date": "2026-10-17T05:49:08Z",
+          "tip_sha": "0cf561f",
+          "tip_date": "2026-10-17T05:58:58Z",
           "open_prs": 0,
           "open_pr_url": null,
           "open_pr_number": null,
@@ -508,9 +475,9 @@
             "name": "Cluster tests",
             "conclusion": "success",
             "branch": "main",
-            "sha": "4af8259",
-            "created": "2026-10-17T05:49:11Z",
-            "html_url": "https://github.com/rupret007/bob-ops-dashboard/actions/runs/39007646673"
+            "sha": "0cf561f",
+            "created": "2026-10-17T05:59:00Z",
+            "html_url": "https://github.com/rupret007/bob-ops-dashboard/actions/runs/39008211775"
           },
           "release": null,
           "release_sha": null,
@@ -542,6 +509,11 @@
           "notes": "Local runtime lane. No gateway restart, credential change, or live operation from this board."
         }
       ]
+    },
+    {
+      "id": "usage-machines",
+      "title": "Usage & machines",
+      "projects": []
     },
     {
       "id": "active-agents",
@@ -633,10 +605,10 @@
         {
           "name": "AdoptIQ",
           "private": true,
-          "status": "parked",
-          "chip": "Parked",
+          "status": "yellow",
+          "chip": "Yellow",
           "notes": "Private, draft, and offline-only; ready_for_live_cisco=false. No secrets or customer data on this page.",
-          "accessible": false,
+          "accessible": true,
           "ci": {},
           "coord": {
             "repo": "AdoptIQ",
@@ -648,10 +620,10 @@
         {
           "name": "TACTrack",
           "private": true,
-          "status": "parked",
-          "chip": "Parked",
+          "status": "yellow",
+          "chip": "Yellow",
           "notes": "Private. High-level only. No live-repo, CI, or PR taps on this board.",
-          "accessible": false,
+          "accessible": true,
           "ci": {},
           "coord": {
             "repo": "TACTrack",
@@ -887,24 +859,23 @@
     "Rad-Dad-Merch",
     "RadDadSite",
     "Turdanoid",
+    "AdoptIQ",
+    "TACTrack",
     "AI-Music-Vault",
     "rad-dad-show-night",
     "Andrea_NanoBot",
     "Bob-the-Bot",
     "StoryOps-AI",
+    "ballbeacon",
+    "CSS_Conductor",
+    "barker",
     "bob-ops-dashboard",
     "Cursor-OpenClaw-Integration",
     "StoryDesk"
   ],
-  "inaccessible": [
-    "AdoptIQ",
-    "TACTrack",
-    "ballbeacon",
-    "CSS_Conductor",
-    "barker"
-  ],
+  "inaccessible": [],
   "publish_notes": "Public board -- no secrets or customer paths. Private repositories stay high-level; AI Music Vault stays private-content-boundary only.",
-  "refresh_started_ms": 1792216185011,
+  "refresh_started_ms": 1792216845889,
   "agents_source": "file:stale->unknown",
   "agents": [
     {
@@ -1075,7 +1046,7 @@
     }
   ],
   "llm_work_now_freshness": {
-    "generated_at": "2026-10-17 00:50 CT",
+    "generated_at": "2026-10-17 01:01 CT",
     "warn_ttl_sec": 1200,
     "warnings": [],
     "ok": true
@@ -1096,6 +1067,190 @@
     "updated_at": "2026-09-25T07:24:02-05:00",
     "display_status": "closed",
     "idle": true
+  },
+  "usage_machines": {
+    "v": "usage-machines/v1",
+    "generated_at": "2026-10-17 01:00 CT",
+    "timezone": "America/Chicago",
+    "hosts": [
+      "mini"
+    ],
+    "days": [
+      {
+        "date": "2026-10-12",
+        "codex": {
+          "total_tokens": 182000000,
+          "cached_tokens": 0,
+          "output_tokens": 0,
+          "reasoning_tokens": 0
+        },
+        "codex_by_host": {
+          "mini": {
+            "total_tokens": 182000000,
+            "cached_tokens": 0,
+            "output_tokens": 0,
+            "reasoning_tokens": 0
+          }
+        },
+        "gemini": null,
+        "lanes": null,
+        "cursor": null,
+        "claude": null,
+        "minimax": null,
+        "grok_bot": {
+          "status": "unknown",
+          "source": null
+        },
+        "machines": null,
+        "merged_prs": {
+          "count": 130,
+          "tokens_total": 182000000,
+          "tokens_per_pr": 1400000
+        }
+      },
+      {
+        "date": "2026-10-13",
+        "codex": {
+          "total_tokens": 312000000,
+          "cached_tokens": 0,
+          "output_tokens": 0,
+          "reasoning_tokens": 0
+        },
+        "codex_by_host": {
+          "mini": {
+            "total_tokens": 312000000,
+            "cached_tokens": 0,
+            "output_tokens": 0,
+            "reasoning_tokens": 0
+          }
+        },
+        "gemini": null,
+        "lanes": null,
+        "cursor": null,
+        "claude": null,
+        "minimax": null,
+        "grok_bot": {
+          "status": "unknown",
+          "source": null
+        },
+        "machines": null,
+        "merged_prs": {
+          "count": 110,
+          "tokens_total": 312000000,
+          "tokens_per_pr": 2836364
+        }
+      },
+      {
+        "date": "2026-10-14",
+        "codex": {
+          "total_tokens": 203000000,
+          "cached_tokens": 0,
+          "output_tokens": 0,
+          "reasoning_tokens": 0
+        },
+        "codex_by_host": {
+          "mini": {
+            "total_tokens": 203000000,
+            "cached_tokens": 0,
+            "output_tokens": 0,
+            "reasoning_tokens": 0
+          }
+        },
+        "gemini": null,
+        "lanes": null,
+        "cursor": null,
+        "claude": null,
+        "minimax": null,
+        "grok_bot": {
+          "status": "unknown",
+          "source": null
+        },
+        "machines": null,
+        "merged_prs": {
+          "count": 72,
+          "tokens_total": 203000000,
+          "tokens_per_pr": 2819444
+        }
+      },
+      {
+        "date": "2026-10-15",
+        "codex": {
+          "total_tokens": 249000000,
+          "cached_tokens": 0,
+          "output_tokens": 0,
+          "reasoning_tokens": 0
+        },
+        "codex_by_host": {
+          "mini": {
+            "total_tokens": 249000000,
+            "cached_tokens": 0,
+            "output_tokens": 0,
+            "reasoning_tokens": 0
+          }
+        },
+        "gemini": null,
+        "lanes": null,
+        "cursor": null,
+        "claude": null,
+        "minimax": null,
+        "grok_bot": {
+          "status": "unknown",
+          "source": null
+        },
+        "machines": null,
+        "merged_prs": {
+          "count": 23,
+          "tokens_total": 249000000,
+          "tokens_per_pr": 10826087
+        }
+      },
+      {
+        "date": "2026-10-16",
+        "codex": {
+          "total_tokens": 697000000,
+          "cached_tokens": 0,
+          "output_tokens": 3480000,
+          "reasoning_tokens": 0
+        },
+        "codex_by_host": {
+          "mini": {
+            "total_tokens": 697000000,
+            "cached_tokens": 0,
+            "output_tokens": 3480000,
+            "reasoning_tokens": 0
+          }
+        },
+        "gemini": {
+          "tokens": 11600000,
+          "usd": 42.38
+        },
+        "lanes": {
+          "codex": 1,
+          "cursor": 3
+        },
+        "cursor": null,
+        "claude": null,
+        "minimax": null,
+        "grok_bot": {
+          "status": "unknown",
+          "source": null
+        },
+        "machines": {
+          "mini": {
+            "load1": 1.602,
+            "load5": 3.449,
+            "mem_used_gb": 3.806,
+            "swap_used_gb": 0.722,
+            "disk_free_gb": 867.995
+          }
+        },
+        "merged_prs": {
+          "count": 75,
+          "tokens_total": 708600000,
+          "tokens_per_pr": 9448000
+        }
+      }
+    ]
   },
   "pending": [
     {

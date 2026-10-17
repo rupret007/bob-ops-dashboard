@@ -1,6 +1,6 @@
 {
   "v": "usage-machines/v1",
-  "generated_at": "2026-10-17 00:20 CT",
+  "generated_at": "2026-10-17 01:00 CT",
   "timezone": "America/Chicago",
   "hosts": [
     "mini"
@@ -23,19 +23,15 @@
         }
       },
       "gemini": null,
+      "grok_bot": {
+        "status": "unknown",
+        "source": null
+      },
       "lanes": null,
       "cursor": null,
       "claude": null,
       "minimax": null,
-      "machines": {
-        "mini": {
-          "load1": 8.089,
-          "load5": 7.143,
-          "mem_used_gb": 0.006,
-          "swap_used_gb": 0.001,
-          "disk_free_gb": 871.142
-        }
-      },
+      "machines": null,
       "merged_prs": {
         "count": 130,
         "tokens_total": 182000000,
@@ -59,19 +55,15 @@
         }
       },
       "gemini": null,
+      "grok_bot": {
+        "status": "unknown",
+        "source": null
+      },
       "lanes": null,
       "cursor": null,
       "claude": null,
       "minimax": null,
-      "machines": {
-        "mini": {
-          "load1": 8.089,
-          "load5": 7.143,
-          "mem_used_gb": 0.006,
-          "swap_used_gb": 0.001,
-          "disk_free_gb": 871.142
-        }
-      },
+      "machines": null,
       "merged_prs": {
         "count": 110,
         "tokens_total": 312000000,
@@ -95,19 +87,15 @@
         }
       },
       "gemini": null,
+      "grok_bot": {
+        "status": "unknown",
+        "source": null
+      },
       "lanes": null,
       "cursor": null,
       "claude": null,
       "minimax": null,
-      "machines": {
-        "mini": {
-          "load1": 8.089,
-          "load5": 7.143,
-          "mem_used_gb": 0.006,
-          "swap_used_gb": 0.001,
-          "disk_free_gb": 871.142
-        }
-      },
+      "machines": null,
       "merged_prs": {
         "count": 72,
         "tokens_total": 203000000,
@@ -131,19 +119,15 @@
         }
       },
       "gemini": null,
+      "grok_bot": {
+        "status": "unknown",
+        "source": null
+      },
       "lanes": null,
       "cursor": null,
       "claude": null,
       "minimax": null,
-      "machines": {
-        "mini": {
-          "load1": 8.089,
-          "load5": 7.143,
-          "mem_used_gb": 0.006,
-          "swap_used_gb": 0.001,
-          "disk_free_gb": 871.142
-        }
-      },
+      "machines": null,
       "merged_prs": {
         "count": 23,
         "tokens_total": 249000000,
@@ -170,6 +154,10 @@
         "tokens": 11600000,
         "usd": 42.38
       },
+      "grok_bot": {
+        "status": "unknown",
+        "source": null
+      },
       "lanes": {
         "codex": 1,
         "cursor": 3
@@ -179,11 +167,11 @@
       "minimax": null,
       "machines": {
         "mini": {
-          "load1": 8.089,
-          "load5": 7.143,
-          "mem_used_gb": 0.006,
-          "swap_used_gb": 0.001,
-          "disk_free_gb": 871.142
+          "load1": 1.602,
+          "load5": 3.449,
+          "mem_used_gb": 3.806,
+          "swap_used_gb": 0.722,
+          "disk_free_gb": 867.995
         }
       },
       "merged_prs": {
