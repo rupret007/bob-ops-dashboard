@@ -35,6 +35,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 import re
 import time
 from dataclasses import dataclass
@@ -266,6 +267,8 @@ class LeaseService:
     stage-2 permissions let each host publish only for its own host token. The service refuses any
     owner whose host part differs, and for renew/release it also checks that the stored holder belongs
     to that host before the compare-and-set, so guessing another host's revision gets nothing.
+    Requests with a reply outside that host's inbox are dropped before any lease operation: the
+    hub's publish privileges and allow_responses must never authorize a caller-chosen destination.
     """
 
     def __init__(self, nc, kv):
@@ -283,6 +286,16 @@ class LeaseService:
             self.sub = None
 
     async def _on_msg(self, msg):
+        if msg.reply:
+            parts = msg.subject.split(".")
+            if (len(parts) != 4 or ".".join(parts[:2]) != LEASE_SVC_PREFIX
+                    or not is_valid_host(parts[2])
+                    or not msg.reply.startswith(f"_INBOX_{parts[2]}.")):
+                # All request fields, including subjects and reply addresses, are untrusted.
+                logging.getLogger(__name__).warning(
+                    "Dropped lease request with reply outside the requesting host's inbox"
+                )
+                return
         try:
             reply = await self.handle(msg.subject, msg.data)
         except Exception as e:  # never crash the service on one bad request

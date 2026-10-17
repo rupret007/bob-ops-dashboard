@@ -61,6 +61,8 @@ lease → pull → ack path works). Nothing reads that module at runtime and `na
 - **Operator (hub, NucBox):** publish `$JS.API.>`, `$KV.LANE_LEASES.>`, `lanes.>`, `lanes_dlq.>`;
   subscribe `lanesvc.lease.*.*` and `$JS.EVENT.ADVISORY.CONSUMER.MAX_DELIVERIES.LANES.*`; responses allowed.
   Runs `LeaseService`, `DeadLetterWatcher` and `ensure_lanes`. The only identity that writes lease keys.
+  `LeaseService` drops requests with a nonempty reply address outside `_INBOX_<host>.` before any
+  lease operation, using the host from the request subject. Rejections log no request fields.
 - **Conductor (Mini fill loop):** publish `lanes.*.*.*` (enqueue) and read-only `LANES_DLQ` info/get;
   subscribe `_INBOX_conductor.>`. No `$KV`, no consumer APIs.
 - **Each member lane host `<host>`:** publish only
