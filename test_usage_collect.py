@@ -13,11 +13,13 @@ from unittest.mock import mock_open, patch
 from usage_collect import (
     TokenTotals,
     _read_mem_linux,
+    _sum_optional_tokens,
     aggregate_gemini_spend,
     aggregate_provider_usage,
     collect_codex_for_day,
     collect_host_snapshot,
     last_codex_token_usage,
+    load_merged_usage,
     merge_host_snapshots,
     parse_gemini_spend_line,
 )
@@ -192,6 +194,137 @@ class UsageCollectBaselineTests(unittest.TestCase):
                 self.assertIn("mini", machines)
             else:
                 self.assertIsNone(machines)
+
+
+class PublishedUsageRegressionTests(unittest.TestCase):
+    """Exercise the host JSON -> publication loader -> normalized status path."""
+
+    def publish(self, snapshots):
+        from board_meta import normalize_usage_machines
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            for snapshot in snapshots:
+                (root / f"usage-host-{snapshot['host']}.json").write_text(
+                    json.dumps(snapshot), encoding="utf-8"
+                )
+            return normalize_usage_machines(load_merged_usage(root))
+
+    def snapshot(self, host, metrics, day="2026-10-16", machines=None):
+        return {"host": host, "days": [
+            {"date": day, "codex": metrics, "machines": machines}
+        ]}
+
+    def test_optional_sum_requires_every_part(self):
+        for a, b in ((None, None), (None, 7), (7, None), (0, None), (None, 0)):
+            with self.subTest(a=a, b=b):
+                self.assertIsNone(_sum_optional_tokens(a, b))
+        self.assertEqual(0, _sum_optional_tokens(0, 0))
+        self.assertEqual(12, _sum_optional_tokens(5, 7))
+
+    def test_published_missing_and_null_fields_remain_unknown(self):
+        for metrics in (
+            {"total_tokens": 42},
+            {"total_tokens": 42, "cached_tokens": None,
+             "output_tokens": None, "reasoning_tokens": None},
+        ):
+            with self.subTest(metrics=metrics):
+                row = self.publish([self.snapshot("mini", metrics)])["days"][0]
+                self.assertEqual(42, row["codex"]["total_tokens"])
+                for field in ("cached_tokens", "output_tokens", "reasoning_tokens"):
+                    self.assertIsNone(row["codex"][field], field)
+
+    def test_published_default_token_fields_remain_unknown(self):
+        row = self.publish([
+            self.snapshot("mini", TokenTotals(total_tokens=42).to_dict())
+        ])["days"][0]
+        for field in ("cached_tokens", "output_tokens", "reasoning_tokens"):
+            self.assertIsNone(row["codex"][field], field)
+
+    def test_published_mixed_hosts_remain_unknown_in_either_order(self):
+        known = {"total_tokens": 42, "cached_tokens": 7,
+                 "output_tokens": 8, "reasoning_tokens": 9}
+        for unknown in ({"total_tokens": 10}, {"total_tokens": 10,
+                        "cached_tokens": None, "output_tokens": None,
+                        "reasoning_tokens": None}):
+            snapshots = [self.snapshot("mini", known), self.snapshot("nucbox", unknown)]
+            for ordered in (snapshots, list(reversed(snapshots))):
+                with self.subTest(unknown=unknown, order=[s["host"] for s in ordered]):
+                    row = self.publish(ordered)["days"][0]
+                    self.assertEqual(52, row["codex"]["total_tokens"])
+                    for field in ("cached_tokens", "output_tokens", "reasoning_tokens"):
+                        self.assertIsNone(row["codex"][field], field)
+                        self.assertEqual(known[field], row["codex_by_host"]["mini"][field])
+
+    def test_published_known_counts_and_explicit_zero_are_preserved(self):
+        for hosts in (("mini",), ("mini", "nucbox")):
+            for value in (0, 7):
+                metrics = {"total_tokens": 42, "cached_tokens": value,
+                           "output_tokens": value, "reasoning_tokens": value}
+                row = self.publish([self.snapshot(host, metrics) for host in hosts])["days"][0]
+                self.assertEqual(42 * len(hosts), row["codex"]["total_tokens"])
+                for field in ("cached_tokens", "output_tokens", "reasoning_tokens"):
+                    self.assertEqual(value * len(hosts), row["codex"][field], field)
+
+    def test_published_mixed_sessions_remain_unknown(self):
+        for reverse in (False, True):
+            with self.subTest(reverse=reverse), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                day_dir = root / "sessions/2026/10/16"
+                day_dir.mkdir(parents=True)
+                usages = [{"total_tokens": 42, "cached_input_tokens": 7,
+                           "output_tokens": 8, "reasoning_output_tokens": 9},
+                          {"total_tokens": 10}]
+                if reverse:
+                    usages.reverse()
+                for i, usage in enumerate(usages):
+                    (day_dir / f"session-{i}.jsonl").write_text(json.dumps({
+                        "type": "event_msg", "payload": {"type": "token_count",
+                        "info": {"total_token_usage": usage}}
+                    }) + "\n", encoding="utf-8")
+                with patch("usage_collect.collect_machine_snapshot", return_value={}):
+                    snapshot = collect_host_snapshot(
+                        host="mini", sessions_root=root / "sessions", lane_logs=root / "logs",
+                        days=["2026-10-16"], collect_merged=False,
+                    )
+                row = self.publish([snapshot])["days"][0]
+                self.assertEqual(52, row["codex"]["total_tokens"])
+                for field in ("cached_tokens", "output_tokens", "reasoning_tokens"):
+                    self.assertIsNone(row["codex"][field], field)
+
+    def test_published_disjoint_host_days_null_historical_machines(self):
+        snapshots = [
+            self.snapshot("mini", {"total_tokens": 42}, day="2026-10-15",
+                          machines={"mini": {"mem_used_gb": 2.0}}),
+            self.snapshot("nucbox", {"total_tokens": 10}, day="2026-10-16",
+                          machines={"nucbox": {"mem_used_gb": 3.0}}),
+        ]
+        for ordered in (snapshots, list(reversed(snapshots))):
+            rows = self.publish(ordered)["days"]
+            self.assertEqual("2026-10-15", rows[0]["date"])
+            self.assertIsNone(rows[0]["machines"])
+            self.assertEqual({"nucbox": {"mem_used_gb": 3.0}}, rows[1]["machines"])
+
+    def test_committed_unknown_measurements_are_null(self):
+        data = json.loads((ROOT / "usage-machines.json").read_text(encoding="utf-8"))
+        for row in data["days"]:
+            for metrics in (row["codex"], row["codex_by_host"]["mini"]):
+                self.assertIsNone(metrics["cached_tokens"], row["date"])
+                self.assertIsNone(metrics["reasoning_tokens"], row["date"])
+        latest = max(data["days"], key=lambda row: row["date"])
+        self.assertIsNone(latest["machines"]["mini"]["mem_used_gb"])
+        self.assertIsNone(latest["machines"]["mini"]["swap_used_gb"])
+
+    def test_published_unknown_machine_values_have_no_unit(self):
+        from board_meta import usage_machines_html
+
+        for value, expected in ((None, "unknown"), (0, "0.0G"), (1.5, "1.5G")):
+            blob = self.publish([self.snapshot("mini", {"total_tokens": 42}, machines={
+                "mini": {"mem_used_gb": value, "swap_used_gb": value}
+            })])
+            html = usage_machines_html(blob)
+            self.assertIn(f"mem {expected} · swap {expected} · disk free", html)
+            self.assertNotIn("unknownG", html)
 
 
 class UsageMachinesPanelTests(unittest.TestCase):
