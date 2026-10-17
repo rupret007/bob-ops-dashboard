@@ -44,13 +44,10 @@ async def publish_job(nc_url: str, user: str, token: str, spec: dict) -> None:
 
 async def wait_result_from_sub(sub, job_id: str, timeout: float) -> dict | None:
     """Wait for a results message matching job_id; idle per-iteration timeouts do not end the wait."""
-    deadline = time.time() + timeout
+    deadline = time.monotonic() + timeout
     idle_timeout = idle_timeout_exceptions()
     while True:
-        now = time.time()
-        if now >= deadline:
-            return None
-        remaining = deadline - now
+        remaining = deadline - time.monotonic()
         if remaining <= 0:
             return None
         try:
