@@ -228,11 +228,12 @@ class PublishedUsageRegressionTests(unittest.TestCase):
             {"total_tokens": 42, "cached_tokens": None,
              "output_tokens": None, "reasoning_tokens": None},
         ):
-            with self.subTest(metrics=metrics):
-                row = self.publish([self.snapshot("mini", metrics)])["days"][0]
-                self.assertEqual(42, row["codex"]["total_tokens"])
-                for field in ("cached_tokens", "output_tokens", "reasoning_tokens"):
-                    self.assertIsNone(row["codex"][field], field)
+            for hosts in (("mini",), ("mini", "nucbox")):
+                with self.subTest(metrics=metrics, hosts=hosts):
+                    row = self.publish([self.snapshot(host, metrics) for host in hosts])["days"][0]
+                    self.assertEqual(42 * len(hosts), row["codex"]["total_tokens"])
+                    for field in ("cached_tokens", "output_tokens", "reasoning_tokens"):
+                        self.assertIsNone(row["codex"][field], field)
 
     def test_published_default_token_fields_remain_unknown(self):
         row = self.publish([
