@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-10-16T22:49:56.519892-05:00",
-  "generated_at_display": "Fri Oct 16, 2026 \u00b7 10:49 PM CDT",
+  "generated_at": "2026-10-16T23:04:58.118159-05:00",
+  "generated_at_display": "Fri Oct 16, 2026 \u00b7 11:04 PM CDT",
   "timezone": "America/Chicago",
   "owner": "rupret007",
   "dashboard": "bob-ops-dashboard",
@@ -46,11 +46,11 @@
           "url": "https://github.com/rupret007/webjam",
           "repo_url": "https://github.com/rupret007/webjam",
           "private": false,
-          "status": "green",
-          "chip": "Green",
+          "status": "yellow",
+          "chip": "Yellow",
           "default_branch": "master",
-          "tip_sha": "54485fb",
-          "tip_date": "2026-10-17T03:18:26Z",
+          "tip_sha": "95bb2c0",
+          "tip_date": "2026-10-17T03:53:28Z",
           "open_prs": 0,
           "open_pr_url": null,
           "open_pr_number": null,
@@ -59,12 +59,12 @@
           "pr_listing_complete": true,
           "agent_url": null,
           "ci": {
-            "name": "Cross-network acceptance",
-            "conclusion": "success",
+            "name": "WebJam CI",
+            "conclusion": "in_progress",
             "branch": "master",
-            "sha": "54485fb",
-            "created": "2026-10-17T03:18:30Z",
-            "html_url": "https://github.com/rupret007/webjam/actions/runs/38998277115"
+            "sha": "95bb2c0",
+            "created": "2026-10-17T03:53:31Z",
+            "html_url": "https://github.com/rupret007/webjam/actions/runs/39000505302"
           },
           "release": "v0.29.0",
           "release_sha": "7aa74be",
@@ -495,8 +495,8 @@
           "status": "green",
           "chip": "Green",
           "default_branch": "main",
-          "tip_sha": "d6e94fc",
-          "tip_date": "2026-10-17T03:35:07Z",
+          "tip_sha": "470a08c",
+          "tip_date": "2026-10-17T03:50:10Z",
           "open_prs": 0,
           "open_pr_url": null,
           "open_pr_number": null,
@@ -880,7 +880,7 @@
     "barker"
   ],
   "publish_notes": "Public board -- no secrets or customer paths. Private repositories stay high-level; AI Music Vault stays private-content-boundary only.",
-  "refresh_started_ms": 1792208967919,
+  "refresh_started_ms": 1792209870033,
   "agents_source": "file:stale->unknown",
   "agents": [
     {
@@ -1026,7 +1026,7 @@
     }
   ],
   "llm_work_now_freshness": {
-    "generated_at": "2026-10-16 22:49 CT",
+    "generated_at": "2026-10-16 23:04 CT",
     "warn_ttl_sec": 1200,
     "warnings": [],
     "ok": true
