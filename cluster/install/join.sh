@@ -58,6 +58,12 @@ fi
 
 APP="${HOME}/.local/share/bob-cluster/app"
 VENV="${HOME}/.local/share/bob-cluster/venv"
+PYDEPS="${HOME}/.local/share/bob-cluster/pydeps"
+BOBPY="${HOME}/.local/share/bob-cluster/bin/bob-python"
+# Nodes only need nats-py (pure Python). Pinned wheel + sha256 for hosts with
+# neither venv nor pip (e.g. stock Ubuntu/WSL without python3-venv).
+NATS_WHEEL_URL="https://files.pythonhosted.org/packages/48/a3/16cec37172144d3362d7551bb823a098b2b2903281fc095dfe4480b8c2fd/nats_py-2.16.0-py3-none-any.whl"
+NATS_WHEEL_SHA256="aeb1ff123966c05833d26c7df7e1d54c1c6d32b612428b21677a2e921f1fecae"
 NODE_ENV="${HOME}/.config/bob-cluster/node.env"
 REPO="rupret007/bob-ops-dashboard"
 TARBALL_URL="https://codeload.github.com/${REPO}/tar.gz/${REF}"
@@ -150,7 +156,7 @@ pythonpath_root() {
 }
 
 run_registry_py() {
-  local py="${VENV}/bin/python"
+  local py="${BOBPY}"
   if [[ ! -x "$py" ]]; then
     py="python3"
   fi
@@ -173,7 +179,8 @@ if [[ "$DRY_RUN" -eq 1 ]]; then
   dry "would verify python3 >= 3.10, git, curl, tar"
   dry "would download ${TARBALL_URL} to a temporary directory"
   dry "would extract cluster/ into ${APP}/cluster (atomic replace via ${APP}.new)"
-  dry "would create venv at ${VENV} and pip install -r ${APP}/cluster/requirements.txt"
+  dry "would install nats-py via venv+pip, else pip --target, else the pinned wheel (sha256-checked) into ${PYDEPS}"
+  dry "would write launcher ${BOBPY}"
   dry "would run cluster.join --check-only (hub reachability)"
   dry "would run cluster.join redeem"
   if command -v tailscale >/dev/null 2>&1; then
@@ -267,10 +274,34 @@ mv "$CLUSTER_SRC" "${APP}.new/cluster"
 rm -rf "${APP}"
 mv "${APP}.new" "${APP}"
 
-if [[ ! -d "${VENV}" ]]; then
-  python3 -m venv "${VENV}"
-fi
-"${VENV}/bin/pip" install -q -r "${APP}/cluster/requirements.txt"
+sha256_of() {
+  if command -v sha256sum >/dev/null 2>&1; then sha256sum "$1" | cut -d' ' -f1; else shasum -a 256 "$1" | cut -d' ' -f1; fi
+}
+
+install_deps() {
+  mkdir -p "$(dirname "${BOBPY}")"
+  if [[ -x "${VENV}/bin/python" ]] || python3 -m venv "${VENV}" >/dev/null 2>&1; then
+    if "${VENV}/bin/python" -m pip install -q "nats-py==2.16.0" >/dev/null 2>&1; then
+      printf '#!/bin/sh\nexport PYTHONPATH="%s"\nexec "%s" "$@"\n' "${APP}" "${VENV}/bin/python" > "${BOBPY}"
+      chmod 755 "${BOBPY}"; echo "Python deps: venv"; return 0
+    fi
+    rm -rf "${VENV}"
+  fi
+  rm -rf "${PYDEPS}"; mkdir -p "${PYDEPS}"
+  if python3 -m pip --version >/dev/null 2>&1 && python3 -m pip install -q --target "${PYDEPS}" "nats-py==2.16.0" >/dev/null 2>&1; then
+    echo "Python deps: pip --target"
+  else
+    curl -fsSL -o "${TMP}/nats.whl" "${NATS_WHEEL_URL}"
+    if [[ "$(sha256_of "${TMP}/nats.whl")" != "${NATS_WHEEL_SHA256}" ]]; then
+      echo "join.sh: nats-py wheel checksum mismatch; refusing to install" >&2; exit 1
+    fi
+    python3 -m zipfile -e "${TMP}/nats.whl" "${PYDEPS}"
+    echo "Python deps: pinned wheel (no venv/pip on this host)"
+  fi
+  printf '#!/bin/sh\nexport PYTHONPATH="%s:%s"\nexec python3 "$@"\n' "${APP}" "${PYDEPS}" > "${BOBPY}"
+  chmod 755 "${BOBPY}"
+}
+install_deps
 
 JOIN_LANE_ARGS=()
 if [[ -n "$LANES" ]]; then
@@ -278,7 +309,7 @@ if [[ -n "$LANES" ]]; then
 fi
 
 set +e
-CHECK_OUT="$(cd "${APP}" && BOB_JOIN_CODE="$CODE" "${VENV}/bin/python" -m cluster.join --check-only 2>&1)"
+CHECK_OUT="$(cd "${APP}" && BOB_JOIN_CODE="$CODE" "${BOBPY}" -m cluster.join --check-only 2>&1)"
 CHECK_RC=$?
 set -e
 if [[ "$CHECK_RC" -eq 3 ]]; then
@@ -302,7 +333,7 @@ if [[ "$ROLE" == "guest" ]]; then
 fi
 
 # The code travels in the environment, not argv, so it never shows up in `ps`.
-JOIN_OUT="$(cd "${APP}" && BOB_JOIN_CODE="$CODE" "${VENV}/bin/python" -m cluster.join ${JOIN_LANE_ARGS[@]+"${JOIN_LANE_ARGS[@]}"} 2>&1)" || {
+JOIN_OUT="$(cd "${APP}" && BOB_JOIN_CODE="$CODE" "${BOBPY}" -m cluster.join ${JOIN_LANE_ARGS[@]+"${JOIN_LANE_ARGS[@]}"} 2>&1)" || {
   echo "$JOIN_OUT" >&2
   exit 4
 }
@@ -316,7 +347,7 @@ if [[ "$JOIN_OUT" =~ node\ \'([^\']+)\'\ joined\ as\ ([a-z]+) ]]; then
 fi
 
 install_service() {
-  local py="${VENV}/bin/python"
+  local py="${BOBPY}"
   case "$OS_KIND" in
     darwin)
       local plist="${HOME}/Library/LaunchAgents/com.bob.cluster-node.plist"
@@ -383,12 +414,12 @@ UNIT
 #!/usr/bin/env bash
 set -euo pipefail
 APP="${HOME}/.local/share/bob-cluster/app"
-VENV="${HOME}/.local/share/bob-cluster/venv"
+BOBPY="${HOME}/.local/share/bob-cluster/bin/bob-python"
 NODE_ENV="${HOME}/.config/bob-cluster/node.env"
 LOG="${HOME}/.local/share/bob-cluster/node.log"
 cd "$APP"
 while true; do
-  "$VENV/bin/python" -m cluster.mesh_worker --env "$NODE_ENV" >>"$LOG" 2>&1 || true
+  "$BOBPY" -m cluster.mesh_worker --env "$NODE_ENV" >>"$LOG" 2>&1 || true
   sleep 10
 done
 WRAP

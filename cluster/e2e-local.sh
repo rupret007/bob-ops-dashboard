@@ -21,7 +21,7 @@ step() { echo "== $*"; }
 gen() { python3 -c 'import secrets;print(secrets.token_urlsafe(24))'; }
 { echo "NUCBOX_TOKEN=$(gen)"; echo "DASHBOARD_TOKEN=$(gen)"; } > "$CFG/tokens.env"; chmod 600 "$CFG/tokens.env"
 HUB=(--config-dir "$CFG" --conf-out "$CFG/nats.conf" --store-dir "$T/js" --pidfile "$CFG/nats.pid" --port "$PORT" --http "127.0.0.1:${HTTP}")
-export PYTHONPATH="$ROOT"
+export PYTHONPATH="$ROOT${PYTHONPATH:+:$PYTHONPATH}"
 PY="${PY:-python3}"
 
 step "render throwaway hub config (port $PORT)"
@@ -54,7 +54,7 @@ if BOB_JOIN_CODE="$CODE" "$PY" -m cluster.join --env-out "$T/replay.env" >/dev/n
 
 step "start the node agent (real HOME so real CLI logins are detected)"
 APP="$HOME2/.local/share/bob-cluster"
-(cd "$APP/app" && "$APP/venv/bin/python" -m cluster.mesh_worker --env "$NODE_ENV" >"$T/worker.log" 2>&1) & PIDS+=($!)
+(cd "$APP/app" && "$APP/bin/bob-python" -m cluster.mesh_worker --env "$NODE_ENV" >"$T/worker.log" 2>&1) & PIDS+=($!)
 sleep 4
 step "live capability heartbeat as the dashboard sees it"
 "$PY" -m cluster.bobctl caps "${HUB[@]}" --nats "$URL" --seconds 17 | sed 's/^/   /'
