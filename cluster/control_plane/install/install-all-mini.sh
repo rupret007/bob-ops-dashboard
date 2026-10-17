@@ -236,6 +236,17 @@ CONFIG
     fi
 
     log_info "karen-gate CLI installed to $bin_dir/karen-gate"
+    
+    local poller_plist_src="$SCRIPT_DIR/com.storypool.karen-poller.plist"
+    local poller_plist_dst="$HOME/Library/LaunchAgents/com.storypool.karen-poller.plist"
+    
+    if [[ -f "$poller_plist_src" ]]; then
+        sed -e "s|__REPO_PATH__|$REPO_ROOT|g" \
+            -e "s|__HOME__|$HOME|g" \
+            "$poller_plist_src" > "$poller_plist_dst"
+        log_info "Karen poller plist installed (NOT loaded in shadow mode)"
+    fi
+    
     log_info "Karen poller NOT loaded (shadow mode — run karen-gate --dry-run manually)"
 
     if [[ ":$PATH:" != *":$bin_dir:"* ]]; then

@@ -183,25 +183,11 @@ enable_live_mode() {
     log_pass "Dispatcher and Conductor now in LIVE mode"
 }
 
-load_karen_poller() {
-    log_header "Loading Karen Poller"
+skip_karen_poller() {
+    log_header "Karen Poller"
     
-    local poller_service_src="$SCRIPT_DIR/storypool-karen-poller.service"
-    local poller_timer_src="$SCRIPT_DIR/storypool-karen-poller.timer"
-    
-    if [[ -f "$poller_service_src" ]] && [[ -f "$poller_timer_src" ]]; then
-        sed -e "s|__REPO_PATH__|$REPO_ROOT|g" \
-            "$poller_service_src" > "$SYSTEMD_DIR/storypool-karen-poller.service"
-        cp "$poller_timer_src" "$SYSTEMD_DIR/storypool-karen-poller.timer"
-        
-        systemctl --user daemon-reload
-        systemctl --user enable storypool-karen-poller.timer
-        systemctl --user start storypool-karen-poller.timer
-        
-        log_pass "Karen poller loaded"
-    else
-        log_warn "Karen poller service/timer not found, skipping"
-    fi
+    log_info "Karen poller runs on Mini only (it SSHs to NucBox for Codex)"
+    log_info "NucBox provides the Codex backend; Mini runs the gate checks"
 }
 
 main() {
@@ -223,7 +209,7 @@ main() {
         echo ""
         
         enable_live_mode
-        load_karen_poller
+        skip_karen_poller
         
         echo ""
         log_header "LIVE MODE ENABLED"

@@ -12,9 +12,10 @@ import logging
 import os
 import sys
 import time
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Optional
+from typing import Optional, List
 
 from .config import KarenConfig
 from .gate import run_gate
@@ -33,7 +34,7 @@ class PollState:
     """State tracking for the poller."""
 
     last_poll: str
-    prs_checked: list[dict]
+    prs_checked: list  # List[dict]
 
     def to_dict(self) -> dict:
         return {"last_poll": self.last_poll, "prs_checked": self.prs_checked}
@@ -44,9 +45,6 @@ class PollState:
             last_poll=d.get("last_poll", ""),
             prs_checked=d.get("prs_checked", []),
         )
-
-
-from dataclasses import dataclass
 
 
 def load_poll_state(config: KarenConfig) -> PollState:
@@ -70,11 +68,12 @@ def save_poll_state(state: PollState, config: KarenConfig) -> None:
 
 
 def poll_and_run(
-    repos: list[str],
-    config: KarenConfig,
-    post_comment: bool = True,
-    remove_label_on_complete: bool = True,
-) -> list[dict]:
+    repos,  # type: List[str]
+    config,  # type: KarenConfig
+    post_comment=True,  # type: bool
+    remove_label_on_complete=True,  # type: bool
+):
+    # type: (...) -> List[dict]
     """Poll for PRs with needs-karen label and run gate on them.
 
     Args:
@@ -157,7 +156,8 @@ def poll_and_run(
     return results
 
 
-def run_poll_once(config: Optional[KarenConfig] = None) -> list[dict]:
+def run_poll_once(config=None):
+    # type: (Optional[KarenConfig]) -> List[dict]
     """Run a single poll cycle.
 
     Reads repos from environment or config.

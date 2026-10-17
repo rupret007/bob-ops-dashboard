@@ -184,20 +184,18 @@ enable_live_mode() {
 load_karen_poller() {
     log_header "Loading Karen Poller"
     
-    local poller_plist_src="$SCRIPT_DIR/com.storypool.karen-poller.plist"
     local poller_plist_dst="$HOME/Library/LaunchAgents/com.storypool.karen-poller.plist"
     
-    if [[ -f "$poller_plist_src" ]]; then
-        sed -e "s|__REPO_PATH__|$REPO_ROOT|g" \
-            -e "s|__HOME__|$HOME|g" \
-            "$poller_plist_src" > "$poller_plist_dst"
-        
+    if [[ -f "$poller_plist_dst" ]]; then
         launchctl unload "$poller_plist_dst" 2>/dev/null || true
         launchctl load "$poller_plist_dst"
         
-        log_pass "Karen poller loaded"
+        log_pass "Karen poller loaded (polls every 10 min)"
     else
-        log_warn "Karen poller plist not found, skipping"
+        log_error "Karen poller plist not found at $poller_plist_dst"
+        log_error "Run install-all-mini.sh first"
+        FAILURES+=("karen-poller-plist")
+        ALL_PASS=false
     fi
 }
 
