@@ -1,9 +1,73 @@
 import asyncio
+import importlib.util
 import json
+import os
+import subprocess
+import sys
 import unittest
+from pathlib import Path
 
 from cluster.submit import wait_result_from_sub
+from cluster.tests.nats_test_util import require_or_skip
 from cluster.worker_logic import fetch_or_empty
+
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+
+
+def _nats_py_available() -> bool:
+    try:
+        return importlib.util.find_spec("nats") is not None
+    except ModuleNotFoundError:
+        return False
+
+
+_HAS_NATS_PY = _nats_py_available()
+
+_SUBPROCESS_HIDE_NATS = r"""
+import importlib.abc
+import sys
+import unittest
+
+
+class _HideNatsFinder(importlib.abc.MetaPathFinder):
+    def find_spec(self, fullname, path, target=None):
+        if fullname.split(".", 1)[0] == "nats":
+            raise ModuleNotFoundError(f"No module named '{fullname}'")
+        return None
+
+
+sys.meta_path.insert(0, _HideNatsFinder())
+
+suite = unittest.defaultTestLoader.loadTestsFromName(
+    "cluster.tests.test_idle_timeout.TestFetchOrEmpty.test_non_idle_errors_propagate"
+)
+result = unittest.TextTestRunner(verbosity=0).run(suite)
+if result.errors:
+    raise SystemExit("unexpected errors: " + repr(result.errors))
+if result.failures:
+    raise SystemExit("unexpected failures: " + repr(result.failures))
+if len(result.skipped) != 1:
+    raise SystemExit(
+        f"expected 1 skip, got skipped={result.skipped} testsRun={result.testsRun}"
+    )
+"""
+
+_SUBPROCESS_RUN_NON_IDLE = r"""
+import unittest
+
+suite = unittest.defaultTestLoader.loadTestsFromName(
+    "cluster.tests.test_idle_timeout.TestFetchOrEmpty.test_non_idle_errors_propagate"
+)
+result = unittest.TextTestRunner(verbosity=0).run(suite)
+if result.errors:
+    raise SystemExit("unexpected errors: " + repr(result.errors))
+if result.failures:
+    raise SystemExit("unexpected failures: " + repr(result.failures))
+if result.skipped:
+    raise SystemExit(f"unexpected skip: {result.skipped}")
+if result.testsRun != 1:
+    raise SystemExit(f"expected 1 test run, got testsRun={result.testsRun}")
+"""
 
 
 class FakeMsg:
@@ -60,6 +124,7 @@ class TestFetchOrEmpty(unittest.IsolatedAsyncioTestCase):
         psub = FakePsub([TimeoutError()])
         self.assertEqual(await fetch_or_empty(psub, 1, timeout=1), [])
 
+    @require_or_skip(_HAS_NATS_PY, "nats-py not installed")
     async def test_non_idle_errors_propagate(self):
         """Non-timeout errors must escape; fails if except is widened to Exception/BaseException."""
         import nats.errors
@@ -123,6 +188,43 @@ class TestWaitResultFromSub(unittest.IsolatedAsyncioTestCase):
             # Overall wait is < 5s, so every remaining is < 5; a bare 5.0 would fail.
             self.assertLessEqual(t, overall)
             self.assertLess(t, 5.0)
+
+
+class TestNatsDependentSkipGuard(unittest.TestCase):
+    def _subprocess_env(self) -> dict[str, str]:
+        env = {
+            "HOME": os.environ.get("HOME", ""),
+            "PATH": os.environ.get("PATH", "/usr/bin:/bin"),
+            "LANG": os.environ.get("LANG", "C.UTF-8"),
+            "PYTHONPATH": str(_REPO_ROOT),
+        }
+        return env
+
+    def test_non_idle_errors_skips_when_nats_hidden(self):
+        proc = subprocess.run(
+            [sys.executable, "-c", _SUBPROCESS_HIDE_NATS],
+            cwd=_REPO_ROOT,
+            env=self._subprocess_env(),
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(proc.returncode, 0, (proc.stdout, proc.stderr))
+
+    @require_or_skip(_HAS_NATS_PY, "nats-py not installed")
+    def test_non_idle_errors_runs_when_nats_available(self):
+        import nats
+
+        nats_root = str(Path(nats.__file__).resolve().parent.parent)
+        env = self._subprocess_env()
+        env["PYTHONPATH"] = f"{_REPO_ROOT}:{nats_root}"
+        proc = subprocess.run(
+            [sys.executable, "-c", _SUBPROCESS_RUN_NON_IDLE],
+            cwd=_REPO_ROOT,
+            env=env,
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(proc.returncode, 0, (proc.stdout, proc.stderr))
 
 
 if __name__ == "__main__":
