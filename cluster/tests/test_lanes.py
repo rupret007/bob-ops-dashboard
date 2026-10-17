@@ -11,6 +11,8 @@ class TestLaneNames(unittest.TestCase):
         self.assertEqual(lanes.lease_key("rupret007/webjam", "pr", "390"), "rupret007.webjam.pr.390")
         dotted = lanes.lease_key("o/My.Repo", "issue", 7)
         self.assertTrue(dotted.startswith("o.My-Repo-") and dotted.endswith(".issue.7"), dotted)
+        # Karen S5: pin the exact digest (sha256("My.Repo")[:8]), not just its shape.
+        self.assertEqual(dotted, "o.My-Repo-ce141e7f.issue.7")
         self.assertEqual(dotted, lanes.lease_key("o/My.Repo", "issue", 7), "must be stable")
 
     def test_lease_key_rejects_bad_input(self):
@@ -66,6 +68,173 @@ class TestLaneNames(unittest.TestCase):
                 lanes.dedupe_key(bad, "j", "a")
             with self.subTest(bad=bad), self.assertRaises(ValueError):
                 lanes.consumer_name(bad, "nuc")
+
+
+class TestReservedHostNames(unittest.TestCase):  # Karen S1
+    def test_reserved_names_are_never_hosts(self):
+        from cluster import lanes_perms
+
+        self.assertEqual(lanes.RESERVED_HOST_NAMES, frozenset({"hub", "conductor"}))
+        for bad in ("hub", "conductor"):
+            self.assertFalse(lanes.is_valid_host(bad))
+            for fn in (lambda h: lanes.check_host(h), lambda h: lanes.inbox_prefix(h),
+                       lambda h: lanes.consumer_name("gemini", h), lambda h: lanes.lease_subject(h, "acquire"),
+                       lambda h: lanes.subject("gemini", h, "j"), lambda h: lanes.LeaseClient(None, h),
+                       lambda h: lanes_perms.host(h, ["gemini"])):
+                with self.subTest(host=bad), self.assertRaises(ValueError):
+                    fn(bad)
+            with self.subTest(host=bad), self.assertRaises(ValueError):
+                asyncio.run(lanes.enqueue(None, "gemini", "j", {}, "a", host=bad))
+            with self.subTest(host=bad), self.assertRaises(ValueError):
+                asyncio.run(lanes.ensure_lanes(None, {"gemini": {bad: 1}}))
+        for ok in ("nuc", "mini", "hubx", "xhub", "conductor2", "hub-1"):
+            self.assertEqual(lanes.check_host(ok), ok)
+
+    def test_no_host_inbox_overlaps_a_role_inbox(self):
+        from cluster import lanes_perms
+
+        self.assertEqual(lanes.OPERATOR_INBOX, "_INBOX_hub")
+        self.assertEqual(lanes.role_inbox_prefix("conductor"), "_INBOX_conductor")
+        for bad in ("nuc", "", "operator", "hub.x"):
+            with self.subTest(role=bad), self.assertRaises(ValueError):
+                lanes.role_inbox_prefix(bad)
+        self.assertIn("_INBOX_hub.>", lanes_perms.operator()["subscribe"]["allow"])
+        self.assertEqual(lanes_perms.conductor()["subscribe"]["allow"], ["_INBOX_conductor.>"])
+        role_inboxes = {lanes.role_inbox_prefix(r) for r in lanes.RESERVED_HOST_NAMES}
+        for h in ("nuc", "mini", "hubx", "hub-1", "conductor2", "a"):
+            self.assertNotIn(lanes.inbox_prefix(h), role_inboxes)
+            for sub in lanes_perms.host(h, ["gemini"])["subscribe"]["allow"]:
+                for r in role_inboxes:
+                    self.assertFalse(sub == f"{r}.>" or sub.startswith(f"{r}."), (h, sub))
+
+    def test_lease_service_refuses_reserved_host_subjects(self):
+        svc = lanes.LeaseService(None, None)
+        for h in ("hub", "conductor"):
+            for op in lanes.LEASE_OPS:
+                body = json.dumps({"key": "o.r.pr.1", "owner": h, "revision": 1}).encode()
+                r = asyncio.run(svc.handle(f"lanesvc.lease.{h}.{op}", body))
+                self.assertEqual((r["ok"], r["error"]), (False, "forbidden"), (h, op, r))
+
+
+class TestLeaseServiceHostBinding(unittest.TestCase):  # Karen S3: host comes from the subject only
+    def setUp(self):
+        self.calls = []
+        self._orig = lanes.acquire
+
+        async def fake_acquire(kv, key, owner, meta=None):
+            self.calls.append((key, owner, dict(meta or {})))
+            return lanes.Lease(key, owner, 7)
+        lanes.acquire = fake_acquire
+
+    def tearDown(self):
+        lanes.acquire = self._orig
+
+    def _handle(self, subject, body):
+        return asyncio.run(lanes.LeaseService(None, None).handle(subject, json.dumps(body).encode()))
+
+    def test_body_host_is_ignored_and_meta_host_is_overwritten(self):
+        r = self._handle("lanesvc.lease.mini.acquire",
+                         {"key": "o.r.pr.1", "owner": "mini/l1", "host": "nuc", "meta": {"host": "nuc", "x": 1}})
+        self.assertEqual(r, {"ok": True, "revision": 7})
+        self.assertEqual(self.calls, [("o.r.pr.1", "mini/l1", {"host": "mini", "x": 1})])
+
+    def test_body_host_cannot_authorize_another_hosts_owner(self):
+        for body in ({"key": "o.r.pr.1", "owner": "nuc/l1", "host": "nuc"},
+                     {"key": "o.r.pr.1", "owner": "nuc", "host": "nuc", "meta": {"host": "nuc"}},
+                     {"key": "o.r.pr.1", "owner": "nuc", "requester": "nuc", "subject": "lanesvc.lease.nuc.acquire"}):
+            r = self._handle("lanesvc.lease.mini.acquire", body)
+            self.assertEqual((r["ok"], r["error"]), (False, "forbidden"), body)
+        self.assertEqual(self.calls, [])
+
+
+class _RawMsg:
+    def __init__(self, subject, data, headers=None):
+        self.subject, self.data, self.headers = subject, data, headers
+
+
+class _FakeDlqJS:
+    def __init__(self, msgs, fail_publish=False):
+        self.msgs = dict(msgs)
+        self.ops = []
+        self.fail_publish = fail_publish
+
+    async def get_msg(self, stream, seq):
+        from nats.js.errors import NotFoundError
+
+        self.ops.append(("get", stream, seq))
+        if seq not in self.msgs:
+            raise NotFoundError()
+        return self.msgs[seq]
+
+    async def publish(self, subj, data, stream=None, headers=None):
+        self.ops.append(("publish", subj, stream, dict(headers or {}), data))
+        if self.fail_publish:
+            raise RuntimeError("dlq publish failed")
+
+    async def delete_msg(self, stream, seq):
+        self.ops.append(("delete", stream, seq))
+        self.msgs.pop(seq, None)
+
+
+def _lanes_msg(job, attempt=0, head="a"):
+    body = json.dumps({"job": job, "provider": "gemini", "host": "nuc", "head": head, "attempt": attempt}).encode()
+    return _RawMsg(lanes.subject("gemini", "nuc", job), body,
+                   {"Nats-Msg-Id": lanes.dedupe_key("gemini", job, head, attempt)})
+
+
+class TestDeadLetterMove(unittest.TestCase):  # Karen S3
+    def test_copies_before_it_deletes(self):
+        js = _FakeDlqJS({5: _lanes_msg("poison")})
+        rec = asyncio.run(lanes.DeadLetterWatcher(None, js).move(5, "lane_gemini_nuc", 3))
+        kinds = [op[0] for op in js.ops]
+        self.assertEqual(kinds, ["get", "publish", "delete"])
+        pub = js.ops[1]
+        self.assertEqual(pub[1], "lanes_dlq.gemini.nuc")
+        self.assertEqual(pub[2], lanes.DLQ_STREAM)
+        self.assertEqual(json.loads(pub[4])["job"], "poison")
+        self.assertEqual(js.ops[2], ("delete", lanes.LANES_STREAM, 5))
+        self.assertEqual(rec["job"]["job"], "poison")
+
+    def test_failed_copy_never_deletes(self):
+        js = _FakeDlqJS({5: _lanes_msg("poison")}, fail_publish=True)
+        with self.assertRaises(RuntimeError):
+            asyncio.run(lanes.DeadLetterWatcher(None, js).move(5, "lane_gemini_nuc", 3))
+        self.assertNotIn("delete", [op[0] for op in js.ops])
+        self.assertIn(5, js.msgs, "job must stay in LANES when the DLQ copy fails")
+
+    def test_msg_id_is_keyed_on_job_not_lanes_seq(self):
+        # Same seq after a stream recreate, different jobs -> different ids (no false duplicate).
+        a = _FakeDlqJS({1: _lanes_msg("job-a")})
+        b = _FakeDlqJS({1: _lanes_msg("job-b")})
+        asyncio.run(lanes.DeadLetterWatcher(None, a).move(1, "c", 3))
+        asyncio.run(lanes.DeadLetterWatcher(None, b).move(1, "c", 3))
+        id_a, id_b = a.ops[1][3]["Nats-Msg-Id"], b.ops[1][3]["Nats-Msg-Id"]
+        self.assertNotEqual(id_a, id_b)
+        self.assertEqual(id_a, "dlq-" + lanes.dedupe_key("gemini", "job-a", "a"))
+        # Same job+attempt at a different seq -> same id (idempotent copy).
+        c = _FakeDlqJS({42: _lanes_msg("job-a")})
+        asyncio.run(lanes.DeadLetterWatcher(None, c).move(42, "c", 3))
+        self.assertEqual(c.ops[1][3]["Nats-Msg-Id"], id_a)
+        self.assertEqual(c.ops[1][3]["Lanes-Orig-Seq"], "42")
+        # A retry attempt of the same job is distinct work.
+        d = _FakeDlqJS({1: _lanes_msg("job-a", attempt=1)})
+        asyncio.run(lanes.DeadLetterWatcher(None, d).move(1, "c", 3))
+        self.assertNotEqual(d.ops[1][3]["Nats-Msg-Id"], id_a)
+        for js in (a, b, c, d):
+            self.assertNotIn(lanes.LANES_STREAM + "-", js.ops[1][3]["Nats-Msg-Id"])
+
+    def test_msg_id_without_enqueue_header_hashes_content(self):
+        m1 = _RawMsg("lanes.gemini.nuc.x", b'{"job":"x"}', None)
+        m2 = _RawMsg("lanes.gemini.nuc.y", b'{"job":"y"}', {})
+        self.assertTrue(lanes.dlq_msg_id(m1).startswith("dlq-sha-"))
+        self.assertEqual(lanes.dlq_msg_id(m1), lanes.dlq_msg_id(_RawMsg("lanes.gemini.nuc.x", b'{"job":"x"}')))
+        self.assertNotEqual(lanes.dlq_msg_id(m1), lanes.dlq_msg_id(m2))
+
+    def test_reserved_or_bad_host_subject_goes_to_unknown(self):
+        raw = _RawMsg("lanes.gemini.hub.j", b'{"job":"j"}', {"Nats-Msg-Id": "gemini:j@a"})
+        js = _FakeDlqJS({3: raw})
+        asyncio.run(lanes.DeadLetterWatcher(None, js).move(3, "c", 3))
+        self.assertEqual(js.ops[1][1], "lanes_dlq.unknown.unknown")
 
 
 class JSCase(unittest.TestCase):
