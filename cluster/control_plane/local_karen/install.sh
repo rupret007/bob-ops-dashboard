@@ -52,6 +52,36 @@ check_dependencies() {
     log_info "Dependencies OK"
 }
 
+setup_api_key_dirs() {
+    log_info "Setting up API key directories..."
+
+    STORYPOOL_DIR="$HOME/.config/storypool"
+
+    if [[ ! -d "$STORYPOOL_DIR" ]]; then
+        mkdir -p "$STORYPOOL_DIR"
+        chmod 700 "$STORYPOOL_DIR"
+        log_info "Created $STORYPOOL_DIR with mode 700"
+    else
+        chmod 700 "$STORYPOOL_DIR"
+        log_info "Ensured $STORYPOOL_DIR has mode 700"
+    fi
+
+    echo ""
+    log_info "API key files (create these to enable reviewers):"
+    echo ""
+    echo "  Gemini (fallback reviewer):"
+    echo "    touch $STORYPOOL_DIR/gemini.key && chmod 600 $STORYPOOL_DIR/gemini.key"
+    echo "    # Then open in editor and paste your key (don't echo it to shell)"
+    echo "    nano $STORYPOOL_DIR/gemini.key"
+    echo ""
+    echo "  MiniMax (second judge):"
+    echo "    touch $STORYPOOL_DIR/minimax.key && chmod 600 $STORYPOOL_DIR/minimax.key"
+    echo "    nano $STORYPOOL_DIR/minimax.key"
+    echo ""
+    echo "  NEVER echo keys to the terminal or put them in shell history."
+    echo ""
+}
+
 install_cli() {
     log_info "Installing karen-gate CLI..."
 
@@ -214,11 +244,13 @@ main() {
             ;;
         --cli-only)
             check_dependencies
+            setup_api_key_dirs
             install_cli
             log_info "Installation complete (CLI only)"
             ;;
         *)
             check_dependencies
+            setup_api_key_dirs
             install_cli
             install_launchd
             log_info "Installation complete"

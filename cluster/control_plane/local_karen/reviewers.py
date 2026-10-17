@@ -367,10 +367,18 @@ class GeminiReviewer(BaseReviewer):
     name = "gemini"
 
     def is_available(self, config: KarenConfig) -> tuple[bool, str]:
-        """Check if Gemini API key is configured."""
+        """Check if Gemini API key is configured.
+
+        Missing key file is a skip (not an error) - try next reviewer.
+        """
+        key_file = Path(config.gemini_api_key_file).expanduser()
+        if not key_file.is_file():
+            env_key = os.environ.get("GEMINI_API_KEY", "")
+            if not env_key:
+                return False, f"Gemini API key not found (no {key_file} or GEMINI_API_KEY env)"
         key = self._load_key(config)
         if not key:
-            return False, "Gemini API key not configured"
+            return False, "Gemini API key file exists but is empty"
         return True, "ok"
 
     def _load_key(self, config: KarenConfig) -> str:
@@ -496,10 +504,18 @@ Respond with exactly one line:
 """
 
     def is_available(self, config: KarenConfig) -> tuple[bool, str]:
-        """Check if MiniMax API key is configured."""
+        """Check if MiniMax API key is configured.
+
+        Missing key file is a skip (not an error) - second judge is optional.
+        """
+        key_file = Path(config.minimax_api_key_file).expanduser()
+        if not key_file.is_file():
+            env_key = os.environ.get("MINIMAX_API_KEY", "")
+            if not env_key:
+                return False, f"MiniMax API key not found (no {key_file} or MINIMAX_API_KEY env)"
         key = self._load_key(config)
         if not key:
-            return False, "MiniMax API key not configured"
+            return False, "MiniMax API key file exists but is empty"
         return True, "ok"
 
     def _load_key(self, config: KarenConfig) -> str:

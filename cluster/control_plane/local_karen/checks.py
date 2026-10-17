@@ -14,6 +14,12 @@ from typing import Optional
 
 from .config import KarenConfig
 
+try:
+    from cluster.never_touch import is_never_touch, NeverTouchViolation
+    _HAS_NEVER_TOUCH = True
+except ImportError:
+    _HAS_NEVER_TOUCH = False
+
 
 class CheckVerdict(Enum):
     """Verdict from a single check."""
@@ -82,13 +88,30 @@ TEST_FILE_PATTERNS = [
 
 
 def check_blocked_repo(pr: PRInfo, config: KarenConfig) -> CheckResult:
-    """Check if repo is in the never-touch list."""
+    """Check if repo is in the never-touch list.
+
+    Uses both:
+    1. cluster.never_touch module (authoritative, if available)
+    2. Local config never_touch_repos (backup)
+    """
+    full_repo = f"{pr.owner}/{pr.repo}"
+
+    if _HAS_NEVER_TOUCH:
+        if is_never_touch(full_repo):
+            return CheckResult(
+                check_name="blocked_repo",
+                verdict=CheckVerdict.FAIL,
+                reason=f"Repository {full_repo} is on the authoritative never-touch list",
+                details="Human approval required; automation blocked",
+            )
+
     if config.is_blocked_repo(pr.owner, pr.repo):
         return CheckResult(
             check_name="blocked_repo",
             verdict=CheckVerdict.FAIL,
-            reason=f"Repository {pr.owner}/{pr.repo} is in the never-touch list",
+            reason=f"Repository {full_repo} is in the local never-touch list",
         )
+
     return CheckResult(
         check_name="blocked_repo",
         verdict=CheckVerdict.PASS,

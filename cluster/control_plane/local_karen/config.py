@@ -98,6 +98,6 @@ class KarenConfig:
         return Path(self.state_dir).expanduser()
 
     def is_blocked_repo(self, owner: str, repo: str) -> bool:
-        """Check if a repo is in the never-touch list."""
-        full_name = f"{owner}/{repo}"
-        return full_name in self.never_touch_repos
+        """Check if a repo is in the never-touch list (case-insensitive)."""
+        full_name = f"{owner}/{repo}".lower()
+        return full_name in {r.lower() for r in self.never_touch_repos}

@@ -43,10 +43,58 @@ def _run_gh(args: list[str], timeout: int = 30) -> str:
         raise GitHubError("gh CLI not found — install GitHub CLI first")
 
 
+def _parse_ci_status(ci_data: list[dict]) -> dict[str, str]:
+    """Parse CI check status from gh CLI output.
+
+    gh pr checks --json supports: bucket, completedAt, description, event,
+    link, name, startedAt, state, workflow
+
+    bucket values: pass, fail, pending, skipping, cancel
+    state values: SUCCESS, FAILURE, PENDING, etc.
+
+    We normalize to: success, failure, pending, skipped, cancelled
+    """
+    ci_status = {}
+
+    for check in ci_data:
+        name = check.get("name", "unknown")
+        bucket = check.get("bucket", "").lower()
+        state = check.get("state", "").lower()
+
+        if bucket == "pass":
+            ci_status[name] = "success"
+        elif bucket == "fail":
+            ci_status[name] = "failure"
+        elif bucket == "pending":
+            ci_status[name] = "pending"
+        elif bucket == "skipping":
+            ci_status[name] = "skipped"
+        elif bucket == "cancel":
+            ci_status[name] = "cancelled"
+        elif state:
+            if state in ("success", "neutral"):
+                ci_status[name] = "success"
+            elif state in ("failure", "error", "timed_out", "action_required"):
+                ci_status[name] = "failure"
+            elif state in ("pending", "queued", "in_progress", "waiting"):
+                ci_status[name] = "pending"
+            elif state == "skipped":
+                ci_status[name] = "skipped"
+            elif state == "cancelled":
+                ci_status[name] = "cancelled"
+            else:
+                ci_status[name] = state
+        else:
+            ci_status[name] = "unknown"
+
+    return ci_status
+
+
 def fetch_pr_info(owner: str, repo: str, pr_number: int) -> PRInfo:
     """Fetch PR information from GitHub.
 
-    Pins the exact head SHA at fetch time.
+    Pins the exact head SHA at fetch time by fetching PR view FIRST,
+    then fetches checks and diff.
     """
     pr_json = _run_gh([
         "pr", "view", str(pr_number),
@@ -55,7 +103,9 @@ def fetch_pr_info(owner: str, repo: str, pr_number: int) -> PRInfo:
     ])
     pr_data = json.loads(pr_json)
 
-    head_sha = pr_data["headRefOid"]
+    head_sha = pr_data.get("headRefOid", "")
+    if not head_sha:
+        raise GitHubError(f"Could not get head SHA for PR #{pr_number}")
 
     diff = _run_gh([
         "pr", "diff", str(pr_number),
@@ -65,22 +115,10 @@ def fetch_pr_info(owner: str, repo: str, pr_number: int) -> PRInfo:
     ci_json = _run_gh([
         "pr", "checks", str(pr_number),
         "--repo", f"{owner}/{repo}",
-        "--json", "name,conclusion,status",
+        "--json", "name,state,bucket",
     ])
     ci_data = json.loads(ci_json)
-
-    ci_status = {}
-    for check in ci_data:
-        name = check.get("name", "unknown")
-        status = check.get("status", "").lower()
-        conclusion = check.get("conclusion", "").lower()
-
-        if status == "completed":
-            ci_status[name] = conclusion or "success"
-        elif status in ("queued", "in_progress", "pending"):
-            ci_status[name] = status
-        else:
-            ci_status[name] = status or "unknown"
+    ci_status = _parse_ci_status(ci_data)
 
     files_data = pr_data.get("files", [])
     changed_files = []

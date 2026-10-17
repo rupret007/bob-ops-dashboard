@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import unittest
+from unittest.mock import patch
 
 from cluster.control_plane.local_karen.checks import (
     CheckVerdict,
@@ -16,6 +17,7 @@ from cluster.control_plane.local_karen.checks import (
     run_all_checks,
     all_checks_pass,
     get_failed_checks,
+    _HAS_NEVER_TOUCH,
 )
 from cluster.control_plane.local_karen.config import KarenConfig
 
@@ -57,12 +59,29 @@ class TestBlockedRepoCheck(TestCheckHelpers):
         result = check_blocked_repo(pr, config)
         self.assertEqual(result.verdict, CheckVerdict.PASS)
 
-    def test_fails_blocked_repo(self):
+    def test_fails_blocked_repo_from_config(self):
+        """Fails when repo is in local config never_touch_repos."""
         pr = self._make_pr(owner="rupret007", repo="rad-dad-show-night")
         config = self._make_config()
         result = check_blocked_repo(pr, config)
         self.assertEqual(result.verdict, CheckVerdict.FAIL)
         self.assertIn("never-touch", result.reason.lower())
+
+    @unittest.skipUnless(_HAS_NEVER_TOUCH, "cluster.never_touch not available")
+    def test_fails_blocked_repo_from_authoritative_list(self):
+        """Fails when repo is on authoritative never_touch list."""
+        pr = self._make_pr(owner="rupret007", repo="rad-dad-show-night")
+        config = self._make_config(never_touch_repos=frozenset())
+        result = check_blocked_repo(pr, config)
+        self.assertEqual(result.verdict, CheckVerdict.FAIL)
+        self.assertIn("authoritative", result.reason.lower())
+
+    def test_fails_blocked_repo_case_insensitive(self):
+        """Never-touch check should handle case variations."""
+        pr = self._make_pr(owner="Rupret007", repo="Rad-Dad-Show-Night")
+        config = self._make_config()
+        result = check_blocked_repo(pr, config)
+        self.assertEqual(result.verdict, CheckVerdict.FAIL)
 
 
 class TestDraftCheck(TestCheckHelpers):
