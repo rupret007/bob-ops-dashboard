@@ -3,6 +3,13 @@
 
 Polls GitHub for PRs labeled `needs-karen` and runs the gate on them.
 Designed to be run by launchd (macOS) or cron.
+
+Each tick:
+1. Self-update from git (fast-forward only, reinstall if HEAD changed)
+2. Discover all rupret007 repos with open PRs (excluding blocked repos)
+3. Label queued PRs with needs-karen
+4. Run gate on PRs with needs-karen label
+5. Write backlog report
 """
 
 from __future__ import annotations
@@ -20,6 +27,19 @@ from typing import Optional, List
 from .config import KarenConfig
 from .gate import run_gate
 from .github_client import list_prs_with_label, remove_label, add_label, GitHubError
+
+try:
+    from ..backlog import (
+        discover_repos,
+        label_queued_prs,
+        collect_backlog,
+        write_backlog_report,
+        EXCLUDED_REPOS,
+    )
+    from ..self_update import self_update
+    BACKLOG_AVAILABLE = True
+except ImportError:
+    BACKLOG_AVAILABLE = False
 
 logging.basicConfig(
     level=logging.INFO,
@@ -156,22 +176,58 @@ def poll_and_run(
     return results
 
 
-def run_poll_once(config=None):
-    # type: (Optional[KarenConfig]) -> List[dict]
+def run_poll_once(config=None, auto_discover=True, auto_label=True, auto_update=True):
+    # type: (Optional[KarenConfig], bool, bool, bool) -> List[dict]
     """Run a single poll cycle.
 
-    Reads repos from environment or config.
+    Args:
+        config: Karen configuration
+        auto_discover: Whether to auto-discover repos (default True)
+        auto_label: Whether to auto-label queued PRs with needs-karen (default True)
+        auto_update: Whether to self-update from git (default True)
+
+    Reads repos from environment or config, or auto-discovers if enabled.
     """
     if config is None:
         config = KarenConfig.load()
 
+    machine = os.environ.get("STORYPOOL_MACHINE", "mini")
+    install_dir_env = os.environ.get("STORYPOOL_INSTALL_DIR")
+    install_dir = Path(install_dir_env).expanduser() if install_dir_env else None
+
+    if auto_update and BACKLOG_AVAILABLE:
+        logger.info("Attempting self-update...")
+        try:
+            update_result = self_update(machine=machine, install_dir=install_dir)
+            if update_result.get("updated"):
+                logger.info("Self-updated: %s -> %s", 
+                           update_result.get("old_head", "?"),
+                           update_result.get("new_head", "?"))
+            else:
+                logger.debug("No update needed: %s", update_result.get("reason", "unknown"))
+        except Exception as e:
+            logger.warning("Self-update failed: %s", e)
+
     repos_env = os.environ.get("KAREN_REPOS", "")
     if repos_env:
         repos = [r.strip() for r in repos_env.split(",") if r.strip()]
+    elif auto_discover and BACKLOG_AVAILABLE:
+        logger.info("Auto-discovering repos...")
+        repos = discover_repos(owner="rupret007")
+        logger.info("Discovered %d repos", len(repos))
     else:
         repos = ["rupret007/webjam", "rupret007/bob-ops-dashboard"]
 
-    logger.info(f"Polling {len(repos)} repo(s) for PRs with {config.poll_label} label")
+    if auto_label and BACKLOG_AVAILABLE:
+        logger.info("Auto-labeling queued PRs...")
+        try:
+            labeled = label_queued_prs(repos=repos, dry_run=False)
+            if labeled:
+                logger.info("Labeled %d PR(s) with needs-karen", len(labeled))
+        except Exception as e:
+            logger.warning("Auto-label failed: %s", e)
+
+    logger.info("Polling %d repo(s) for PRs with %s label", len(repos), config.poll_label)
 
     results = poll_and_run(repos, config)
 
@@ -180,6 +236,17 @@ def run_poll_once(config=None):
     state.prs_checked.extend(results)
     state.prs_checked = state.prs_checked[-100:]
     save_poll_state(state, config)
+
+    if BACKLOG_AVAILABLE:
+        logger.info("Writing backlog report...")
+        try:
+            backlog = collect_backlog(repos=repos)
+            repo_root_env = os.environ.get("STORYPOOL_INSTALL_DIR")
+            repo_root = Path(repo_root_env).expanduser() if repo_root_env else None
+            write_backlog_report(backlog, repo_root=repo_root)
+            logger.info("Backlog: %d PRs queued", backlog["summary"].get("queued", 0))
+        except Exception as e:
+            logger.warning("Backlog report failed: %s", e)
 
     return results
 
@@ -249,6 +316,21 @@ def main() -> int:
         action="store_true",
         help="Verbose output",
     )
+    parser.add_argument(
+        "--no-discover",
+        action="store_true",
+        help="Don't auto-discover repos (use KAREN_REPOS or defaults)",
+    )
+    parser.add_argument(
+        "--no-label",
+        action="store_true",
+        help="Don't auto-label queued PRs with needs-karen",
+    )
+    parser.add_argument(
+        "--no-update",
+        action="store_true",
+        help="Don't attempt self-update from git",
+    )
 
     args = parser.parse_args()
 
@@ -264,14 +346,21 @@ def main() -> int:
         os.environ["KAREN_REPOS"] = args.repos
 
     if args.once:
-        results = run_poll_once(config)
+        results = run_poll_once(
+            config,
+            auto_discover=not args.no_discover,
+            auto_label=not args.no_label,
+            auto_update=not args.no_update,
+        )
         for r in results:
             if "error" in r:
-                print(f"❌ {r['repo']}#{r['pr']}: {r['error']}")
+                print("X {repo}#{pr}: {error}".format(**r))
             elif r.get("passed"):
-                print(f"✅ {r['repo']}#{r['pr']}@{r['sha']}: {r['reason'][:50]}")
+                print("PASS {repo}#{pr}@{sha}: {reason}".format(
+                    reason=r.get("reason", "")[:50], **r))
             else:
-                print(f"❌ {r['repo']}#{r['pr']}@{r['sha']}: {r['reason'][:50]}")
+                print("FAIL {repo}#{pr}@{sha}: {reason}".format(
+                    reason=r.get("reason", "")[:50], **r))
         return 0
     else:
         run_poll_loop(config)
