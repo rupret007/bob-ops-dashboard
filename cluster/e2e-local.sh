@@ -62,7 +62,7 @@ step "live capability heartbeat as the dashboard sees it"
 step "capability-routed shell.test job (runs the cluster unit tests at $REF)"
 "$PY" -m cluster.bobctl submit "${HUB[@]}" --nats "$URL" --cap shell.test --ref "$REF" \
   --cmd "python3 -m unittest discover -s cluster/tests -v" --timeout 600 --wait 600 \
-  | "$PY" -c 'import json,sys;d=json.load(sys.stdin);r=d.get("result") or {};print("   job",d["id"],"cap",d["cap"],"->",r.get("node"),r.get("status"),"rc",r.get("rc"),"in",r.get("duration_s"),"s")'
+  | "$PY" -c 'import json,sys;d=json.load(sys.stdin);r=d.get("result") or {};print("   job",d["id"],"cap",d["cap"],"->",r.get("node"),r.get("status"),"rc",r.get("rc"),"in",r.get("duration_s"),"s");t=(r.get("tail") or "").strip().splitlines();print("   tail:", " | ".join(t[-3:])[:300])'
 
 if [ "$LLM" = "--llm" ]; then
   step "llm.composer job through this machine's own cursor-agent login"
