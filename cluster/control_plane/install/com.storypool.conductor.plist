@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<!--
+StoryPool Conductor - Mac mini launchd plist
+
+Runs every hour to orchestrate PR lifecycle:
+- Labels ready PRs with needs-karen
+- Merges PRs with KARENPASS verdict (sha-pinned)
+- Notes stuck PRs for attention
+
+Default is shadow/dry-run mode (logs decisions, takes no action).
+Change __LIVE_MODE__ to true to enable live actions.
+
+NEVER auto-merges repos in cluster/never_touch.py
+NO SUDO, NO FORCE-PUSH, NO TAGS/RELEASES
+Never touches: ~/.cursor, auth files, Keychain, svc-* screens
+Never sends messages to people
+
+Install with: cp this-file ~/Library/LaunchAgents/
+              launchctl load ~/Library/LaunchAgents/com.storypool.conductor.plist
+
+Uninstall:    launchctl unload ~/Library/LaunchAgents/com.storypool.conductor.plist
+              rm ~/Library/LaunchAgents/com.storypool.conductor.plist
+-->
+<dict>
+    <key>Label</key>
+    <string>com.storypool.conductor</string>
+    
+    <key>ProgramArguments</key>
+    <array>
+        <string>/usr/bin/env</string>
+        <string>python3</string>
+        <string>-m</string>
+        <string>cluster.control_plane.conductor</string>
+        <!-- Remove the comment below to enable live mode -->
+        <!-- <string>--live</string> -->
+    </array>
+    
+    <key>WorkingDirectory</key>
+    <string>__REPO_PATH__</string>
+    
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PYTHONPATH</key>
+        <string>__REPO_PATH__</string>
+        <key>PATH</key>
+        <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
+    </dict>
+    
+    <key>StartCalendarInterval</key>
+    <dict>
+        <key>Minute</key>
+        <integer>5</integer>
+    </dict>
+    
+    <key>RunAtLoad</key>
+    <false/>
+    
+    <key>StandardOutPath</key>
+    <string>__HOME__/.local/share/storypool/conductor/stdout.log</string>
+    
+    <key>StandardErrorPath</key>
+    <string>__HOME__/.local/share/storypool/conductor/stderr.log</string>
+    
+    <key>Nice</key>
+    <integer>10</integer>
+</dict>
+</plist>

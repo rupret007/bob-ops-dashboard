@@ -1,0 +1,27 @@
+[Unit]
+Description=StoryPool Lane Dispatcher
+Documentation=https://github.com/rupret007/bob-ops-dashboard/blob/main/docs/design/storypool-control-plane.md
+
+# Default is shadow/dry-run mode (logs decisions, takes no action).
+# Add --live to ExecStart to enable live dispatch.
+#
+# NO SUDO, NO FORCE-PUSH, NO TAGS/RELEASES
+# Never touches: ~/.cursor, auth files, Keychain, svc-* screens
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/env python3 -m cluster.control_plane.dispatcher --machine nucbox
+WorkingDirectory=__REPO_PATH__
+Environment="PYTHONPATH=__REPO_PATH__"
+Environment="STORYPOOL_MACHINE=nucbox"
+
+# Resource limits
+Nice=10
+CPUWeight=50
+MemoryMax=512M
+
+# Timeouts
+TimeoutStartSec=300
+
+[Install]
+WantedBy=default.target
