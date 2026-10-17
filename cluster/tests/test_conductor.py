@@ -577,7 +577,12 @@ class TestConductorExecution(unittest.TestCase):
     @patch("subprocess.run")
     def test_execute_live_merge(self, mock_run):
         """Merge action is executed in live mode."""
-        mock_run.return_value = MagicMock(returncode=0)
+        def mock_run_side_effect(cmd, **kwargs):
+            result = MagicMock(returncode=0)
+            if "gh" in cmd and "api" in cmd:
+                result.stdout = '{"state": "success"}'
+            return result
+        mock_run.side_effect = mock_run_side_effect
         
         proposal = ProposedAction(
             action_type="merge_pr", 
@@ -590,8 +595,10 @@ class TestConductorExecution(unittest.TestCase):
         result = self.conductor.execute_action(validated, live=True)
         
         self.assertTrue(result.executed)
-        self.assertEqual(result.execution_result, "merged")
-        call_args = mock_run.call_args[0][0]
+        self.assertIn("merged", result.execution_result)
+        merge_call = [c for c in mock_run.call_args_list if "merge" in str(c)]
+        self.assertTrue(len(merge_call) > 0)
+        call_args = merge_call[0][0][0]
         self.assertIn("--match-head-commit", call_args)
         self.assertIn("abc123", call_args)
 

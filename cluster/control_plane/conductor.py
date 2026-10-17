@@ -60,6 +60,10 @@ VERDICT_DIR = Path(
 CODEX_WEEKLY_CAP_PCT = 75.0
 GEMINI_DAILY_BUDGET_USD = 5.0
 
+MAX_MERGES_PER_HOUR = 3
+MAX_MERGES_PER_DAY = 15
+CONSECUTIVE_CI_FAILURES_TO_PAUSE = 2
+
 
 class ActionType(Enum):
     """Types of actions the conductor can take."""
@@ -111,15 +115,15 @@ class ValidatedAction:
 class StateSnapshot:
     """Complete state snapshot for LLM context."""
     timestamp: str
-    repos: list[str]
-    open_prs: list[dict]
-    ci_statuses: dict[str, dict]
-    karen_verdicts: list[dict]
-    lane_usage: dict[str, int]
-    machine_guards: dict[str, dict]
-    budget_summary: dict[str, dict]
-    recent_errors: list[dict]
-    never_touch_repos: list[str]
+    repos: list  # List[str]
+    open_prs: list  # List[dict]
+    ci_statuses: dict  # Dict[str, dict]
+    karen_verdicts: list  # List[dict]
+    lane_usage: dict  # Dict[str, int]
+    machine_guards: dict  # Dict[str, dict]
+    budget_summary: dict  # Dict[str, dict]
+    recent_errors: list  # List[dict]
+    never_touch_repos: list  # List[str]
     
     def to_dict(self) -> dict:
         return asdict(self)
@@ -422,7 +426,7 @@ class Conductor:
         self.codex = codex_client or CodexClient()
         self.gemini = gemini_client or GeminiClient()
         self.use_claude = use_claude
-        self.validated_actions: list[ValidatedAction] = []
+        self.validated_actions = []  # type: list
         
     def _log_file(self) -> Path:
         date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
@@ -464,12 +468,132 @@ class Conductor:
         """Check if Codex is within budget cap."""
         pct = self.budget.weekly_pct("codex")
         if pct >= CODEX_WEEKLY_CAP_PCT:
-            return False, f"Codex at {pct:.1f}% of weekly cap (limit {CODEX_WEEKLY_CAP_PCT}%)"
+            return False, "Codex at {:.1f}% of weekly cap (limit {}%)".format(pct, CODEX_WEEKLY_CAP_PCT)
         return True, "ok"
     
     def _can_use_gemini(self) -> tuple[bool, str]:
         """Check if Gemini is available."""
         return self.budget.can_use("gemini")
+    
+    def _merge_state_file(self) -> Path:
+        """File tracking merge history for rate limiting."""
+        return self.log_dir / "merge-state.json"
+    
+    def _load_merge_state(self) -> dict:
+        """Load merge tracking state."""
+        state_file = self._merge_state_file()
+        if not state_file.is_file():
+            return {"merges": [], "consecutive_ci_failures": 0, "paused": False, "pause_reason": ""}
+        try:
+            return json.loads(state_file.read_text())
+        except (json.JSONDecodeError, IOError):
+            return {"merges": [], "consecutive_ci_failures": 0, "paused": False, "pause_reason": ""}
+    
+    def _save_merge_state(self, state: dict) -> None:
+        """Save merge tracking state."""
+        self._merge_state_file().write_text(json.dumps(state, indent=2))
+    
+    def _check_merge_rate_limit(self) -> tuple[bool, str]:
+        """Check if we're within merge rate limits.
+        
+        Returns (allowed, reason).
+        """
+        state = self._load_merge_state()
+        
+        if state.get("paused"):
+            return False, "PAUSED: {}".format(state.get("pause_reason", "unknown"))
+        
+        now = datetime.now(timezone.utc)
+        now_ts = now.timestamp()
+        hour_ago = now_ts - 3600
+        day_ago = now_ts - 86400
+        
+        merges = state.get("merges", [])
+        merges_last_hour = sum(1 for m in merges if m.get("ts", 0) > hour_ago)
+        merges_last_day = sum(1 for m in merges if m.get("ts", 0) > day_ago)
+        
+        if merges_last_hour >= MAX_MERGES_PER_HOUR:
+            return False, "Rate limit: {} merges in last hour (max {})".format(
+                merges_last_hour, MAX_MERGES_PER_HOUR)
+        
+        if merges_last_day >= MAX_MERGES_PER_DAY:
+            return False, "Rate limit: {} merges in last day (max {})".format(
+                merges_last_day, MAX_MERGES_PER_DAY)
+        
+        return True, "ok"
+    
+    def _record_merge(self, repo: str, pr_number: int, sha: str) -> None:
+        """Record a successful merge."""
+        state = self._load_merge_state()
+        now = datetime.now(timezone.utc)
+        
+        state["merges"].append({
+            "repo": repo,
+            "pr": pr_number,
+            "sha": sha[:12],
+            "ts": now.timestamp(),
+            "time": now.isoformat(),
+        })
+        
+        cutoff = now.timestamp() - 86400 * 2
+        state["merges"] = [m for m in state["merges"] if m.get("ts", 0) > cutoff]
+        
+        self._save_merge_state(state)
+    
+    def _check_main_ci_after_merge(self, repo: str) -> tuple[bool, str]:
+        """Check if main CI is passing after a merge.
+        
+        Returns (passing, status).
+        """
+        try:
+            result = subprocess.run(
+                ["gh", "api", "/repos/{}/commits/main/status".format(repo)],
+                capture_output=True, text=True, timeout=30,
+            )
+            if result.returncode != 0:
+                return True, "unknown"
+            
+            data = json.loads(result.stdout)
+            state = data.get("state", "unknown")
+            return state in ("success", "pending"), state
+        except (subprocess.SubprocessError, json.JSONDecodeError):
+            return True, "unknown"
+    
+    def _record_ci_result(self, repo: str, passed: bool) -> None:
+        """Record CI result after merge, auto-pause if consecutive failures."""
+        state = self._load_merge_state()
+        
+        if passed:
+            state["consecutive_ci_failures"] = 0
+        else:
+            state["consecutive_ci_failures"] = state.get("consecutive_ci_failures", 0) + 1
+            
+            if state["consecutive_ci_failures"] >= CONSECUTIVE_CI_FAILURES_TO_PAUSE:
+                state["paused"] = True
+                state["pause_reason"] = "Auto-paused: {} consecutive merges broke main CI".format(
+                    state["consecutive_ci_failures"])
+                self._write_alert(state["pause_reason"], {
+                    "repo": repo,
+                    "consecutive_failures": state["consecutive_ci_failures"],
+                })
+        
+        self._save_merge_state(state)
+    
+    def is_paused(self) -> tuple[bool, str]:
+        """Check if conductor is paused."""
+        state = self._load_merge_state()
+        if state.get("paused"):
+            return True, state.get("pause_reason", "unknown")
+        return False, ""
+    
+    def resume(self) -> None:
+        """Resume from paused state (for manual intervention)."""
+        state = self._load_merge_state()
+        state["paused"] = False
+        state["pause_reason"] = ""
+        state["consecutive_ci_failures"] = 0
+        self._save_merge_state(state)
+        self._write_log({"action": "resume", "timestamp": _now_iso()})
     
     def build_state_snapshot(self) -> StateSnapshot:
         """Build complete state snapshot for LLM context."""
@@ -568,9 +692,13 @@ class Conductor:
         head_sha = action.head_sha or ""
         
         if action.action_type == ActionType.MERGE_PR.value:
+            rate_ok, rate_reason = self._check_merge_rate_limit()
+            if not rate_ok:
+                return ValidatedAction(action, False, "RAIL: {}".format(rate_reason))
+            
             merge_allowed, reason = check_merge_allowed(repo)
             if not merge_allowed:
-                return ValidatedAction(action, False, f"RAIL: {reason}")
+                return ValidatedAction(action, False, "RAIL: {}".format(reason))
             
             verdict = _read_verdict(repo, pr_number, head_sha) if pr_number else None
             if not verdict or verdict.get("verdict") != "KARENPASS":
@@ -641,6 +769,14 @@ class Conductor:
                 )
                 validated.executed = True
                 validated.execution_result = "merged"
+                
+                self._record_merge(action.repo, action.pr_number, action.head_sha)
+                
+                time.sleep(10)
+                ci_ok, ci_status = self._check_main_ci_after_merge(action.repo)
+                self._record_ci_result(action.repo, ci_ok)
+                if not ci_ok:
+                    validated.execution_result = "merged (CI: {})".format(ci_status)
                 
             elif action.action_type == ActionType.LABEL_NEEDS_KAREN.value:
                 subprocess.run(
