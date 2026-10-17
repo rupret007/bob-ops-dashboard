@@ -15,6 +15,7 @@ from typing import Optional
 
 NEVER_TOUCH_REPOS: frozenset[str] = frozenset({
     "rupret007/rad-dad-show-night",
+    "rupret007/bob-ops-dashboard",
 })
 
 _REPO_RE = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
@@ -58,6 +59,20 @@ def is_never_touch(repo: str) -> bool:
         return normalize_repo(repo) in NEVER_TOUCH_REPOS
     except ValueError:
         return False
+
+
+def check_merge_allowed(repo: str) -> tuple[bool, str]:
+    """Check if auto-merge is allowed for a repository.
+    
+    Args:
+        repo: Repository in "owner/name" format
+        
+    Returns:
+        Tuple of (allowed, reason)
+    """
+    if is_never_touch(repo):
+        return False, f"repo {repo} is in NEVER_TOUCH_REPOS - requires human merge"
+    return True, "ok"
 
 
 def assert_not_never_touch(repo: str, operation: str) -> None:
