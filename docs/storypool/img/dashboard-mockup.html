@@ -1,0 +1,50 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+body{margin:0;background:#0b1622;font-family:Asap,Helvetica,Arial,sans-serif;color:#e6edf5;width:1400px;height:790px;overflow:hidden}
+.banner{background:repeating-linear-gradient(45deg,#ffd166 0 18px,#f4b942 18px 36px);color:#0b1622;font-weight:800;text-align:center;padding:9px;font-size:19px;letter-spacing:1px}
+header{display:flex;align-items:center;justify-content:space-between;padding:18px 34px 6px}
+h1{margin:0;font-family:Fraunces,Georgia,serif;font-size:34px}h1 span{color:#3fd0c9}
+.sub{color:#8ea3b8;font-size:15px}
+.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:22px;padding:14px 34px}
+.card{background:#13243a;border:1px solid #22384f;border-radius:18px;padding:16px 18px;position:relative}
+.card h2{margin:0 0 2px;font-size:20px}.muted{color:#8ea3b8;font-size:13.5px}
+.row{display:flex;justify-content:space-between;font-size:14px;margin-top:6px;color:#c9d6e3}
+.ok{color:#5be3a1}.warn{color:#ffd166}.off{color:#7a8fa6}
+.pill{position:absolute;top:16px;right:16px;font-size:12px;font-weight:700;padding:3px 10px;border-radius:20px}
+.donors{margin:4px 34px;background:#13243a;border:1px solid #22384f;border-radius:18px;padding:16px 20px}
+.donors h2{margin:0 0 8px;font-size:20px}
+table{width:100%;border-collapse:collapse;font-size:14.5px}th{color:#8ea3b8;text-align:left;font-weight:600;padding:6px 8px;border-bottom:1px solid #22384f}
+td{padding:8px;border-bottom:1px solid #1b2f45}
+.bar{position:relative;height:14px;background:#0b1622;border-radius:8px;width:260px;overflow:hidden}
+.don{position:absolute;left:0;top:0;bottom:0;background:#1f6f9a}
+.used{position:absolute;left:0;top:0;bottom:0;background:#3fd0c9}
+.foot{padding:8px 34px;color:#7a8fa6;font-size:12.5px}
+</style></head><body>
+<div class="banner">MOCKUP · ILLUSTRATIVE NUMBERS · NOT A LIVE SCREENSHOT · donor panel is PLANNED</div>
+<header><div><h1>Story<span>Pool</span> · live</h1><div class="sub">bob-ops-dashboard speedometers · updated every few seconds</div></div>
+<div class="sub">Fri 11:40 PM CT · 2 of 3 Jeff machines online · 3 donors</div></header>
+<div class="grid" id="g"></div>
+<div class="donors"><h2>Donors: donated vs used (this week)</h2>
+<table><tr><th>Donor</th><th>Type</th><th>Cap (set on their machine)</th><th>Donated · used</th><th>Window</th><th>Status</th></tr>
+<tr><td>Friend A</td><td>Compute (builds/tests)</td><td>25% CPU · 3 h/day</td><td><div class="bar"><div class="don" style="width:75%"></div><div class="used" style="width:42%"></div></div><span class="muted">21 h donated · 11.8 h used</span></td><td>nights 10 PM–7 AM</td><td class="ok">accepting</td></tr>
+<tr><td>Friend B</td><td>Local model (Ollama)</td><td>GPU 50% · 2 h/day</td><td><div class="bar"><div class="don" style="width:50%"></div><div class="used" style="width:12%"></div></div><span class="muted">14 h donated · 3.4 h used</span></td><td>weekends</td><td class="off">outside window</td></tr>
+<tr><td>Friend C</td><td>Pay-as-you-go API key</td><td>$5 / week prepaid</td><td><div class="bar"><div class="don" style="width:100%"></div><div class="used" style="width:88%"></div></div><span class="muted">$5.00 donated · $4.40 used</span></td><td>any time</td><td class="warn">near cap</td></tr>
+</table></div>
+<div class="foot">MOCKUP for the StoryPool design docs. Bars: dark = donated headroom, teal = used. The queue only ever sees remaining headroom; keys and logins stay on each donor's machine.</div>
+<script>
+const nodes=[
+ {n:"Mac mini",s:61,load:"8.4 / 10",swap:"62% / 80%",disk:"44 GB (min 15)",lanes:"3 lanes",st:"guards OK",c:"ok"},
+ {n:"NucBox",s:78,load:"9.7 / 12",swap:"n/a",disk:"ok",lanes:"5 of 4–5 lanes",st:"at lane cap",c:"warn"},
+ {n:"MacBook Pro",s:0,load:"—",swap:"—",disk:"—",lanes:"planned",st:"offline / planned",c:"off"}];
+const g=document.getElementById('g');
+for(const d of nodes){
+ const a=-210+240*d.s/100, r=a*Math.PI/180, x=150+92*Math.cos(r), y=125+92*Math.sin(r);
+ let ticks='';for(let i=0;i<=10;i++){const t=(-210+24*i)*Math.PI/180;ticks+=`<line x1="${150+100*Math.cos(t)}" y1="${125+100*Math.sin(t)}" x2="${150+112*Math.cos(t)}" y2="${125+112*Math.sin(t)}" stroke="#4b6580" stroke-width="3"/>`}
+ const arc=(f,t,col)=>{const p=q=>[150+112*Math.cos(q*Math.PI/180),125+112*Math.sin(q*Math.PI/180)];const[a1,b1]=p(f),[a2,b2]=p(t);return `<path d="M${a1} ${b1} A112 112 0 ${t-f>180?1:0} 1 ${a2} ${b2}" stroke="${col}" stroke-width="10" fill="none" stroke-linecap="round"/>`};
+ const col=d.c=="ok"?"#5be3a1":d.c=="warn"?"#ffd166":"#7a8fa6";
+ g.innerHTML+=`<div class="card"><span class="pill" style="background:${col};color:#0b1622">${d.st}</span><h2>${d.n}</h2><div class="muted">speed index 0–100</div>
+ <svg width="300" height="190" style="display:block;margin:auto">${arc(-210,30,'#22384f')}${d.s?arc(-210,a,col):''}${ticks}
+ <line x1="150" y1="125" x2="${x}" y2="${y}" stroke="#ffffff" stroke-width="5" stroke-linecap="round" opacity="${d.s?1:.3}"/><circle cx="150" cy="125" r="10" fill="#fff"/>
+ <text x="150" y="182" text-anchor="middle" font-size="34" font-weight="800" fill="#fff">${d.s?d.s:'—'}</text></svg>
+ <div class="row"><span>load</span><span>${d.load}</span></div><div class="row"><span>swap</span><span>${d.swap}</span></div>
+ <div class="row"><span>disk free</span><span>${d.disk}</span></div><div class="row"><span>lanes</span><span>${d.lanes}</span></div></div>`}
+</script></body></html>
