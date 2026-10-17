@@ -112,6 +112,33 @@ class UsagePanelUnknownGuards(unittest.TestCase):
         html = usage_machines_html(blob)
         self.assertNotIn("<th>Merged PRs</th><td>0", html)
         self.assertNotIn("Merged PRs</th><td>0 ·", html)
+        self.assertIn("<th>Merged PRs</th><td class='muted'>unknown</td>", html)
+
+    def test_unknown_values_use_unknown_label_in_api_and_ui_not_none(self):
+        from board_meta import normalize_usage_machines, usage_machines_html, usage_unknown_display
+
+        self.assertEqual(usage_unknown_display(None), "unknown")
+        blob = normalize_usage_machines(
+            {
+                "v": "usage-machines/v1",
+                "days": [
+                    {
+                        "date": "2026-10-16",
+                        "codex": {"total_tokens": None},
+                        "gemini": {"tokens": None, "usd": None},
+                        "merged_prs": {"count": None, "tokens_total": None, "tokens_per_pr": None},
+                    }
+                ],
+            }
+        )
+        display = blob["days"][0]["display"]
+        self.assertEqual(display["codex_total_tokens"], "unknown")
+        self.assertEqual(display["gemini_tokens"], "unknown")
+        self.assertEqual(display["gemini_usd"], "unknown")
+        self.assertEqual(display["merged_prs_count"], "unknown")
+        html = usage_machines_html(blob)
+        self.assertNotIn("None", html)
+        self.assertIn("unknown", html)
 
 
 if __name__ == "__main__":
