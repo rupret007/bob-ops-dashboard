@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-10-17T03:20:38.445809-05:00",
-  "generated_at_display": "Sat Oct 17, 2026 \u00b7 3:20 AM CDT",
+  "generated_at": "2026-10-17T03:35:41.563641-05:00",
+  "generated_at_display": "Sat Oct 17, 2026 \u00b7 3:35 AM CDT",
   "timezone": "America/Chicago",
   "owner": "rupret007",
   "dashboard": "bob-ops-dashboard",
@@ -293,11 +293,11 @@
           "url": "https://github.com/rupret007/Turdanoid",
           "repo_url": "https://github.com/rupret007/Turdanoid",
           "private": false,
-          "status": "green",
-          "chip": "Green",
+          "status": "red",
+          "chip": "Red",
           "default_branch": "main",
-          "tip_sha": "aacc48a",
-          "tip_date": "2026-10-17T07:13:02Z",
+          "tip_sha": "039beb2",
+          "tip_date": "2026-10-17T08:25:20Z",
           "open_prs": 0,
           "open_pr_url": null,
           "open_pr_number": null,
@@ -307,11 +307,11 @@
           "agent_url": null,
           "ci": {
             "name": "CI",
-            "conclusion": "success",
+            "conclusion": "failure",
             "branch": "main",
-            "sha": "aacc48a",
-            "created": "2026-10-17T07:13:05Z",
-            "html_url": "https://github.com/rupret007/Turdanoid/actions/runs/39012807545"
+            "sha": "039beb2",
+            "created": "2026-10-17T08:25:23Z",
+            "html_url": "https://github.com/rupret007/Turdanoid/actions/runs/39017303101"
           },
           "release": null,
           "release_sha": null,
@@ -492,11 +492,11 @@
           "url": "https://github.com/rupret007/bob-ops-dashboard",
           "repo_url": "https://github.com/rupret007/bob-ops-dashboard",
           "private": false,
-          "status": "yellow",
-          "chip": "Yellow",
+          "status": "green",
+          "chip": "Green",
           "default_branch": "main",
-          "tip_sha": "57e96f2",
-          "tip_date": "2026-10-17T08:20:15Z",
+          "tip_sha": "3125097",
+          "tip_date": "2026-10-17T08:20:55Z",
           "open_prs": 0,
           "open_pr_url": null,
           "open_pr_number": null,
@@ -504,14 +504,7 @@
           "open_pr_stack": [],
           "pr_listing_complete": true,
           "agent_url": null,
-          "ci": {
-            "name": "QA claim smoke",
-            "conclusion": "in_progress",
-            "branch": "main",
-            "sha": "57e96f2",
-            "created": "2026-10-17T08:20:18Z",
-            "html_url": "https://github.com/rupret007/bob-ops-dashboard/actions/runs/39016981196"
-          },
+          "ci": null,
           "release": null,
           "release_sha": null,
           "release_url": null,
@@ -683,8 +676,8 @@
           "url": "https://github.com/rupret007/Andrea_NanoBot",
           "repo_url": "https://github.com/rupret007/Andrea_NanoBot",
           "private": false,
-          "status": "yellow",
-          "chip": "Yellow",
+          "status": "green",
+          "chip": "Green",
           "default_branch": "main",
           "tip_sha": "3e83ed2",
           "tip_date": "2026-10-17T08:20:08Z",
@@ -696,12 +689,12 @@
           "pr_listing_complete": true,
           "agent_url": null,
           "ci": {
-            "name": "CI",
-            "conclusion": "in_progress",
+            "name": "AGI Layer CI",
+            "conclusion": "success",
             "branch": "main",
             "sha": "3e83ed2",
             "created": "2026-10-17T08:20:11Z",
-            "html_url": "https://github.com/rupret007/Andrea_NanoBot/actions/runs/39016972642"
+            "html_url": "https://github.com/rupret007/Andrea_NanoBot/actions/runs/39016972662"
           },
           "release": null,
           "release_sha": null,
@@ -907,7 +900,7 @@
     "barker"
   ],
   "publish_notes": "Public board -- no secrets or customer paths. Private repositories stay high-level; AI Music Vault stays private-content-boundary only.",
-  "refresh_started_ms": 1792225202842,
+  "refresh_started_ms": 1792226104608,
   "agents_source": "file:stale->unknown",
   "agents": [
     {
@@ -1078,7 +1071,7 @@
     }
   ],
   "llm_work_now_freshness": {
-    "generated_at": "2026-10-17 03:20 CT",
+    "generated_at": "2026-10-17 03:35 CT",
     "warn_ttl_sec": 1200,
     "warnings": [],
     "ok": true
@@ -1109,7 +1102,7 @@
     ],
     "scorecards": {
       "v": "scorecards/v1",
-      "generated_at": "2026-10-17T08:20:39.816830+00:00",
+      "generated_at": "2026-10-17T08:35:42.990457+00:00",
       "windows": {
         "24h": {
           "providers": {
@@ -2722,6 +2715,12 @@
           "count": 130,
           "tokens_total": 182000000,
           "tokens_per_pr": 1400000
+        },
+        "display": {
+          "codex_total_tokens": "182.00M",
+          "gemini_tokens": "unknown",
+          "gemini_usd": "unknown",
+          "merged_prs_count": "130"
         }
       },
       {
@@ -2754,6 +2753,12 @@
           "count": 110,
           "tokens_total": 312000000,
           "tokens_per_pr": 2836364
+        },
+        "display": {
+          "codex_total_tokens": "312.00M",
+          "gemini_tokens": "unknown",
+          "gemini_usd": "unknown",
+          "merged_prs_count": "110"
         }
       },
       {
@@ -2786,6 +2791,12 @@
           "count": 72,
           "tokens_total": 203000000,
           "tokens_per_pr": 2819444
+        },
+        "display": {
+          "codex_total_tokens": "203.00M",
+          "gemini_tokens": "unknown",
+          "gemini_usd": "unknown",
+          "merged_prs_count": "72"
         }
       },
       {
@@ -2818,6 +2829,12 @@
           "count": 23,
           "tokens_total": 249000000,
           "tokens_per_pr": 10826087
+        },
+        "display": {
+          "codex_total_tokens": "249.00M",
+          "gemini_tokens": "unknown",
+          "gemini_usd": "unknown",
+          "merged_prs_count": "23"
         }
       },
       {
@@ -2864,6 +2881,12 @@
           "count": 75,
           "tokens_total": 708600000,
           "tokens_per_pr": 9448000
+        },
+        "display": {
+          "codex_total_tokens": "697.00M",
+          "gemini_tokens": "11.60M",
+          "gemini_usd": "42.38",
+          "merged_prs_count": "75"
         }
       }
     ]
