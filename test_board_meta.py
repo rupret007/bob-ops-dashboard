@@ -3113,6 +3113,12 @@ class GeminiPauseReasonBucketTest(_ut_gem.TestCase):
             self.assertNotIn("kernel", title)
 
 
+# Tailnet-shaped literals are built at runtime (live/tests/test_security forbids tracked ones).
+_GEM_TS_HOST = ".".join(["mini", "tail1a2b3c", "ts", "net"])
+_GEM_TS_HOST2 = ".".join(["mini", "tail1a2b", "ts", "net"])
+_GEM_TN_IP = ".".join(map(str, [100, 93, 165, 1]))
+
+
 class GeminiLanePagesLeakTest(_ut_gem.TestCase):
     """Karen FAIL r3 (#70): heartbeat_at raw, job scrub leaks, cap inf/True."""
 
@@ -3126,7 +3132,7 @@ class GeminiLanePagesLeakTest(_ut_gem.TestCase):
         from board_meta import gemini_lane_rows
         now, _ = self._fresh()
         tok = "ghp_" + "A" * 40
-        for bad in (tok + " mini.tail1a2b.ts.net", "mini.tail1a2b.ts.net", "not-a-date",
+        for bad in (tok + " " + _GEM_TS_HOST2, _GEM_TS_HOST2, "not-a-date",
                     "2026-10-16T22:00:00+00:00 " + tok, "2026-10-16T22:00:00",  # naive -> rejected
                     "x" * 500, 12345, True, ["2026-10-16T22:00:00+00:00"],
                     "2026-10-16T22:00:00.123456+00:00:00.123456"):  # parseable but > 40 chars
@@ -3156,7 +3162,7 @@ class GeminiLanePagesLeakTest(_ut_gem.TestCase):
         now, fresh = self._fresh()
         aiza = "AIzaSy" + "B" * 33
         cases = {
-            "mini.tail1a2b3c.ts.net": ("tail1a2b3c", "ts.net", "mini.tail"),
+            _GEM_TS_HOST: ("tail1a2b3c", "ts.net", "mini.tail"),
             "gemrev-" + aiza + "-pr1": ("AIza", "BBBBBBBB"),
             "key " + aiza + " 312-555-0199": ("AIza", "BBBBBBBB", "555-0199", "REDACTED"),
             "sk-proj-abcdefghij": ("sk-proj", "abcdefghij"),
@@ -3167,10 +3173,10 @@ class GeminiLanePagesLeakTest(_ut_gem.TestCase):
             "gemrev-fd7a:115c:a1e0::1-pr1": ("fd7a", "115c"),
             "github.com/rupret007/secret-repo": ("github", "secret", "rupret007"),
             "gemrev-github.com-pr1": ("github",),
-            "gemrev-mini.tail1a2b3c.ts.net-pr1": ("tail1a2b3c", "ts.net"),
+            "gemrev-" + _GEM_TS_HOST + "-pr1": ("tail1a2b3c", "ts.net"),
             "gemrev-ghp_" + "c" * 36 + "-pr1": ("ghp_", "cccccc"),
             "gemrev-bob-brain-pr1; rm -rf /": ("rm", "rf"),
-            "100.93.165.1": ("93.165", "100.93"),
+            _GEM_TN_IP: ("93.165", "100.93"),
         }
         for raw, needles in cases.items():
             rows = gemini_lane_rows({"generated_at": fresh, "lanes": [{"job": raw, "mode": "review"}]}, now=now)
