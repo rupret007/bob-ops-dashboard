@@ -56,9 +56,10 @@ class PRInfo:
     author: str
     is_draft: bool
     diff: str
-    ci_status: dict[str, str]
-    changed_files: list[str]
-    deleted_files: list[str]
+    ci_status: dict  # Dict[str, str]
+    changed_files: list  # List[str]
+    deleted_files: list  # List[str]
+    description: str = ""  # PR body/description
 
 
 SECRET_PATTERNS = [
@@ -367,7 +368,8 @@ def check_no_dangerous_commands(pr: PRInfo, config: KarenConfig) -> CheckResult:
     )
 
 
-def run_all_checks(pr: PRInfo, config: KarenConfig) -> list[CheckResult]:
+def run_all_checks(pr, config):
+    # type: (PRInfo, KarenConfig) -> list
     """Run all deterministic checks and return results.
 
     Order matters: blocked repo check runs first.
@@ -397,11 +399,13 @@ def run_all_checks(pr: PRInfo, config: KarenConfig) -> list[CheckResult]:
     return results
 
 
-def all_checks_pass(results: list[CheckResult]) -> bool:
+def all_checks_pass(results):
+    # type: (list) -> bool
     """Return True if all checks passed (none failed)."""
     return not any(r.failed for r in results)
 
 
-def get_failed_checks(results: list[CheckResult]) -> list[CheckResult]:
+def get_failed_checks(results):
+    # type: (list) -> list
     """Return list of failed checks."""
     return [r for r in results if r.failed]

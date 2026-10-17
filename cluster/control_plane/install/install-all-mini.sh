@@ -293,11 +293,16 @@ run_self_check() {
     fi
 
     log_info "Testing shadow tick..."
-    if cd "$REPO_ROOT" && PYTHONPATH="$REPO_ROOT" python3 -m cluster.control_plane.shadow_runner --machine mini --json 2>/dev/null | head -1 | grep -q "timestamp"; then
+    local shadow_output
+    local shadow_exit
+    shadow_output=$(cd "$REPO_ROOT" && PYTHONPATH="$REPO_ROOT" python3 -m cluster.control_plane.shadow_runner --machine mini --json 2>&1)
+    shadow_exit=$?
+    if [[ $shadow_exit -eq 0 ]] && echo "$shadow_output" | head -1 | grep -q '"timestamp"'; then
         log_pass "shadow tick: ran successfully"
         RESULTS+=("shadow-tick: PASS")
     else
-        log_fail "shadow tick: failed"
+        log_fail "shadow tick: failed (exit code $shadow_exit)"
+        echo "    Output: ${shadow_output:0:500}"
         RESULTS+=("shadow-tick: FAIL")
         all_pass=false
     fi

@@ -27,7 +27,7 @@ DEFAULT_BUDGET_PER_RUN_USD = 0.50
 class KarenConfig:
     """Configuration for Local Karen gate."""
 
-    reviewer_order: list[str] = field(
+    reviewer_order: list = field(  # List[str]
         default_factory=lambda: list(DEFAULT_REVIEWER_ORDER)
     )
     codex_host: str = "nuc"
@@ -44,7 +44,7 @@ class KarenConfig:
 
     budget_per_run_usd: float = DEFAULT_BUDGET_PER_RUN_USD
 
-    never_touch_repos: frozenset[str] = field(
+    never_touch_repos: frozenset = field(  # frozenset[str]
         default_factory=lambda: NEVER_TOUCH_REPOS
     )
 
