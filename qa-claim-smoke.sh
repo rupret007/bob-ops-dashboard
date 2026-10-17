@@ -941,7 +941,7 @@ if command -v gh >/dev/null; then
   PRIVATE_E2E="$TMP/private-e2e"
   MOCK_BIN="$PRIVATE_E2E/bin"
   mkdir -p "$MOCK_BIN"
-  cp "$ROOT/refresh.sh" "$ROOT/board_meta.py" "$ROOT/usage_collect.py" "$ROOT/README.md" "$PRIVATE_E2E/"
+  cp "$ROOT/refresh.sh" "$ROOT/board_meta.py" "$ROOT/usage_collect.py" "$ROOT/scorecards.py" "$ROOT/README.md" "$PRIVATE_E2E/"
   chmod +x "$PRIVATE_E2E/refresh.sh"
   python3 - "$MOCK_BIN/gh" <<'PY' || fail "private fixture setup failed"
 from pathlib import Path
@@ -1276,7 +1276,7 @@ PY
 
   E2E="$TMP/refresh-e2e"
   mkdir -p "$E2E"
-  cp "$ROOT/refresh.sh" "$ROOT/board_meta.py" "$ROOT/usage_collect.py" "$ROOT/README.md" "$E2E/"
+  cp "$ROOT/refresh.sh" "$ROOT/board_meta.py" "$ROOT/usage_collect.py" "$ROOT/scorecards.py" "$ROOT/README.md" "$E2E/"
   chmod +x "$E2E/refresh.sh"
   python3 - "$E2E/status.json" <<'PY' || fail "e2e seed failed"
 import json, sys

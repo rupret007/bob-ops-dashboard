@@ -60,3 +60,13 @@ Collector on this clone’s host found Codex sessions only for **2026-10-16** an
 python3 test_usage_collect.py -v
 python3 test_board_meta.py -v
 ```
+
+## Follow-up draft: push live view and scorecards
+
+See [live metrics research](live-metrics-research.md), [private live metrics](live-metrics.md),
+and [scorecard evidence/thresholds](scorecards.md). Not enabled; Karen gate before live.
+Missing session total_tokens now propagates unknown through daily, host, merged,
+chart and per-PR totals. Explicit zero remains zero. A trailing incomplete token
+observation does not reuse an earlier complete total. Gemini missing measurements
+likewise remain unknown, and labeled token fields are counted once. Grok Bot
+(conserve-only) has no direct source and remains unknown everywhere.

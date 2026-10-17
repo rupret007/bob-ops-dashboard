@@ -96,13 +96,14 @@ class OfflineQaTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             source = Path(tmp) / "source"
             source.mkdir()
-            for name in ("README.md", "board_meta.py", "usage_collect.py", "refresh.sh"):
+            for name in ("README.md", "board_meta.py", "usage_collect.py", "scorecards.py", "refresh.sh"):
                 (source / name).write_text("fixture source\n", encoding="utf-8")
             for name in ("status.json", "index.html", "agents-status.json"):
                 (source / name).write_text("synthetic-owner-data-must-not-copy\n", encoding="utf-8")
             destination = Path(tmp) / "generator"
             prepare_generator(source, destination)
             self.assertEqual((destination / "usage_collect.py").read_text(), "fixture source\n")
+            self.assertEqual((destination / "scorecards.py").read_text(), "fixture source\n")
             self.assertEqual(json.loads((destination / "status.json").read_text()), {"offline_fixture": True})
             agents = json.loads((destination / "agents-status.json").read_text())["agents"]
             self.assertEqual([row["state"] for row in agents], ["unknown", "unknown", "unknown"])

@@ -110,6 +110,7 @@ def collect_metrics(
 
     return {
         "node_id": node_id,
+        "grok_bot": {"label": "Grok Bot (conserve-only)", "status": "unknown"},
         "ts": time.time(),
         "cpu_pct": round(cpu_pct, 2),
         "load1": round(load1, 3),
