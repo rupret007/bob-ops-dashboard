@@ -28,14 +28,13 @@ StoryPool runs other people's work on Jeff's machines, and (soon) Jeff's work on
 | T2 | **A member host misbehaves** (bug or compromise) | Mini tries to steal the NucBox's lease, or ack its job | Per-host NATS permissions: own lease subject, own consumer, own inbox. Raw `$KV` writes denied. |
 | T3 | **Identity spoofing** | A host claims "I'm nucbox" in the request body | The lease service takes the host from the **NATS subject**, which the server only lets each host publish for itself. The body is never trusted for identity. |
 | T4 | **Forged system events** | A host publishes a fake `MAX_DELIVERIES` advisory to get a job dead-lettered | Hosts have no publish grant on `$JS.EVENT.>`, so forged advisories are denied by the server. |
-| T5 | **Reply redirection** | A host sets its reply subject to a lease key, hoping the hub writes it | The lease service's reply cannot become a lease write. Lease keys are only written by the service's own compare-and-set. (Karen-passed in #71; see the verification note in §8.) |
-| T6 | **Lost work during dead-lettering** | Crash between copy and delete | The DLQ copies, **waits for the server's confirm**, then deletes. Idempotent `Nats-Msg-Id` makes a repeat copy harmless. |
-| T7 | **Malicious job spec** | `cmd: ["bash","-c","curl … | sh"]` or a key pasted into argv | Exact argv allowlist per class, single allowlisted repo, strict ref format, env allowlist, secret scanning across argv (including keys split across items). |
-| T8 | **A guest job tries to escape or steal keys** | Guest job reads `~/.config` or calls an API | Rootless podman sandbox with no keys and no host credentials mounted. Guests only get no-key jobs. |
-| T9 | **A friend's machine is compromised** | Attacker uses a friend's tailnet node to probe | Tailscale ACL lets that node reach **only tcp:4222 on the queue**, and its NATS user only gets guest subjects. |
-| T10 | **Reserved-name squatting** | A friend picks the host name `hub` or `conductor` | **In progress:** these names must be refused at enrollment before any friend joins. |
-| T11 | **Runaway spend** | A loop burns API credit | Prepaid plans and prepaid credit only. Donor caps are enforced on the donor's machine. |
-| T12 | **Bad change merged** | A PR weakens a permission | Karen gates every merge; CI fails on any skipped required security test; no force-push. |
+| T5 | **Lost work during dead-lettering** | Crash between copy and delete | The DLQ copies, **waits for the server's confirm**, then deletes. Idempotent `Nats-Msg-Id` makes a repeat copy harmless. |
+| T6 | **Malicious job spec** | `cmd: ["bash","-c","curl … | sh"]` or a key pasted into argv | Exact argv allowlist per class, single allowlisted repo, strict ref format, env allowlist, secret scanning across argv (including keys split across items). |
+| T7 | **A guest job tries to escape or steal keys** | Guest job reads `~/.config` or calls an API | Rootless podman sandbox with no keys and no host credentials mounted. Guests only get no-key jobs. |
+| T8 | **A friend's machine is compromised** | Attacker uses a friend's tailnet node to probe | Tailscale ACL lets that node reach **only tcp:4222 on the queue**, and its NATS user only gets guest subjects. |
+| T9 | **Reserved-name squatting** | A friend picks the host name `hub` or `conductor` | **In progress:** these names must be refused at enrollment before any friend joins. |
+| T10 | **Runaway spend** | A loop burns API credit | Prepaid plans and prepaid credit only. Donor caps are enforced on the donor's machine. |
+| T11 | **Bad change merged** | A PR weakens a permission | Karen gates every merge; CI fails on any skipped required security test; no force-push. |
 
 ## 3. Permission matrix
 
@@ -142,4 +141,4 @@ Which jobs can go to a friend's machine: **sandboxed, no-key jobs only** (builds
 | **Lease metadata is readable by any host** | The `holder` op returns who holds any key and its metadata. Low risk among Jeff's machines; worth scoping before guests. | Known, open. |
 | **A nak'd job holds its slot during the delay** | On nats-server 2.15.1 a delay-nak'd job keeps its `max_ack_pending` slot until redelivered, so a held lease can cost one lane slot for up to one TTL (900 s). | Known, documented and asserted in tests. |
 | **Apply stage-2 permissions to the live hub** | Until then the live hub runs the looser stage-1 grants. | Planned (needs Jeff's approval for the config change). |
-| **Verification note on reply redirects** | When these docs were written, `cluster/lanes.py` on `main` (6b166e6) replies to whatever reply subject a request carries. Before go-live, confirm the hub's reply path cannot publish into `$KV.LANE_LEASES.>` (for example a reply-subject check, or a separate reply identity without `$KV` grants) and that a test covers it. | To verify before stage 2. |
+| **Reply redirection (lease service reply must not become a lease write)** | A host can set its reply subject to a lease key and trick the hub into writing it. Lease keys must only be written by the service's own compare-and-set, not via an arbitrary reply subject. | **Open (HIGH).** Fix in progress in bob-ops-dashboard #76. |
