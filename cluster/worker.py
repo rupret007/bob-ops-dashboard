@@ -24,6 +24,7 @@ from cluster.worker_logic import (
     build_result,
     check_load_ceiling,
     classify_run_outcome,
+    fetch_or_empty,
     parse_job_payload,
 )
 
@@ -162,10 +163,7 @@ async def run_worker(args: argparse.Namespace) -> None:
 
     try:
         while True:
-            try:
-                msgs = await psub.fetch(args.max_parallel, timeout=5)
-            except nats.errors.TimeoutError:
-                continue
+            msgs = await fetch_or_empty(psub, args.max_parallel, timeout=5)
             tasks = [
                 asyncio.create_task(
                     handle_message(

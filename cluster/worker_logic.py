@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import os
 from dataclasses import dataclass
 from enum import Enum
@@ -79,3 +80,23 @@ RedeliveryTracker = Callable[[str], int]
 
 def should_stop_redelivery(delivery_count: int, max_deliver: int = 3) -> bool:
     return delivery_count >= max_deliver
+
+
+def idle_timeout_exceptions() -> tuple[type[BaseException], ...]:
+    """Exception types raised when a NATS pull fetch or sub read times out with no message."""
+    excs: list[type[BaseException]] = [asyncio.TimeoutError, TimeoutError]
+    try:
+        import nats.errors
+
+        excs.append(nats.errors.TimeoutError)
+    except ImportError:
+        pass
+    return tuple(excs)
+
+
+async def fetch_or_empty(psub, n: int, timeout: float) -> list:
+    """Return fetched messages, or [] on idle timeout (worker should keep polling)."""
+    try:
+        return await psub.fetch(n, timeout=timeout)
+    except idle_timeout_exceptions():
+        return []
