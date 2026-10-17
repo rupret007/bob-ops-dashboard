@@ -1522,6 +1522,7 @@ allowed_tabs = {
     "controls",
     "live-shipping",
     "apps-utilities",
+    "usage-machines",
     "cisco",
     "messaging",
     "private-media",
@@ -1532,7 +1533,10 @@ tab_ids = set(re.findall(r'data-tab="([^"]+)"', head))
 bad_tabs = sorted(tab_ids - allowed_tabs)
 if bad_tabs:
     raise SystemExit("invented type tab ids: " + ", ".join(bad_tabs))
-for sid in ("live-shipping", "apps-utilities", "cisco", "parked"):
+for needle in ("Grok Bot (conserve-only)", "unknown — no usage source; conserve-only"):
+    if needle not in head:
+        raise SystemExit("missing Grok budget placeholder: " + needle)
+for sid in ("live-shipping", "apps-utilities", "usage-machines", "cisco", "parked"):
     if not re.search(r'id="' + sid + r'"[^>]*\bhidden\b', html):
         raise SystemExit(sid + " must stay hidden on first paint")
 nav = html.split('id="type-tabs"', 1)[-1].split("</nav>", 1)[0] if 'id="type-tabs"' in html else ""
