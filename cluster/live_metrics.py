@@ -89,3 +89,16 @@ class Publisher:
         finally:
             self.lanes[provider] -= 1
             await self.emit()
+
+
+def delivery_queue_depth(messages):
+    """Ready messages remaining in the existing worker consumer, as observed at delivery.
+
+    Empty/time-out fetch is not a queue census. Never query JetStream with the
+    metrics identity or infer zero from an idle fetch.
+    """
+    if not messages:
+        return None
+    metadata = messages[-1].metadata
+    depth = getattr(metadata, 'num_pending', None)
+    return depth if type(depth) is int and depth >= 0 else None

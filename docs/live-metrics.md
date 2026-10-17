@@ -10,15 +10,17 @@ including exceptional completion. A host runner shares one publisher across its
 provider lanes and wraps execution in `async with publisher.lane(provider)`.
 Grok Bot is not an allowed provider. The existing worker has an opt-in
 `--live-metrics --metrics-provider <provider>` integration; its default is unchanged.
+The single-provider worker reports other providers as unknown, not zero.
 Only one aggregate owner per host should be configured; multiple independent
 publishers for the same host would overwrite each other's snapshots.
 
 The read-only sources are Codex session JSONL and gemini-spend.txt; unknown
 measurements remain null. Weekly percentage requires a timestamped 10080-minute
 rate_limits window, at most seven days old and not past its reported reset.
-Tokens today are partial/unknown if either token source is absent. Queue depth
-is null unless the owning runner supplies a measured count through the usage
-callback: the metrics identity cannot query JetStream. No worker leases, prompts,
+Tokens today are partial/unknown if either token source is absent. Queue depth uses remaining-ready-message metadata from the existing worker
+consumer delivery, or a measured count supplied by the owning lane runner. An
+empty/timed-out fetch stays unknown. It is a delivery-time observation, not a
+new broker query: the metrics identity cannot query JetStream. No worker leases, prompts,
 job IDs, paths, credentials, or tailnet addresses enter the schema. Machine values
 come from OS counters; unavailable Mac memory/swap remain null, not guessed zero.
 Grok Bot (conserve-only) is always explicitly unknown without a direct source.

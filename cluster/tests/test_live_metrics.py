@@ -172,3 +172,14 @@ class FailureAndSourcesTests(unittest.IsolatedAsyncioTestCase):
                     'payload':{'type':'token_count', 'rate_limits':{'secondary':{
                         'window_minutes':minutes,'used_percent':percent,'resets_at':reset}}}}))
                 self.assertEqual(weekly_limit(root), expected)
+
+
+class QueueDepthTests(unittest.TestCase):
+    def test_real_delivery_metadata_and_unknown_empty_fetch(self):
+        from cluster.live_metrics import delivery_queue_depth
+        for depth in (0, 3):
+            msg = SimpleNamespace(metadata=SimpleNamespace(num_pending=depth))
+            self.assertEqual(delivery_queue_depth([msg]), depth)
+        self.assertIsNone(delivery_queue_depth([]))
+        for depth in (None, -1, True, 'secret'):
+            self.assertIsNone(delivery_queue_depth([SimpleNamespace(metadata=SimpleNamespace(num_pending=depth))]))

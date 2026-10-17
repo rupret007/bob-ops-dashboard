@@ -165,8 +165,8 @@ async def run_worker(args: argparse.Namespace) -> None:
     active_jobs: dict[str, int] = {"n": 0}
     sem = asyncio.Semaphore(args.max_parallel)
     live_metrics = metrics_nc = None
+    queue_state = {"depth": None}
     if getattr(args, "live_metrics", False):
-        from functools import partial
         from urllib.parse import urlsplit
         if urlsplit(args.nats).username or urlsplit(args.nats).password:
             raise ValueError("use separate private metrics credentials")
@@ -178,7 +178,12 @@ async def run_worker(args: argparse.Namespace) -> None:
         metrics_nc = await nats.connect(
             args.nats, user=os.environ["BOB_METRICS_PUBLISHER_USER"],
             password=os.environ["BOB_METRICS_PUBLISHER_PASSWORD"], error_cb=quiet_error)
-        live_metrics = Publisher(metrics_nc, args.node_id, partial(usage_today, *default_paths()),
+        source_paths = default_paths()
+        def measured_usage():
+            usage = usage_today(*source_paths)
+            usage["queue_depth"] = queue_state["depth"]
+            return usage
+        live_metrics = Publisher(metrics_nc, args.node_id, measured_usage,
                                  providers=(args.metrics_provider,))
     interval = 10.0 if args.light else 2.0
     metrics_task = asyncio.create_task(
@@ -189,6 +194,9 @@ async def run_worker(args: argparse.Namespace) -> None:
     try:
         while True:
             msgs = await fetch_or_empty(psub, args.max_parallel, timeout=5)
+            if live_metrics is not None:
+                from cluster.live_metrics import delivery_queue_depth
+                queue_state["depth"] = delivery_queue_depth(msgs)
             tasks = [
                 asyncio.create_task(
                     handle_message(
