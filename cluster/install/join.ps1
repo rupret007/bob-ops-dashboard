@@ -4,21 +4,29 @@
   Windows join helper: runs the bash installer inside WSL Ubuntu.
 #>
 param(
-    [Parameter(Mandatory)]
-    [string]$Code,
+    # Prefer passing the code via $env:BOB_JOIN_CODE (what bobctl prints) so it
+    # stays out of the process list and shell history.
+    [string]$Code = $env:BOB_JOIN_CODE,
     [string]$Ref = 'main',
     [int]$Lanes = 0,
     [switch]$DryRun
 )
 
 $ErrorActionPreference = 'Stop'
+if (-not $Code) {
+    Write-Error 'Set $env:BOB_JOIN_CODE (or pass -Code) to the join code Jeff gave you.'
+    exit 1
+}
+# wsl.exe prints UTF-16; ask for UTF-8 and strip stray NULs so matching works on PS 5.1.
+$env:WSL_UTF8 = '1'
 
 if ([Environment]::UserName -eq 'SYSTEM') {
     Write-Error 'Run join.ps1 as a normal user, not SYSTEM.'
     exit 1
 }
 
-$ubuntu = (& wsl -l -q 2>$null | Where-Object { $_ -match 'Ubuntu' } | Select-Object -First 1)
+$ubuntu = (& wsl -l -q 2>$null | ForEach-Object { ($_ -replace "`0", '').Trim() } |
+    Where-Object { $_ -match '^Ubuntu' } | Select-Object -First 1)
 if (-not $ubuntu) {
     Write-Host 'Run: wsl --install -d Ubuntu  then reboot and re-run this command.'
     exit 1
@@ -62,12 +70,14 @@ if ($DryRun) {
 }
 
 $env:BOB_JOIN_CODE = $Code
-$env:WSLENV = 'BOB_JOIN_CODE/u'
+if ($env:WSLENV) { $env:WSLENV = "$($env:WSLENV):BOB_JOIN_CODE/u" } else { $env:WSLENV = 'BOB_JOIN_CODE/u' }
 
 $bashCmd = "curl -fsSL '$joinUrl' | bash -s -- --ref '$Ref'$lanesArg"
 & wsl -d $distro -- bash -lc $bashCmd
-if ($LASTEXITCODE -ne 0) {
-    exit $LASTEXITCODE
+$rc = $LASTEXITCODE
+Remove-Item Env:BOB_JOIN_CODE -ErrorAction SilentlyContinue
+if ($rc -ne 0) {
+    exit $rc
 }
 
 $wslUser = (& wsl -d $distro -- whoami).Trim()

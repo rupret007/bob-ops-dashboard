@@ -230,7 +230,17 @@ class MeshWorker:
         caps = self.refresh_caps()
         if self.cfg.role == "guest":
             return [(STREAM_SANDBOX, CONSUMER_GUESTS, "sandbox.test")] if "sandbox.test" in caps else []
-        return [(STREAM_CAPJOBS, cap_consumer(c), c) for c in caps if c not in GUEST_CAPS]
+        out = []
+        for c in caps:
+            if c in GUEST_CAPS:
+                continue
+            if c.startswith("llm."):
+                try:
+                    llm_argv(c, "probe")
+                except SpecError:
+                    continue  # advertised (e.g. MiniMax key present) but no v1 runner: do not pull
+            out.append((STREAM_CAPJOBS, cap_consumer(c), c))
+        return out
 
     async def run(self, stop: asyncio.Event | None = None) -> None:
         import nats

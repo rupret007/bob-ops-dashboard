@@ -86,6 +86,28 @@ Optional bridge to the live dashboard aggregator:
 python3 cluster/worker.py --node-id mini --also-post http://127.0.0.1:8787/api/node ...
 ```
 
+## Mesh: any computer, pooled LLM capacity (Stage 2, not yet live)
+
+Design: [MESH.md](MESH.md). Auth review and open items: [AUTH-DESIGN.md](AUTH-DESIGN.md).
+
+Every node advertises what it can do (`caps.<node>` heartbeat: which LLM CLIs are signed in locally,
+CPU/RAM/load, lanes). Jobs go to `cap.<capability>.<id>` and only nodes holding that capability's NATS
+permission *and* the local login can pull them. Each subscription only ever runs on its owner's
+machine; keys and logins never leave it.
+
+Add a computer (on the NucBox, after the rollout):
+
+```bash
+python3 -m cluster.bobctl mint --name <name> --role member     # or --role guest for a friend
+```
+
+It prints one line to paste on the new machine (macOS/Linux `curl … | bash`, or a PowerShell line for
+Windows + WSL). The code is single-use, expires in 30 minutes, and installs a background service.
+Revoke any time: `python3 -m cluster.bobctl revoke <name>`.
+
+Until Karen's gate, `bobctl` only renders `~/.config/bob-cluster/nats.mesh.conf`; the live `nats.conf`
+is not touched unless `--live` is passed. Throwaway end-to-end check: `bash cluster/e2e-local.sh <sha> [--llm]`.
+
 ## Submit
 
 ```bash

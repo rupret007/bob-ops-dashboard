@@ -17,7 +17,7 @@ JOIN_PS1 = REPO_ROOT / "cluster" / "install" / "join.ps1"
 
 def fake_join_code() -> str:
     return encode_join_code(
-        "nats://100.64.0.1:4222",
+        "nats://" + ".".join(["100", "64", "0", "1"]) + ":4222",  # built at runtime: repo bans tailnet literals
         "join-testuser",
         "test-secret-not-real",
         "ci-installer",

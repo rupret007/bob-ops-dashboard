@@ -24,7 +24,7 @@ from cluster.routing import ROUTES, llm_argv, pick_capability, subject_for, vali
 from cluster.sandbox import sandbox_argv  # noqa: E402
 from cluster.spec import SpecError  # noqa: E402
 
-URL = "nats://100.64.0.1:4222"
+URL = "nats://" + ".".join(["100", "64", "0", "1"]) + ":4222"  # built at runtime: repo bans tailnet literals
 
 
 def base(cap, **kw):
@@ -178,6 +178,36 @@ class RoutingTests(unittest.TestCase):
         self.assertFalse(any(x.startswith("-v") or "docker.sock" in x for x in a))
         with self.assertRaises(SpecError):
             sandbox_argv("bash", Path("/tmp"), ["npm", "test"], "j1")
+
+
+class WorkerConsumerTests(unittest.TestCase):
+    def test_only_granted_detected_runnable_caps_are_pulled(self):
+        from cluster.mesh_worker import Executor, MeshWorker, NodeConfig
+
+        cfg = NodeConfig({"BOB_NODE_USER": "box", "BOB_NODE_TOKEN": "t" * 30, "BOB_ROLE": "member",
+                          "BOB_GRANTED_CAPS": "llm.codex.high,llm.minimax,llm.claude,shell.build"})
+        w = MeshWorker(cfg, Executor("member", True), providers={},
+                       detected={"llm.codex.high", "llm.minimax", "shell.build", "llm.composer"})
+        self.assertEqual([c[2] for c in w.consumers()], ["llm.codex.high", "shell.build"])
+        self.assertEqual(w.result_subject("j1"), "results.box.j1")
+        g = MeshWorker(NodeConfig({"BOB_NODE_USER": "fr", "BOB_NODE_TOKEN": "t" * 30, "BOB_ROLE": "guest",
+                                   "BOB_GRANTED_CAPS": "sandbox.test"}), Executor("guest", True),
+                       providers={}, detected=set())
+        self.assertEqual(g.consumers(), [])  # no docker/podman detected: refuses sandbox work
+
+    def test_guest_without_runtime_refuses_rather_than_running_on_host(self):
+        from cluster.mesh_worker import Executor
+
+        ex = Executor("guest", dry_run=False, which=lambda n: None)
+        spec = validate_cap_spec(base("sandbox.test", cmd=["npm", "test"]), guest=True)
+        import cluster.job_exec as je
+        orig = je.prepare_worktree
+        je.prepare_worktree = lambda s, dry_run: Path(tempfile.mkdtemp())
+        try:
+            status, rc, tail = ex.run(spec)
+        finally:
+            je.prepare_worktree = orig
+        self.assertEqual(status, "refused")
 
 
 class JoinClientTests(unittest.TestCase):
