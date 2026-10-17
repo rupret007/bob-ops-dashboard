@@ -119,8 +119,11 @@ def prepare_generator(source: Path, destination: Path) -> None:
     if destination.exists() and any(destination.iterdir()):
         raise ValueError("Fixture generator destination must be empty")
     destination.mkdir(parents=True, exist_ok=True)
-    for name in ("README.md", "board_meta.py", "refresh.sh"):
+    for name in ("README.md", "board_meta.py", "usage_collect.py", "refresh.sh"):
         shutil.copyfile(source / name, destination / name)
+    work_now = source / "llm-work-now.json"
+    if work_now.is_file():
+        shutil.copyfile(work_now, destination / work_now.name)
     (destination / "status.json").write_text('{"offline_fixture": true}\n', encoding="utf-8")
     (destination / "index.html").write_text("<!-- offline fixture sentinel -->\n", encoding="utf-8")
     seed_agent_fixture(destination)
