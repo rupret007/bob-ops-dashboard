@@ -794,6 +794,9 @@ class AggregatorServer:
                     finally:
                         if cond in server._sse_clients:
                             server._sse_clients.remove(cond)
+                        # Session expired or server stopping: don't let keep-alive
+                        # hold the socket open for another request.
+                        self.close_connection = True
                     return
                 if path == "/" or path == "/index.html":
                     index = server.web_root / "index.html"

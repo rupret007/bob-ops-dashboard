@@ -30,9 +30,16 @@ def job_workdir(job_id: str) -> Path:
     root = WORK_ROOT.resolve()
     candidate = root / job_id
     wd = candidate.resolve()
-    # Reject root aliases and symlinks, including links to other jobs.
-    if wd == root or root not in wd.parents or wd != candidate or candidate.is_symlink():
-        raise SpecError("job work directory must be strictly under jobs root without symlinks")
+    # Each check is separate (with its own reason) so tests can prove every
+    # guard is load-bearing on its own.
+    if wd == root:
+        raise SpecError("job work directory must not alias the jobs root")
+    if candidate.is_symlink():
+        raise SpecError("job work directory must not be a symlink")
+    if root not in wd.parents:
+        raise SpecError("job work directory must be strictly under jobs root")
+    if wd != candidate:
+        raise SpecError("job work directory must resolve to itself")
     return wd
 
 
@@ -46,7 +53,9 @@ def ensure_mirror(repo: str, dry_run: bool) -> Path:
     remote = f"https://github.com/{repo}.git"
     if not (mp / "objects").is_dir():
         subprocess.run(
-            ["git", "clone", "--mirror", "--filter=blob:none", remote, str(mp)],
+            # Full mirror: job clones use --shared and cannot lazily fetch missing
+            # blobs from a partial (promisor) mirror, so checkout would fail.
+            ["git", "clone", "--mirror", remote, str(mp)],
             check=True,
             capture_output=True,
             text=True,

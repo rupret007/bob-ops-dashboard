@@ -24,7 +24,7 @@ authorization {
       user: nucbox
       password: "{{NUCBOX_TOKEN}}"
       permissions: {
-        publish: ["metrics.nucbox", "results.>", "jobs.>", "$JS.API.>"]
+        publish: ["metrics.nucbox", "results.>", "jobs.>", "$JS.API.>", "$JS.ACK.JOBS.workers.>"]
         subscribe: ["$JS.API.>", "$JS.ACK.>", "$JS.FC.>", "_INBOX.>", "results.>"]
       }
     }

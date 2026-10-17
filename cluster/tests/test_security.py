@@ -147,6 +147,60 @@ class TestExecutionSecurity(unittest.TestCase):
                 run.assert_not_called()
                 self.assertEqual(marker.read_text(), "keep")
 
+    def test_job_workdir_rejects_root_alias_directly(self):
+        (self.root / "alias").symlink_to(self.root, target_is_directory=True)
+        with self.assertRaisesRegex(SpecError, "must not alias the jobs root"):
+            job_exec.job_workdir("alias")
+        # A root-aliasing symlink must also never reach rmtree or git.
+        with patch.object(job_exec.shutil, "rmtree") as delete, patch.object(job_exec.subprocess, "run") as run:
+            with self.assertRaisesRegex(SpecError, "must not alias the jobs root"):
+                job_exec.prepare_worktree(valid_spec(id="alias"), False)
+            delete.assert_not_called()
+            run.assert_not_called()
+
+    def test_job_workdir_rejects_preplanted_symlink_directly(self):
+        outside = self.root.parent / "outside"
+        outside.mkdir()
+        sibling = self.root / "sibling"
+        sibling.mkdir()
+        (self.root / "escape").symlink_to(outside, target_is_directory=True)
+        (self.root / "sibling-alias").symlink_to(sibling, target_is_directory=True)
+        (self.root / "dangling").symlink_to(self.root / "not-there", target_is_directory=True)
+        for job_id in ("escape", "sibling-alias", "dangling"):
+            with self.subTest(job_id=job_id):
+                with self.assertRaisesRegex(SpecError, "must not be a symlink"):
+                    job_exec.job_workdir(job_id)
+                with patch.object(job_exec.shutil, "rmtree") as delete, \
+                        patch.object(job_exec.subprocess, "run") as run:
+                    with self.assertRaisesRegex(SpecError, "must not be a symlink"):
+                        job_exec.prepare_worktree(valid_spec(id=job_id), False)
+                    delete.assert_not_called()
+                    run.assert_not_called()
+
+    def _resolve_job_to(self, job_id, target):
+        real_resolve = Path.resolve
+        candidate = self.root / job_id
+
+        def fake_resolve(path, *args, **kwargs):
+            if path == candidate:
+                return target
+            return real_resolve(path, *args, **kwargs)
+
+        return patch.object(Path, "resolve", fake_resolve)
+
+    def test_job_workdir_outside_root_check_fires_alone(self):
+        # Not a symlink and not the root: only the outside-root check can reject.
+        outside = self.root.parent / "outside" / "job1"
+        with self._resolve_job_to("job1", outside):
+            with self.assertRaisesRegex(SpecError, "strictly under jobs root"):
+                job_exec.job_workdir("job1")
+
+    def test_job_workdir_must_resolve_to_itself_check_fires_alone(self):
+        # Resolves inside root to a different entry without being a symlink.
+        with self._resolve_job_to("job1", self.root / "other-job"):
+            with self.assertRaisesRegex(SpecError, "must resolve to itself"):
+                job_exec.job_workdir("job1")
+
     def test_existing_job_cleanup_and_git_option_terminators(self):
         wd = self.root / "job-1"
         wd.mkdir()
@@ -184,6 +238,34 @@ class TestExecutionSecurity(unittest.TestCase):
                                             env=env, check=True, capture_output=True, text=True)
                     self.assertEqual(actual.stdout.strip(), sha)
 
+    def test_mirror_is_not_partial_so_shared_clones_can_checkout(self):
+        with patch.object(job_exec, "MIRROR_ROOT", self.root.parent / "mirrors"), \
+                patch.object(job_exec.subprocess, "run") as run:
+            job_exec.ensure_mirror("rupret007/bob-ops-dashboard", False)
+        clone = run.call_args_list[0].args[0]
+        self.assertEqual(clone[:3], ["git", "clone", "--mirror"])
+        self.assertFalse(any(a.startswith("--filter") for a in clone))
+
+    def test_shared_clone_from_mirror_checks_out_files(self):
+        src = self.root.parent / "src"
+        src.mkdir()
+        env = job_exec.minimal_env(self.root.parent / "git-home")
+
+        def git(*args, cwd=src):
+            return subprocess.run(["git", *args], cwd=cwd, env=env,
+                                  check=True, capture_output=True, text=True).stdout.strip()
+
+        git("init")
+        (src / "f.txt").write_text("payload")
+        git("add", "f.txt")
+        git("-c", "user.name=Test", "-c", "user.email=test@example.invalid", "commit", "-m", "fixture")
+        sha = git("rev-parse", "HEAD")
+        mirror = self.root.parent / "mirror.git"
+        git("clone", "--mirror", str(src), str(mirror), cwd=self.root.parent)
+        with patch.object(job_exec, "ensure_mirror", return_value=mirror):
+            wd = job_exec.prepare_worktree(valid_spec(ref=sha), False)
+        self.assertEqual((wd / "f.txt").read_text(), "payload")
+
     def test_environment_is_minimal_for_commands_and_git(self):
         poison = {"BOB_NODE_TOKEN": "synthetic-nats", "OPENAI_API_KEY": "synthetic-api",
                   "PATH": "/untrusted", "LD_PRELOAD": "bad", "GIT_CONFIG_COUNT": "1"}
@@ -220,6 +302,11 @@ class TestExecutionSecurity(unittest.TestCase):
 class TestNatsConfigSecurity(unittest.TestCase):
     def setUp(self):
         self.config = (Path(__file__).resolve().parents[1] / "nats.conf.template").read_text()
+
+    def test_nucbox_worker_can_ack_jobs(self):
+        block = self.config.split("user: nucbox", 1)[1].split("user:", 1)[0]
+        publish = set(re.findall(r'"([^\"]+)"', re.search(r'publish: \[(.*?)\]', block).group(1)))
+        self.assertIn("$JS.ACK.JOBS.workers.>", publish)
 
     def test_monitoring_is_loopback_and_does_not_conflict_with_vaultwarden(self):
         self.assertRegex(self.config, r'(?m)^http: "127\.0\.0\.1:8232"$')
