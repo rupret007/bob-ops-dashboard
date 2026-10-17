@@ -1,6 +1,7 @@
 # Bob cluster mesh: any computer can join, LLM capacity is pooled by routing
 
-Status: design + first working version (draft PR). Live NATS config is NOT changed
+Status: design + first working version (draft PR). Exact permissions, threat
+model and the Codex security review: `cluster/AUTH-DESIGN.md`. Live NATS config is NOT changed
 until Karen gates this and Jeff approves the rollout.
 
 ## Recommendation (plain words)
@@ -46,8 +47,8 @@ until Karen gates this and Jeff approves the rollout.
 | BOB | `jobs.<class>.<id>` | existing | legacy class queue (unchanged) |
 | BOB | `cap.<cap_token>.<id>` | operator publishes | capability-routed jobs, stream `CAPJOBS` |
 | BOB | `caps.<node>` | each member | capability heartbeat (node info + LLM caps) |
-| BOB | `results.<id>` | members | results (stream `RESULTS`, unchanged) |
-| GUEST | `sandbox.jobs.<id>` | BOB operator (via service import) | stream `SANDBOX`, consumer `guests` |
+| BOB | `results.<node>.<id>` | members | results, scoped to the publishing node (stream `RESULTS`) |
+| GUEST | `sandbox.jobs.<id>` | hub's `guestops` user (lives in GUEST) | stream `SANDBOX`, consumer `guests` |
 | GUEST | `sandbox.results.<node>.<id>` | guests | results, exported to BOB |
 | GUEST | `sandbox.caps.<node>` | guests | heartbeat, exported to BOB |
 | JOIN | `join.redeem` | pending join users | redeem a join code (served by `joind`) |
@@ -74,6 +75,8 @@ work; `llm.claude` when a node is signed in to Claude Code. `cluster/routing.py`
 
 On the NucBox: `python3 -m cluster.bobctl mint --name macbook --role member`
 prints one install line containing a single-use join code (expires in 30 min).
+Treat that line like a password until it is used: it is single use and dies
+after 30 minutes, but whoever runs it first gets the node slot.
 
 On the new machine, paste the line (macOS/Linux bash, or Windows PowerShell which
 installs into WSL). The installer: installs Python deps + worker into

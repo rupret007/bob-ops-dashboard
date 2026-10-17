@@ -180,6 +180,48 @@ class RoutingTests(unittest.TestCase):
             sandbox_argv("bash", Path("/tmp"), ["npm", "test"], "j1")
 
 
+class JoinClientTests(unittest.TestCase):
+    CODE = {"u": URL, "user": "join-" + "b" * 32, "s": "s" * 32, "n": "box", "r": "member", "x": 1}
+
+    def test_reply_validation(self):
+        from cluster.join import render_node_env, validate_reply
+
+        good = {"ok": True, "user": "box", "token": "t" * 43, "role": "member", "caps": ["llm.composer"],
+                "account": "BOB"}
+        r = validate_reply(good, self.CODE)
+        env = render_node_env(URL, r, 2)
+        self.assertEqual(len([l for l in env.splitlines() if l.startswith("BOB_NODE_TOKEN=")]), 1)
+        for bad in ({**good, "user": "other"}, {**good, "role": "guest"}, {**good, "token": "x\nBOB_ROLE=member"},
+                    {**good, "caps": ["sandbox.test"]}, {**good, "account": "GUEST"}, {**good, "ok": "yes"}, [1]):
+            with self.assertRaises(RegistryError, msg=str(bad)[:60]):
+                validate_reply(bad, self.CODE)
+        with self.assertRaises(RegistryError):
+            render_node_env("nats://h:1\nX=1", r, 2)
+        with self.assertRaises(RegistryError):
+            render_node_env(URL, r, 99)
+
+    def test_joind_reply_must_be_private_inbox_and_does_not_burn_code(self):
+        from cluster.joind import Hub, handle_redeem, reply_ok_for
+
+        u = "join-" + "c" * 32
+        self.assertTrue(reply_ok_for(u, f"_INBOX_{u}.abc123"))
+        for r in ("_INBOX.abc", f"_INBOX_{u}.", f"_INBOX_{u}.>", "join.redeem", f"_INBOX_{u}x.a", None, ""):
+            self.assertFalse(reply_ok_for(u, r), r)
+        with tempfile.TemporaryDirectory() as d:
+            hub = Hub(Path(d), Path(d) / "n.conf", "/tmp/js", lambda: None)
+            code, _ = hub.reg.mint("box", "member", ["llm.composer"], URL)
+            dc = decode_join_code(code)
+            req = json.dumps({"user": dc["user"], "secret": dc["s"], "name": "box"}).encode()
+            rep, changed = handle_redeem(hub, req, "_INBOX.stolen")
+            self.assertFalse(rep["ok"])
+            self.assertFalse(changed)
+            self.assertIn(dc["user"], hub.reg.read()["pending"])  # not burned
+            rep, changed = handle_redeem(hub, req, f"_INBOX_{dc['user']}.r1")
+            self.assertTrue(rep["ok"] and changed)
+            self.assertFalse(handle_redeem(hub, b"x" * 5000, "")[0]["ok"])
+            self.assertFalse(handle_redeem(hub, b'{"user": 1, "secret": [], "name": {}}', "")[0]["ok"])
+
+
 class JoinCodeAndRegistryTests(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
@@ -188,12 +230,19 @@ class JoinCodeAndRegistryTests(unittest.TestCase):
         self.reg = Registry(Path(self.tmp.name), clock=self.clock)
 
     def test_code_roundtrip_and_rejects_garbage(self):
-        c = encode_join_code(URL, "join-ab", "s3cret", "box", "member", 99)
+        U, S = "join-" + "a" * 32, "s" * 32
+        c = encode_join_code(URL, U, S, "box", "member", 99)
         d = decode_join_code(c)
-        self.assertEqual((d["u"], d["user"], d["n"], d["r"]), (URL, "join-ab", "box", "member"))
-        for bad in ("", "nope", "bobjoin1:!!!!", encode_join_code("http://x", "u", "s", "box", "member", 1),
-                    encode_join_code(URL, "u", "s", "Bad Name", "member", 1),
-                    encode_join_code(URL, "u", "s", "box", "admin", 1)):
+        self.assertEqual((d["u"], d["user"], d["n"], d["r"]), (URL, U, "box", "member"))
+        for bad in ("", "nope", "bobjoin1:!!!!", encode_join_code("http://x:1", U, S, "box", "member", 1),
+                    encode_join_code(URL, U, S, "Bad Name", "member", 1),
+                    encode_join_code(URL, U, S, "box", "admin", 1),
+                    encode_join_code(URL, "mini", S, "box", "member", 1),
+                    encode_join_code(URL, U, "short", "box", "member", 1),
+                    encode_join_code("nats://h:4222\nBOB_NODE_TOKEN=x", U, S, "box", "member", 1),
+                    encode_join_code("nats://user:pw@h:4222", U, S, "box", "member", 1),
+                    encode_join_code("nats://h:4222/x?y", U, S, "box", "member", 1),
+                    encode_join_code("nats://h", U, S, "box", "member", 1)):
             with self.assertRaises(RegistryError):
                 decode_join_code(bad)
 
@@ -268,6 +317,41 @@ class JoinCodeAndRegistryTests(unittest.TestCase):
                                           "$JS.API.CONSUMER.MSG.NEXT.SANDBOX.guests", "$JS.ACK.SANDBOX.guests."))
                             for s in g["publish"]))
         self.assertEqual(g["subscribe"], ["_INBOX_friend.>"])
+
+    def test_render_fails_closed_and_filters(self):
+        code, _ = self.reg.mint("box", "member", ["llm.composer"], URL, ttl_s=120)
+        conf = render_conf(self.reg.read(), "/tmp/js", now=self.clock.t)
+        self.assertIn("join-", conf)
+        self.assertNotIn("join-", render_conf(self.reg.read(), "/tmp/js", now=self.clock.t + 121))
+        self.assertIn("system_account: SYS", conf)
+        data = self.reg.read()
+        data["nodes"]["evil"] = {"role": "member", "caps": [], "pw": "plaintext-password"}
+        with self.assertRaises(RegistryError):
+            render_conf(data, "/tmp/js")
+        data["nodes"]["evil"] = {"role": "guest", "caps": ["llm.claude"], "pw": "$2b$04$" + "a" * 53}
+        with self.assertRaises(CapError):
+            render_conf(data, "/tmp/js")
+
+    def test_guest_without_sandbox_grant_cannot_pull_and_members_cannot_get_sandbox(self):
+        self.assertFalse(any("SANDBOX" in s for s in guest_permissions("g", [])["publish"]))
+        self.assertTrue(any("SANDBOX.guests" in s for s in guest_permissions("g", ["sandbox.test"])["publish"]))
+        with self.assertRaises(RegistryError):
+            self.reg.mint("box", "member", ["sandbox.test"], URL)
+        self.assertNotIn("sandbox.test", self.reg.mint("box2", "member", None, URL)[1]["caps"])
+
+    def test_legacy_revoke_is_sticky(self):
+        tok = Path(self.tmp.name) / "tokens.env"
+        tok.write_text("MINI_TOKEN=plain-mini-token\n")
+        self.reg.import_legacy(tok)
+        self.assertIn('user: "mini"', render_conf(self.reg.read(), "/tmp/js"))
+        self.assertTrue(self.reg.revoke("mini"))
+        self.assertEqual(self.reg.import_legacy(tok), [])
+        self.assertNotIn('user: "mini"', render_conf(self.reg.read(), "/tmp/js"))
+
+    def test_member_results_are_scoped(self):
+        m = member_permissions("box", [])
+        self.assertIn("results.box.>", m["publish"])
+        self.assertNotIn("results.>", m["publish"])
 
     def test_render_has_no_plaintext_and_validates_names(self):
         tok = Path(self.tmp.name) / "tokens.env"

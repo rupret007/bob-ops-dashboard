@@ -159,7 +159,8 @@ class MeshWorker:
     def result_subject(self, job_id: str) -> str:
         if self.cfg.role == "guest":
             return f"sandbox.results.{self.cfg.user}.{job_id}"
-        return f"results.{job_id}"
+        # Scoped to this node: NATS only lets it publish results.<self>.>.
+        return f"results.{self.cfg.user}.{job_id}"
 
     async def handle(self, msg, cap: str) -> None:
         guest = self.cfg.role == "guest"

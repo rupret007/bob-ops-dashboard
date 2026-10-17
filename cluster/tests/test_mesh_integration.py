@@ -245,6 +245,26 @@ class MeshIntegration(unittest.TestCase):
             return closed
         self.assertTrue(asyncio.run(run()))
 
+    def test_guestops_cannot_delete_or_read_streams_and_legacy_revoke_disconnects(self):
+        async def run():
+            go = await connect(self.m.url, "guestops", self.hub.reg.service_password("guestops"),
+                               inbox_prefix=b"_INBOX_guestops")
+            ib = "_INBOX_guestops.x"
+            for subj in ("$JS.API.STREAM.DELETE.SANDBOX", "$JS.API.STREAM.MSG.GET.SANDBOX_RESULTS",
+                         "$JS.API.STREAM.PURGE.SANDBOX", "$JS.API.CONSUMER.DELETE.SANDBOX.guests"):
+                self.assertTrue(await perm_violation(go, lambda s=subj: go.publish(s, b"{}", reply=ib)), subj)
+            await go.close()
+            mini = await connect(self.m.url, "mini", LEGACY["MINI_TOKEN"])
+            self.hub.reg.revoke("mini")
+            await asyncio.to_thread(self.hub.apply)
+            await asyncio.sleep(0.8)
+            dropped = not mini.is_connected
+            await mini.close()
+            with self.assertRaises(Exception):
+                await connect(self.m.url, "mini", LEGACY["MINI_TOKEN"])
+            return dropped
+        self.assertTrue(asyncio.run(run()))
+
     def test_pending_users_cannot_sniff_each_other(self):
         c1 = self.join("p-one", "member", ["llm.composer"])
         d1 = decode_join_code(c1)

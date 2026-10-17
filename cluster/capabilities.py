@@ -66,7 +66,8 @@ def cap_filter(cap: str) -> str:
 
 def allowed_caps_for_role(role: str) -> frozenset[str]:
     if role == "member":
-        return frozenset(CAPABILITIES)
+        # Sandbox work runs under a separate GUEST identity, never a member's.
+        return frozenset(CAPABILITIES) - GUEST_CAPS
     if role == "guest":
         return GUEST_CAPS
     return frozenset()

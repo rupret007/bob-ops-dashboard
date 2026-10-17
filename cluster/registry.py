@@ -82,6 +82,31 @@ def encode_join_code(url: str, user: str, secret: str, name: str, role: str, exp
     return JOIN_PREFIX + base64.urlsafe_b64encode(body).decode().rstrip("=")
 
 
+TOKEN_PATTERN = re.compile(r"[A-Za-z0-9_-]{20,128}")
+PENDING_USER_PATTERN = re.compile(r"join-[0-9a-f]{32}")
+BCRYPT_PATTERN = re.compile(r"\$2[aby]\$(0[4-9]|1[0-4])\$[./A-Za-z0-9]{53}")
+_CTRL = re.compile(r"[\x00-\x1f\x7f]")
+
+
+def validate_hub_url(url: Any) -> str:
+    """nats://host:port or tls://host:port only; no userinfo/path/query/controls."""
+    from urllib.parse import urlsplit
+
+    if not isinstance(url, str) or len(url) > 200 or _CTRL.search(url) or any(c in url for c in "\"' $`\\"):
+        raise RegistryError("bad hub url")
+    u = urlsplit(url)
+    try:
+        port = u.port
+    except ValueError as e:
+        raise RegistryError("bad hub url port") from e
+    if u.scheme not in ("nats", "tls") or not u.hostname or u.username or u.password \
+            or u.path not in ("", "/") or u.query or u.fragment or not port:
+        raise RegistryError("hub url must be nats://host:port or tls://host:port")
+    if not re.fullmatch(r"[A-Za-z0-9.-]{1,100}|\[[0-9a-fA-F:]{2,60}\]", u.netloc.rsplit(":", 1)[0]):
+        raise RegistryError("bad hub url host")
+    return f"{u.scheme}://{u.netloc}"
+
+
 def decode_join_code(code: str) -> dict[str, Any]:
     if not isinstance(code, str) or not code.startswith(JOIN_PREFIX):
         raise RegistryError("not a bob join code")
@@ -92,10 +117,15 @@ def decode_join_code(code: str) -> dict[str, Any]:
         raise RegistryError("corrupt join code") from e
     if not isinstance(data, dict) or not {"u", "user", "s", "n", "r", "x"} <= set(data):
         raise RegistryError("incomplete join code")
-    if not str(data["u"]).startswith(("nats://", "tls://")):
-        raise RegistryError("join code url must be nats:// or tls://")
-    if data["r"] not in ROLES or not NODE_NAME_PATTERN.fullmatch(str(data["n"])):
+    data["u"] = validate_hub_url(data["u"])
+    if data["r"] not in ROLES or not isinstance(data["n"], str) or not NODE_NAME_PATTERN.fullmatch(data["n"]):
         raise RegistryError("join code role/name invalid")
+    if not isinstance(data["user"], str) or not PENDING_USER_PATTERN.fullmatch(data["user"]):
+        raise RegistryError("join code user invalid")
+    if not isinstance(data["s"], str) or not TOKEN_PATTERN.fullmatch(data["s"]):
+        raise RegistryError("join code secret invalid")
+    if not isinstance(data["x"], int):
+        raise RegistryError("join code expiry invalid")
     return data
 
 
@@ -118,12 +148,23 @@ class Registry:
     def locked(self) -> Iterator[dict[str, Any]]:
         import fcntl
 
-        self.dir.mkdir(parents=True, exist_ok=True, mode=0o700)
-        with open(self.dir / ".registry.lock", "a+") as lf:
+        self._ensure_private_dir()
+        fd = os.open(self.dir / ".registry.lock", os.O_RDWR | os.O_CREAT | getattr(os, "O_NOFOLLOW", 0), 0o600)
+        with os.fdopen(fd, "a+") as lf:
             fcntl.flock(lf, fcntl.LOCK_EX)
             data = self._load()
             yield data
             self._save(data)
+
+    def _ensure_private_dir(self) -> None:
+        self.dir.mkdir(parents=True, exist_ok=True, mode=0o700)
+        if self.dir.is_symlink():
+            raise RegistryError("config dir must not be a symlink")
+        st = self.dir.stat()
+        if hasattr(os, "getuid") and st.st_uid != os.getuid():
+            raise RegistryError("config dir must be owned by this user")
+        if st.st_mode & 0o077:
+            os.chmod(self.dir, 0o700)
 
     def read(self) -> dict[str, Any]:
         return self._load()
@@ -143,27 +184,25 @@ class Registry:
 
     # service users (joind in JOIN, guestops in GUEST): plaintext stays on hub
     def service_password(self, user: str) -> str:
-        env = _read_env(self.secrets_path)
+        if user not in ("joind", "guestops"):
+            raise RegistryError("unknown service user")
         key = f"{user.upper()}_PASSWORD"
-        if key in env:
-            return env[key]
-        pw = secrets.token_urlsafe(32)
-        env[key] = pw
-        _atomic_write(self.secrets_path, "".join(f"{k}={v}\n" for k, v in sorted(env.items())))
+        # One lock covers the env file and the hash so concurrent initializers agree.
         with self.locked() as data:
-            data["service"][user] = hash_secret(pw)
+            env = _read_env(self.secrets_path)
+            pw = env.get(key)
+            if not pw:
+                pw = secrets.token_urlsafe(32)
+                env[key] = pw
+                _atomic_write(self.secrets_path, "".join(f"{k}={v}\n" for k, v in sorted(env.items())))
+            h = data["service"].get(user)
+            if not h or not check_secret(pw, h):
+                data["service"][user] = hash_secret(pw)
         return pw
 
     def ensure_service_users(self) -> None:
         for u in ("joind", "guestops"):
             self.service_password(u)
-        # Keep bcrypt in sync if the registry was recreated.
-        env = _read_env(self.secrets_path)
-        with self.locked() as data:
-            for u in ("joind", "guestops"):
-                h = data["service"].get(u)
-                if not h or not check_secret(env[f"{u.upper()}_PASSWORD"], h):
-                    data["service"][u] = hash_secret(env[f"{u.upper()}_PASSWORD"])
 
     def import_legacy(self, tokens_env: Path) -> list[str]:
         """Hash the four existing tokens.env users into the registry (no plaintext kept)."""
@@ -171,7 +210,10 @@ class Registry:
         added = []
         with self.locked() as data:
             legacy = data.setdefault("legacy", {})
+            dead = set(data.get("legacy_revoked") or [])
             for u in LEGACY_USERS:
+                if u in dead:
+                    continue  # a revoked legacy identity is never resurrected implicitly
                 tok = env.get(f"{u.upper()}_TOKEN")
                 if tok and not (legacy.get(u) and check_secret(tok, legacy[u])):
                     legacy[u] = hash_secret(tok)
@@ -195,7 +237,6 @@ class Registry:
         except CapError as e:
             raise RegistryError(str(e)) from e
         now = self.clock()
-        user = PENDING_PREFIX + secrets.token_hex(4)
         secret = secrets.token_urlsafe(24)
         expires = now + int(ttl_s)
         with self.locked() as data:
@@ -205,12 +246,17 @@ class Registry:
                 raise RegistryError(f"node {name} already exists; revoke it first")
             if any(p["name"] == name for p in data["pending"].values()):
                 raise RegistryError(f"a join code for {name} is already outstanding")
+            user = PENDING_PREFIX + secrets.token_hex(16)
+            while user in data["pending"]:
+                user = PENDING_PREFIX + secrets.token_hex(16)
             data["pending"][user] = {"name": name, "role": role, "caps": caps,
                                      "pw": hash_secret(secret), "expires": expires, "created": now}
         return encode_join_code(url, user, secret, name, role, expires), {
             "user": user, "name": name, "role": role, "caps": caps, "expires": expires}
 
     def redeem(self, user: str, secret: str, name: str) -> dict[str, Any]:
+        if not all(isinstance(x, str) for x in (user, secret, name)) or len(secret) > 200:
+            raise RegistryError("join code is invalid, expired or already used")
         now = self.clock()
         with self.locked() as data:
             self._expire(data, now)
@@ -228,6 +274,12 @@ class Registry:
     def revoke(self, name: str) -> bool:
         with self.locked() as data:
             hit = False
+            if name in (data.get("legacy") or {}):
+                del data["legacy"][name]
+                data.setdefault("legacy_revoked", [])
+                if name not in data["legacy_revoked"]:
+                    data["legacy_revoked"].append(name)
+                hit = True
             n = data["nodes"].get(name)
             if n and not n.get("revoked"):
                 n["revoked"] = True
@@ -270,7 +322,7 @@ def _read_env(path: Path) -> dict[str, str]:
             if line and not line.startswith("#") and "=" in line:
                 k, v = line.split("=", 1)
                 out[k.strip()] = v.strip().strip('"')
-    except OSError:
+    except FileNotFoundError:
         pass
     return out
 
@@ -283,7 +335,14 @@ def _atomic_write(path: Path, text: str) -> None:
         os.fchmod(fd, 0o600)
         with os.fdopen(fd, "w", encoding="utf-8") as f:
             f.write(text)
+            f.flush()
+            os.fsync(f.fileno())
         os.replace(tmp, path)
+        dfd = os.open(path.parent, os.O_RDONLY)
+        try:
+            os.fsync(dfd)
+        finally:
+            os.close(dfd)
     except BaseException:
         with contextlib.suppress(OSError):
             os.unlink(tmp)
@@ -300,7 +359,7 @@ def _q(items: list[str]) -> str:
 
 
 def member_permissions(name: str, caps: list[str]) -> dict[str, Any]:
-    pub = [f"caps.{name}", f"metrics.{name}", "results.>",
+    pub = [f"caps.{name}", f"metrics.{name}", f"results.{name}.>",
            "$JS.API.CONSUMER.INFO.JOBS.workers", "$JS.API.CONSUMER.MSG.NEXT.JOBS.workers",
            "$JS.ACK.JOBS.workers.>"]
     for c in caps:
@@ -313,14 +372,27 @@ def member_permissions(name: str, caps: list[str]) -> dict[str, Any]:
     return {"publish": pub, "subscribe": [f"{inbox_prefix(name)}.>"]}
 
 
-def guest_permissions(name: str) -> dict[str, Any]:
-    return {
-        "publish": [f"sandbox.caps.{name}", f"sandbox.results.{name}.>",
-                    f"$JS.API.CONSUMER.INFO.{STREAM_SANDBOX}.{CONSUMER_GUESTS}",
-                    f"$JS.API.CONSUMER.MSG.NEXT.{STREAM_SANDBOX}.{CONSUMER_GUESTS}",
-                    f"$JS.ACK.{STREAM_SANDBOX}.{CONSUMER_GUESTS}.>"],
-        "subscribe": [f"{inbox_prefix(name)}.>"],
-    }
+def guest_permissions(name: str, caps: list[str] | None = None) -> dict[str, Any]:
+    pub = [f"sandbox.caps.{name}", f"sandbox.results.{name}.>"]
+    if caps is None or "sandbox.test" in caps:
+        pub += [f"$JS.API.CONSUMER.INFO.{STREAM_SANDBOX}.{CONSUMER_GUESTS}",
+                f"$JS.API.CONSUMER.MSG.NEXT.{STREAM_SANDBOX}.{CONSUMER_GUESTS}",
+                f"$JS.ACK.{STREAM_SANDBOX}.{CONSUMER_GUESTS}.>"]
+    return {"publish": pub, "subscribe": [f"{inbox_prefix(name)}.>"]}
+
+
+# guestops: enqueue sandbox jobs and manage only the two GUEST streams; no
+# delete, no message reads, no other streams.
+GUESTOPS_PERMS = {
+    "publish": ["sandbox.jobs.*", "$JS.API.INFO",
+                f"$JS.API.STREAM.CREATE.{STREAM_SANDBOX}", f"$JS.API.STREAM.UPDATE.{STREAM_SANDBOX}",
+                f"$JS.API.STREAM.INFO.{STREAM_SANDBOX}",
+                f"$JS.API.STREAM.CREATE.{STREAM_SANDBOX_RESULTS}", f"$JS.API.STREAM.UPDATE.{STREAM_SANDBOX_RESULTS}",
+                f"$JS.API.STREAM.INFO.{STREAM_SANDBOX_RESULTS}",
+                f"$JS.API.CONSUMER.CREATE.{STREAM_SANDBOX}.>", f"$JS.API.CONSUMER.DURABLE.CREATE.{STREAM_SANDBOX}.>",
+                f"$JS.API.CONSUMER.INFO.{STREAM_SANDBOX}.>"],
+    "subscribe": ["_INBOX_guestops.>", "sandbox.results.>", "sandbox.caps.>"],
+}
 
 
 LEGACY_PERMS = {
@@ -341,8 +413,11 @@ LEGACY_PERMS = {
 
 
 def _user_block(user: str, pw: str, perms: dict[str, Any] | None, allow_responses: bool = False) -> str:
-    if '"' in pw or "\\" in pw or "\n" in pw:
-        raise RegistryError("password contains unsafe characters")
+    # Fail closed: only bcrypt hashes and safe user names are ever rendered.
+    if not isinstance(pw, str) or not BCRYPT_PATTERN.fullmatch(pw):
+        raise RegistryError(f"refusing to render non-bcrypt password for {user}")
+    if not re.fullmatch(r"[a-z][a-z0-9-]{1,40}", user):
+        raise RegistryError(f"refusing to render unsafe user name {user!r}")
     lines = [f"      {{ user: {json.dumps(user)}, password: {json.dumps(pw)}"]
     if perms is not None:
         p = [f"publish: {_q(perms['publish'])}" if perms["publish"] else "publish: { deny: [\">\"] }",
@@ -355,8 +430,9 @@ def _user_block(user: str, pw: str, perms: dict[str, Any] | None, allow_response
 
 
 def render_conf(reg: dict[str, Any], store_dir: str, port: int = 4222, http: str = "127.0.0.1:8232",
-                host: str = "127.0.0.1") -> str:
+                host: str = "127.0.0.1", now: float | None = None) -> str:
     """Render the accounts-based nats.conf. Only bcrypt hashes are written."""
+    now = time.time() if now is None else now
     bob, guest, join = [], [], []
     for u, h in sorted((reg.get("legacy") or {}).items()):
         if u in LEGACY_PERMS:
@@ -364,19 +440,22 @@ def render_conf(reg: dict[str, Any], store_dir: str, port: int = 4222, http: str
     for name, n in sorted(reg["nodes"].items()):
         if n.get("revoked") or not n.get("pw"):
             continue
+        if not NODE_NAME_PATTERN.fullmatch(name) or name in RESERVED_NAMES:
+            raise RegistryError(f"refusing to render bad node name {name!r}")
+        caps = validate_grant(n["role"], n.get("caps") or [])
         if n["role"] == "member":
-            bob.append(_user_block(name, n["pw"], member_permissions(name, n["caps"])))
+            bob.append(_user_block(name, n["pw"], member_permissions(name, caps)))
         elif n["role"] == "guest":
-            guest.append(_user_block(name, n["pw"], guest_permissions(name)))
+            guest.append(_user_block(name, n["pw"], guest_permissions(name, caps)))
     svc = reg.get("service") or {}
     if svc.get("guestops"):
-        guest.append(_user_block("guestops", svc["guestops"], {
-            "publish": ["sandbox.jobs.>", "$JS.API.>"],
-            "subscribe": ["_INBOX.>", "sandbox.results.>", "sandbox.caps.>"]}))
+        guest.append(_user_block("guestops", svc["guestops"], GUESTOPS_PERMS))
     if svc.get("joind"):
         join.append(_user_block("joind", svc["joind"], {"publish": [], "subscribe": ["join.redeem"]},
                                 allow_responses=True))
     for user, p in sorted(reg["pending"].items()):
+        if p["expires"] <= now:
+            continue  # expired codes never authenticate, even before the sweep runs
         join.append(_user_block(user, p["pw"], {"publish": ["join.redeem"], "subscribe": [f"{inbox_prefix(user)}.>"]}))
 
     def users(blocks: list[str]) -> str:
@@ -414,5 +493,9 @@ accounts {{
   JOIN: {{
     users: {users(join)}
   }}
+  SYS: {{
+    users: []
+  }}
 }}
+system_account: SYS
 """

@@ -191,7 +191,7 @@ async def setup_streams(url: str, bob_user: str, bob_pw: str, guest_pw: str | No
             max_deliver=3, filter_subject=cap_filter(cap)))
     await nc.close()
     if guest_pw:
-        nc = await nats.connect(url, user="guestops", password=guest_pw)
+        nc = await nats.connect(url, user="guestops", password=guest_pw, inbox_prefix=b"_INBOX_guestops")
         js = nc.jetstream()
         await upsert_stream(js, StreamConfig(name=STREAM_SANDBOX, subjects=["sandbox.jobs.*"],
                                              retention=RetentionPolicy.WORK_QUEUE,
@@ -228,13 +228,17 @@ async def submit_spec(url: str, user: str, pw: str, spec: dict, wait: float = 0.
 
     from cluster.routing import subject_for
 
-    nc = await nats.connect(url, user=user, password=pw)
+    kw = {"inbox_prefix": b"_INBOX_guestops"} if user == "guestops" else {}
+    nc = await nats.connect(url, user=user, password=pw, **kw)
     js = nc.jetstream()
-    ack = await js.publish(subject_for(spec), json.dumps(spec).encode())
     result = None
+    sub = None
     if wait > 0:
-        subj = (f"sandbox.results.*.{spec['id']}" if spec["cap"] in GUEST_CAPS else f"results.{spec['id']}")
+        subj = (f"sandbox.results.*.{spec['id']}" if spec["cap"] in GUEST_CAPS else f"results.*.{spec['id']}")
         sub = await nc.subscribe(subj)
+        await nc.flush()
+    ack = await js.publish(subject_for(spec), json.dumps(spec).encode())
+    if sub is not None:
         try:
             msg = await sub.next_msg(timeout=wait)
             result = json.loads(msg.data)
