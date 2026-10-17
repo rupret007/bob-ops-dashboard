@@ -204,28 +204,26 @@ class BaseReviewer(ABC):
 
 
 class CodexReviewer(BaseReviewer):
-    """Codex CLI reviewer via CODEX_HOST=nuc.
+    """Codex CLI reviewer.
 
     Primary reviewer using Jeff's $200 Codex plan.
     Runs at low effort by default, high effort for security/high-risk.
     Stops at 75% weekly usage.
+
+    When codex_host is set (e.g., "nuc"), attempts to run on that host via SSH.
+    Falls back to local execution if SSH fails.
     """
 
     name = "codex"
 
     def is_available(self, config: KarenConfig) -> tuple[bool, str]:
         """Check if Codex CLI is available and within budget."""
-        try:
-            result = subprocess.run(
-                ["which", "codex"],
-                capture_output=True,
-                text=True,
-                timeout=5,
-            )
-            if result.returncode != 0:
+        if not self._codex_available_locally():
+            if config.codex_host and config.codex_host != "local":
+                if not self._can_ssh_to_host(config.codex_host):
+                    return False, f"codex CLI not local and SSH to {config.codex_host} failed"
+            else:
                 return False, "codex CLI not found in PATH"
-        except (subprocess.TimeoutExpired, FileNotFoundError):
-            return False, "codex CLI not accessible"
 
         usage_pct = self._get_weekly_usage_pct(config)
         if usage_pct >= config.codex_weekly_cap_pct:
@@ -233,11 +231,34 @@ class CodexReviewer(BaseReviewer):
 
         return True, "ok"
 
-    def _get_weekly_usage_pct(self, config: KarenConfig) -> float:
-        """Get current weekly Codex usage percentage.
+    def _codex_available_locally(self) -> bool:
+        """Check if codex CLI is available locally."""
+        try:
+            result = subprocess.run(
+                ["which", "codex"],
+                capture_output=True,
+                text=True,
+                timeout=5,
+            )
+            return result.returncode == 0
+        except (subprocess.TimeoutExpired, FileNotFoundError):
+            return False
 
-        Reads from budget tracker state file.
-        """
+    def _can_ssh_to_host(self, host: str) -> bool:
+        """Check if we can SSH to a remote host."""
+        try:
+            result = subprocess.run(
+                ["ssh", "-o", "ConnectTimeout=5", "-o", "BatchMode=yes", host, "which", "codex"],
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
+            return result.returncode == 0
+        except (subprocess.TimeoutExpired, FileNotFoundError):
+            return False
+
+    def _get_weekly_usage_pct(self, config: KarenConfig) -> float:
+        """Get current weekly Codex usage percentage."""
         state_file = config.get_state_dir() / "codex_weekly_usage.json"
         if not state_file.is_file():
             return 0.0
@@ -275,6 +296,24 @@ class CodexReviewer(BaseReviewer):
         }
         state_file.write_text(json.dumps(data, indent=2))
 
+    def _build_codex_args(self, prompt: str, effort: str) -> list[str]:
+        """Build the codex exec command arguments.
+
+        Uses current codex CLI flags:
+        - -c model_reasoning_effort="low"|"high" (NOT --effort)
+        - --sandbox read-only
+        - --skip-git-repo-check (no git repo needed)
+        - -o (--output-last-message) for clean output
+        """
+        return [
+            "codex", "exec",
+            "-c", f'model_reasoning_effort="{effort}"',
+            "--sandbox", "read-only",
+            "--skip-git-repo-check",
+            "-o",
+            prompt,
+        ]
+
     def review(self, pr: PRInfo, tier: ReviewTier, config: KarenConfig) -> ReviewResult:
         """Run Codex review via CLI."""
         start_time = time.time()
@@ -295,28 +334,52 @@ class CodexReviewer(BaseReviewer):
             diff_len=min(len(pr.diff), 15000),
         )
 
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
-            f.write(prompt)
-            prompt_file = f.name
+        run_on_host = None
+        use_ssh = False
+
+        if config.codex_host and config.codex_host not in ("local", ""):
+            if self._can_ssh_to_host(config.codex_host):
+                use_ssh = True
+                run_on_host = config.codex_host
+            elif self._codex_available_locally():
+                pass
+            else:
+                return ReviewResult(
+                    reviewer=self.name,
+                    verdict=ReviewVerdict.ERROR,
+                    reason=f"Cannot reach {config.codex_host} via SSH and no local codex",
+                    tier=tier,
+                    duration_sec=time.time() - start_time,
+                )
+
+        codex_args = self._build_codex_args(prompt, effort)
 
         try:
-            env = os.environ.copy()
-            env["CODEX_HOST"] = config.codex_host
-
-            result = subprocess.run(
-                [
+            if use_ssh:
+                escaped_prompt = prompt.replace("'", "'\"'\"'")
+                ssh_codex_args = [
                     "codex", "exec",
-                    "--effort", effort,
-                    "--quiet",
-                    "--no-full-auto",
-                    prompt,
-                ],
-                capture_output=True,
-                text=True,
-                timeout=300,
-                env=env,
-                cwd=tempfile.gettempdir(),
-            )
+                    "-c", f'model_reasoning_effort="{effort}"',
+                    "--sandbox", "read-only",
+                    "--skip-git-repo-check",
+                    "-o",
+                    escaped_prompt,
+                ]
+                full_cmd = ["ssh", "-o", "ConnectTimeout=30", run_on_host] + ssh_codex_args
+
+                result = subprocess.run(
+                    full_cmd,
+                    capture_output=True,
+                    text=True,
+                    timeout=300,
+                )
+            else:
+                result = subprocess.run(
+                    codex_args,
+                    capture_output=True,
+                    text=True,
+                    timeout=300,
+                )
 
             duration = time.time() - start_time
 
@@ -354,31 +417,35 @@ class CodexReviewer(BaseReviewer):
                 tier=tier,
                 duration_sec=time.time() - start_time,
             )
-        finally:
-            try:
-                os.unlink(prompt_file)
-            except OSError:
-                pass
 
 
 class GeminiReviewer(BaseReviewer):
-    """Gemini API reviewer (prepaid fallback)."""
+    """Gemini API reviewer (prepaid fallback).
+
+    Uses v1beta generateContent API with configurable model.
+    Default model: gemini-2.5-flash (fast, cheap)
+    """
 
     name = "gemini"
+
+    DEFAULT_MODEL = "gemini-2.5-flash"
 
     def is_available(self, config: KarenConfig) -> tuple[bool, str]:
         """Check if Gemini API key is configured.
 
-        Missing key file is a skip (not an error) - try next reviewer.
+        Missing key file is a SKIP (not an error) - skips to next reviewer
+        WITHOUT making any HTTP call.
         """
         key_file = Path(config.gemini_api_key_file).expanduser()
-        if not key_file.is_file():
-            env_key = os.environ.get("GEMINI_API_KEY", "")
-            if not env_key:
-                return False, f"Gemini API key not found (no {key_file} or GEMINI_API_KEY env)"
+        env_key = os.environ.get("GEMINI_API_KEY", "")
+
+        if not key_file.is_file() and not env_key:
+            return False, f"SKIP: no Gemini key (missing {key_file} and no GEMINI_API_KEY env)"
+
         key = self._load_key(config)
         if not key:
-            return False, "Gemini API key file exists but is empty"
+            return False, "SKIP: Gemini API key file exists but is empty"
+
         return True, "ok"
 
     def _load_key(self, config: KarenConfig) -> str:
@@ -388,8 +455,16 @@ class GeminiReviewer(BaseReviewer):
             return key_file.read_text().strip()
         return os.environ.get("GEMINI_API_KEY", "")
 
+    def _get_model(self, config: KarenConfig) -> str:
+        """Get the Gemini model to use."""
+        return getattr(config, "gemini_model", None) or self.DEFAULT_MODEL
+
     def review(self, pr: PRInfo, tier: ReviewTier, config: KarenConfig) -> ReviewResult:
-        """Run Gemini review via API."""
+        """Run Gemini review via API.
+
+        IMPORTANT: is_available() MUST be called first to check for key.
+        This method assumes the key exists.
+        """
         start_time = time.time()
 
         api_key = self._load_key(config)
@@ -397,9 +472,11 @@ class GeminiReviewer(BaseReviewer):
             return ReviewResult(
                 reviewer=self.name,
                 verdict=ReviewVerdict.ERROR,
-                reason="Gemini API key not available",
+                reason="Gemini API key not available (should have been caught by is_available)",
                 tier=tier,
             )
+
+        model = self._get_model(config)
 
         prompt = REVIEW_PROMPT.format(
             owner=pr.owner,
@@ -417,7 +494,7 @@ class GeminiReviewer(BaseReviewer):
             import urllib.request
             import urllib.error
 
-            url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={api_key}"
+            url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}"
 
             payload = json.dumps({
                 "contents": [{"parts": [{"text": prompt}]}],
