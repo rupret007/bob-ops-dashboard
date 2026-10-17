@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-10-17T02:50:27.873771-05:00",
-  "generated_at_display": "Sat Oct 17, 2026 \u00b7 2:50 AM CDT",
+  "generated_at": "2026-10-17T03:05:35.600808-05:00",
+  "generated_at_display": "Sat Oct 17, 2026 \u00b7 3:05 AM CDT",
   "timezone": "America/Chicago",
   "owner": "rupret007",
   "dashboard": "bob-ops-dashboard",
@@ -495,8 +495,8 @@
           "status": "green",
           "chip": "Green",
           "default_branch": "main",
-          "tip_sha": "1b577ba",
-          "tip_date": "2026-10-17T07:39:02Z",
+          "tip_sha": "09dba6a",
+          "tip_date": "2026-10-17T07:50:42Z",
           "open_prs": 0,
           "open_pr_url": null,
           "open_pr_number": null,
@@ -504,14 +504,7 @@
           "open_pr_stack": [],
           "pr_listing_complete": true,
           "agent_url": null,
-          "ci": {
-            "name": "Cluster tests",
-            "conclusion": "success",
-            "branch": "main",
-            "sha": "1b577ba",
-            "created": "2026-10-17T07:39:04Z",
-            "html_url": "https://github.com/rupret007/bob-ops-dashboard/actions/runs/39014422983"
-          },
+          "ci": null,
           "release": null,
           "release_sha": null,
           "release_url": null,
@@ -683,8 +676,8 @@
           "url": "https://github.com/rupret007/Andrea_NanoBot",
           "repo_url": "https://github.com/rupret007/Andrea_NanoBot",
           "private": false,
-          "status": "yellow",
-          "chip": "Yellow",
+          "status": "green",
+          "chip": "Green",
           "default_branch": "main",
           "tip_sha": "4d84bfd",
           "tip_date": "2026-10-17T07:43:30Z",
@@ -696,12 +689,12 @@
           "pr_listing_complete": true,
           "agent_url": null,
           "ci": {
-            "name": "CI",
-            "conclusion": "in_progress",
+            "name": "AGI Layer CI",
+            "conclusion": "success",
             "branch": "main",
             "sha": "4d84bfd",
             "created": "2026-10-17T07:43:33Z",
-            "html_url": "https://github.com/rupret007/Andrea_NanoBot/actions/runs/39014700978"
+            "html_url": "https://github.com/rupret007/Andrea_NanoBot/actions/runs/39014700819"
           },
           "release": null,
           "release_sha": null,
@@ -907,7 +900,7 @@
     "barker"
   ],
   "publish_notes": "Public board -- no secrets or customer paths. Private repositories stay high-level; AI Music Vault stays private-content-boundary only.",
-  "refresh_started_ms": 1792223397905,
+  "refresh_started_ms": 1792224302684,
   "agents_source": "file:stale->unknown",
   "agents": [
     {
@@ -1078,7 +1071,7 @@
     }
   ],
   "llm_work_now_freshness": {
-    "generated_at": "2026-10-17 02:50 CT",
+    "generated_at": "2026-10-17 03:05 CT",
     "warn_ttl_sec": 1200,
     "warnings": [],
     "ok": true
@@ -1109,7 +1102,7 @@
     ],
     "scorecards": {
       "v": "scorecards/v1",
-      "generated_at": "2026-10-17T07:50:28.903073+00:00",
+      "generated_at": "2026-10-17T08:05:36.749171+00:00",
       "windows": {
         "24h": {
           "providers": {
