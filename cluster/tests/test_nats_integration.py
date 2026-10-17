@@ -1,10 +1,24 @@
 import asyncio
+import importlib.util
 import json
 import unittest
 
 from cluster.spec import job_subject, validate_job_spec
 from cluster.tests.nats_test_util import EphemeralNats, find_nats_binary
 from cluster.worker_logic import JobAction, parse_job_payload
+
+def _nats_py_available() -> bool:
+    try:
+        return importlib.util.find_spec("nats") is not None
+    except ModuleNotFoundError:
+        return False
+
+
+_HAS_NATS_PY = _nats_py_available()
+
+
+def _nats_integration_available() -> bool:
+    return bool(find_nats_binary()) and _HAS_NATS_PY
 
 
 class FakeMsg:
@@ -50,7 +64,10 @@ class TestFakeJobSource(unittest.TestCase):
         self.assertEqual(len(deliveries), 3)
 
 
-@unittest.skipUnless(find_nats_binary(), "nats-server binary not installed")
+@unittest.skipUnless(
+    _nats_integration_available(),
+    "nats-server binary or nats-py not installed",
+)
 class TestNatsIntegration(unittest.TestCase):
     def test_setup_and_publish(self):
         nats_srv = EphemeralNats()
@@ -117,7 +134,10 @@ class TestNatsIntegration(unittest.TestCase):
         await nc.close()
 
 
-@unittest.skipUnless(find_nats_binary(), "nats-server binary not installed")
+@unittest.skipUnless(
+    _nats_integration_available(),
+    "nats-server binary or nats-py not installed",
+)
 class TestWorkerPermissions(unittest.TestCase):
     def test_template_allows_work_and_denies_administration(self):
         server = EphemeralNats(secured=True)
