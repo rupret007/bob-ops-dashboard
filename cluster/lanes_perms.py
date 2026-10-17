@@ -67,3 +67,16 @@ def render_users(users: dict) -> str:
     for login, (password, perms) in users.items():
         rows.append(f'    {{ user: {_fmt(login, 0)}, password: {_fmt(password, 0)}, permissions: {_fmt(perms, 4)} }}')
     return "authorization {\n  users = [\n" + "\n".join(rows) + "\n  ]\n}\n"
+
+
+def metrics_publisher() -> dict:
+    """Proposed dedicated identity only; never grants replies or JetStream access."""
+    return {
+        "publish": {"allow": ["metrics.*"],
+                    "deny": ["$KV.>", "lanes.>", "lanes_dlq.>", "_INBOX.>", "$JS.>"]},
+        "subscribe": {"deny": [">"]},
+    }
+
+
+def metrics_viewer() -> dict:
+    return {"publish": {"deny": [">"]}, "subscribe": {"allow": ["metrics.*"]}}

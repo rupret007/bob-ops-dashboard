@@ -61,7 +61,7 @@ def _sum_optional_tokens(a: int | None, b: int | None) -> int | None:
 
 @dataclass(frozen=True)
 class TokenTotals:
-    total_tokens: int = 0
+    total_tokens: int | None = None
     cached_tokens: int | None = None
     output_tokens: int | None = None
     reasoning_tokens: int | None = None
@@ -76,7 +76,7 @@ class TokenTotals:
 
     def __add__(self, other: TokenTotals) -> TokenTotals:
         return TokenTotals(
-            total_tokens=self.total_tokens + other.total_tokens,
+            total_tokens=_sum_optional_tokens(self.total_tokens, other.total_tokens),
             cached_tokens=_sum_optional_tokens(self.cached_tokens, other.cached_tokens),
             output_tokens=_sum_optional_tokens(self.output_tokens, other.output_tokens),
             reasoning_tokens=_sum_optional_tokens(
@@ -147,7 +147,7 @@ def last_codex_token_usage(session_path: Path) -> TokenTotals | None:
     if not last:
         return None
     return TokenTotals(
-        total_tokens=int(last.get("total_tokens") or 0),
+        total_tokens=_optional_token_int(last, "total_tokens"),
         cached_tokens=_optional_token_int(last, "cached_input_tokens"),
         output_tokens=_optional_token_int(last, "output_tokens"),
         reasoning_tokens=_optional_token_int(last, "reasoning_output_tokens"),
@@ -164,6 +164,8 @@ def collect_codex_for_day(sessions_root: Path, day: str) -> TokenTotals:
         if fp.name.startswith(".") or "auth" in fp.name.lower():
             continue
         row = last_codex_token_usage(fp)
+        if row is None:
+            row = TokenTotals()
         if row:
             # No observations is distinct from an observation with unknown fields.
             total = row if total is None else total + row
@@ -350,7 +352,9 @@ def tokens_for_merged_prs(
     if gemini_day:
         tokens_total += int(gemini_day.get("tokens") or 0)
     if codex_day:
-        tokens_total += int(codex_day.total_tokens)
+        if codex_day.total_tokens is None:
+            return {"count": merged_count, "tokens_total": None, "tokens_per_pr": None}
+        tokens_total += codex_day.total_tokens
     for _prov, n in (provider_usage or {}).items():
         tokens_total += int(n) * 0  # lane rows are counts only; tokens from spend/codex
     if tokens_total <= 0:
@@ -404,11 +408,11 @@ def collect_host_snapshot(
             merged_count,
             lane_day,
             gemini_day,
-            codex_totals if codex_totals.total_tokens else None,
+            codex_totals,
         )
         row: dict[str, Any] = {
             "date": day,
-            "codex": codex_totals.to_dict() if codex_totals.total_tokens else None,
+            "codex": codex_totals.to_dict(),
             "gemini": gemini_day,
             # No direct source exists; lanes never consume this tracked budget.
             "grok_bot": {"status": "unknown", "source": None},
@@ -545,13 +549,13 @@ def merge_host_snapshots(snapshots: list[dict[str, Any]]) -> dict[str, Any]:
             for metrics in codex_hosts.values():
                 if isinstance(metrics, dict):
                     observed = TokenTotals(
-                        total_tokens=int(metrics.get("total_tokens") or 0),
+                        total_tokens=_optional_token_int(metrics, "total_tokens"),
                         cached_tokens=_optional_token_int(metrics, "cached_tokens"),
                         output_tokens=_optional_token_int(metrics, "output_tokens"),
                         reasoning_tokens=_optional_token_int(metrics, "reasoning_tokens"),
                     )
                     combined = observed if combined is None else combined + observed
-            codex_combined = combined.to_dict() if combined and combined.total_tokens else None
+            codex_combined = combined.to_dict() if combined else None
         days_out.append(
             {
                 "date": day,

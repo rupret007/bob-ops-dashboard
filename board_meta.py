@@ -2949,11 +2949,11 @@ def usage_machines_chart_bars(days: list[dict[str, Any]]) -> list[dict[str, Any]
     vals: list[int] = []
     for row in days:
         codex = row.get("codex") if isinstance(row.get("codex"), dict) else {}
-        vals.append(int(codex.get("total_tokens") or 0))
-    peak = max(vals) if vals else 0
+        vals.append(codex.get("total_tokens"))
+    peak = max((v for v in vals if v is not None), default=0)
     out: list[dict[str, Any]] = []
     for row, val in zip(days, vals):
-        pct = 0 if peak <= 0 else min(100, max(4, int(100 * val / peak)))
+        pct = 0 if val is None or peak <= 0 else min(100, max(4, int(100 * val / peak)))
         out.append({"date": row.get("date"), "value": val, "height_pct": pct})
     return out
 
@@ -2977,7 +2977,7 @@ def usage_machines_html(data: Any) -> str:
     bar_bits: list[str] = []
     for bar in bars:
         label = html_lib.escape(str(bar.get("date") or "")[5:])
-        tip = html_lib.escape(_usage_millions(bar.get("value")))
+        tip = html_lib.escape(_usage_millions_or_unknown(bar.get("value")))
         height = int(bar.get("height_pct") or 0)
         bar_bits.append(
             f'<div class="usage-bar" title="{label} Codex {tip}">'
@@ -2993,7 +2993,7 @@ def usage_machines_html(data: Any) -> str:
     if codex:
         rows.append(
             "<tr><th>Codex</th><td>"
-            + html_lib.escape(_usage_millions(codex.get("total_tokens")))
+            + html_lib.escape(_usage_millions_or_unknown(codex.get("total_tokens")))
             + " total · "
             + html_lib.escape(_usage_millions_or_unknown(codex.get("output_tokens")))
             + " out · cached "

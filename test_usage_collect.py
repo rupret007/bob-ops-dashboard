@@ -431,3 +431,28 @@ class UsageMachinesPanelTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class MissingTotalTokensTests(unittest.TestCase):
+    def test_missing_total_poisoned_daily_and_merged_sum(self):
+        from board_meta import normalize_usage_machines, usage_machines_html, usage_machines_chart_bars
+        for missing in ({'output_tokens': 7}, {}):
+            with self.subTest(missing=missing), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                day = root / '2026/10/16'
+                day.mkdir(parents=True)
+                for i, usage in enumerate(({'total_tokens': 42}, missing)):
+                    (day / f'{i}.jsonl').write_text(json.dumps({'type': 'event_msg', 'payload': {
+                        'type': 'token_count', 'info': {'total_token_usage': usage}}}))
+                self.assertIsNone(collect_codex_for_day(root, '2026-10-16').total_tokens)
+                snap = collect_host_snapshot(host='mini', sessions_root=root, lane_logs=root,
+                                             days=['2026-10-16'], gh_search=lambda *_: 2)
+                self.assertIsNone(snap['days'][0]['merged_prs']['tokens_per_pr'])
+                merged = normalize_usage_machines(merge_host_snapshots([snap, {
+                    'host': 'nucbox', 'days': [{'date': '2026-10-16', 'codex': {'total_tokens': 50}}]}]))
+                self.assertIsNone(merged['days'][0]['codex']['total_tokens'])
+                self.assertIn('unknown total', usage_machines_html(merged))
+                self.assertIsNone(usage_machines_chart_bars(merged['days'])[0]['value'])
+
+    def test_explicit_zero_is_preserved(self):
+        self.assertEqual((TokenTotals(total_tokens=0) + TokenTotals(total_tokens=0)).total_tokens, 0)
