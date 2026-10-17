@@ -120,6 +120,70 @@ async function main() {
       await rejectsClippedText(title);
       assert(await row.evaluate(el => el === document.activeElement));
       assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
+      const workRow = page.locator('#agents-strip .agent-row[data-lane-id="codex"]');
+      await workRow.waitFor({ state: 'visible' });
+      assert.equal(await workRow.locator('.model').innerText(), 'Model: gpt-4o');
+      await workRow.locator('.task').click();
+      const sheet = page.locator('#detail-sheet');
+      await sheet.waitFor({ state: 'visible' });
+      assert.equal(await page.locator('#detail-title').innerText(), 'Codex (ChatGPT)');
+      assert((await page.locator('#detail-meta').innerText()).includes('Work now'));
+      assert((await page.locator('#detail-task').innerText()).includes('Pivot PR #56 to LLM work-now attribution board'));
+      assert((await page.locator('#detail-goal').innerText()).includes('Replace process-state pills with detailed assignment rows'));
+      const factsText = await page.locator('#detail-facts').innerText();
+      assert(factsText.includes('Model') && factsText.includes('gpt-4o'));
+      assert(factsText.includes('Session spend') && factsText.includes('$0.42'));
+      assert(factsText.includes('Repo') && factsText.includes('rupret007/bob-ops-dashboard'));
+      assert(factsText.includes('Branch') && factsText.includes('cursor/max-llm-resource-strip-ec39'));
+      assert(factsText.includes('PR') && factsText.includes('#56'));
+      assert(await page.locator('#detail-history-title').isVisible());
+      const related = page.locator('#detail-related button');
+      assert.equal(await related.count(), 1);
+      assert((await related.innerText()).includes('Bob Ops Dashboard'));
+      await related.click();
+      assert.equal(await page.locator('#detail-title').innerText(), 'Bob Ops Dashboard');
+      assert((await page.locator('#detail-meta').innerText()).includes('Lane'));
+      const relatedFacts = await page.locator('#detail-facts').innerText();
+      assert(relatedFacts.includes('Repo') && relatedFacts.includes('rupret007/bob-ops-dashboard'));
+      assert(relatedFacts.includes('Tip SHA'));
+      assert(await page.locator('#detail-history-title').isVisible());
+      assert((await page.locator('#detail-history').innerText()).toLowerCase().includes('tip'));
+      await page.locator('#detail-back').click();
+      assert.equal(await page.locator('#detail-title').innerText(), 'Codex (ChatGPT)');
+      await page.locator('#detail-close').click();
+      await expectHidden(page.locator('#detail-sheet'));
+      await page.click('#tab-live-shipping');
+      const lane = page.locator('[data-focus-key="project:storyliner"]');
+      await lane.waitFor({ state: 'visible' });
+      await lane.locator('.chip').click();
+      await sheet.waitFor({ state: 'visible' });
+      assert.equal(await page.locator('#detail-title').innerText(), 'StoryLiner');
+      assert((await page.locator('#detail-note').innerText()).includes('Current review stack and default-branch CI come from the live refresh.'));
+      assert((await page.locator('#detail-time').innerText()).includes('Snapshot:'));
+      const laneFacts = await page.locator('#detail-facts').innerText();
+      assert(laneFacts.includes('Repo') && laneFacts.includes('StoryLiner'));
+      assert(laneFacts.includes('Tip SHA'));
+      assert(await page.locator('#detail-history-title').isVisible());
+      assert((await page.locator('#detail-history').innerText()).toLowerCase().includes('tip'));
+      await page.locator('#detail-close').click();
+      await page.click('#tab-apps-utilities');
+      const privateLane = page.locator('[data-focus-key="project:css-conductor"]');
+      await privateLane.waitFor({ state: 'visible' });
+      await privateLane.locator('.notes').click();
+      await sheet.waitFor({ state: 'visible' });
+      assert.equal(await page.locator('#detail-title').innerText(), 'CSS Conductor');
+      const privateFacts = await page.locator('#detail-facts').innerText();
+      assert(privateFacts.includes('High-level only'));
+      assert(!privateFacts.includes('Tip SHA'));
+      assert.equal(await page.locator('#detail-related button').count(), 0);
+      await page.locator('#detail-close').click();
+      await expectHidden(page.locator('#detail-sheet'));
+      await page.click('#tab-live-shipping');
+      await lane.waitFor({ state: 'visible' });
+      await lane.locator('.chip').click();
+      await sheet.waitFor({ state: 'visible' });
+      await page.goBack();
+      await expectHidden(page.locator('#detail-sheet'));
       assert.deepEqual(errors, [], 'Browser script errors');
       assert.deepEqual(blocked, [], 'Unexpected external request or write');
       assert.deepEqual(popups, [], 'Navigation must not open an issue composer');
@@ -130,6 +194,10 @@ async function main() {
     if (browser) await browser.close();
     if (server.listening) await new Promise(resolve => server.close(resolve));
   }
+}
+
+async function expectHidden(locator) {
+  await locator.waitFor({ state: 'hidden' });
 }
 
 main().catch(error => { console.error(error); process.exitCode = 1; });

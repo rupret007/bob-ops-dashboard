@@ -57,6 +57,9 @@ MAX_META_BYTES = 2048
 PROVIDERS = ("codex", "cursor", "gemini", "claude", "minimax")
 _TOKEN_RE = re.compile(r"[^A-Za-z0-9_-]+")
 _HOST_RE = re.compile(r"^[a-z][a-z0-9-]{0,23}$")
+# Role names that own a reply inbox on the hub. A lane host with one of these names would get the
+# role's inbox (``_INBOX_hub`` carries the operator's JetStream API replies), so they are never hosts.
+RESERVED_HOST_NAMES = frozenset({"hub", "conductor"})
 _OWNER_RE = re.compile(r"^[A-Za-z0-9_.:/-]{1,80}$")
 
 
@@ -105,8 +108,13 @@ def check_provider(provider: str) -> str:
     return provider
 
 
+def is_valid_host(host) -> bool:
+    """A lane host name: lowercase token, and never a reserved role name (Karen S1)."""
+    return isinstance(host, str) and bool(_HOST_RE.fullmatch(host)) and host not in RESERVED_HOST_NAMES
+
+
 def check_host(host: str) -> str:
-    if not isinstance(host, str) or not _HOST_RE.match(host):
+    if not is_valid_host(host):
         raise ValueError(f"bad host {host!r}")
     return host
 
@@ -287,7 +295,7 @@ class LeaseService:
         if len(parts) != 4 or ".".join(parts[:2]) != LEASE_SVC_PREFIX:
             return {"ok": False, "error": "forbidden", "detail": "bad subject"}
         host, op = parts[2], parts[3]
-        if not _HOST_RE.match(host) or op not in LEASE_OPS:
+        if not is_valid_host(host) or op not in LEASE_OPS:
             return {"ok": False, "error": "forbidden", "detail": "bad host or op"}
         if len(data) > MAX_META_BYTES + 512:
             return {"ok": False, "error": "forbidden", "detail": "request too large"}
@@ -398,6 +406,16 @@ class LeaseClient:
 def inbox_prefix(host: str) -> str:
     """Per-host reply inbox namespace, so one host cannot read another host's replies or deliveries."""
     return f"_INBOX_{check_host(host)}"
+
+
+def role_inbox_prefix(role: str) -> str:
+    """Reply inbox for a hub role (``hub`` operator, ``conductor``). Lane hosts can never take these names."""
+    if role not in RESERVED_HOST_NAMES:
+        raise ValueError(f"unknown role {role!r}")
+    return f"_INBOX_{role}"
+
+
+OPERATOR_INBOX = role_inbox_prefix("hub")
 
 
 # --------------------------------------------------------------------------------------------------
@@ -612,9 +630,9 @@ class DeadLetterWatcher:
             return None  # already acked/termed/moved
         parts = (raw.subject or "").split(".")
         provider, host = (parts[1], parts[2]) if len(parts) == 4 else ("unknown", "unknown")
-        if provider not in PROVIDERS or not _HOST_RE.match(host):
+        if provider not in PROVIDERS or not is_valid_host(host):
             provider, host = "unknown", "unknown"
-        headers = {"Nats-Msg-Id": f"dlq-{LANES_STREAM}-{seq}", "Lanes-Orig-Seq": str(seq),
+        headers = {"Nats-Msg-Id": dlq_msg_id(raw), "Lanes-Orig-Seq": str(seq),
                    "Lanes-Orig-Subject": raw.subject or "", "Lanes-Consumer": consumer,
                    "Lanes-Deliveries": str(deliveries)}
         await self.js.publish(f"lanes_dlq.{provider}.{host}", raw.data or b"", stream=DLQ_STREAM, headers=headers)
@@ -628,6 +646,23 @@ class DeadLetterWatcher:
         if self.on_dead is not None:
             await self.on_dead(rec)
         return rec
+
+
+def dlq_msg_id(raw) -> str:
+    """Idempotency key for a dead-letter copy, independent of the LANES sequence number (Karen S3).
+
+    Keyed on the job's own enqueue ``Nats-Msg-Id`` (provider + job + head SHA + attempt), so a stream that
+    was recreated (sequence numbers restart) can never make a *different* job look like a duplicate of
+    an earlier dead letter. Without that header, falls back to a hash of the original subject and body.
+    """
+    orig = ""
+    hdrs = getattr(raw, "headers", None) or {}
+    if isinstance(hdrs, dict):
+        orig = str(hdrs.get("Nats-Msg-Id") or "").strip()
+    if orig:
+        return f"dlq-{orig}"
+    h = hashlib.sha256((raw.subject or "").encode() + b"\n" + (raw.data or b"")).hexdigest()[:24]
+    return f"dlq-sha-{h}"
 
 
 async def dead_letters(js, limit: int = 50) -> list:

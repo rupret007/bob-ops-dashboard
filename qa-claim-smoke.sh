@@ -297,6 +297,9 @@ pass "soft-paint / agent age-gate smoke"
 [[ -f "$ROOT/test_open_links.js" ]] || fail "missing test_open_links.js"
 node "$ROOT/test_open_links.js" "$INDEX" || fail "open-links smoke"
 pass "open-links smoke"
+[[ -f "$ROOT/test_detail_sheet.js" ]] || fail "missing test_detail_sheet.js"
+node "$ROOT/test_detail_sheet.js" || fail "detail-sheet deep-detail smoke"
+pass "detail-sheet deep-detail smoke"
 
 # 7) status.json must not carry a verify challenge
 if [[ -f "$STATUS" ]]; then

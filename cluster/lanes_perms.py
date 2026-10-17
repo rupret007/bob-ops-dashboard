@@ -20,14 +20,14 @@ from cluster import lanes
 
 def operator() -> dict:
     return {
-        "publish": {"allow": ["$JS.API.>", "$KV.LANE_LEASES.>", "lanes.>", "lanes_dlq.>", "_INBOX_hub.>"]},
-        "subscribe": {"allow": [f"{lanes.LEASE_SVC_PREFIX}.*.*", lanes.MAX_DELIVERIES_ADVISORY, "_INBOX_hub.>"]},
+        "publish": {"allow": ["$JS.API.>", "$KV.LANE_LEASES.>", "lanes.>", "lanes_dlq.>", f"{lanes.OPERATOR_INBOX}.>"]},
+        "subscribe": {"allow": [f"{lanes.LEASE_SVC_PREFIX}.*.*", lanes.MAX_DELIVERIES_ADVISORY, f"{lanes.OPERATOR_INBOX}.>"]},
         "allow_responses": True,
     }
 
 
 def conductor(name: str = "conductor") -> dict:
-    inbox = lanes.inbox_prefix(name)
+    inbox = lanes.role_inbox_prefix(name)
     return {
         "publish": {"allow": [lanes.LANES_SUBJECTS,
                               f"$JS.API.STREAM.INFO.{lanes.DLQ_STREAM}",
