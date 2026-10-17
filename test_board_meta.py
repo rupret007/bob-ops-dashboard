@@ -3344,5 +3344,50 @@ class GeminiLaneRepoAllowlistTest(_ut_gem.TestCase):
             rows = gemini_lane_rows({"generated_at": fresh, "lanes": [{"job": "gemrev-bob-brain-pr1", "mode": good}]}, now=now)
             self.assertEqual(rows[1]["task_title"], f"gemrev-bob-brain-pr1 ({shown})")
 
+
+class GeminiLaneDenyReTest(_ut_gem.TestCase):
+    """Karen soft (#70): GEMINI_LANE_JOB_DENY_RE is defense in depth behind the repo allowlist.
+
+    It is redundant for today's repo list (no known repo carries a secret/host shape), so prove both:
+    the allowlist never conflicts with it, and it still blocks on its own if a bad name ever lands in the list.
+    """
+
+    # Built at runtime: one repo-shaped name per deny alternative (no tracked secret/tailnet literals).
+    BAD_REPOS = ("x-" + "AIza" + "Q", "x-" + "sk-" + "q", "ghp" + "_q", "gho" + "_q", "ghs" + "_q",
+                 "github" + "_pat_q", "xox" + "b-q", "AKIA" + "Q", "eyJ" + "q", "x-ts" + "-net",
+                 "my" + "tailnet", "my" + "Tailscale", "my" + "tailscale")
+
+    def test_known_repos_never_hit_the_deny_list(self):
+        from board_meta import GEMINI_LANE_JOB_DENY_RE, GEMINI_LANE_KNOWN_REPOS, gemini_lane_public_job
+        for repo in GEMINI_LANE_KNOWN_REPOS:
+            for raw in (f"gemrev-{repo}-pr1", f"auto-{repo}-iss2", f"bl-{repo}-pr3.gat.1"):
+                self.assertIsNone(GEMINI_LANE_JOB_DENY_RE.search(raw), raw)
+                self.assertEqual(gemini_lane_public_job(raw), raw)
+
+    def test_every_deny_alternative_matches(self):
+        from board_meta import GEMINI_LANE_JOB_DENY_RE
+        for repo in self.BAD_REPOS:
+            self.assertIsNotNone(GEMINI_LANE_JOB_DENY_RE.search(f"gemrev-{repo}-pr1"), repo)
+
+    def test_deny_blocks_even_if_a_bad_name_is_allowlisted(self):
+        import re as _re
+        import board_meta
+        from live.sanitize import sanitize
+        orig_map, orig_deny = board_meta.GEMINI_LANE_KNOWN_REPO_BY_LOWER, board_meta.GEMINI_LANE_JOB_DENY_RE
+        try:
+            board_meta.GEMINI_LANE_KNOWN_REPO_BY_LOWER = dict(orig_map, **{r.lower(): r for r in self.BAD_REPOS})
+            for repo in self.BAD_REPOS:
+                raw = f"gemrev-{repo}-pr1"
+                with self.subTest(repo=repo):
+                    self.assertEqual(board_meta.gemini_lane_public_job(raw), "job")
+            # Control: the deny list is the layer doing the blocking (sanitize/shape alone let these through).
+            board_meta.GEMINI_LANE_JOB_DENY_RE = _re.compile(r"(?!x)x")
+            passed = [r for r in self.BAD_REPOS if board_meta.gemini_lane_public_job(f"gemrev-{r}-pr1") != "job"]
+            self.assertTrue(passed, "control: no case depends on the deny list")
+            for r in passed:
+                self.assertEqual(sanitize(f"gemrev-{r}-pr1"), f"gemrev-{r}-pr1")
+        finally:
+            board_meta.GEMINI_LANE_KNOWN_REPO_BY_LOWER, board_meta.GEMINI_LANE_JOB_DENY_RE = orig_map, orig_deny
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
