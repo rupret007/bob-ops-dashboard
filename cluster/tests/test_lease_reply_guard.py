@@ -1,5 +1,6 @@
 """Lease reply subjects must never turn the hub into a member's publish proxy."""
 
+import asyncio
 import json
 import secrets
 import unittest
@@ -28,10 +29,12 @@ class TestLeaseReplyGuard(unittest.IsolatedAsyncioTestCase):
         self.addCleanup(self.srv.stop)
         self.srv.start()
         self.errors = []
+        self.error_received = asyncio.Event()
 
         for user in users:
             async def on_error(error, user=user):
                 self.errors.append((user, str(error)))
+                self.error_received.set()
 
             nc = await nats.connect(
                 self.srv.url, user=user, password=passwords[user], inbox_prefix=f"_INBOX_{user}",
@@ -135,6 +138,8 @@ class TestLeaseReplyGuard(unittest.IsolatedAsyncioTestCase):
         # NATS 2.15.1 itself refuses $JS.ACK reply addresses before delivery to the service.
         await self.nuc.publish(subject, body, reply=self.ack_subject)
         await self.nuc.flush()
+        # nats-py dispatches error callbacks separately from the flush/PONG reader.
+        await asyncio.wait_for(self.error_received.wait(), timeout=2)
         self.assertEqual(self.errors, [(
             "nuc", f'nats: permissions violation for publish with reply of "{self.ack_subject.lower()}"',
         )])
