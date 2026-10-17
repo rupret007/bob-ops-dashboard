@@ -32,8 +32,9 @@ def free_port() -> int:
 
 
 class EphemeralNats:
-    def __init__(self, secured: bool = False) -> None:
+    def __init__(self, secured: bool = False, extra_conf: str = "") -> None:
         self.secured = secured
+        self.extra_conf = extra_conf
         self.passwords = {node: secrets.token_urlsafe(24) for node in ("mini", "macbook", "nucbox", "dashboard")}
         self.bin = find_nats_binary()
         self.proc: subprocess.Popen | None = None
@@ -61,6 +62,7 @@ jetstream {{
   max_mem_store: 67108864
   max_file_store: 134217728
 }}
+{self.extra_conf}
 """,
             encoding="utf-8",
         )
