@@ -22,7 +22,7 @@ held for hours after their lanes died, and an idle NucBox while the file queue r
 | Known providers only | `PROVIDERS` is an allowlist for enqueue, subscribe and `ensure_lanes` |
 | Crash recovery | Explicit ack, `ack_wait` 600 s with `in_progress` heartbeats, `max_deliver` 3 |
 | Lease already held on delivery | `take()` naks with delay = lease TTL (not term, not instant redelivery) |
-| Poison jobs | `DeadLetterWatcher` moves MAX_DELIVERIES jobs to `LANES_DLQ`; `dead_letters()` lists them for the dashboard |
+| Poison jobs | `DeadLetterWatcher` copies MAX_DELIVERIES jobs to `LANES_DLQ` (then deletes from `LANES`, never before); the copy's `Nats-Msg-Id` is `dlq-` + the job's own enqueue msg-id, not the LANES sequence, so a recreated stream cannot drop a different job as a duplicate; `dead_letters()` lists them for the dashboard |
 | Config drift | `ensure_lanes` applies editable changes in place; a non-editable difference (err 10012) raises `LaneConfigConflict`, and recreate only happens with `recreate_idle=True` and nothing in flight. Stream updates touch only managed fields |
 | Empty queue is normal | `pull` returns `[]` on timeout (the worker crash loop was an unhandled timeout) |
 
@@ -70,4 +70,6 @@ lease → pull → ack path works). Nothing reads that module at runtime and `na
   - explicit deny `$KV.>`, `$JS.API.STREAM.>`, `lanes.>`.
   Subscribe only `_INBOX_<host>.>`; hosts connect with `inbox_prefix="_INBOX_<host>"` so one host cannot
   read another's replies or deliveries. No `$KV.LANE_LEASES.>` for any member, and no shared-consumer ack.
+  Host names `hub` and `conductor` are reserved (`RESERVED_HOST_NAMES`): `check_host` refuses them, so no
+  lane host can be given `_INBOX_hub` (the operator's JetStream API replies) or `_INBOX_conductor`.
 - **Guests:** none. Lane jobs carry repo work and never go to the GUEST account.

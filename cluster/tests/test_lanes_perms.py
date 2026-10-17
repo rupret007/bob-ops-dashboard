@@ -56,7 +56,7 @@ class TestStage2Permissions(unittest.TestCase):
     def test_member_cannot_raw_put_or_delete_leases_and_cannot_touch_other_hosts(self):
         async def go():
             hub, hjs, herrs = await self._connect("hub", "_INBOX_hub")
-            cond, cjs, _ = await self._connect("conductor", lanes.inbox_prefix("conductor"))
+            cond, cjs, _ = await self._connect("conductor", lanes.role_inbox_prefix("conductor"))
             nuc, njs, nerrs = await self._connect("nuc", lanes.inbox_prefix("nuc"))
             mini, mjs, merrs = await self._connect("mini", lanes.inbox_prefix("mini"))
             try:
