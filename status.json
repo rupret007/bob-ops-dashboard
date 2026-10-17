@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-10-17T00:35:09.629847-05:00",
-  "generated_at_display": "Sat Oct 17, 2026 \u00b7 12:35 AM CDT",
+  "generated_at": "2026-10-17T01:05:19.290953-05:00",
+  "generated_at_display": "Sat Oct 17, 2026 \u00b7 1:05 AM CDT",
   "timezone": "America/Chicago",
   "owner": "rupret007",
   "dashboard": "bob-ops-dashboard",
@@ -296,8 +296,8 @@
           "status": "green",
           "chip": "Green",
           "default_branch": "main",
-          "tip_sha": "892805d",
-          "tip_date": "2026-10-17T04:55:29Z",
+          "tip_sha": "3a730bd",
+          "tip_date": "2026-10-17T05:59:07Z",
           "open_prs": 0,
           "open_pr_url": null,
           "open_pr_number": null,
@@ -309,9 +309,9 @@
             "name": "CI",
             "conclusion": "success",
             "branch": "main",
-            "sha": "892805d",
-            "created": "2026-10-17T04:55:31Z",
-            "html_url": "https://github.com/rupret007/Turdanoid/actions/runs/39004374491"
+            "sha": "3a730bd",
+            "created": "2026-10-17T05:59:10Z",
+            "html_url": "https://github.com/rupret007/Turdanoid/actions/runs/39008220222"
           },
           "release": null,
           "release_sha": null,
@@ -495,8 +495,8 @@
           "status": "green",
           "chip": "Green",
           "default_branch": "main",
-          "tip_sha": "98fee79",
-          "tip_date": "2026-10-17T05:20:22Z",
+          "tip_sha": "0cf561f",
+          "tip_date": "2026-10-17T05:58:58Z",
           "open_prs": 0,
           "open_pr_url": null,
           "open_pr_number": null,
@@ -504,7 +504,14 @@
           "open_pr_stack": [],
           "pr_listing_complete": true,
           "agent_url": null,
-          "ci": null,
+          "ci": {
+            "name": "QA claim smoke",
+            "conclusion": "success",
+            "branch": "main",
+            "sha": "0cf561f",
+            "created": "2026-10-17T05:59:00Z",
+            "html_url": "https://github.com/rupret007/bob-ops-dashboard/actions/runs/39008211798"
+          },
           "release": null,
           "release_sha": null,
           "release_url": null,
@@ -671,11 +678,11 @@
           "url": "https://github.com/rupret007/Andrea_NanoBot",
           "repo_url": "https://github.com/rupret007/Andrea_NanoBot",
           "private": false,
-          "status": "green",
-          "chip": "Green",
+          "status": "yellow",
+          "chip": "Yellow",
           "default_branch": "main",
-          "tip_sha": "b77b65e",
-          "tip_date": "2026-10-17T04:16:05Z",
+          "tip_sha": "6f1030f",
+          "tip_date": "2026-10-17T06:01:32Z",
           "open_prs": 0,
           "open_pr_url": null,
           "open_pr_number": null,
@@ -684,12 +691,12 @@
           "pr_listing_complete": true,
           "agent_url": null,
           "ci": {
-            "name": "CI",
-            "conclusion": "success",
+            "name": "AGI Layer CI",
+            "conclusion": "in_progress",
             "branch": "main",
-            "sha": "b77b65e",
-            "created": "2026-10-17T04:16:08Z",
-            "html_url": "https://github.com/rupret007/Andrea_NanoBot/actions/runs/39001924644"
+            "sha": "6f1030f",
+            "created": "2026-10-17T06:01:35Z",
+            "html_url": "https://github.com/rupret007/Andrea_NanoBot/actions/runs/39008376037"
           },
           "release": null,
           "release_sha": null,
@@ -897,7 +904,7 @@
     "barker"
   ],
   "publish_notes": "Public board -- no secrets or customer paths. Private repositories stay high-level; AI Music Vault stays private-content-boundary only.",
-  "refresh_started_ms": 1792215282629,
+  "refresh_started_ms": 1792217087732,
   "agents_source": "file:stale->unknown",
   "agents": [
     {
@@ -943,7 +950,17 @@
       "checked_at": null
     }
   ],
-  "cloud_agents": [],
+  "cloud_agents": [
+    {
+      "id": "bc-a807a4fc-cfb1-5e4b-a8e9-e4a7fb9c6baa",
+      "name": "PR #28",
+      "state": "unknown",
+      "detail": "Vendor cleaned OpenClaw CLI fallback under tools/openclaw",
+      "url": "https://cursor.com/agents/bc-a807a4fc-cfb1-5e4b-a8e9-e4a7fb9c6baa",
+      "pr_url": "https://github.com/rupret007/Bob-the-Bot/pull/28",
+      "checked_at": null
+    }
+  ],
   "llm_work": [
     {
       "id": "codex",
@@ -1068,7 +1085,7 @@
     }
   ],
   "llm_work_now_freshness": {
-    "generated_at": "2026-10-17 00:35 CT",
+    "generated_at": "2026-10-17 01:05 CT",
     "warn_ttl_sec": 1200,
     "warnings": [],
     "ok": true
