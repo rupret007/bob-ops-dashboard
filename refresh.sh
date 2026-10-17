@@ -235,6 +235,7 @@ from board_meta import (
     llm_work_now_freshness_warnings,
     build_llm_work_now_freshness_meta,
     gemini_lane_rows,
+    gemini_lane_rows_unknown,
     assert_dual_sot_files,
     LLM_WORK_NOW_STALE_WARN_SEC,
     DUAL_SOT_MAX_STAMP_SKEW_SEC,
@@ -766,9 +767,15 @@ for lane_id, lane_name in LANE_ORDER:
 try:
     _gl_path = Path(os.environ.get("GEMINI_LANES_JSON") or (root / "gemini-lanes.json"))
     if _gl_path.is_file():
-        llm_work.extend(gemini_lane_rows(json.loads(_gl_path.read_text(encoding="utf-8"))))
+        _gl_rows = gemini_lane_rows(json.loads(_gl_path.read_text(encoding="utf-8")))
+        if not _gl_rows:
+            _gl_rows = gemini_lane_rows_unknown("malformed")
+        llm_work.extend(_gl_rows)
+    else:
+        llm_work.extend(gemini_lane_rows_unknown("file not found"))
 except Exception as _gl_err:
     print(f"WARN gemini-lanes.json unreadable: {type(_gl_err).__name__}")
+    llm_work.extend(gemini_lane_rows_unknown(type(_gl_err).__name__))
 
 status["llm_work"] = llm_work
 

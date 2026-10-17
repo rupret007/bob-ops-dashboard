@@ -2864,7 +2864,7 @@ def merge_first_class(sections: list[Any] | None) -> list[dict[str, Any]]:
 GEMINI_LANE_SOURCE = "mini_gemini_lane"
 
 
-def gemini_lane_rows(snapshot: Any) -> list[dict[str, Any]]:
+def gemini_lane_rows(snapshot: Any, *, now: float | None = None) -> list[dict[str, Any]]:
     """Build llm_work rows for Gemini lanes from a gemini-lanes.json snapshot.
 
     Returns [] for anything malformed. Never invents Running: per-lane rows are
@@ -2876,19 +2876,42 @@ def gemini_lane_rows(snapshot: Any) -> list[dict[str, Any]]:
     stamp = str(snapshot.get("generated_at") or "").strip()
     lanes = [x for x in (snapshot.get("lanes") or []) if isinstance(x, dict)]
     paused = str(snapshot.get("paused") or "").strip()
+
+    spend_str = "spend unknown"
     try:
-        spend = float(snapshot.get("spend_est_usd") or 0.0)
-        cap = float(snapshot.get("cap_usd") or 0.0)
+        spend_val = snapshot.get("spend_est_usd")
+        if spend_val is not None and str(spend_val).strip() != "":
+            spend = float(spend_val)
+            spend_str = f"${spend:.2f}"
     except (TypeError, ValueError):
-        spend, cap = 0.0, 0.0
+        pass
+
+    cap_str = ""
+    try:
+        cap_val = snapshot.get("cap_usd")
+        if cap_val is not None and str(cap_val).strip() != "":
+            cap = float(cap_val)
+            if cap > 0:
+                cap_str = f" / ${cap:.0f}"
+    except (TypeError, ValueError):
+        pass
+
+    clock = time.time() if now is None else float(now)
+    proof = llm_work_proof_timestamp({"heartbeat_at": stamp})
+    is_fresh = llm_work_proof_is_fresh(proof, clock, LLM_WORK_RUNNING_HEARTBEAT_TTL_SEC)
+
     rows: list[dict[str, Any]] = []
-    summary = f"{len(lanes)} Gemini lanes · est. ${spend:.2f}" + (f" / ${cap:.0f}" if cap else "")
-    if paused:
+    summary = f"{len(lanes)} Gemini lanes · est. {spend_str}{cap_str}"
+
+    if not is_fresh:
+        status, title = "idle", f"STALE · {summary}"
+    elif paused:
         status, title = "blocked", f"PAUSED ({paused[:120]}) · {summary}"
     elif lanes and stamp:
         status, title = "running", summary
     else:
         status, title = "idle", summary
+
     head = {"id": "gemini-lanes", "name": "Gemini lanes", "task_title": title,
             "status": status, "source": GEMINI_LANE_SOURCE if status == "running" else "idle"}
     if stamp:
@@ -2901,11 +2924,22 @@ def gemini_lane_rows(snapshot: Any) -> list[dict[str, Any]]:
         mode = re.sub(r"[^a-z]", "", str(lane.get("mode") or "").lower())[:12]
         row = {"id": f"gemini-lane-{job}", "name": "Gemini lane",
                "task_title": job + (f" ({mode})" if mode else ""),
-               "status": "running" if (stamp and not paused) else "idle",
-               "source": GEMINI_LANE_SOURCE if (stamp and not paused) else "idle"}
+               "status": "running" if (is_fresh and not paused) else "idle",
+               "source": GEMINI_LANE_SOURCE if (is_fresh and not paused) else "idle"}
         if stamp:
             row["heartbeat_at"] = stamp
         if lane.get("started_at"):
             row["started_at"] = str(lane.get("started_at"))
         rows.append(row)
     return rows
+
+
+def gemini_lane_rows_unknown(reason: str) -> list[dict[str, Any]]:
+    """Fallback summary row when Gemini lanes snapshot is missing or corrupt."""
+    return [{
+        "id": "gemini-lanes",
+        "name": "Gemini lanes",
+        "task_title": f"Gemini lanes: status unknown ({reason})",
+        "status": "idle",
+        "source": "idle"
+    }]

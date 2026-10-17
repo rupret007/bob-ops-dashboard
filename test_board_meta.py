@@ -2939,7 +2939,7 @@ class GeminiLaneRowsTest(_ut_gem.TestCase):
         fresh = _dt.fromtimestamp(now - 60, tz=_tz.utc).isoformat()
         snap = {"generated_at": fresh, "spend_est_usd": 3.5, "cap_usd": 118,
                 "lanes": [{"job": "gemrev-bob-brain-pr118", "mode": "review"}, {"job": "bad job;rm", "mode": "code"}]}
-        rows = gemini_lane_rows(snap)
+        rows = gemini_lane_rows(snap, now=now)
         assert rows[0]["id"] == "gemini-lanes" and rows[0]["status"] == "running"
         assert "$3.50 / $118" in rows[0]["task_title"]
         assert rows[1]["id"] == "gemini-lane-gemrev-bob-brain-pr118" and rows[1]["status"] == "running"
@@ -2947,15 +2947,71 @@ class GeminiLaneRowsTest(_ut_gem.TestCase):
         kept = demote_stale_running_llm_work(rows, now=now)
         assert all(r["status"] == "running" for r in kept)
         stale = _dt.fromtimestamp(now - 3600, tz=_tz.utc).isoformat()
-        old = demote_stale_running_llm_work(gemini_lane_rows(dict(snap, generated_at=stale)), now=now)
+        old = demote_stale_running_llm_work(gemini_lane_rows(dict(snap, generated_at=stale), now=now), now=now)
         assert all(r["status"] != "running" for r in old)
-
 
     def test_paused_and_malformed(self):
         from board_meta import gemini_lane_rows
-        rows = gemini_lane_rows({"generated_at": "2026-10-17T03:00:00+00:00", "paused": "total est. spend $118.10 >= cap $118",
-                                 "lanes": [{"job": "x", "mode": "code"}]})
+        import time as _t
+        from datetime import datetime as _dt, timezone as _tz
+        now = _t.time()
+        fresh = _dt.fromtimestamp(now - 60, tz=_tz.utc).isoformat()
+        rows = gemini_lane_rows({"generated_at": fresh, "paused": "total est. spend $118.10 >= cap $118",
+                                 "lanes": [{"job": "x", "mode": "code"}]}, now=now)
         assert rows[0]["status"] == "blocked" and rows[0]["task_title"].startswith("PAUSED")
         assert rows[1]["status"] == "idle"
         assert gemini_lane_rows(None) == [] and gemini_lane_rows("x") == []
         assert gemini_lane_rows({})[0]["status"] == "idle"
+
+    def test_spend_unknown_and_stale(self):
+        from board_meta import gemini_lane_rows, gemini_lane_rows_unknown, LLM_WORK_RUNNING_HEARTBEAT_TTL_SEC
+        import time as _t
+        from datetime import datetime as _dt, timezone as _tz
+        now = float(int(_t.time()))  # whole seconds: exact-TTL edge must not depend on float/isoformat rounding
+        fresh = _dt.fromtimestamp(now - 60, tz=_tz.utc).isoformat()
+
+        # spend missing -> "unknown" (no "$0.00")
+        rows = gemini_lane_rows({"generated_at": fresh, "lanes": []}, now=now)
+        assert "spend unknown" in rows[0]["task_title"]
+        assert "$0.00" not in rows[0]["task_title"]
+
+        # spend "abc" -> unknown
+        rows = gemini_lane_rows({"generated_at": fresh, "spend_est_usd": "abc", "lanes": []}, now=now)
+        assert "spend unknown" in rows[0]["task_title"]
+
+        # unknown-helper row
+        unk = gemini_lane_rows_unknown("test reason")
+        assert len(unk) == 1
+        assert unk[0]["id"] == "gemini-lanes"
+        assert unk[0]["status"] == "idle"
+        assert "status unknown (test reason)" in unk[0]["task_title"]
+
+        # paused stale -> STALE
+        stale = _dt.fromtimestamp(now - 3600, tz=_tz.utc).isoformat()
+        rows = gemini_lane_rows({"generated_at": stale, "paused": "yes", "lanes": []}, now=now)
+        assert rows[0]["status"] == "idle"
+        assert rows[0]["task_title"].startswith("STALE")
+
+        # idle stale -> STALE
+        rows = gemini_lane_rows({"generated_at": stale, "lanes": []}, now=now)
+        assert rows[0]["status"] == "idle"
+        assert rows[0]["task_title"].startswith("STALE")
+
+        # exact 15-minute edge
+        ttl = LLM_WORK_RUNNING_HEARTBEAT_TTL_SEC
+        edge_fresh = _dt.fromtimestamp(now - ttl + 1, tz=_tz.utc).isoformat()
+        edge_stale = _dt.fromtimestamp(now - ttl - 1, tz=_tz.utc).isoformat()
+        edge_exact = _dt.fromtimestamp(now - ttl, tz=_tz.utc).isoformat()
+
+        # TTL-1s fresh
+        rows = gemini_lane_rows({"generated_at": edge_fresh, "lanes": [{"job": "x"}]}, now=now)
+        assert rows[0]["status"] == "running"
+
+        # TTL+1s stale
+        rows = gemini_lane_rows({"generated_at": edge_stale, "lanes": [{"job": "x"}]}, now=now)
+        assert rows[0]["status"] == "idle"
+        assert rows[0]["task_title"].startswith("STALE")
+
+        # exact TTL counts as fresh or stale consistently with llm_work_running_reject_reasons
+        rows = gemini_lane_rows({"generated_at": edge_exact, "lanes": [{"job": "x"}]}, now=now)
+        assert rows[0]["status"] == "running"
