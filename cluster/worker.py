@@ -74,7 +74,6 @@ async def handle_message(
     active_jobs: dict[str, int],
     sem: asyncio.Semaphore,
     dry_run: bool,
-    node_id: str = "nucbox",
     live_metrics=None,
     provider: str | None = None,
 ) -> None:
@@ -125,7 +124,7 @@ async def handle_message(
                 status = "exhausted"
             duration = time.time() - t0
             result = build_result(spec["id"], status, rc, duration, tail)
-            await js.publish(f"results.{node_id}.{spec['id']}", json.dumps(result).encode("utf-8"))
+            await js.publish(f"results.{spec['id']}", json.dumps(result).encode("utf-8"))
             if spec["class"] == "test":
                 bump_test_runs()
             bump_jobs_done()
@@ -138,7 +137,7 @@ async def handle_message(
         except Exception as e:
             duration = time.time() - t0
             result = build_result(spec["id"], "error", -1, duration, str(e))
-            await js.publish(f"results.{node_id}.{spec['id']}", json.dumps(result).encode("utf-8"))
+            await js.publish(f"results.{spec['id']}", json.dumps(result).encode("utf-8"))
             if delivery >= 3:
                 await msg.term()
             else:
@@ -159,9 +158,9 @@ async def run_worker(args: argparse.Namespace) -> None:
     token = load_token(args.node_id, args.token_file)
     user = args.node_id if args.node_id in {"mini", "nucbox", "macbook", "dashboard"} else args.node_id
 
-    nc = await nats.connect(args.nats, user=user, password=token, inbox_prefix=f"_INBOX_{user}".encode())
+    nc = await nats.connect(args.nats, user=user, password=token)
     js = nc.jetstream()
-    psub = await js.pull_subscribe("", durable=f"workers_{user}", stream=STREAM_JOBS)
+    psub = await js.pull_subscribe("", durable=CONSUMER_WORKERS, stream=STREAM_JOBS)
 
     active_jobs: dict[str, int] = {"n": 0}
     sem = asyncio.Semaphore(args.max_parallel)
@@ -201,17 +200,8 @@ async def run_worker(args: argparse.Namespace) -> None:
             tasks = [
                 asyncio.create_task(
                     handle_message(
-                        m,
-                        js,
-                        nc,
-                        supported,
-                        args.max_parallel,
-                        active_jobs,
-                        sem,
-                        args.dry_run,
-                        node_id=user,
-                        live_metrics=live_metrics,
-                        provider=getattr(args, "metrics_provider", None),
+                        m, js, nc, supported, args.max_parallel, active_jobs, sem, args.dry_run,
+                        live_metrics, getattr(args, "metrics_provider", None)
                     )
                 )
                 for m in msgs

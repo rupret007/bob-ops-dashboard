@@ -10,6 +10,32 @@ from cluster.metrics_server import Bridge, private_bind
 from cluster.tests.nats_test_util import EphemeralNats, find_nats_binary, require_or_skip
 
 
+class BridgeReceiveTests(unittest.IsolatedAsyncioTestCase):
+    async def asyncSetUp(self):
+        self.nc = SimpleNamespace(subscribe=AsyncMock(), flush=AsyncMock())
+        self.bridge = await Bridge(port=0).start(self.nc)
+
+    async def asyncTearDown(self):
+        await self.bridge.close()
+
+    async def test_receive_requires_matching_metrics_subject(self):
+        data = aggregate('mini', {}, {}, {}, now=1)
+        payload = json.dumps(data).encode()
+        await self.bridge.receive(SimpleNamespace(subject='metrics.nucbox', data=payload))
+        self.assertEqual({}, self.bridge.latest)
+        await self.bridge.receive(SimpleNamespace(subject='metrics.mini', data=payload))
+        self.assertEqual('mini', self.bridge.latest['mini']['host'])
+
+    async def test_wrong_host_returns_403_within_timeout(self):
+        reader, writer = await asyncio.open_connection('127.0.0.1', self.bridge.port)
+        writer.write(b'GET /events HTTP/1.1\r\nHost: attacker.invalid\r\n\r\n')
+        await writer.drain()
+        response = await asyncio.wait_for(reader.read(256), timeout=2)
+        self.assertIn(b'403', response)
+        writer.close()
+        await writer.wait_closed()
+
+
 class SchemaTests(unittest.TestCase):
     def test_no_secrets_and_unknowns(self):
         raw = {'password': 'private', 'load1': 2, 'path': '/home/private', 'ip': '.'.join(('100', '64', '1', '2'))}

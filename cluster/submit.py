@@ -30,14 +30,12 @@ def load_token(user: str, token_file: str) -> str:
     raise SystemExit("Set BOB_NODE_TOKEN or provide --token-file with user token")
 
 
-async def publish_job(nc_url: str, user: str, token: str, spec: dict, node: str = "nucbox") -> None:
+async def publish_job(nc_url: str, user: str, token: str, spec: dict) -> None:
     import nats
 
-    nc = await nats.connect(nc_url, user=user, password=token, inbox_prefix=f"_INBOX_{user}".encode())
+    nc = await nats.connect(nc_url, user=user, password=token)
     js = nc.jetstream()
-    from cluster.capabilities import node_token
-
-    subj = f"jobs.n.{node_token(node)}.{spec['class']}.{spec['id']}"
+    subj = job_subject(spec)
     payload = json.dumps(spec).encode("utf-8")
     await js.publish(subj, payload)
     await nc.close()
@@ -64,8 +62,8 @@ async def wait_result_from_sub(sub, job_id: str, timeout: float) -> dict | None:
 async def wait_result(nc_url: str, user: str, token: str, job_id: str, timeout: float) -> dict | None:
     import nats
 
-    nc = await nats.connect(nc_url, user=user, password=token, inbox_prefix=f"_INBOX_{user}".encode())
-    sub = await nc.subscribe(f"results.*.{job_id}")
+    nc = await nats.connect(nc_url, user=user, password=token)
+    sub = await nc.subscribe(f"results.{job_id}")
     try:
         return await wait_result_from_sub(sub, job_id, timeout)
     finally:
@@ -77,7 +75,6 @@ def main() -> int:
     parser.add_argument("--nats", default=os.environ.get("BOB_NATS_URL", "nats://127.0.0.1:4222"))
     parser.add_argument("--user", default=os.environ.get("BOB_NATS_USER", "nucbox"))
     parser.add_argument("--token-file", default=os.path.expanduser("~/.config/bob-cluster/tokens.env"))
-    parser.add_argument("--node", default="nucbox", help="target legacy worker identity")
     parser.add_argument("--spec", help="JSON job spec string")
     parser.add_argument("--spec-file", help="Path to JSON job spec file")
     parser.add_argument("--wait", action="store_true", help="Wait for results.<id>")
@@ -97,7 +94,7 @@ def main() -> int:
         return 1
 
     token = load_token(args.user, args.token_file)
-    asyncio.run(publish_job(args.nats, args.user, token, spec, node=args.node))
+    asyncio.run(publish_job(args.nats, args.user, token, spec))
 
     if args.wait:
         result = asyncio.run(wait_result(args.nats, args.user, token, spec["id"], args.wait_timeout))

@@ -23,7 +23,7 @@ async def setup(nc_url: str, token: str, user: str) -> None:
         StreamConfig,
     )
 
-    nc = await nats.connect(nc_url, user=user, password=token, inbox_prefix=f"_INBOX_{user}".encode())
+    nc = await nats.connect(nc_url, user=user, password=token)
     js = nc.jetstream()
 
     jobs_cfg = StreamConfig(
@@ -56,12 +56,18 @@ async def setup(nc_url: str, token: str, user: str) -> None:
         await js.update_stream(results_cfg)
         print(f"updated stream {STREAM_RESULTS}")
 
-    for node in ("mini", "macbook", "nucbox"):
-        consumer_cfg = ConsumerConfig(
-            durable_name=f"workers_{node}", ack_policy=AckPolicy.EXPLICIT,
-            ack_wait=30 * 60, max_deliver=3, filter_subject=f"jobs.n.{node}.>")
+    consumer_cfg = ConsumerConfig(
+        durable_name=CONSUMER_WORKERS,
+        ack_policy=AckPolicy.EXPLICIT,
+        ack_wait=30 * 60,
+        max_deliver=3,
+        filter_subject="jobs.>",
+    )
+    try:
         await js.add_consumer(STREAM_JOBS, consumer_cfg)
-        print(f"created consumer {consumer_cfg.durable_name}")
+        print(f"created consumer {CONSUMER_WORKERS}")
+    except BadRequestError:
+        print(f"consumer {CONSUMER_WORKERS} already exists")
 
     await nc.close()
 
