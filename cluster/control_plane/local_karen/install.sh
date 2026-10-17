@@ -119,7 +119,23 @@ WRAPPER
     chmod +x "$BIN_DIR/karen-poller"
 
     mkdir -p "$KAREN_DIR/module/cluster/control_plane"
+
+    # Remove old module to avoid stale .pyc files
+    rm -rf "$KAREN_DIR/module/cluster/control_plane/local_karen"
+    rm -f "$KAREN_DIR/module/cluster/never_touch.py"
+
+    # Copy fresh module (excluding __pycache__)
     cp -r "$SCRIPT_DIR" "$KAREN_DIR/module/cluster/control_plane/local_karen"
+    find "$KAREN_DIR/module/cluster/control_plane/local_karen" -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
+    find "$KAREN_DIR/module/cluster/control_plane/local_karen" -name "*.pyc" -delete 2>/dev/null || true
+
+    # Copy never_touch.py from parent cluster directory if it exists
+    CLUSTER_DIR="$(dirname "$(dirname "$SCRIPT_DIR")")"
+    if [[ -f "$CLUSTER_DIR/never_touch.py" ]]; then
+        cp "$CLUSTER_DIR/never_touch.py" "$KAREN_DIR/module/cluster/never_touch.py"
+        log_info "Copied never_touch.py to module"
+    fi
+
     touch "$KAREN_DIR/module/cluster/__init__.py"
     touch "$KAREN_DIR/module/cluster/control_plane/__init__.py"
 
