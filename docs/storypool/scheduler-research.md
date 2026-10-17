@@ -76,6 +76,16 @@ Reserve budget and host capacity as one admission decision in the scheduler ledg
 
 Default interpretation of `$20/hour` is a pacing rate, not a strict rolling-hour cap: bucket balance is bounded by burst size and refills at `$20/3600` per second. If Jeff requires no more than $20 in any rolling hour, add a rolling-window ledger; a bucket with bursts alone cannot guarantee that. Choose daily timezone and weekly/session resets from authoritative account windows. Never reset a ledger merely because a worker's wall clock crossed midnight.
 
+### Grok Bot: tracked conserve-only budget
+
+Jeff's 2026-10-17 00:33 CT policy: Grok Bot is a **tracked conserve-only budget**. Keep usage low; never fill or deliberately consume the available budget. It is not an execution pool, spare capacity, a refill target or a fallback provider. The scheduler **NEVER grants a lane that uses Grok Bot**. Lanes never consume this budget, including through nested calls, aliases or another provider's wrapper. Reject `grok-*` lane requests before reserving resources or publishing grants; enforce the same prohibition at local start/renewal and provider-call boundaries.
+
+No direct Grok Bot usage source was found in this repository. `probe-agents-status.sh` reports conductor capability, and `live/agent.py` recognizes `grok-*` process names; neither measures Grok Bot budget consumption. Specify a UI budget entry named **Grok Bot**, with policy **conserve-only** and usage placeholder labeled exactly **"unknown"** until an approved direct usage source exists. Do not infer usage from process counts, idle state or capability labels; never invent percentages, spend, remaining allowance or reset times. When direct observations become available, track their source, timestamp and uncertainty in the account ledger without converting remaining budget into lane permits. Known low usage never relaxes the prohibition.
+
+### Conductor and routine design notes
+
+Keep Grok Bot use minimal in both conductor and routine design. Use deterministic queue/guard evaluation, cached observations, batched status summaries and event-driven updates to avoid repeated model calls. Routines must not invoke Grok Bot on every scheduler tick, poll it to fill a budget, or route lane execution through the conductor. Any necessary conductor use remains outside lane grants and is accounted for against the same conserve-only budget when directly observable; missing telemetry stays "unknown". Prefer fewer calls and concise context, with no utilization target or automatic spend-up behavior.
+
 ### Grant logic, delivery and fencing
 
 Use a single active scheduler initially. Keep its durable grant/budget ledger behind a transactional authority that rejects stale scheduler epochs. An OS singleton lock alone is insufficient across hosts. No automatic takeover until previous authority is fenced and outstanding execution is reconciled; if unavailable, stop admission. Selection of the transactional store is an open decision, not permission to fall back to LeaseService.
@@ -120,6 +130,7 @@ These are acceptance criteria for a future implementation. Guards and reservatio
 10. **Safe release:** grant expiry, missing heartbeat or message redelivery alone never proves a process stopped. Retain uncertain slots/budget until fenced termination and cost reconciliation; no replacement can overlap an unfenced old attempt.
 11. **Control-path isolation:** no capacity/grant/status event uses LeaseService subjects or reply paths. Host spoofing, grant publishing by a host and cross-host status publishing are denied by permissions.
 12. **Bounded safety response:** every admitted provider chunk and borrowed lane has a tested stop bound (candidate 10 seconds after local detection). Guards run before calls and at least every 5 seconds. Hard-stop actions bypass stabilization; processes lacking enforceable bounds are not eligible for autonomous admission.
+13. **Grok Bot exclusion:** the scheduler NEVER grants a lane that uses Grok Bot, including every `grok-*` request and indirect/wrapped use. No backlog, spare capacity, priority, retry, failover or known remaining budget overrides this guard. Grok Bot stays a tracked conserve-only budget; conductor and routines minimize use, never fill it, and missing direct usage is displayed as "unknown".
 
 ## Failure modes
 
@@ -146,6 +157,7 @@ No new tests or code are added in this research PR. Future implementation must d
 | --- | --- |
 | Boundary/property tests | Mini load 9.99/10; swap 79.99/80 and Gemini-review 89.99/90; disk 14.99/15 GB; NucBox load 11.99/12; zero/one/many jobs. Random interleavings preserve invariants 1–4 with all providers counted. |
 | Reservations and budgets | Race two hosts for the last slot/dollar; only one grant wins. Codex 74.99/75%, readings at 2h and just over, outstanding reservations, missing/NaN values. Gemini requests that reach/exceed $118, bucket burst/refill, daily rollover and restart persistence. Claude overlapping windows; MiniMax global 1/2 ceilings. |
+| Grok Bot exclusion and tracking | Submit `grok-*` requests on both hosts with idle slots, high-priority backlog and low reported usage; repeat with unknown usage, retries, failover and Grok Bot hidden behind another provider's wrapper. Assert no grant is committed or published, no budget/slot reservation is created, and local start/renewal and provider-call gates reject bypass attempts. Confirm the UI usage placeholder is exactly "unknown" without a direct source, no numbers are fabricated, and conductor/routines have no budget-filling or per-tick Grok Bot call path. |
 | Freshness and clocks | At/after 30-second TTL, reordered samples, duplicate sequence, reboot, future timestamps, suspended WSL, NTP jumps and scheduler restart: no stale admission or premature budget reset. |
 | Borrowing/preemption | Fill seven NucBox slots with Cursor including two borrowers; enqueue Codex; verify immediate revocation, bounded stop and no Codex start before exit. Repeat with quota-blocked Codex and a stuck borrower. |
 | Delivery/authority faults | Drop messages; duplicate grants; crash between ledger commit and publish, spawn and acceptance, completion and ack. Partition two schedulers; replay old epochs; kill process groups. Confirm no double spend, overlapping effects or unsafe slot release. |
