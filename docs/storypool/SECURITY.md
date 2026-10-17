@@ -4,7 +4,7 @@ StoryPool runs other people's work on Jeff's machines, and (soon) Jeff's work on
 
 - **The network is private.** The queue only listens on localhost; the only way in is Tailscale.
 - **Every machine has its own credential**, and the NATS server decides what each one may publish and subscribe to.
-- **A host can only touch its own work.** It can't write leases directly, ack someone else's job, or read someone else's replies.
+- **A host can only touch its own work, except the open HIGH lease-reply hole, pending #76.** It can't write leases directly, ack someone else's job, or read someone else's replies.
 - **Guests get a sandbox with no keys.** Friends' machines only ever run sandboxed, no-key jobs.
 - **Secrets never ride in jobs**, and donor credentials never leave the donor's machine.
 
@@ -25,7 +25,7 @@ StoryPool runs other people's work on Jeff's machines, and (soon) Jeff's work on
 | # | Threat | Example | Defense |
 |---|---|---|---|
 | T1 | **Outsider on the internet** | Port scan finds the queue | Server binds `127.0.0.1` only. Tailscale userspace forwards tailnet traffic; nothing listens on a public interface. |
-| T2 | **A member host misbehaves** (bug or compromise) | Mini tries to steal the NucBox's lease, or ack its job | Per-host NATS permissions: own lease subject, own consumer, own inbox. Raw `$KV` writes denied. |
+| T2 | **A member host misbehaves** (bug or compromise) | Mini tries to steal the NucBox's lease, or ack its job | Per-host NATS permissions: own lease subject, own consumer, own inbox. Raw `$KV` writes denied, except the open HIGH lease-reply hole, pending #76. |
 | T3 | **Identity spoofing** | A host claims "I'm nucbox" in the request body | The lease service takes the host from the **NATS subject**, which the server only lets each host publish for itself. The body is never trusted for identity. |
 | T4 | **Forged system events** | A host publishes a fake `MAX_DELIVERIES` advisory to get a job dead-lettered | Hosts have no publish grant on `$JS.EVENT.>`, so forged advisories are denied by the server. |
 | T5 | **Lost work during dead-lettering** | Crash between copy and delete | The DLQ copies, **waits for the server's confirm**, then deletes. Idempotent `Nats-Msg-Id` makes a repeat copy harmless. |

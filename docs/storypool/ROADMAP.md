@@ -59,7 +59,7 @@ flowchart LR
 | Reserved names `hub` / `conductor` refused before any friend joins | In progress |
 | Lease metadata readable by any host (`holder`) | Open |
 | A delay-nak'd job holds its lane slot for the delay (nats-server 2.15.1) | Known, documented |
-| Verify the lease service's reply path can't write `$KV.LANE_LEASES` | To verify before stage 2 |
+| Verify the lease service's reply path can't write `$KV.LANE_LEASES` | Open (HIGH), fix pending #76 |
 
 ## Not now (on purpose)
 
