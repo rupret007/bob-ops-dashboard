@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Client side of the join flow: redeem a single-use join code for a node token.
 
-    python3 -m cluster.join --code 'bobjoin1:...' [--env-out ~/.config/bob-cluster/node.env]
+    BOB_JOIN_CODE='bobjoin1:...' python3 -m cluster.join [--env-out ~/.config/bob-cluster/node.env]
 
 Connects to the hub as the code's pending JOIN user, sends join.redeem, and
 writes the returned per-node credential to a 0600 env file. The token is never
@@ -73,7 +73,8 @@ def default_lanes() -> int:
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description="Redeem a Bob cluster join code")
-    ap.add_argument("--code", required=True)
+    ap.add_argument("--code", default=os.environ.get("BOB_JOIN_CODE", ""),
+                    help="join code (default: $BOB_JOIN_CODE, preferred so it stays out of ps)")
     ap.add_argument("--env-out", default=str(DEFAULT_ENV))
     ap.add_argument("--max-lanes", type=int, default=default_lanes())
     ap.add_argument("--check-only", action="store_true", help="decode code + test hub reachability")

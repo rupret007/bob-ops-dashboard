@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# Compatible with macOS /bin/bash 3.2: no empty-array expansion under set -u.
 # One-command Bob cluster node join (macOS, Linux, WSL). Never enable xtrace (secrets).
 set -euo pipefail
 
@@ -162,7 +163,7 @@ run_registry_py() {
   if [[ -n "$root" ]]; then
     env_args=(env "PYTHONPATH=${root}${PYTHONPATH:+:${PYTHONPATH}}")
   fi
-  "${env_args[@]}" "$py" "$@"
+  ${env_args[@]+"${env_args[@]}"} "$py" "$@"
 }
 
 export BOB_JOIN_CODE_DECODE="$CODE"
@@ -277,7 +278,7 @@ if [[ -n "$LANES" ]]; then
 fi
 
 set +e
-CHECK_OUT="$(cd "${APP}" && "${VENV}/bin/python" -m cluster.join --check-only --code "$CODE" 2>&1)"
+CHECK_OUT="$(cd "${APP}" && BOB_JOIN_CODE="$CODE" "${VENV}/bin/python" -m cluster.join --check-only 2>&1)"
 CHECK_RC=$?
 set -e
 if [[ "$CHECK_RC" -eq 3 ]]; then
@@ -300,7 +301,8 @@ if [[ "$ROLE" == "guest" ]]; then
   fi
 fi
 
-JOIN_OUT="$(cd "${APP}" && "${VENV}/bin/python" -m cluster.join --code "$CODE" "${JOIN_LANE_ARGS[@]}" 2>&1)" || {
+# The code travels in the environment, not argv, so it never shows up in `ps`.
+JOIN_OUT="$(cd "${APP}" && BOB_JOIN_CODE="$CODE" "${VENV}/bin/python" -m cluster.join ${JOIN_LANE_ARGS[@]+"${JOIN_LANE_ARGS[@]}"} 2>&1)" || {
   echo "$JOIN_OUT" >&2
   exit 4
 }
