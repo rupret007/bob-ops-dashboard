@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<!--
+StoryPool Shadow Mode Runner - Mac mini launchd plist
+
+Runs every 15 minutes to evaluate what the control plane WOULD do.
+Logs decisions to JSONL files for comparison with Grok-based system.
+
+TAKES NO ACTIONS: no merges, no pushes, no sends, no NATS publishes.
+
+Install with: cp this-file ~/Library/LaunchAgents/
+              launchctl load ~/Library/LaunchAgents/com.storypool.shadow.plist
+
+Uninstall:    launchctl unload ~/Library/LaunchAgents/com.storypool.shadow.plist
+              rm ~/Library/LaunchAgents/com.storypool.shadow.plist
+-->
+<dict>
+    <key>Label</key>
+    <string>com.storypool.shadow</string>
+    
+    <key>ProgramArguments</key>
+    <array>
+        <string>/usr/bin/env</string>
+        <string>python3</string>
+        <string>-m</string>
+        <string>cluster.control_plane.shadow_runner</string>
+        <string>--machine</string>
+        <string>mini</string>
+    </array>
+    
+    <key>WorkingDirectory</key>
+    <string>__REPO_PATH__</string>
+    
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PYTHONPATH</key>
+        <string>__REPO_PATH__</string>
+        <key>STORYPOOL_MACHINE</key>
+        <string>mini</string>
+        <key>PATH</key>
+        <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
+    </dict>
+    
+    <key>StartInterval</key>
+    <integer>900</integer>
+    
+    <key>RunAtLoad</key>
+    <false/>
+    
+    <key>StandardOutPath</key>
+    <string>__HOME__/.local/share/storypool/shadow/stdout.log</string>
+    
+    <key>StandardErrorPath</key>
+    <string>__HOME__/.local/share/storypool/shadow/stderr.log</string>
+    
+    <key>Nice</key>
+    <integer>10</integer>
+</dict>
+</plist>

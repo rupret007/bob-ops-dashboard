@@ -463,22 +463,36 @@ echo "$MINIMAX_KEY" > ~/.config/storypool/minimax.key
 chmod 600 ~/.config/storypool/minimax.key
 ```
 
-### Phase 1: Shadow Mode (1 week)
+### Phase 1: Shadow Mode (1-2 days)
 
 **What changes:**
 - New scheduler runs alongside Grok bots
-- Dispatcher logs what it *would* do without acting
+- Shadow runner logs what it *would* dispatch/gate to JSONL
 - Gate runner logs verdicts without blocking merges
 - Budget tracker starts collecting data
 
 **Grok usage:** Unchanged (still authoritative)
 
 **Validation:**
-- Compare deterministic decisions with Grok decisions
-- Tune priority weights
-- Identify edge cases
+- Compare deterministic decisions with Grok decisions via daily compare script
+- Tune priority weights based on shadow logs
+- Identify edge cases before cutover
 
-### Phase 2: Scheduler Cutover (1 week)
+**Installation:**
+```bash
+# Mac mini (launchd, runs every 15 min)
+bash cluster/control_plane/install/install-shadow-mini.sh
+
+# NucBox WSL (systemd --user, runs every 15 min)
+bash cluster/control_plane/install/install-shadow-nucbox.sh
+```
+
+**Daily comparison:**
+```bash
+python3 cluster/control_plane/shadow_compare.py --days 1
+```
+
+### Phase 2: Scheduler Cutover (1-2 days)
 
 **What changes:**
 - Disable Grok hourly conductor
@@ -489,7 +503,7 @@ chmod 600 ~/.config/storypool/minimax.key
 
 **Rollback:** Re-enable Grok hourly conductor
 
-### Phase 3: Dispatcher Cutover (1 week)
+### Phase 3: Dispatcher Cutover (1-2 days)
 
 **What changes:**
 - Disable Grok lane dispatcher
@@ -500,7 +514,7 @@ chmod 600 ~/.config/storypool/minimax.key
 
 **Rollback:** Re-enable Grok lane dispatcher
 
-### Phase 4: Gate Cutover (2 weeks)
+### Phase 4: Gate Cutover (2-3 days)
 
 **What changes:**
 - Disable Grok Karen gate

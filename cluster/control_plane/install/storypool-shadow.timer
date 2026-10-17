@@ -1,0 +1,22 @@
+# StoryPool Shadow Mode Timer - systemd user timer
+#
+# Triggers storypool-shadow.service every 15 minutes.
+#
+# Install with: install-shadow-nucbox.sh
+# Check status: systemctl --user list-timers storypool-shadow.timer
+
+[Unit]
+Description=Run StoryPool Shadow Mode every 15 minutes
+
+[Timer]
+# Run every 15 minutes
+OnCalendar=*:0/15
+# Add some randomness to avoid thundering herd
+RandomizedDelaySec=60
+# Persist timer state across reboots
+Persistent=true
+# Run immediately if a scheduled time was missed
+OnBootSec=5min
+
+[Install]
+WantedBy=timers.target
