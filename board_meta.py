@@ -2856,3 +2856,56 @@ def merge_first_class(sections: list[Any] | None) -> list[dict[str, Any]]:
     out.append(fc["abilities"])
     out.append(fc["features"])
     return out
+
+
+# Gemini lanes (ROUTING v6, 2026-10-16): Mini fill.sh writes gemini-lanes.json
+# (job, mode, started_at; spend estimate; pause reason). Rows carry the snapshot
+# stamp as heartbeat_at so a stale snapshot is demoted by the normal TTL path.
+GEMINI_LANE_SOURCE = "mini_gemini_lane"
+
+
+def gemini_lane_rows(snapshot: Any) -> list[dict[str, Any]]:
+    """Build llm_work rows for Gemini lanes from a gemini-lanes.json snapshot.
+
+    Returns [] for anything malformed. Never invents Running: per-lane rows are
+    Running only with a snapshot stamp (validated/demoted downstream), and the
+    summary row is blocked when the spend guard paused Gemini.
+    """
+    if not isinstance(snapshot, dict):
+        return []
+    stamp = str(snapshot.get("generated_at") or "").strip()
+    lanes = [x for x in (snapshot.get("lanes") or []) if isinstance(x, dict)]
+    paused = str(snapshot.get("paused") or "").strip()
+    try:
+        spend = float(snapshot.get("spend_est_usd") or 0.0)
+        cap = float(snapshot.get("cap_usd") or 0.0)
+    except (TypeError, ValueError):
+        spend, cap = 0.0, 0.0
+    rows: list[dict[str, Any]] = []
+    summary = f"{len(lanes)} Gemini lanes · est. ${spend:.2f}" + (f" / ${cap:.0f}" if cap else "")
+    if paused:
+        status, title = "blocked", f"PAUSED ({paused[:120]}) · {summary}"
+    elif lanes and stamp:
+        status, title = "running", summary
+    else:
+        status, title = "idle", summary
+    head = {"id": "gemini-lanes", "name": "Gemini lanes", "task_title": title,
+            "status": status, "source": GEMINI_LANE_SOURCE if status == "running" else "idle"}
+    if stamp:
+        head["heartbeat_at"] = stamp
+    rows.append(head)
+    for lane in lanes:
+        job = re.sub(r"[^A-Za-z0-9._-]", "", str(lane.get("job") or ""))[:80]
+        if not job:
+            continue
+        mode = re.sub(r"[^a-z]", "", str(lane.get("mode") or "").lower())[:12]
+        row = {"id": f"gemini-lane-{job}", "name": "Gemini lane",
+               "task_title": job + (f" ({mode})" if mode else ""),
+               "status": "running" if (stamp and not paused) else "idle",
+               "source": GEMINI_LANE_SOURCE if (stamp and not paused) else "idle"}
+        if stamp:
+            row["heartbeat_at"] = stamp
+        if lane.get("started_at"):
+            row["started_at"] = str(lane.get("started_at"))
+        rows.append(row)
+    return rows

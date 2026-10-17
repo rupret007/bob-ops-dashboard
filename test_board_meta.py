@@ -2925,3 +2925,37 @@ def test_harden_window_softpaint_js_is_ascii():
     assert "R—" not in html
     assert "\u00b7" not in html.encode("unicode_escape").decode()
     assert "Closed - Idle" in html or "Closed" in html
+
+
+import unittest as _ut_gem
+
+
+class GeminiLaneRowsTest(_ut_gem.TestCase):
+    def test_running_and_ttl_demote(self):
+        import time as _t
+        from datetime import datetime as _dt, timezone as _tz
+        from board_meta import gemini_lane_rows, demote_stale_running_llm_work
+        now = _t.time()
+        fresh = _dt.fromtimestamp(now - 60, tz=_tz.utc).isoformat()
+        snap = {"generated_at": fresh, "spend_est_usd": 3.5, "cap_usd": 118,
+                "lanes": [{"job": "gemrev-bob-brain-pr118", "mode": "review"}, {"job": "bad job;rm", "mode": "code"}]}
+        rows = gemini_lane_rows(snap)
+        assert rows[0]["id"] == "gemini-lanes" and rows[0]["status"] == "running"
+        assert "$3.50 / $118" in rows[0]["task_title"]
+        assert rows[1]["id"] == "gemini-lane-gemrev-bob-brain-pr118" and rows[1]["status"] == "running"
+        assert rows[2]["id"] == "gemini-lane-badjobrm"
+        kept = demote_stale_running_llm_work(rows, now=now)
+        assert all(r["status"] == "running" for r in kept)
+        stale = _dt.fromtimestamp(now - 3600, tz=_tz.utc).isoformat()
+        old = demote_stale_running_llm_work(gemini_lane_rows(dict(snap, generated_at=stale)), now=now)
+        assert all(r["status"] != "running" for r in old)
+
+
+    def test_paused_and_malformed(self):
+        from board_meta import gemini_lane_rows
+        rows = gemini_lane_rows({"generated_at": "2026-10-17T03:00:00+00:00", "paused": "total est. spend $118.10 >= cap $118",
+                                 "lanes": [{"job": "x", "mode": "code"}]})
+        assert rows[0]["status"] == "blocked" and rows[0]["task_title"].startswith("PAUSED")
+        assert rows[1]["status"] == "idle"
+        assert gemini_lane_rows(None) == [] and gemini_lane_rows("x") == []
+        assert gemini_lane_rows({})[0]["status"] == "idle"
