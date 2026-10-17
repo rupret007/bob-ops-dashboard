@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import html as html_lib
 import json
+import math
 import re
 import time
 from datetime import datetime, timezone
@@ -2875,16 +2876,32 @@ def gemini_lane_rows(snapshot: Any, *, now: float | None = None) -> list[dict[st
         return []
     stamp = str(snapshot.get("generated_at") or "").strip()
     lanes = [x for x in (snapshot.get("lanes") or []) if isinstance(x, dict)]
-    paused = str(snapshot.get("paused") or "").strip()
+    raw_paused = str(snapshot.get("paused") or "").strip()
+    paused = ""
+    if raw_paused:
+        low = raw_paused.lower()
+        if "cap" in low:
+            paused = "spend cap"
+        elif "billing" in low or "credit" in low or "402" in low:
+            paused = "billing"
+        elif "quota" in low:
+            paused = "quota"
+        elif "429" in low:
+            paused = "429 storm"
+        elif "manual" in low:
+            paused = "manual"
+        else:
+            paused = "other"
 
     spend_str = "spend unknown"
-    try:
-        spend_val = snapshot.get("spend_est_usd")
-        if spend_val is not None and str(spend_val).strip() != "":
+    spend_val = snapshot.get("spend_est_usd")
+    if spend_val is not None and not isinstance(spend_val, bool):
+        try:
             spend = float(spend_val)
-            spend_str = f"${spend:.2f}"
-    except (TypeError, ValueError):
-        pass
+            if math.isfinite(spend) and spend >= 0:
+                spend_str = f"${spend:.2f}"
+        except (TypeError, ValueError):
+            pass
 
     cap_str = ""
     try:
@@ -2906,7 +2923,7 @@ def gemini_lane_rows(snapshot: Any, *, now: float | None = None) -> list[dict[st
     if not is_fresh:
         status, title = "idle", f"STALE · {summary}"
     elif paused:
-        status, title = "blocked", f"PAUSED ({paused[:120]}) · {summary}"
+        status, title = "blocked", f"PAUSED ({paused}) · {summary}"
     elif lanes and stamp:
         status, title = "running", summary
     else:
@@ -2917,19 +2934,37 @@ def gemini_lane_rows(snapshot: Any, *, now: float | None = None) -> list[dict[st
     if stamp:
         head["heartbeat_at"] = stamp
     rows.append(head)
+
+    from live.sanitize import sanitize
+
     for lane in lanes:
-        job = re.sub(r"[^A-Za-z0-9._-]", "", str(lane.get("job") or ""))[:80]
+        raw_job = str(lane.get("job") or "")
+        job_no_url = re.sub(r"https?://\S+", "[url]", raw_job)
+        job = re.sub(r"[^A-Za-z0-9._\[\]-]", "", job_no_url)[:80]
         if not job:
             continue
+        job = re.sub(r"\d{1,3}(?:\.\d{1,3}){3}", "[ip]", job)
+        safe_job = re.sub(r"[^A-Za-z0-9._\[\]-]", "", sanitize(job))[:80]
+        if not safe_job:
+            continue
+
         mode = re.sub(r"[^a-z]", "", str(lane.get("mode") or "").lower())[:12]
-        row = {"id": f"gemini-lane-{job}", "name": "Gemini lane",
-               "task_title": job + (f" ({mode})" if mode else ""),
+        task_title = safe_job + (f" ({mode})" if mode else "")
+
+        row = {"id": f"gemini-lane-{safe_job}", "name": "Gemini lane",
+               "task_title": sanitize(task_title),
                "status": "running" if (is_fresh and not paused) else "idle",
                "source": GEMINI_LANE_SOURCE if (is_fresh and not paused) else "idle"}
         if stamp:
             row["heartbeat_at"] = stamp
-        if lane.get("started_at"):
-            row["started_at"] = str(lane.get("started_at"))
+
+        raw_started = str(lane.get("started_at") or "").strip()
+        if raw_started:
+            try:
+                row["started_at"] = datetime.fromisoformat(raw_started.replace("Z", "+00:00")).isoformat()
+            except ValueError:
+                row["started_at"] = "unknown"
+
         rows.append(row)
     return rows
 
@@ -2943,3 +2978,18 @@ def gemini_lane_rows_unknown(reason: str) -> list[dict[str, Any]]:
         "status": "idle",
         "source": "idle"
     }]
+
+
+def load_gemini_lane_rows(path: Any, *, now: float | None = None) -> list[dict[str, Any]]:
+    """Load Gemini lanes from a JSON file."""
+    p = Path(path)
+    if not p.is_file():
+        return gemini_lane_rows_unknown("file not found")
+    try:
+        data = json.loads(p.read_text(encoding="utf-8"))
+    except Exception:
+        return gemini_lane_rows_unknown("unreadable")
+    rows = gemini_lane_rows(data, now=now)
+    if not rows:
+        return gemini_lane_rows_unknown("malformed")
+    return rows

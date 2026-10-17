@@ -2822,11 +2822,6 @@ class HardenWindowStripTests(unittest.TestCase):
         self.assertTrue(closed["idle"])
 
 
-
-if __name__ == "__main__":
-    unittest.main(verbosity=2)
-
-
 class WriteHardenWindowOpenResetTests(unittest.TestCase):
     """R8 hole: open must not inherit prior started_at/lanes across rounds."""
 
@@ -3015,3 +3010,104 @@ class GeminiLaneRowsTest(_ut_gem.TestCase):
         # exact TTL counts as fresh or stale consistently with llm_work_running_reject_reasons
         rows = gemini_lane_rows({"generated_at": edge_exact, "lanes": [{"job": "x"}]}, now=now)
         assert rows[0]["status"] == "running"
+
+    def test_load_gemini_lane_rows(self):
+        from board_meta import load_gemini_lane_rows
+        import tempfile
+        with tempfile.TemporaryDirectory() as td:
+            p = Path(td) / "gemini-lanes.json"
+            self.assertEqual(load_gemini_lane_rows(p)[0]["task_title"], "Gemini lanes: status unknown (file not found)")
+            p.write_text("{not json")
+            self.assertEqual(load_gemini_lane_rows(p)[0]["task_title"], "Gemini lanes: status unknown (unreadable)")
+            p.write_text("[]")
+            self.assertEqual(load_gemini_lane_rows(p)[0]["task_title"], "Gemini lanes: status unknown (malformed)")
+
+            refresh = Path(__file__).with_name("refresh.sh").read_text()
+            self.assertIn("load_gemini_lane_rows(", refresh)
+
+    def test_staleness_and_ttl(self):
+        from board_meta import gemini_lane_rows, LLM_WORK_RUNNING_HEARTBEAT_TTL_SEC
+        import time as _t
+        from datetime import datetime as _dt, timezone as _tz
+        now = _t.time()
+
+        rows = gemini_lane_rows({"paused": "manual", "lanes": []}, now=now)
+        self.assertTrue(rows[0]["task_title"].startswith("STALE"))
+
+        rows = gemini_lane_rows({"generated_at": "garbage", "lanes": [{"job": "x"}]}, now=now)
+        self.assertTrue(rows[0]["task_title"].startswith("STALE"))
+        self.assertNotEqual(rows[1]["status"], "running")
+
+        self.assertEqual(LLM_WORK_RUNNING_HEARTBEAT_TTL_SEC, 900)
+
+        fresh_iso = _dt.fromtimestamp(now - 899, tz=_tz.utc).isoformat()
+        rows = gemini_lane_rows({"generated_at": fresh_iso, "lanes": [{"job": "x"}]}, now=now)
+        self.assertEqual(rows[0]["status"], "running")
+
+        stale_iso = _dt.fromtimestamp(now - 901, tz=_tz.utc).isoformat()
+        rows = gemini_lane_rows({"generated_at": stale_iso, "lanes": [{"job": "x"}]}, now=now)
+        self.assertEqual(rows[0]["status"], "idle")
+        self.assertTrue(rows[0]["task_title"].startswith("STALE"))
+
+    def test_public_board_scrubbing(self):
+        from board_meta import gemini_lane_rows
+        import time as _t
+        from datetime import datetime as _dt, timezone as _tz
+        now = _t.time()
+        fresh = _dt.fromtimestamp(now - 60, tz=_tz.utc).isoformat()
+
+        bad_reason = "cap hit at 10.0.0.5 see https://x.io ghp_" + "a" * 36
+        rows = gemini_lane_rows({"generated_at": fresh, "paused": bad_reason, "lanes": []}, now=now)
+        title = rows[0]["task_title"]
+        self.assertIn("spend cap", title)
+        self.assertNotIn("10.0.0.5", title)
+        self.assertNotIn("https", title)
+        self.assertNotIn("ghp_", title)
+
+        bad_job = "ghp_" + "a" * 36
+        rows = gemini_lane_rows({"generated_at": fresh, "lanes": [{"job": bad_job}]}, now=now)
+        self.assertNotIn("ghp_", json.dumps(rows))
+
+        rows = gemini_lane_rows({"generated_at": fresh, "lanes": [{"job": "fetch-192.168.1.20"}]}, now=now)
+        self.assertNotIn("192.168.1.20", json.dumps(rows))
+
+        rows = gemini_lane_rows({"generated_at": fresh, "lanes": [{"job": "job-https://evil.example/a"}]}, now=now)
+        self.assertNotIn("evil.example", json.dumps(rows))
+
+        rows = gemini_lane_rows({"generated_at": fresh, "lanes": [{"job": "x", "started_at": "not-a-date"}, {"job": "y", "started_at": fresh}]}, now=now)
+        self.assertEqual(rows[1]["started_at"], "unknown")
+        self.assertEqual(rows[2]["started_at"], fresh)
+
+    def test_spend_values(self):
+        from board_meta import gemini_lane_rows
+        import time as _t
+        from datetime import datetime as _dt, timezone as _tz
+        now = _t.time()
+        fresh = _dt.fromtimestamp(now - 60, tz=_tz.utc).isoformat()
+
+        for bad in (float("nan"), float("inf"), True, -5):
+            rows = gemini_lane_rows({"generated_at": fresh, "spend_est_usd": bad, "lanes": []}, now=now)
+            self.assertIn("spend unknown", rows[0]["task_title"])
+
+        rows = gemini_lane_rows({"generated_at": fresh, "spend_est_usd": 3.5, "lanes": []}, now=now)
+        self.assertIn("$3.50", rows[0]["task_title"])
+
+
+
+class GeminiPauseReasonBucketTest(_ut_gem.TestCase):
+    def test_unmapped_pause_reason_is_other(self):
+        import time as _t
+        from datetime import datetime as _dt, timezone as _tz
+        from board_meta import gemini_lane_rows
+        now = float(int(_t.time()))
+        fresh = _dt.fromtimestamp(now - 60, tz=_tz.utc).isoformat()
+        for reason, bucket in (("kernel panic at 10.0.0.9", "other"), ("billing error http 400", "billing"),
+                               ("quota exhausted", "quota"), ("429 storm: 7 in 10 min", "429 storm"),
+                               ("manual hold", "manual"), ("total est. spend $118.10 >= cap $118", "spend cap")):
+            title = gemini_lane_rows({"generated_at": fresh, "paused": reason, "lanes": []}, now=now)[0]["task_title"]
+            self.assertTrue(title.startswith(f"PAUSED ({bucket})"), title)
+            self.assertNotIn("10.0.0.9", title)
+            self.assertNotIn("kernel", title)
+
+if __name__ == "__main__":
+    unittest.main(verbosity=2)
