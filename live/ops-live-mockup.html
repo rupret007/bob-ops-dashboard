@@ -1,0 +1,101 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Bob Ops — mockup</title><style>
+:root{--bg:#0b0f14;--card:#141a22;--line:#232c38;--tx:#e6edf3;--mu:#8b98a8;--ok:#3fb950;--warn:#d29922;--bad:#f85149;--info:#58a6ff;--unk:#6e7681}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--tx);font:14px/1.4 -apple-system,system-ui,Segoe UI,Roboto,sans-serif}
+.sample{background:#3b2f00;color:#ffd666;text-align:center;font-size:12px;padding:4px;font-weight:600}
+header{position:sticky;top:0;z-index:5;background:#0b0f14ee;backdrop-filter:blur(6px);border-bottom:1px solid var(--line);padding:10px 14px;display:flex;align-items:center;gap:10px}
+header h1{font-size:17px;margin:0;flex:1}.fresh{font-size:12px;color:var(--mu)}.dot{width:10px;height:10px;border-radius:50%;display:inline-block}
+nav{display:flex;gap:6px;overflow-x:auto;padding:8px 14px;border-bottom:1px solid var(--line)}nav a{flex:none;color:var(--mu);text-decoration:none;border:1px solid var(--line);border-radius:999px;padding:6px 12px;font-size:13px;min-height:32px}
+main{padding:12px;display:grid;gap:12px;grid-template-columns:1fr;max-width:1400px;margin:auto}
+.kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}.kpi{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px}
+.kpi b{display:block;font-size:22px}.kpi span{font-size:11px;color:var(--mu)}.kpi.alert{border-color:var(--bad)}
+section{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px}section h2{font-size:13px;letter-spacing:.06em;text-transform:uppercase;color:var(--mu);margin:0 0 10px;display:flex;justify-content:space-between}
+.row{display:flex;gap:10px;align-items:center;padding:10px 0;border-top:1px solid var(--line);min-height:44px}.row:first-of-type{border-top:0}.row .m{flex:1;min-width:0}.row small{color:var(--mu);display:block}
+.pill{font-size:11px;padding:2px 8px;border-radius:999px;border:1px solid;white-space:nowrap}.ok{color:var(--ok)}.warn{color:var(--warn)}.bad{color:var(--bad)}.info{color:var(--info)}.unk{color:var(--unk)}
+.btn{background:var(--info);color:#001;border:0;border-radius:8px;padding:10px 14px;font-weight:600;min-height:44px}
+.mach{display:grid;grid-template-columns:1fr 1fr;gap:8px}.mc{border:1px solid var(--line);border-radius:10px;padding:10px}
+.bar{height:6px;background:#0d1117;border-radius:4px;overflow:hidden;margin:4px 0 8px}.bar i{display:block;height:100%}
+.bar.unknown{background:repeating-linear-gradient(45deg,#30363d 0 6px,#161b22 6px 12px)}
+.pipe{display:grid;grid-template-columns:repeat(5,1fr);gap:4px;font-size:11px;text-align:center}.pipe div{border:1px solid var(--line);border-radius:8px;padding:6px 2px}.pipe b{display:block;font-size:16px}
+.tl .row{align-items:flex-start}.tl time{color:var(--mu);font-size:12px;width:62px;flex:none}
+svg{display:block}.mc small{display:block;color:var(--mu);margin-top:4px}
+@media(min-width:900px){main{grid-template-columns:repeat(12,1fr)}.kpis{grid-column:1/-1;grid-template-columns:repeat(6,1fr)}
+#needs{grid-column:1/6}#health{grid-column:6/13}#live{grid-column:1/8}#thru{grid-column:8/13}#pipe{grid-column:1/8}#events{grid-column:8/13}#routines{grid-column:1/-1}nav{display:none}}
+</style></head><body>
+<div class="sample">MOCKUP · SAMPLE DATA ONLY: numbers are illustrative, not live</div>
+<header><span class="dot" style="background:var(--warn)"></span><h1>Bob Ops</h1><span class="fresh">Updated 4:45 PM CT · 1m ago ✓ paired</span></header>
+<nav><a href="#needs">Needs you 2</a><a href="#health">Health</a><a href="#live">Live work</a><a href="#pipe">Pipeline</a><a href="#thru">Throughput</a><a href="#events">Events</a></nav>
+<main>
+<div class="kpis">
+<div class="kpi alert"><b class="bad">2</b><span>Needs you</span></div>
+<div class="kpi"><b>9</b><span>Lanes running · 6 Nuc / 3 Mini</span></div>
+<div class="kpi"><b>11</b><span>PRs open · 3 at Karen</span></div>
+<div class="kpi"><b class="ok">14</b><span>Merged today · 7d avg 6.1 ▲</span></div>
+<div class="kpi"><b class="warn">10.8</b><span>Mini load / 14 limit</span></div>
+<div class="kpi"><b class="bad">2%</b><span>Codex left · resets Thu</span></div>
+</div>
+
+<section id="needs"><h2>Needs you <span class="bad">2</span></h2>
+<div class="row"><span class="pill bad">Decision</span><div class="m">Undraft Turdanoid #79 (8.8 MB audio in repo)?<small>Karen PASS · waiting 12m</small></div><button class="btn">Review</button></div>
+<div class="row"><span class="pill warn">Action</span><div class="m">Click the contact-form activation email<small>After the first form message · not yet sent</small></div><button class="btn">Open</button></div>
+<div class="row"><span class="pill unk">Later</span><div class="m">Plug in the external drive for the Mini<small>No rush · when home</small></div></div>
+</section>
+
+<section id="health"><h2>Health <span>machines · AI capacity</span></h2>
+<div class="mach">
+<div class="mc"><b>Mac mini</b> <span class="pill ok">online</span><small class="unk">8 GB · 3 lanes</small>
+<small>Load 10.8 / 14</small><div class="bar"><i style="width:77%;background:var(--warn)"></i></div>
+<small>Memory 7.1/8 GB · swap 2.4 GB</small><div class="bar"><i style="width:89%;background:var(--bad)"></i></div>
+<small>Disk 20.4 GB free (floor 15)</small><div class="bar"><i style="width:40%;background:var(--ok)"></i></div></div>
+<div class="mc"><b>NucBox K6</b> <span class="pill ok">online</span><small class="unk">24 GB · 6 lanes</small>
+<small>Load 6.2 / 14</small><div class="bar"><i style="width:44%;background:var(--ok)"></i></div>
+<small>Memory 11/24 GB · swap 0</small><div class="bar"><i style="width:46%;background:var(--ok)"></i></div>
+<small>Disk 310 GB free</small><div class="bar"><i style="width:20%;background:var(--ok)"></i></div></div>
+</div>
+<h2 style="margin-top:12px">AI capacity <span>left · resets</span></h2>
+<div class="row"><div class="m">Codex<div class="bar"><i style="width:2%;background:var(--bad)"></i></div></div><span class="bad">2% · Thu 1:29 AM</span></div>
+<div class="row"><div class="m">MiniMax<div class="bar"><i style="width:100%;background:var(--ok)"></i></div></div><span class="ok">100% · 7:00 PM</span></div>
+<div class="row"><div class="m">Cursor<div class="bar unknown"></div></div><span class="unk">unknown · not measurable</span></div>
+<div class="row"><div class="m">Claude<div class="bar unknown"></div></div><span class="unk">unknown · no limit seen 6h</span></div>
+</section>
+
+<section id="live"><h2>Live work <span>9 lanes</span></h2>
+<small class="unk">NUCBOX</small>
+<div class="row"><span class="pill info">composer</span><div class="m">site-contact · StalemateSite<small>Contact form → band email · started 4:31 PM · 14m</small></div><span class="ok">●</span></div>
+<div class="row"><span class="pill info">composer</span><div class="m">site-followup · StalemateSite<small>Play Here, YouTube buttons, title spelling · 4:31 PM · 14m</small></div><span class="ok">●</span></div>
+<div class="row"><span class="pill info">composer</span><div class="m">bb-voice-allowlist · bob-brain<small>Recall-field allowlist · 4:38 PM · 7m</small></div><span class="ok">●</span></div>
+<div class="row"><span class="pill unk">queued</span><div class="m">games-title · Turdanoid<small>Waits for games-music2</small></div><span class="unk">○</span></div>
+<small class="unk">MAC MINI</small>
+<div class="row"><span class="pill info">composer</span><div class="m">games-music2 · Turdanoid<small>Music in remaining games · 3:58 PM · 47m</small></div><span class="ok">●</span></div>
+<div class="row"><span class="pill warn">paused</span><div class="m">games-difficulty · Turdanoid<small>Waiting for load &lt; 14</small></div><span class="warn">❚❚</span></div>
+</section>
+
+<section id="pipe"><h2>Pipeline <span>PR → CI → Karen → merged</span></h2>
+<div class="pipe"><div>Draft<b>4</b></div><div>CI<b class="warn">2</b></div><div>Karen<b class="info">3</b></div><div>Ready<b class="ok">1</b></div><div>Merged today<b class="ok">14</b></div></div>
+<div class="row"><span class="pill bad">Karen FAIL</span><div class="m">bob-brain #146 AI capacity<small>Fix pushed d58c7ba · re-gate requested</small></div></div>
+<div class="row"><span class="pill info">At Karen</span><div class="m">Turdanoid #79 shared song list<small>CI green · requested 4:33 PM</small></div></div>
+<div class="row"><span class="pill warn">CI running</span><div class="m">StalemateSite #27 music switch<small>2 of 3 checks done</small></div></div>
+<div class="row"><span class="pill ok">Merged</span><div class="m">bob-brain #142 voice key check<small>4:30 PM · Karen PASS 0c0128c</small></div></div>
+</section>
+
+<section id="thru"><h2>Throughput <span>today vs 7d</span></h2>
+<svg viewBox="0 0 300 80" width="100%" height="80"><polyline fill="none" stroke="#30363d" stroke-width="2" points="0,60 43,52 86,58 129,48 172,55 215,50 258,54"/><polyline fill="none" stroke="#3fb950" stroke-width="3" points="258,54 300,12"/><circle cx="300" cy="12" r="4" fill="#3fb950"/></svg>
+<div class="row"><div class="m">PRs merged<small>7-day avg 6.1</small></div><b class="ok">14</b></div>
+<div class="row"><div class="m">PRs opened<small>7-day avg 8.4</small></div><b>12</b></div>
+<div class="row"><div class="m">Karen gates<small>pass 9 · fail 4</small></div><b>13</b></div>
+</section>
+
+<section id="events" class="tl"><h2>Recent events</h2>
+<div class="row"><time>4:40 PM</time><div class="m">Fix for #146 pushed, re-gate requested</div></div>
+<div class="row"><time>4:37 PM</time><div class="m ok">Mini load back to 9 (heavy tests moved to NucBox)</div></div>
+<div class="row"><time>4:33 PM</time><div class="m">Old Chrome copies cleared · +2.5 GB</div></div>
+<div class="row"><time>4:30 PM</time><div class="m ok">Merged bob-brain #142, the last of 13 parity PRs</div></div>
+<div class="row"><time>4:24 PM</time><div class="m bad">Mini load 44 (memory swap) · lane paused</div></div>
+</section>
+
+<section id="routines"><h2>Routines <span>last · next</span></h2>
+<div class="row"><div class="m">Dashboard refresh<small>every 5 min</small></div><span class="ok">4:45 PM ✓</span></div>
+<div class="row"><div class="m">Capacity check<small>one-time</small></div><span class="unk">next 6:00 PM</span></div>
+<div class="row"><div class="m">Morning report</div><span class="unk">next 7:30 AM</span></div>
+</section>
+</main></body></html>

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import html as html_lib
 import json
+import math
 import re
 import time
 from datetime import datetime, timezone
@@ -2856,3 +2857,219 @@ def merge_first_class(sections: list[Any] | None) -> list[dict[str, Any]]:
     out.append(fc["abilities"])
     out.append(fc["features"])
     return out
+
+
+# Gemini lanes (ROUTING v6, 2026-10-16): Mini fill.sh writes gemini-lanes.json
+# (job, mode, started_at; spend estimate; pause reason). Rows carry the snapshot
+# stamp as heartbeat_at so a stale snapshot is demoted by the normal TTL path.
+GEMINI_LANE_SOURCE = "mini_gemini_lane"
+GEMINI_LANE_MAX_CAP_USD = 100000.0
+GEMINI_LANE_JOB_PLACEHOLDER = "job"
+# Public job ids are allowlisted to the shapes the lane scripts generate
+# (gemini-feed.py gemrev-/gemfix-<repo>-pr<n>, fill-autoqueue.py auto-<repo>-pr|iss<n>,
+# backlog bl-<repo>-pr<n>, optional .gat.<n> retry suffix). Anything else is shown as "job".
+GEMINI_LANE_JOB_RE = re.compile(
+    r"(?P<prefix>gemrev|gemfix|auto|bl)-(?P<repo>[A-Za-z][A-Za-z0-9_-]{0,63}?)"
+    r"-(?P<kind>pr|iss)(?P<num>\d{1,6})(?:\.gat\.(?P<gat>\d{1,3}))?",
+    re.ASCII,  # \d must not match non-ASCII digits (int() would normalize them)
+)
+# The <repo> segment is never trusted by shape alone (a dot-free host, tailnet id,
+# token or key fits [A-Za-z0-9_-]). It must name a known repo: the REPOS array in
+# refresh.sh (mirrored here; test_board_meta pins the two equal) plus the fixed
+# lane-only repos the Mini lanes work on. Unknown repos -> "job".
+GEMINI_LANE_REFRESH_REPOS = (
+    "webjam", "StoryLiner", "StoryBoard", "Rad-Dad-Merch", "RadDadSite", "Turdanoid",
+    "AdoptIQ", "TACTrack", "AI-Music-Vault", "rad-dad-show-night", "Andrea_NanoBot",
+    "Bob-the-Bot", "StoryOps-AI", "ballbeacon", "CSS_Conductor", "barker",
+    "bob-ops-dashboard", "Cursor-OpenClaw-Integration", "StoryDesk",
+)
+GEMINI_LANE_EXTRA_REPOS = (
+    "bob-brain", "StalemateSite", "TrailerParkDerby", "Storyland-Fantasy-Football",
+    "storyland-draft-and-season", "stalemate-media-merch", "Sliding-Glass-Door-PETG-Screw",
+)
+GEMINI_LANE_KNOWN_REPOS = GEMINI_LANE_REFRESH_REPOS + GEMINI_LANE_EXTRA_REPOS
+GEMINI_LANE_KNOWN_REPO_BY_LOWER = {r.lower(): r for r in GEMINI_LANE_KNOWN_REPOS}
+# Lane modes the scripts emit; anything else is dropped from the title.
+GEMINI_LANE_MODES = frozenset({"review", "code", "fix"})
+# Defense in depth: secret/host shapes that must never ride inside an allowlisted id.
+GEMINI_LANE_JOB_DENY_RE = re.compile(
+    r"AIza|(?:^|[-_])sk-|ghp_|gho_|ghs_|github_pat|xox[abprs]-|AKIA|eyJ|ts-net|tailnet|[Tt]ailscale"
+)
+
+
+def gemini_lane_iso_stamp(value: Any) -> str:
+    """Return a normalized ISO-8601 stamp, or "" when value is not one.
+
+    The published value is rebuilt from the parsed datetime, never echoed raw.
+    """
+    if value is None or isinstance(value, bool) or not isinstance(value, str):
+        return ""
+    raw = value.strip()
+    if not raw or len(raw) > 40:
+        return ""
+    try:
+        dt = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+    except ValueError:
+        return ""
+    if dt.tzinfo is None:
+        return ""
+    return dt.isoformat()
+
+
+def gemini_lane_public_job(value: Any) -> str:
+    """Return a job id safe for the public board, or the "job" placeholder.
+
+    live.sanitize runs on the raw value first; the result must be unchanged by
+    sanitize, fully match the allowlisted job-id shape and contain no secret shape.
+    """
+    from live.sanitize import sanitize
+
+    if not isinstance(value, str):
+        return GEMINI_LANE_JOB_PLACEHOLDER
+    raw = value.strip()
+    if not raw or len(raw) > 80:
+        return GEMINI_LANE_JOB_PLACEHOLDER
+    if sanitize(raw) != raw:
+        return GEMINI_LANE_JOB_PLACEHOLDER
+    m = GEMINI_LANE_JOB_RE.fullmatch(raw)
+    if not m:
+        return GEMINI_LANE_JOB_PLACEHOLDER
+    if GEMINI_LANE_JOB_DENY_RE.search(raw):
+        return GEMINI_LANE_JOB_PLACEHOLDER
+    repo = GEMINI_LANE_KNOWN_REPO_BY_LOWER.get(m.group("repo").lower())
+    if repo is None:
+        return GEMINI_LANE_JOB_PLACEHOLDER
+    # Rebuilt from parsed parts (canonical repo casing, int-normalized numbers),
+    # never echoed raw.
+    out = f"{m.group('prefix')}-{repo}-{m.group('kind')}{int(m.group('num'))}"
+    if m.group("gat") is not None:
+        out += f".gat.{int(m.group('gat'))}"
+    return out
+
+
+def gemini_lane_rows(snapshot: Any, *, now: float | None = None) -> list[dict[str, Any]]:
+    """Build llm_work rows for Gemini lanes from a gemini-lanes.json snapshot.
+
+    Returns [] for anything malformed. Never invents Running: per-lane rows are
+    Running only with a snapshot stamp (validated/demoted downstream), and the
+    summary row is blocked when the spend guard paused Gemini.
+    """
+    if not isinstance(snapshot, dict):
+        return []
+    stamp = gemini_lane_iso_stamp(snapshot.get("generated_at"))
+    lanes = [x for x in (snapshot.get("lanes") or []) if isinstance(x, dict)]
+    raw_paused = str(snapshot.get("paused") or "").strip()
+    paused = ""
+    if raw_paused:
+        low = raw_paused.lower()
+        if "cap" in low:
+            paused = "spend cap"
+        elif "billing" in low or "credit" in low or "402" in low:
+            paused = "billing"
+        elif "quota" in low:
+            paused = "quota"
+        elif "429" in low:
+            paused = "429 storm"
+        elif "manual" in low:
+            paused = "manual"
+        else:
+            paused = "other"
+
+    spend_str = "spend unknown"
+    spend_val = snapshot.get("spend_est_usd")
+    if spend_val is not None and not isinstance(spend_val, bool):
+        try:
+            spend = float(spend_val)
+            if math.isfinite(spend) and spend >= 0:
+                spend_str = f"${spend:.2f}"
+        except (TypeError, ValueError):
+            pass
+
+    cap_str = ""
+    cap_val = snapshot.get("cap_usd")
+    if cap_val is not None and not isinstance(cap_val, bool) and str(cap_val).strip() != "":
+        try:
+            cap = float(cap_val)
+            if math.isfinite(cap) and 0 < cap <= GEMINI_LANE_MAX_CAP_USD:
+                cap_str = f" / ${cap:.0f}"
+        except (TypeError, ValueError, OverflowError):
+            pass
+
+    clock = time.time() if now is None else float(now)
+    proof = llm_work_proof_timestamp({"heartbeat_at": stamp})
+    is_fresh = llm_work_proof_is_fresh(proof, clock, LLM_WORK_RUNNING_HEARTBEAT_TTL_SEC)
+
+    rows: list[dict[str, Any]] = []
+    summary = f"{len(lanes)} Gemini lanes · est. {spend_str}{cap_str}"
+
+    if not is_fresh:
+        status, title = "idle", f"STALE · {summary}"
+    elif paused:
+        status, title = "blocked", f"PAUSED ({paused}) · {summary}"
+    elif lanes and stamp:
+        status, title = "running", summary
+    else:
+        status, title = "idle", summary
+
+    head = {"id": "gemini-lanes", "name": "Gemini lanes", "task_title": title,
+            "status": status, "source": GEMINI_LANE_SOURCE if status == "running" else "idle"}
+    if stamp:
+        head["heartbeat_at"] = stamp
+    rows.append(head)
+
+    from live.sanitize import sanitize
+
+    for idx, lane in enumerate(lanes):
+        if not str(lane.get("job") or "").strip():
+            continue
+        safe_job = gemini_lane_public_job(lane.get("job"))
+        row_id = f"gemini-lane-{safe_job}" if safe_job != GEMINI_LANE_JOB_PLACEHOLDER else f"gemini-lane-job-{idx}"
+
+        raw_mode = lane.get("mode")
+        mode = raw_mode.strip().lower() if isinstance(raw_mode, str) else ""
+        if mode not in GEMINI_LANE_MODES:
+            mode = ""
+        task_title = safe_job + (f" ({mode})" if mode else "")
+
+        row = {"id": row_id, "name": "Gemini lane",
+               "task_title": sanitize(task_title),
+               "status": "running" if (is_fresh and not paused) else "idle",
+               "source": GEMINI_LANE_SOURCE if (is_fresh and not paused) else "idle"}
+        if stamp:
+            row["heartbeat_at"] = stamp
+
+        raw_started = str(lane.get("started_at") or "").strip()
+        if raw_started:
+            try:
+                row["started_at"] = datetime.fromisoformat(raw_started.replace("Z", "+00:00")).isoformat()
+            except ValueError:
+                row["started_at"] = "unknown"
+
+        rows.append(row)
+    return rows
+
+
+def gemini_lane_rows_unknown(reason: str) -> list[dict[str, Any]]:
+    """Fallback summary row when Gemini lanes snapshot is missing or corrupt."""
+    return [{
+        "id": "gemini-lanes",
+        "name": "Gemini lanes",
+        "task_title": f"Gemini lanes: status unknown ({reason})",
+        "status": "idle",
+        "source": "idle"
+    }]
+
+
+def load_gemini_lane_rows(path: Any, *, now: float | None = None) -> list[dict[str, Any]]:
+    """Load Gemini lanes from a JSON file."""
+    p = Path(path)
+    if not p.is_file():
+        return gemini_lane_rows_unknown("file not found")
+    try:
+        data = json.loads(p.read_text(encoding="utf-8"))
+    except Exception:
+        return gemini_lane_rows_unknown("unreadable")
+    rows = gemini_lane_rows(data, now=now)
+    if not rows:
+        return gemini_lane_rows_unknown("malformed")
+    return rows
