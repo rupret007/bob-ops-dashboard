@@ -22,7 +22,7 @@ def operator() -> dict:
     return {
         "publish": {"allow": ["$JS.API.>", "$KV.LANE_LEASES.>", "lanes.>", "lanes_dlq.>", f"{lanes.OPERATOR_INBOX}.>"]},
         "subscribe": {"allow": [f"{lanes.LEASE_SVC_PREFIX}.*.*", lanes.MAX_DELIVERIES_ADVISORY, f"{lanes.OPERATOR_INBOX}.>"]},
-        "allow_responses": True,
+        "allow_responses": {"max": 1},
     }
 
 
@@ -54,6 +54,8 @@ def _fmt(v, indent: int) -> str:
     if isinstance(v, dict):
         inner = "\n".join(f"{pad}  {k}: {_fmt(x, indent + 2)}" for k, x in v.items())
         return "{\n" + inner + "\n" + pad + "}"
+    if isinstance(v, int) and not isinstance(v, bool):
+        return str(v)
     if isinstance(v, (list, tuple)):
         return "[" + ", ".join(_fmt(x, indent) for x in v) + "]"
     if isinstance(v, bool):
