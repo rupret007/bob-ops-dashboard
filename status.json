@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-10-16T23:50:03.067271-05:00",
-  "generated_at_display": "Fri Oct 16, 2026 \u00b7 11:50 PM CDT",
+  "generated_at": "2026-10-17T00:05:17.397999-05:00",
+  "generated_at_display": "Sat Oct 17, 2026 \u00b7 12:05 AM CDT",
   "timezone": "America/Chicago",
   "owner": "rupret007",
   "dashboard": "bob-ops-dashboard",
@@ -241,8 +241,8 @@
           "status": "green",
           "chip": "Green",
           "default_branch": "main",
-          "tip_sha": "4b8fd94",
-          "tip_date": "2026-10-17T04:39:07Z",
+          "tip_sha": "a49210d",
+          "tip_date": "2026-10-17T05:00:26Z",
           "open_prs": 0,
           "open_pr_url": null,
           "open_pr_number": null,
@@ -254,9 +254,9 @@
             "name": "leftover-honesty",
             "conclusion": "success",
             "branch": "main",
-            "sha": "4b8fd94",
-            "created": "2026-10-17T04:39:09Z",
-            "html_url": "https://github.com/rupret007/rad-dad-show-night/actions/runs/39003363305"
+            "sha": "a49210d",
+            "created": "2026-10-17T05:00:29Z",
+            "html_url": "https://github.com/rupret007/rad-dad-show-night/actions/runs/39004667842"
           },
           "release": null,
           "release_sha": null,
@@ -296,8 +296,8 @@
           "status": "green",
           "chip": "Green",
           "default_branch": "main",
-          "tip_sha": "37ce3c4",
-          "tip_date": "2026-10-17T01:56:49Z",
+          "tip_sha": "892805d",
+          "tip_date": "2026-10-17T04:55:29Z",
           "open_prs": 0,
           "open_pr_url": null,
           "open_pr_number": null,
@@ -309,9 +309,9 @@
             "name": "CI",
             "conclusion": "success",
             "branch": "main",
-            "sha": "37ce3c4",
-            "created": "2026-10-17T01:56:51Z",
-            "html_url": "https://github.com/rupret007/Turdanoid/actions/runs/38992962517"
+            "sha": "892805d",
+            "created": "2026-10-17T04:55:31Z",
+            "html_url": "https://github.com/rupret007/Turdanoid/actions/runs/39004374491"
           },
           "release": null,
           "release_sha": null,
@@ -495,8 +495,8 @@
           "status": "green",
           "chip": "Green",
           "default_branch": "main",
-          "tip_sha": "6b166e6",
-          "tip_date": "2026-10-17T04:35:22Z",
+          "tip_sha": "4966d0f",
+          "tip_date": "2026-10-17T04:55:15Z",
           "open_prs": 0,
           "open_pr_url": null,
           "open_pr_number": null,
@@ -504,7 +504,14 @@
           "open_pr_stack": [],
           "pr_listing_complete": true,
           "agent_url": null,
-          "ci": null,
+          "ci": {
+            "name": "QA claim smoke",
+            "conclusion": "success",
+            "branch": "main",
+            "sha": "4966d0f",
+            "created": "2026-10-17T04:55:18Z",
+            "html_url": "https://github.com/rupret007/bob-ops-dashboard/actions/runs/39004359302"
+          },
           "release": null,
           "release_sha": null,
           "release_url": null,
@@ -599,6 +606,16 @@
           "agent_state": "blocked",
           "url": "",
           "pr_url": ""
+        },
+        {
+          "name": "Gemini lanes",
+          "status": "parked",
+          "chip": "Idle",
+          "notes": "Gemini lanes: status unknown (file not found)",
+          "agent_id": "gemini-lanes",
+          "agent_state": "idle",
+          "url": null,
+          "pr_url": null
         }
       ]
     },
@@ -609,10 +626,10 @@
         {
           "name": "AdoptIQ",
           "private": true,
-          "status": "yellow",
-          "chip": "Yellow",
+          "status": "parked",
+          "chip": "Parked",
           "notes": "Private, draft, and offline-only; ready_for_live_cisco=false. No secrets or customer data on this page.",
-          "accessible": true,
+          "accessible": false,
           "ci": {},
           "coord": {
             "repo": "AdoptIQ",
@@ -863,7 +880,6 @@
     "Rad-Dad-Merch",
     "RadDadSite",
     "Turdanoid",
-    "AdoptIQ",
     "AI-Music-Vault",
     "rad-dad-show-night",
     "Andrea_NanoBot",
@@ -874,13 +890,14 @@
     "StoryDesk"
   ],
   "inaccessible": [
+    "AdoptIQ",
     "TACTrack",
     "ballbeacon",
     "CSS_Conductor",
     "barker"
   ],
   "publish_notes": "Public board -- no secrets or customer paths. Private repositories stay high-level; AI Music Vault stays private-content-boundary only.",
-  "refresh_started_ms": 1792212575120,
+  "refresh_started_ms": 1792213479173,
   "agents_source": "file:stale->unknown",
   "agents": [
     {
@@ -1023,10 +1040,17 @@
       "note": "PR#56 merged; drafts held under wall",
       "last_task": "Cloud BA attribution board era",
       "source": "spend_wall"
+    },
+    {
+      "id": "gemini-lanes",
+      "name": "Gemini lanes",
+      "task_title": "Gemini lanes: status unknown (file not found)",
+      "status": "idle",
+      "source": "idle"
     }
   ],
   "llm_work_now_freshness": {
-    "generated_at": "2026-10-16 23:50 CT",
+    "generated_at": "2026-10-17 00:05 CT",
     "warn_ttl_sec": 1200,
     "warnings": [],
     "ok": true
