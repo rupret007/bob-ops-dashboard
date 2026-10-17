@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-10-17T01:05:19.290953-05:00",
-  "generated_at_display": "Sat Oct 17, 2026 \u00b7 1:05 AM CDT",
+  "generated_at": "2026-10-17T12:36:35.045065-05:00",
+  "generated_at_display": "Sat Oct 17, 2026 \u00b7 12:36 PM CDT",
   "timezone": "America/Chicago",
   "owner": "rupret007",
   "dashboard": "bob-ops-dashboard",
@@ -49,8 +49,8 @@
           "status": "green",
           "chip": "Green",
           "default_branch": "master",
-          "tip_sha": "723bfda",
-          "tip_date": "2026-10-17T04:21:40Z",
+          "tip_sha": "5effbc5",
+          "tip_date": "2026-10-17T08:54:56Z",
           "open_prs": 0,
           "open_pr_url": null,
           "open_pr_number": null,
@@ -59,12 +59,12 @@
           "pr_listing_complete": true,
           "agent_url": null,
           "ci": {
-            "name": "Cross-network acceptance",
+            "name": "Web Join browser tests",
             "conclusion": "success",
             "branch": "master",
-            "sha": "723bfda",
-            "created": "2026-10-17T04:21:43Z",
-            "html_url": "https://github.com/rupret007/webjam/actions/runs/39002275036"
+            "sha": "5effbc5",
+            "created": "2026-10-17T08:54:59Z",
+            "html_url": "https://github.com/rupret007/webjam/actions/runs/39019150533"
           },
           "release": "v0.29.0",
           "release_sha": "7aa74be",
@@ -241,8 +241,8 @@
           "status": "green",
           "chip": "Green",
           "default_branch": "main",
-          "tip_sha": "a49210d",
-          "tip_date": "2026-10-17T05:00:26Z",
+          "tip_sha": "61ad95c",
+          "tip_date": "2026-10-17T06:06:13Z",
           "open_prs": 0,
           "open_pr_url": null,
           "open_pr_number": null,
@@ -254,9 +254,9 @@
             "name": "leftover-honesty",
             "conclusion": "success",
             "branch": "main",
-            "sha": "a49210d",
-            "created": "2026-10-17T05:00:29Z",
-            "html_url": "https://github.com/rupret007/rad-dad-show-night/actions/runs/39004667842"
+            "sha": "61ad95c",
+            "created": "2026-10-17T06:06:17Z",
+            "html_url": "https://github.com/rupret007/rad-dad-show-night/actions/runs/39008671084"
           },
           "release": null,
           "release_sha": null,
@@ -293,11 +293,11 @@
           "url": "https://github.com/rupret007/Turdanoid",
           "repo_url": "https://github.com/rupret007/Turdanoid",
           "private": false,
-          "status": "green",
-          "chip": "Green",
+          "status": "red",
+          "chip": "Red",
           "default_branch": "main",
-          "tip_sha": "3a730bd",
-          "tip_date": "2026-10-17T05:59:07Z",
+          "tip_sha": "76b7bc8",
+          "tip_date": "2026-10-17T09:14:30Z",
           "open_prs": 0,
           "open_pr_url": null,
           "open_pr_number": null,
@@ -307,11 +307,11 @@
           "agent_url": null,
           "ci": {
             "name": "CI",
-            "conclusion": "success",
+            "conclusion": "failure",
             "branch": "main",
-            "sha": "3a730bd",
-            "created": "2026-10-17T05:59:10Z",
-            "html_url": "https://github.com/rupret007/Turdanoid/actions/runs/39008220222"
+            "sha": "76b7bc8",
+            "created": "2026-10-17T09:14:32Z",
+            "html_url": "https://github.com/rupret007/Turdanoid/actions/runs/39020369537"
           },
           "release": null,
           "release_sha": null,
@@ -495,8 +495,8 @@
           "status": "green",
           "chip": "Green",
           "default_branch": "main",
-          "tip_sha": "0cf561f",
-          "tip_date": "2026-10-17T05:58:58Z",
+          "tip_sha": "5850682",
+          "tip_date": "2026-10-17T17:21:50Z",
           "open_prs": 0,
           "open_pr_url": null,
           "open_pr_number": null,
@@ -504,14 +504,7 @@
           "open_pr_stack": [],
           "pr_listing_complete": true,
           "agent_url": null,
-          "ci": {
-            "name": "QA claim smoke",
-            "conclusion": "success",
-            "branch": "main",
-            "sha": "0cf561f",
-            "created": "2026-10-17T05:59:00Z",
-            "html_url": "https://github.com/rupret007/bob-ops-dashboard/actions/runs/39008211798"
-          },
+          "ci": null,
           "release": null,
           "release_sha": null,
           "release_url": null,
@@ -542,6 +535,11 @@
           "notes": "Local runtime lane. No gateway restart, credential change, or live operation from this board."
         }
       ]
+    },
+    {
+      "id": "usage-machines",
+      "title": "Usage & machines",
+      "projects": []
     },
     {
       "id": "active-agents",
@@ -678,11 +676,11 @@
           "url": "https://github.com/rupret007/Andrea_NanoBot",
           "repo_url": "https://github.com/rupret007/Andrea_NanoBot",
           "private": false,
-          "status": "yellow",
-          "chip": "Yellow",
+          "status": "green",
+          "chip": "Green",
           "default_branch": "main",
-          "tip_sha": "6f1030f",
-          "tip_date": "2026-10-17T06:01:32Z",
+          "tip_sha": "3e83ed2",
+          "tip_date": "2026-10-17T08:20:08Z",
           "open_prs": 0,
           "open_pr_url": null,
           "open_pr_number": null,
@@ -692,11 +690,11 @@
           "agent_url": null,
           "ci": {
             "name": "AGI Layer CI",
-            "conclusion": "in_progress",
+            "conclusion": "success",
             "branch": "main",
-            "sha": "6f1030f",
-            "created": "2026-10-17T06:01:35Z",
-            "html_url": "https://github.com/rupret007/Andrea_NanoBot/actions/runs/39008376037"
+            "sha": "3e83ed2",
+            "created": "2026-10-17T08:20:11Z",
+            "html_url": "https://github.com/rupret007/Andrea_NanoBot/actions/runs/39016972662"
           },
           "release": null,
           "release_sha": null,
@@ -717,9 +715,7 @@
           "chip": "Yellow",
           "notes": "Bob application \u2014 private bootstrap. Reuses the Andrea messaging engine and guarded OpenClaw delegation; no live sends, restarts, credentials, or production actions.",
           "accessible": true,
-          "ci": {
-            "conclusion": "success"
-          },
+          "ci": {},
           "coord": {
             "repo": "Bob-the-Bot",
             "agent": "none",
@@ -904,7 +900,7 @@
     "barker"
   ],
   "publish_notes": "Public board -- no secrets or customer paths. Private repositories stay high-level; AI Music Vault stays private-content-boundary only.",
-  "refresh_started_ms": 1792217087732,
+  "refresh_started_ms": 1792258569933,
   "agents_source": "file:stale->unknown",
   "agents": [
     {
@@ -950,17 +946,7 @@
       "checked_at": null
     }
   ],
-  "cloud_agents": [
-    {
-      "id": "bc-a807a4fc-cfb1-5e4b-a8e9-e4a7fb9c6baa",
-      "name": "PR #28",
-      "state": "unknown",
-      "detail": "Vendor cleaned OpenClaw CLI fallback under tools/openclaw",
-      "url": "https://cursor.com/agents/bc-a807a4fc-cfb1-5e4b-a8e9-e4a7fb9c6baa",
-      "pr_url": "https://github.com/rupret007/Bob-the-Bot/pull/28",
-      "checked_at": null
-    }
-  ],
+  "cloud_agents": [],
   "llm_work": [
     {
       "id": "codex",
@@ -1085,7 +1071,7 @@
     }
   ],
   "llm_work_now_freshness": {
-    "generated_at": "2026-10-17 01:05 CT",
+    "generated_at": "2026-10-17 12:36 CT",
     "warn_ttl_sec": 1200,
     "warnings": [],
     "ok": true
@@ -1106,6 +1092,1804 @@
     "updated_at": "2026-09-25T07:24:02-05:00",
     "display_status": "closed",
     "idle": true
+  },
+  "usage_machines": {
+    "v": "usage-machines/v1",
+    "generated_at": "2026-10-17 01:00 CT",
+    "timezone": "America/Chicago",
+    "hosts": [
+      "mini"
+    ],
+    "scorecards": {
+      "v": "scorecards/v1",
+      "generated_at": "2026-10-17T17:36:36.088302+00:00",
+      "windows": {
+        "24h": {
+          "providers": {
+            "codex": {
+              "karen_first_pass_pct": {
+                "value": null,
+                "status": "no data",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              },
+              "karen_rounds": {
+                "value": null,
+                "status": "no data",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              },
+              "ci_first_push_pct": {
+                "value": null,
+                "status": "no data",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              },
+              "rollback_48h_pct": {
+                "value": null,
+                "status": "no data",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              },
+              "gemini_agreement_pct": {
+                "value": null,
+                "status": "no data",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              },
+              "gemini_missed": {
+                "value": null,
+                "status": "no data",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              },
+              "gemini_false_alarm": {
+                "value": null,
+                "status": "no data",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              },
+              "stuck_prs": {
+                "value": null,
+                "status": "no data",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              },
+              "tokens": {
+                "value": null,
+                "status": "no data",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              },
+              "usd": {
+                "value": null,
+                "status": "no data",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              },
+              "wasted_runs": {
+                "value": null,
+                "status": "no data",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              },
+              "empty_gemini": {
+                "value": null,
+                "status": "no data",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              },
+              "refusals": {
+                "value": null,
+                "status": "no data",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              },
+              "codex_weekly_pct": {
+                "value": null,
+                "status": "no data",
+                "observed": 0,
+                "eligible": 1,
+                "partial": true
+              },
+              "tokens_per_merge": {
+                "value": null,
+                "status": "no data",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              },
+              "usd_per_merge": {
+                "value": null,
+                "status": "no data",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              },
+              "tokens_per_pass": {
+                "value": null,
+                "status": "no data",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              },
+              "usd_per_pass": {
+                "value": null,
+                "status": "no data",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              }
+            },
+            "gemini": {
+              "karen_first_pass_pct": {
+                "value": null,
+                "status": "no data",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              },
+              "karen_rounds": {
+                "value": null,
+                "status": "no data",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              },
+              "ci_first_push_pct": {
+                "value": null,
+                "status": "no data",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              },
+              "rollback_48h_pct": {
+                "value": null,
+                "status": "no data",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              },
+              "gemini_agreement_pct": {
+                "value": null,
+                "status": "no data",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              },
+              "gemini_missed": {
+                "value": null,
+                "status": "no data",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              },
+              "gemini_false_alarm": {
+                "value": null,
+                "status": "no data",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              },
+              "stuck_prs": {
+                "value": null,
+                "status": "no data",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              },
+              "tokens": {
+                "value": null,
+                "status": "no data",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              },
+              "usd": {
+                "value": null,
+                "status": "no data",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              },
+              "wasted_runs": {
+                "value": null,
+                "status": "no data",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              },
+              "empty_gemini": {
+                "value": null,
+                "status": "no data",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              },
+              "refusals": {
+                "value": null,
+                "status": "no data",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              },
+              "codex_weekly_pct": {
+                "value": null,
+                "status": "no data",
+                "observed": 0,
+                "eligible": 1,
+                "partial": true
+              },
+              "tokens_per_merge": {
+                "value": null,
+                "status": "no data",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              },
+              "usd_per_merge": {
+                "value": null,
+                "status": "no data",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              },
+              "tokens_per_pass": {
+                "value": null,
+                "status": "no data",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              },
+              "usd_per_pass": {
+                "value": null,
+                "status": "no data",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              }
+            },
+            "cursor": {
+              "karen_first_pass_pct": {
+                "value": null,
+                "status": "no data",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              },
+              "karen_rounds": {
+                "value": null,
+                "status": "no data",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              },
+              "ci_first_push_pct": {
+                "value": null,
+                "status": "no data",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              },
+              "rollback_48h_pct": {
+                "value": null,
+                "status": "no data",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              },
+              "gemini_agreement_pct": {
+                "value": null,
+                "status": "no data",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              },
+              "gemini_missed": {
+                "value": null,
+                "status": "no data",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              },
+              "gemini_false_alarm": {
+                "value": null,
+                "status": "no data",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              },
+              "stuck_prs": {
+                "value": null,
+                "status": "no data",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              },
+              "tokens": {
+                "value": null,
+                "status": "no data",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              },
+              "usd": {
+                "value": null,
+                "status": "no data",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              },
+              "wasted_runs": {
+                "value": null,
+                "status": "no data",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              },
+              "empty_gemini": {
+                "value": null,
+                "status": "no data",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              },
+              "refusals": {
+                "value": null,
+                "status": "no data",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              },
+              "codex_weekly_pct": {
+                "value": null,
+                "status": "no data",
+                "observed": 0,
+                "eligible": 1,
+                "partial": true
+              },
+              "tokens_per_merge": {
+                "value": null,
+                "status": "no data",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              },
+              "usd_per_merge": {
+                "value": null,
+                "status": "no data",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              },
+              "tokens_per_pass": {
+                "value": null,
+                "status": "no data",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              },
+              "usd_per_pass": {
+                "value": null,
+                "status": "no data",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              }
+            },
+            "claude": {
+              "karen_first_pass_pct": {
+                "value": null,
+                "status": "no data",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              },
+              "karen_rounds": {
+                "value": null,
+                "status": "no data",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              },
+              "ci_first_push_pct": {
+                "value": null,
+                "status": "no data",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              },
+              "rollback_48h_pct": {
+                "value": null,
+                "status": "no data",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              },
+              "gemini_agreement_pct": {
+                "value": null,
+                "status": "no data",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              },
+              "gemini_missed": {
+                "value": null,
+                "status": "no data",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              },
+              "gemini_false_alarm": {
+                "value": null,
+                "status": "no data",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              },
+              "stuck_prs": {
+                "value": null,
+                "status": "no data",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              },
+              "tokens": {
+                "value": null,
+                "status": "no data",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              },
+              "usd": {
+                "value": null,
+                "status": "no data",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              },
+              "wasted_runs": {
+                "value": null,
+                "status": "no data",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              },
+              "empty_gemini": {
+                "value": null,
+                "status": "no data",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              },
+              "refusals": {
+                "value": null,
+                "status": "no data",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              },
+              "codex_weekly_pct": {
+                "value": null,
+                "status": "no data",
+                "observed": 0,
+                "eligible": 1,
+                "partial": true
+              },
+              "tokens_per_merge": {
+                "value": null,
+                "status": "no data",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              },
+              "usd_per_merge": {
+                "value": null,
+                "status": "no data",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              },
+              "tokens_per_pass": {
+                "value": null,
+                "status": "no data",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              },
+              "usd_per_pass": {
+                "value": null,
+                "status": "no data",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              }
+            },
+            "minimax": {
+              "karen_first_pass_pct": {
+                "value": null,
+                "status": "no data",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              },
+              "karen_rounds": {
+                "value": null,
+                "status": "no data",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              },
+              "ci_first_push_pct": {
+                "value": null,
+                "status": "no data",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              },
+              "rollback_48h_pct": {
+                "value": null,
+                "status": "no data",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              },
+              "gemini_agreement_pct": {
+                "value": null,
+                "status": "no data",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              },
+              "gemini_missed": {
+                "value": null,
+                "status": "no data",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              },
+              "gemini_false_alarm": {
+                "value": null,
+                "status": "no data",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              },
+              "stuck_prs": {
+                "value": null,
+                "status": "no data",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              },
+              "tokens": {
+                "value": null,
+                "status": "no data",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              },
+              "usd": {
+                "value": null,
+                "status": "no data",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              },
+              "wasted_runs": {
+                "value": null,
+                "status": "no data",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              },
+              "empty_gemini": {
+                "value": null,
+                "status": "no data",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              },
+              "refusals": {
+                "value": null,
+                "status": "no data",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              },
+              "codex_weekly_pct": {
+                "value": null,
+                "status": "no data",
+                "observed": 0,
+                "eligible": 1,
+                "partial": true
+              },
+              "tokens_per_merge": {
+                "value": null,
+                "status": "no data",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              },
+              "usd_per_merge": {
+                "value": null,
+                "status": "no data",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              },
+              "tokens_per_pass": {
+                "value": null,
+                "status": "no data",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              },
+              "usd_per_pass": {
+                "value": null,
+                "status": "no data",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              }
+            },
+            "grok_bot": {
+              "karen_first_pass_pct": {
+                "value": null,
+                "status": "unknown",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              },
+              "karen_rounds": {
+                "value": null,
+                "status": "unknown",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              },
+              "ci_first_push_pct": {
+                "value": null,
+                "status": "unknown",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              },
+              "rollback_48h_pct": {
+                "value": null,
+                "status": "unknown",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              },
+              "gemini_agreement_pct": {
+                "value": null,
+                "status": "unknown",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              },
+              "gemini_missed": {
+                "value": null,
+                "status": "unknown",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              },
+              "gemini_false_alarm": {
+                "value": null,
+                "status": "unknown",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              },
+              "stuck_prs": {
+                "value": null,
+                "status": "unknown",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              },
+              "tokens": {
+                "value": null,
+                "status": "unknown",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              },
+              "usd": {
+                "value": null,
+                "status": "unknown",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              },
+              "wasted_runs": {
+                "value": null,
+                "status": "unknown",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              },
+              "empty_gemini": {
+                "value": null,
+                "status": "unknown",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              },
+              "refusals": {
+                "value": null,
+                "status": "unknown",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              },
+              "codex_weekly_pct": {
+                "value": null,
+                "status": "unknown",
+                "observed": 0,
+                "eligible": 1,
+                "partial": true
+              },
+              "tokens_per_merge": {
+                "value": null,
+                "status": "unknown",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              },
+              "usd_per_merge": {
+                "value": null,
+                "status": "unknown",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              },
+              "tokens_per_pass": {
+                "value": null,
+                "status": "unknown",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              },
+              "usd_per_pass": {
+                "value": null,
+                "status": "unknown",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              }
+            }
+          },
+          "repos": {},
+          "idle_slot_hours": {
+            "mini": {
+              "value": null,
+              "status": "no data",
+              "observed": 0,
+              "eligible": 0,
+              "partial": false
+            },
+            "nucbox": {
+              "value": null,
+              "status": "no data",
+              "observed": 0,
+              "eligible": 0,
+              "partial": false
+            }
+          }
+        },
+        "7d": {
+          "providers": {
+            "codex": {
+              "karen_first_pass_pct": {
+                "value": null,
+                "status": "no data",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              },
+              "karen_rounds": {
+                "value": null,
+                "status": "no data",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              },
+              "ci_first_push_pct": {
+                "value": null,
+                "status": "no data",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              },
+              "rollback_48h_pct": {
+                "value": null,
+                "status": "no data",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              },
+              "gemini_agreement_pct": {
+                "value": null,
+                "status": "no data",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              },
+              "gemini_missed": {
+                "value": null,
+                "status": "no data",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              },
+              "gemini_false_alarm": {
+                "value": null,
+                "status": "no data",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              },
+              "stuck_prs": {
+                "value": null,
+                "status": "no data",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              },
+              "tokens": {
+                "value": null,
+                "status": "no data",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              },
+              "usd": {
+                "value": null,
+                "status": "no data",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              },
+              "wasted_runs": {
+                "value": null,
+                "status": "no data",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              },
+              "empty_gemini": {
+                "value": null,
+                "status": "no data",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              },
+              "refusals": {
+                "value": null,
+                "status": "no data",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              },
+              "codex_weekly_pct": {
+                "value": null,
+                "status": "no data",
+                "observed": 0,
+                "eligible": 1,
+                "partial": true
+              },
+              "tokens_per_merge": {
+                "value": null,
+                "status": "no data",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              },
+              "usd_per_merge": {
+                "value": null,
+                "status": "no data",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              },
+              "tokens_per_pass": {
+                "value": null,
+                "status": "no data",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              },
+              "usd_per_pass": {
+                "value": null,
+                "status": "no data",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              }
+            },
+            "gemini": {
+              "karen_first_pass_pct": {
+                "value": null,
+                "status": "no data",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              },
+              "karen_rounds": {
+                "value": null,
+                "status": "no data",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              },
+              "ci_first_push_pct": {
+                "value": null,
+                "status": "no data",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              },
+              "rollback_48h_pct": {
+                "value": null,
+                "status": "no data",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              },
+              "gemini_agreement_pct": {
+                "value": null,
+                "status": "no data",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              },
+              "gemini_missed": {
+                "value": null,
+                "status": "no data",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              },
+              "gemini_false_alarm": {
+                "value": null,
+                "status": "no data",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              },
+              "stuck_prs": {
+                "value": null,
+                "status": "no data",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              },
+              "tokens": {
+                "value": null,
+                "status": "no data",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              },
+              "usd": {
+                "value": null,
+                "status": "no data",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              },
+              "wasted_runs": {
+                "value": null,
+                "status": "no data",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              },
+              "empty_gemini": {
+                "value": null,
+                "status": "no data",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              },
+              "refusals": {
+                "value": null,
+                "status": "no data",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              },
+              "codex_weekly_pct": {
+                "value": null,
+                "status": "no data",
+                "observed": 0,
+                "eligible": 1,
+                "partial": true
+              },
+              "tokens_per_merge": {
+                "value": null,
+                "status": "no data",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              },
+              "usd_per_merge": {
+                "value": null,
+                "status": "no data",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              },
+              "tokens_per_pass": {
+                "value": null,
+                "status": "no data",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              },
+              "usd_per_pass": {
+                "value": null,
+                "status": "no data",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              }
+            },
+            "cursor": {
+              "karen_first_pass_pct": {
+                "value": null,
+                "status": "no data",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              },
+              "karen_rounds": {
+                "value": null,
+                "status": "no data",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              },
+              "ci_first_push_pct": {
+                "value": null,
+                "status": "no data",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              },
+              "rollback_48h_pct": {
+                "value": null,
+                "status": "no data",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              },
+              "gemini_agreement_pct": {
+                "value": null,
+                "status": "no data",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              },
+              "gemini_missed": {
+                "value": null,
+                "status": "no data",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              },
+              "gemini_false_alarm": {
+                "value": null,
+                "status": "no data",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              },
+              "stuck_prs": {
+                "value": null,
+                "status": "no data",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              },
+              "tokens": {
+                "value": null,
+                "status": "no data",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              },
+              "usd": {
+                "value": null,
+                "status": "no data",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              },
+              "wasted_runs": {
+                "value": null,
+                "status": "no data",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              },
+              "empty_gemini": {
+                "value": null,
+                "status": "no data",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              },
+              "refusals": {
+                "value": null,
+                "status": "no data",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              },
+              "codex_weekly_pct": {
+                "value": null,
+                "status": "no data",
+                "observed": 0,
+                "eligible": 1,
+                "partial": true
+              },
+              "tokens_per_merge": {
+                "value": null,
+                "status": "no data",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              },
+              "usd_per_merge": {
+                "value": null,
+                "status": "no data",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              },
+              "tokens_per_pass": {
+                "value": null,
+                "status": "no data",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              },
+              "usd_per_pass": {
+                "value": null,
+                "status": "no data",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              }
+            },
+            "claude": {
+              "karen_first_pass_pct": {
+                "value": null,
+                "status": "no data",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              },
+              "karen_rounds": {
+                "value": null,
+                "status": "no data",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              },
+              "ci_first_push_pct": {
+                "value": null,
+                "status": "no data",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              },
+              "rollback_48h_pct": {
+                "value": null,
+                "status": "no data",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              },
+              "gemini_agreement_pct": {
+                "value": null,
+                "status": "no data",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              },
+              "gemini_missed": {
+                "value": null,
+                "status": "no data",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              },
+              "gemini_false_alarm": {
+                "value": null,
+                "status": "no data",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              },
+              "stuck_prs": {
+                "value": null,
+                "status": "no data",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              },
+              "tokens": {
+                "value": null,
+                "status": "no data",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              },
+              "usd": {
+                "value": null,
+                "status": "no data",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              },
+              "wasted_runs": {
+                "value": null,
+                "status": "no data",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              },
+              "empty_gemini": {
+                "value": null,
+                "status": "no data",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              },
+              "refusals": {
+                "value": null,
+                "status": "no data",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              },
+              "codex_weekly_pct": {
+                "value": null,
+                "status": "no data",
+                "observed": 0,
+                "eligible": 1,
+                "partial": true
+              },
+              "tokens_per_merge": {
+                "value": null,
+                "status": "no data",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              },
+              "usd_per_merge": {
+                "value": null,
+                "status": "no data",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              },
+              "tokens_per_pass": {
+                "value": null,
+                "status": "no data",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              },
+              "usd_per_pass": {
+                "value": null,
+                "status": "no data",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              }
+            },
+            "minimax": {
+              "karen_first_pass_pct": {
+                "value": null,
+                "status": "no data",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              },
+              "karen_rounds": {
+                "value": null,
+                "status": "no data",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              },
+              "ci_first_push_pct": {
+                "value": null,
+                "status": "no data",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              },
+              "rollback_48h_pct": {
+                "value": null,
+                "status": "no data",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              },
+              "gemini_agreement_pct": {
+                "value": null,
+                "status": "no data",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              },
+              "gemini_missed": {
+                "value": null,
+                "status": "no data",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              },
+              "gemini_false_alarm": {
+                "value": null,
+                "status": "no data",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              },
+              "stuck_prs": {
+                "value": null,
+                "status": "no data",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              },
+              "tokens": {
+                "value": null,
+                "status": "no data",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              },
+              "usd": {
+                "value": null,
+                "status": "no data",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              },
+              "wasted_runs": {
+                "value": null,
+                "status": "no data",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              },
+              "empty_gemini": {
+                "value": null,
+                "status": "no data",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              },
+              "refusals": {
+                "value": null,
+                "status": "no data",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              },
+              "codex_weekly_pct": {
+                "value": null,
+                "status": "no data",
+                "observed": 0,
+                "eligible": 1,
+                "partial": true
+              },
+              "tokens_per_merge": {
+                "value": null,
+                "status": "no data",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              },
+              "usd_per_merge": {
+                "value": null,
+                "status": "no data",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              },
+              "tokens_per_pass": {
+                "value": null,
+                "status": "no data",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              },
+              "usd_per_pass": {
+                "value": null,
+                "status": "no data",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              }
+            },
+            "grok_bot": {
+              "karen_first_pass_pct": {
+                "value": null,
+                "status": "unknown",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              },
+              "karen_rounds": {
+                "value": null,
+                "status": "unknown",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              },
+              "ci_first_push_pct": {
+                "value": null,
+                "status": "unknown",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              },
+              "rollback_48h_pct": {
+                "value": null,
+                "status": "unknown",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              },
+              "gemini_agreement_pct": {
+                "value": null,
+                "status": "unknown",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              },
+              "gemini_missed": {
+                "value": null,
+                "status": "unknown",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              },
+              "gemini_false_alarm": {
+                "value": null,
+                "status": "unknown",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              },
+              "stuck_prs": {
+                "value": null,
+                "status": "unknown",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              },
+              "tokens": {
+                "value": null,
+                "status": "unknown",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              },
+              "usd": {
+                "value": null,
+                "status": "unknown",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              },
+              "wasted_runs": {
+                "value": null,
+                "status": "unknown",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              },
+              "empty_gemini": {
+                "value": null,
+                "status": "unknown",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              },
+              "refusals": {
+                "value": null,
+                "status": "unknown",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              },
+              "codex_weekly_pct": {
+                "value": null,
+                "status": "unknown",
+                "observed": 0,
+                "eligible": 1,
+                "partial": true
+              },
+              "tokens_per_merge": {
+                "value": null,
+                "status": "unknown",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              },
+              "usd_per_merge": {
+                "value": null,
+                "status": "unknown",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              },
+              "tokens_per_pass": {
+                "value": null,
+                "status": "unknown",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              },
+              "usd_per_pass": {
+                "value": null,
+                "status": "unknown",
+                "observed": 0,
+                "eligible": 0,
+                "partial": false
+              }
+            }
+          },
+          "repos": {},
+          "idle_slot_hours": {
+            "mini": {
+              "value": null,
+              "status": "no data",
+              "observed": 0,
+              "eligible": 0,
+              "partial": false
+            },
+            "nucbox": {
+              "value": null,
+              "status": "no data",
+              "observed": 0,
+              "eligible": 0,
+              "partial": false
+            }
+          }
+        }
+      }
+    },
+    "days": [
+      {
+        "date": "2026-10-12",
+        "codex": {
+          "total_tokens": 182000000,
+          "cached_tokens": null,
+          "output_tokens": null,
+          "reasoning_tokens": null
+        },
+        "codex_by_host": {
+          "mini": {
+            "total_tokens": 182000000,
+            "cached_tokens": null,
+            "output_tokens": null,
+            "reasoning_tokens": null
+          }
+        },
+        "gemini": null,
+        "lanes": null,
+        "cursor": null,
+        "claude": null,
+        "minimax": null,
+        "grok_bot": {
+          "status": "unknown",
+          "source": null
+        },
+        "machines": null,
+        "merged_prs": {
+          "count": 130,
+          "tokens_total": 182000000,
+          "tokens_per_pr": 1400000
+        },
+        "display": {
+          "codex_total_tokens": "182.00M",
+          "gemini_tokens": "unknown",
+          "gemini_usd": "unknown",
+          "merged_prs_count": "130"
+        }
+      },
+      {
+        "date": "2026-10-13",
+        "codex": {
+          "total_tokens": 312000000,
+          "cached_tokens": null,
+          "output_tokens": null,
+          "reasoning_tokens": null
+        },
+        "codex_by_host": {
+          "mini": {
+            "total_tokens": 312000000,
+            "cached_tokens": null,
+            "output_tokens": null,
+            "reasoning_tokens": null
+          }
+        },
+        "gemini": null,
+        "lanes": null,
+        "cursor": null,
+        "claude": null,
+        "minimax": null,
+        "grok_bot": {
+          "status": "unknown",
+          "source": null
+        },
+        "machines": null,
+        "merged_prs": {
+          "count": 110,
+          "tokens_total": 312000000,
+          "tokens_per_pr": 2836364
+        },
+        "display": {
+          "codex_total_tokens": "312.00M",
+          "gemini_tokens": "unknown",
+          "gemini_usd": "unknown",
+          "merged_prs_count": "110"
+        }
+      },
+      {
+        "date": "2026-10-14",
+        "codex": {
+          "total_tokens": 203000000,
+          "cached_tokens": null,
+          "output_tokens": null,
+          "reasoning_tokens": null
+        },
+        "codex_by_host": {
+          "mini": {
+            "total_tokens": 203000000,
+            "cached_tokens": null,
+            "output_tokens": null,
+            "reasoning_tokens": null
+          }
+        },
+        "gemini": null,
+        "lanes": null,
+        "cursor": null,
+        "claude": null,
+        "minimax": null,
+        "grok_bot": {
+          "status": "unknown",
+          "source": null
+        },
+        "machines": null,
+        "merged_prs": {
+          "count": 72,
+          "tokens_total": 203000000,
+          "tokens_per_pr": 2819444
+        },
+        "display": {
+          "codex_total_tokens": "203.00M",
+          "gemini_tokens": "unknown",
+          "gemini_usd": "unknown",
+          "merged_prs_count": "72"
+        }
+      },
+      {
+        "date": "2026-10-15",
+        "codex": {
+          "total_tokens": 249000000,
+          "cached_tokens": null,
+          "output_tokens": null,
+          "reasoning_tokens": null
+        },
+        "codex_by_host": {
+          "mini": {
+            "total_tokens": 249000000,
+            "cached_tokens": null,
+            "output_tokens": null,
+            "reasoning_tokens": null
+          }
+        },
+        "gemini": null,
+        "lanes": null,
+        "cursor": null,
+        "claude": null,
+        "minimax": null,
+        "grok_bot": {
+          "status": "unknown",
+          "source": null
+        },
+        "machines": null,
+        "merged_prs": {
+          "count": 23,
+          "tokens_total": 249000000,
+          "tokens_per_pr": 10826087
+        },
+        "display": {
+          "codex_total_tokens": "249.00M",
+          "gemini_tokens": "unknown",
+          "gemini_usd": "unknown",
+          "merged_prs_count": "23"
+        }
+      },
+      {
+        "date": "2026-10-16",
+        "codex": {
+          "total_tokens": 697000000,
+          "cached_tokens": null,
+          "output_tokens": 3480000,
+          "reasoning_tokens": null
+        },
+        "codex_by_host": {
+          "mini": {
+            "total_tokens": 697000000,
+            "cached_tokens": null,
+            "output_tokens": 3480000,
+            "reasoning_tokens": null
+          }
+        },
+        "gemini": {
+          "tokens": 11600000,
+          "usd": 42.38
+        },
+        "lanes": {
+          "codex": 1,
+          "cursor": 3
+        },
+        "cursor": null,
+        "claude": null,
+        "minimax": null,
+        "grok_bot": {
+          "status": "unknown",
+          "source": null
+        },
+        "machines": {
+          "mini": {
+            "load1": 1.602,
+            "load5": 3.449,
+            "mem_used_gb": null,
+            "swap_used_gb": null,
+            "disk_free_gb": 867.995
+          }
+        },
+        "merged_prs": {
+          "count": 75,
+          "tokens_total": 708600000,
+          "tokens_per_pr": 9448000
+        },
+        "display": {
+          "codex_total_tokens": "697.00M",
+          "gemini_tokens": "11.60M",
+          "gemini_usd": "42.38",
+          "merged_prs_count": "75"
+        }
+      }
+    ]
   },
   "pending": [
     {

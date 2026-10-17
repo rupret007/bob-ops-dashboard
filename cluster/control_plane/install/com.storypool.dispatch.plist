@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<!--
+StoryPool Dispatcher - Mac mini launchd plist
+
+Runs every 15 minutes to dispatch work to coding lanes.
+Default is shadow/dry-run mode (logs decisions, takes no action).
+Change __LIVE_MODE__ to true to enable live dispatch.
+
+NO SUDO, NO FORCE-PUSH, NO TAGS/RELEASES
+Never touches: ~/.cursor, auth files, Keychain, svc-* screens
+
+Install with: cp this-file ~/Library/LaunchAgents/
+              launchctl load ~/Library/LaunchAgents/com.storypool.dispatch.plist
+
+Uninstall:    launchctl unload ~/Library/LaunchAgents/com.storypool.dispatch.plist
+              rm ~/Library/LaunchAgents/com.storypool.dispatch.plist
+-->
+<dict>
+    <key>Label</key>
+    <string>com.storypool.dispatch</string>
+    
+    <key>ProgramArguments</key>
+    <array>
+        <string>/usr/bin/env</string>
+        <string>python3</string>
+        <string>-m</string>
+        <string>cluster.control_plane.dispatcher</string>
+        <string>--machine</string>
+        <string>mini</string>
+        <!-- Remove the comment below to enable live mode -->
+        <!-- <string>--live</string> -->
+    </array>
+    
+    <key>WorkingDirectory</key>
+    <string>__REPO_PATH__</string>
+    
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PYTHONPATH</key>
+        <string>__REPO_PATH__</string>
+        <key>STORYPOOL_MACHINE</key>
+        <string>mini</string>
+        <key>PATH</key>
+        <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
+    </dict>
+    
+    <key>StartInterval</key>
+    <integer>900</integer>
+    
+    <key>RunAtLoad</key>
+    <false/>
+    
+    <key>StandardOutPath</key>
+    <string>__HOME__/.local/share/storypool/dispatch/stdout.log</string>
+    
+    <key>StandardErrorPath</key>
+    <string>__HOME__/.local/share/storypool/dispatch/stderr.log</string>
+    
+    <key>Nice</key>
+    <integer>10</integer>
+</dict>
+</plist>
