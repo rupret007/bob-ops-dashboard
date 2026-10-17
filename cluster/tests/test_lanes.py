@@ -546,7 +546,7 @@ class TestLanesOnJetStream(JSCase):
 
     def test_lease_held_job_is_nakked_with_delay_not_lost(self):  # Karen L3
         async def go():
-            nc, js = await self._js()
+            nc, js = await self._js(inbox_prefix=lanes.inbox_prefix("nuc"))
             try:
                 kv = await lanes.lease_bucket(js, ttl_s=30)
                 svc = await lanes.LeaseService(nc, kv).start()
