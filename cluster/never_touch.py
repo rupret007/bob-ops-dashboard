@@ -15,6 +15,10 @@ from typing import Optional
 
 NEVER_TOUCH_REPOS: frozenset[str] = frozenset({
     "rupret007/rad-dad-show-night",
+})
+
+CONDUCTOR_NEVER_MERGE_REPOS: frozenset[str] = frozenset({
+    "rupret007/rad-dad-show-night",
     "rupret007/bob-ops-dashboard",
 })
 
@@ -64,13 +68,23 @@ def is_never_touch(repo: str) -> bool:
 def check_merge_allowed(repo: str) -> tuple[bool, str]:
     """Check if auto-merge is allowed for a repository.
     
+    Used by the conductor service to determine if a PR can be auto-merged.
+    This checks the broader CONDUCTOR_NEVER_MERGE_REPOS list which includes
+    infrastructure repos that shouldn't be auto-merged even if they're not
+    in the strict never-touch list.
+    
     Args:
         repo: Repository in "owner/name" format
         
     Returns:
         Tuple of (allowed, reason)
     """
-    if is_never_touch(repo):
+    try:
+        normalized = normalize_repo(repo)
+    except ValueError:
+        normalized = repo.lower()
+    
+    if normalized in CONDUCTOR_NEVER_MERGE_REPOS:
         return False, f"repo {repo} is in NEVER_TOUCH_REPOS - requires human merge"
     return True, "ok"
 

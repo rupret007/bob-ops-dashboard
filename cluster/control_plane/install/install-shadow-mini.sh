@@ -68,6 +68,11 @@ install() {
         -e "s|__HOME__|$HOME|g" \
         "$PLIST_SRC" > "$PLIST_DST"
     
+    # Clear stale .pyc files to avoid import issues
+    echo "  Clearing __pycache__..."
+    find "$REPO_ROOT/cluster" -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
+    find "$REPO_ROOT/cluster" -name "*.pyc" -delete 2>/dev/null || true
+    
     # Unload if already loaded
     if launchctl list "$LABEL" &>/dev/null; then
         echo "  Unloading existing agent..."
