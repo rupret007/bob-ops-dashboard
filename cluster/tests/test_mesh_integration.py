@@ -93,7 +93,7 @@ class MeshIntegration(unittest.TestCase):
     async def _join_via_joind(self, code):
         stop = asyncio.Event()
         task = asyncio.create_task(serve(self.hub, self.m.url, self.hub.reg.service_password("joind"),
-                                         reload_delay=0.2, stop=stop))
+                                         reload_delay=0.2, stop=stop, allow_loopback=True))
         await asyncio.sleep(0.4)
         try:
             return await redeem(code)
@@ -146,7 +146,7 @@ class MeshIntegration(unittest.TestCase):
             inbox = inbox_prefix("cheapbox") + ".x"
             self.assertTrue(await perm_violation(nc, lambda: nc.publish(nxt + "cap_llm_codex_high", b"1", reply=inbox)))
             # Positive control: its own capability consumer is allowed.
-            self.assertFalse(await perm_violation(nc, lambda: nc.publish(nxt + "cap_llm_composer", b"1", reply=inbox)))
+            self.assertFalse(await perm_violation(nc, lambda: nc.publish(nxt + "cap_llm_composer_n_cheapbox", b"1", reply=inbox)))
             # Members cannot enqueue jobs or spoof another node's heartbeat.
             self.assertTrue(await perm_violation(nc, lambda: nc.publish("cap.llm_codex_high.x1", b"{}")))
             self.assertTrue(await perm_violation(nc, lambda: nc.publish("caps.codexbox", b"{}")))
@@ -189,7 +189,7 @@ class MeshIntegration(unittest.TestCase):
                          "$JS.API.STREAM.INFO.SANDBOX", "$JS.API.CONSUMER.CREATE.SANDBOX"):
                 self.assertTrue(await perm_violation(nc, lambda s=subj: nc.publish(s, b"1", reply=inbox)), subj)
             self.assertFalse(await perm_violation(
-                nc, lambda: nc.publish("$JS.API.CONSUMER.MSG.NEXT.SANDBOX.guests", b"1", reply=inbox)))
+                nc, lambda: nc.publish("$JS.API.CONSUMER.MSG.NEXT.SANDBOX.guests_n_friend", b"1", reply=inbox)))
             # Cannot read results or heartbeats, cannot publish outside its own subjects.
             self.assertTrue(await perm_violation(nc, lambda: nc.subscribe("sandbox.results.>")))
             self.assertTrue(await perm_violation(nc, lambda: nc.subscribe("_INBOX.>")))
@@ -321,6 +321,81 @@ class MeshIntegration(unittest.TestCase):
             await nc.close()
             return sniff and sniff2
         self.assertTrue(asyncio.run(run()))
+
+    def check_cross_node_ack_isolation(self, role):
+        from cluster.bobctl import delivery_consumer
+        from cluster.routing import subject_for
+        cap = 'sandbox.test' if role == 'guest' else 'shell.test'
+        replies = {}
+        # Direct registry redemption keeps this test about broker authorization.
+        for name in ('victim', 'attacker'):
+            code, _ = self.hub.reg.mint(name, role, [cap], self.m.url)
+            d = decode_join_code(code)
+            replies[name] = self.hub.reg.redeem(d['user'], d['s'], name)
+        self.hub.apply()
+        asyncio.run(setup_streams(self.m.url, 'nucbox', LEGACY['NUCBOX_TOKEN'],
+                                  self.hub.reg.service_password('guestops'), self.hub.reg.read()['nodes']))
+
+        async def run():
+            guest = role == 'guest'
+            stream = 'SANDBOX' if guest else 'CAPJOBS'
+            admin_user = 'guestops' if guest else 'nucbox'
+            password = self.hub.reg.service_password('guestops') if guest else LEGACY['NUCBOX_TOKEN']
+            admin = await connect(self.m.url, admin_user, password, inbox_prefix=inbox_prefix(admin_user).encode())
+            victim = await connect(self.m.url, 'victim', replies['victim']['token'], inbox_prefix=b'_INBOX_victim')
+            attacker = await connect(self.m.url, 'attacker', replies['attacker']['token'], inbox_prefix=b'_INBOX_attacker')
+            try:
+                js = admin.jetstream()
+                consumer = delivery_consumer(cap, 'victim').durable_name
+                pull = await victim.jetstream().pull_subscribe_bind(stream=stream, durable=consumer)
+                for i, payload in enumerate((b'+ACK', b'-NAK', b'+TERM', b'+WPI')):
+                    job = spec('isolation' + str(i), cap)
+                    await js.publish(subject_for(job, 'victim'), json.dumps(job).encode())
+                    msg, = await pull.fetch(1, timeout=3)
+                    self.assertEqual((await js.consumer_info(stream, consumer)).num_ack_pending, 1)
+                    # Test both an exact stolen reply and Karen's forged ts/pending tokens.
+                    tokens = msg.reply.split('.')
+                    tokens[-2:] = ['1', '999']
+                    for ack_subject in (msg.reply, '.'.join(tokens)):
+                        self.assertTrue(await perm_violation(attacker, lambda: attacker.publish(ack_subject, payload)))
+                        info = await js.consumer_info(stream, consumer)
+                        self.assertEqual(info.num_ack_pending, 1)
+                        self.assertEqual(info.num_redelivered, 0)
+                        self.assertEqual((await js.stream_info(stream)).state.messages, 1)
+                    await msg.ack_sync(timeout=2)
+                    self.assertEqual((await js.consumer_info(stream, consumer)).num_ack_pending, 0)
+                    self.assertEqual((await js.stream_info(stream)).state.messages, 0)
+                # Peer cannot pull victim's private consumer or read its inbox either.
+                self.assertTrue(await perm_violation(attacker, lambda: attacker.publish(
+                    f'$JS.API.CONSUMER.MSG.NEXT.{stream}.{consumer}', b'1', reply='_INBOX_attacker.x')))
+                self.assertTrue(await perm_violation(attacker, lambda: attacker.subscribe('_INBOX_victim.>')))
+            finally:
+                await attacker.close()
+                await victim.close()
+                await admin.close()
+        asyncio.run(run())
+
+    def test_guest_peer_ack_nak_term_wpi_denied_and_owner_ack_works(self):
+        self.check_cross_node_ack_isolation('guest')
+
+    def test_member_peer_ack_nak_term_wpi_denied_and_owner_ack_works(self):
+        self.check_cross_node_ack_isolation('member')
+
+    def test_legacy_worker_cannot_sniff_inbox_or_ack_another_consumer(self):
+        async def run():
+            mini = await connect(self.m.url, 'mini', LEGACY['MINI_TOKEN'], inbox_prefix=b'_INBOX_mini')
+            try:
+                for subject in ('_INBOX_macbook.>', '_INBOX_nucbox.>', '_INBOX.>', '$JS.API.>', '$JS.ACK.>'):
+                    self.assertTrue(await perm_violation(mini, lambda: mini.subscribe(subject)))
+                for payload in (b'+ACK', b'-NAK', b'+TERM', b'+WPI'):
+                    for consumer in ('workers_macbook', 'workers'):
+                        self.assertTrue(await perm_violation(mini, lambda: mini.publish(
+                            f'$JS.ACK.JOBS.{consumer}.1.1.1.1.1', payload)))
+                self.assertTrue(await perm_violation(mini, lambda: mini.publish('results.macbook.job', b'{}')))
+                self.assertFalse(await perm_violation(mini, lambda: mini.subscribe('_INBOX_mini.>')))
+            finally:
+                await mini.close()
+        asyncio.run(run())
 
 
 if __name__ == "__main__":

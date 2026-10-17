@@ -32,7 +32,7 @@ sleep 1
 "$PY" -m cluster.bobctl setup-streams "${HUB[@]}" --nats "$URL" | sed 's/^/   /'
 
 step "start joind"
-"$PY" -m cluster.joind "${HUB[@]}" --live --nats "$URL" >"$T/joind.log" 2>&1 & PIDS+=($!)
+"$PY" -m cluster.joind "${HUB[@]}" --allow-loopback --live --nats "$URL" >"$T/joind.log" 2>&1 & PIDS+=($!)
 sleep 1
 
 step "mint single-use member code (not printed)"

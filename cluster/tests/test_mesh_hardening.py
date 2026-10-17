@@ -135,6 +135,7 @@ class RevokeHardening(unittest.TestCase):
         with patch.object(joind, 'Registry', return_value=reg), patch.object(joind.Hub, 'render'), \
                 patch.object(joind, 'monitor_json', side_effect=samples), \
                 patch.object(joind.os, 'kill', side_effect=kill_error) as kill, \
+                patch.object(joind.os, 'readlink', return_value='/usr/bin/nats-server'), \
                 patch('subprocess.run', return_value=SimpleNamespace(stdout=f'nats-server -c {self.conf}')), \
                 patch.object(joind.time, 'monotonic', side_effect=[0, 0, 6]), \
                 patch.object(joind.time, 'sleep'), \
@@ -240,3 +241,248 @@ class SourceLimitHardening(unittest.TestCase):
                     stop.set()
                     await task
         asyncio.run(run())
+
+
+class GoLiveHardening(unittest.TestCase):
+    def test_powershell_has_no_code_parameter(self):
+        text = (ROOT / 'cluster/install/join.ps1').read_text()
+        params = text.split('param(', 1)[1].split(')', 1)[0]
+        self.assertNotIn('$Code', params)
+        self.assertIn("Read-Host 'Join code (hidden)' -AsSecureString", text)
+
+    def test_secret_cap_precedes_bcrypt_and_registry_lock(self):
+        from cluster.registry import Registry, RegistryError
+        reg = Registry(Path('/unused-fixture'))
+        with patch.object(reg, 'locked', side_effect=AssertionError('oversize reached registry')) as locked, patch('cluster.registry.check_secret') as check:
+            for size in (201, 256, 1000):
+                with self.assertRaises(RegistryError):
+                    reg.redeem('join-' + 'a' * 32, 's' * size, 'box')
+            locked.assert_not_called()
+            check.assert_not_called()
+
+    def test_monitor_refuses_nonlocal_before_opening(self):
+        with patch('urllib.request.build_opener') as opener:
+            opener.return_value.open.side_effect = lambda *a, **kw: io.BytesIO(b'{}')
+            for address in ('example.invalid:8232', '192.0.2.1:8232', 'localhost:8232', '127.0.0.1:0'):
+                with self.assertRaises(ValueError):
+                    joind.monitor_json(address, 'connz?auth=1')
+            opener.assert_not_called()
+
+    def test_executable_decoy_with_matching_config_is_not_signalled(self):
+        import sys
+        # A real process with the expected -c argument but a different executable.
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            conf = root / 'nats.conf'
+            marker = root / 'signalled'
+            ready = root / 'ready'
+            script = root / 'decoy.py'
+            script.write_text('import signal, time, pathlib\n'
+                              + f"signal.signal(signal.SIGHUP, lambda *a: pathlib.Path({str(marker)!r}).touch())\n"
+                              + f"pathlib.Path({str(ready)!r}).touch()\n"
+                              + 'time.sleep(30)\n')
+            proc = subprocess.Popen([sys.executable, str(script), '-c', str(conf)])
+            try:
+                import time
+                for _ in range(100):
+                    if ready.exists():
+                        break
+                    time.sleep(0.01)
+                self.assertTrue(ready.exists())
+                pid = root / 'pid'
+                pid.write_text(str(proc.pid))
+                with patch.object(joind, 'monitor_json', return_value={
+                        'server_id': 'fixture', 'config_load_time': 'unchanged'}), \
+                        patch.object(joind.os, 'kill', wraps=os.kill) as kill:
+                    with self.assertRaises(RuntimeError):
+                        joind.signal_reload_from_pidfile(pid, conf_out=conf, timeout=0.05)()
+                    kill.assert_not_called()
+                self.assertFalse(marker.exists())
+                self.assertIsNone(proc.poll())
+            finally:
+                proc.terminate()
+                proc.wait(timeout=5)
+
+    def test_per_node_permissions_and_legacy_config(self):
+        import re
+        from cluster.registry import member_permissions, guest_permissions, render_conf, LEGACY_PERMS
+        for permissions, stream in ((member_permissions, 'CAPJOBS'), (guest_permissions, 'SANDBOX')):
+            caps = ['shell.test'] if stream == 'CAPJOBS' else ['sandbox.test']
+            a, b = permissions('nodea', caps), permissions('nodeb', caps)
+            acks = [s for s in a['publish'] if s.startswith('$JS.ACK.')]
+            self.assertEqual(len(acks), 1)
+            self.assertIn('_n_nodea.', acks[0])
+            self.assertFalse(set(acks) & set(b['publish']))
+            self.assertFalse(any('JOBS.workers' in s for s in a['publish']))
+        registry = {'nodes': {}, 'pending': {}, 'legacy': {
+            name: '$2b$04$' + 'a' * 53 for name in LEGACY_PERMS}}
+        rendered = render_conf(registry, '/tmp/fixture-js')
+        template = (ROOT / 'cluster/nats.conf.template').read_text()
+        for text in (rendered, template):
+            for node in ('mini', 'macbook'):
+                block = re.split(r'user: "?' + node + r'"?', text)[1].split('user:', 1)[0]
+                for forbidden in ('"$JS.API.>"', '"$JS.ACK.>"', '"_INBOX.>"', '"results.>"', '"$JS.ACK.JOBS.workers.>"'):
+                    self.assertNotIn(forbidden, block)
+                self.assertIn('"_INBOX_' + node + '.>"', block)
+                self.assertIn('"results.' + node + '.>"', block)
+            nuc = re.split(r'user: "?nucbox"?', text)[1].split('user:', 1)[0]
+            self.assertNotIn('"$JS.ACK.>"', nuc)
+
+
+class JoinConcurrencyHardening(unittest.IsolatedAsyncioTestCase):
+    async def exercise(self, body, *, source='192.0.2.1', allow_loopback=False, handler=None):
+        nc = SimpleNamespace(subscribe=AsyncMock(), flush=AsyncMock(), drain=AsyncMock())
+        stop = asyncio.Event()
+        hub = SimpleNamespace(http='127.0.0.1:18232')
+        with patch('nats.connect', AsyncMock(return_value=nc)), \
+                patch.object(joind, 'source_address', side_effect=lambda *a: source), \
+                patch.object(joind, 'handle_redeem', side_effect=handler or (lambda *a: ({'ok': False}, False))) as redeem, \
+                patch.object(joind, 'FAIL_DELAY_S', 0):
+            task = asyncio.create_task(joind.serve(hub, 'nats://fixture.invalid', 'fixture',
+                                                stop=stop, allow_loopback=allow_loopback))
+            try:
+                while not nc.subscribe.called:
+                    await asyncio.sleep(0)
+                await body(nc.subscribe.call_args.kwargs['cb'], redeem)
+            finally:
+                stop.set()
+                await task
+
+    def message(self, char='a', body_char=None):
+        user = 'join-' + char * 32
+        return SimpleNamespace(subject='join.redeem.' + user, reply='_INBOX_' + user + '.reply',
+                               data=json.dumps({'user': 'join-' + (body_char or char) * 32}).encode(),
+                               respond=AsyncMock())
+
+    async def test_body_user_must_equal_authenticated_subject_user(self):
+        async def check(callback, redeem):
+            msg = self.message('a', 'b')
+            await callback(msg)
+            redeem.assert_not_called()
+            msg.respond.assert_not_awaited()
+            await callback(self.message())
+            self.assertEqual(redeem.call_count, 1)
+        await self.exercise(check)
+
+    async def test_loopback_without_opt_in_refused(self):
+        async def check(callback, redeem):
+            msg = self.message()
+            await callback(msg)
+            redeem.assert_not_called()
+            msg.respond.assert_not_awaited()
+        for source in ('127.0.0.1', '127.8.9.10', '::1'):
+            await self.exercise(check, source=source)
+
+    async def test_loopback_codes_have_independent_small_buckets_and_aggregate_cap(self):
+        async def check(callback, redeem):
+            for _ in range(40):
+                await callback(self.message('a'))
+            self.assertEqual(redeem.call_count, 3)
+            for _ in range(40):
+                await callback(self.message('b'))
+            self.assertEqual(redeem.call_count, 6)
+            await callback(self.message('c'))
+            self.assertEqual(redeem.call_count, 6)
+        await self.exercise(check, source='127.0.0.1', allow_loopback=True)
+
+    async def test_per_user_bucket_cannot_be_reset_by_source_rotation(self):
+        async def check(callback, redeem):
+            for i in range(31):
+                with patch.object(joind, 'source_address', return_value=f'192.0.2.{i+1}'):
+                    await callback(self.message())
+            self.assertEqual(redeem.call_count, 30)
+            await callback(self.message('b'))
+            self.assertEqual(redeem.call_count, 31)
+        await self.exercise(check)
+
+    async def test_joind_serializes_without_registry_flock(self):
+        import threading
+        import time
+        guard = threading.Lock()
+        active = 0
+        peak = 0
+        def handler(*args):
+            nonlocal active, peak
+            with guard:
+                active += 1
+                peak = max(peak, active)
+            time.sleep(0.05)
+            with guard:
+                active -= 1
+            return {'ok': False}, False
+        async def check(callback, redeem):
+            await asyncio.gather(*(callback(self.message(c)) for c in 'abcde'))
+            self.assertEqual(redeem.call_count, 5)
+            self.assertEqual(peak, 1)
+        await self.exercise(check, handler=handler)
+
+
+class DispatchHardening(unittest.IsolatedAsyncioTestCase):
+    async def test_dispatch_uses_subject_identity_and_rejects_stale_busy_or_bad_heartbeats(self):
+        nc = SimpleNamespace(flush=AsyncMock())
+        sub = SimpleNamespace(unsubscribe=AsyncMock())
+        good = {'v': 'caps/v1', 'role': 'member', 'node': 'forged', 'ts': 100,
+                'caps': ['shell.test'], 'active': 0, 'max_lanes': 2}
+        async def subscribe(subject, cb):
+            self.assertEqual(subject, 'caps.*')
+            for node, changes in (('stale', {'ts': 0}), ('busy', {'active': 2}),
+                                  ('bad', {'caps': 'shell.test'}), ('future', {'ts': 200}),
+                                  ('wrongrole', {'role': 'guest'}), ('owner', {})):
+                await cb(SimpleNamespace(subject='caps.' + node, data=json.dumps({**good, **changes}).encode()))
+            return sub
+        nc.subscribe = subscribe
+        with patch.object(bobctl.time, 'time', return_value=100), patch.object(bobctl.asyncio, 'sleep', AsyncMock()):
+            self.assertEqual(await bobctl.select_node(nc, 'shell.test'), 'owner')
+        sub.unsubscribe.assert_awaited_once()
+
+    async def test_dispatch_refuses_a_node_that_withdraws_capacity(self):
+        from cluster.spec import SpecError
+        nc = SimpleNamespace(flush=AsyncMock())
+        async def subscribe(subject, cb):
+            for caps in (['shell.test'], []):
+                body = {'v': 'caps/v1', 'role': 'member', 'ts': 100, 'caps': caps, 'active': 0, 'max_lanes': 1}
+                await cb(SimpleNamespace(subject='caps.owner', data=json.dumps(body).encode()))
+            return SimpleNamespace(unsubscribe=AsyncMock())
+        nc.subscribe = subscribe
+        with patch.object(bobctl.time, 'time', return_value=100), patch.object(bobctl.asyncio, 'sleep', AsyncMock()):
+            with self.assertRaises(SpecError):
+                await bobctl.select_node(nc, 'shell.test')
+
+    async def test_submit_creates_private_consumer_and_waits_only_for_its_owner(self):
+        from cluster.routing import subject_for
+        for cap, stream, prefix in (('shell.test', 'CAPJOBS', 'results'), ('sandbox.test', 'SANDBOX', 'sandbox.results')):
+            job = {'id': 'job', 'cap': cap}
+            js = SimpleNamespace(add_consumer=AsyncMock(), publish=AsyncMock(return_value=SimpleNamespace(stream=stream, seq=1)))
+            nc = SimpleNamespace(jetstream=lambda: js, close=AsyncMock(), flush=AsyncMock(),
+                                 subscribe=AsyncMock(return_value=SimpleNamespace(next_msg=AsyncMock(
+                                     return_value=SimpleNamespace(data=b'{"status":"ok"}')))))
+            with patch('nats.connect', AsyncMock(return_value=nc)), \
+                    patch.object(bobctl, 'select_node', AsyncMock(return_value='owner')):
+                result = await bobctl.submit_spec('nats://fixture.invalid', 'nucbox', 'fixture', job, wait=1)
+            self.assertEqual(result['node'], 'owner')
+            cfg = js.add_consumer.call_args.args[1]
+            self.assertIn('_n_owner', cfg.durable_name)
+            self.assertEqual(cfg.filter_subject, subject_for({**job, 'id': '*'}, 'owner'))
+            nc.subscribe.assert_awaited_once_with(f'{prefix}.owner.job')
+            self.assertEqual(js.publish.call_args.args[0], subject_for(job, 'owner'))
+            nc.close.assert_awaited_once()
+
+    def test_filters_and_workers_are_isolated_and_guests_require_podman(self):
+        from cluster.capabilities import sandbox_runtime
+        from cluster.mesh_worker import MeshWorker, NodeConfig, Executor
+        for role, cap in (('member', 'shell.test'), ('guest', 'sandbox.test')):
+            names = []
+            filters = []
+            for node in ('nodea', 'nodeb'):
+                cfg = bobctl.delivery_consumer(cap, node)
+                names.append(cfg.durable_name)
+                filters.append(cfg.filter_subject)
+                worker = MeshWorker(NodeConfig({'BOB_NODE_USER': node, 'BOB_NODE_TOKEN': 'fixture',
+                    'BOB_ROLE': role, 'BOB_GRANTED_CAPS': cap}), Executor(role, True), providers={}, detected={cap})
+                self.assertEqual(worker.consumers()[0][1], cfg.durable_name)
+            self.assertNotEqual(names[0], names[1])
+            self.assertNotEqual(filters[0], filters[1])
+            self.assertIn('nodea', filters[0])
+            self.assertIn('nodeb', filters[1])
+        self.assertIsNone(sandbox_runtime(lambda name: '/bin/docker' if name == 'docker' else None))
+        self.assertEqual(sandbox_runtime(lambda name: '/bin/podman' if name == 'podman' else None), 'podman')

@@ -16,24 +16,24 @@ authorization {
       user: mini
       password: "{{MINI_TOKEN}}"
       permissions: {
-        publish: ["metrics.mini", "results.>", "$JS.API.CONSUMER.INFO.JOBS.workers", "$JS.API.CONSUMER.MSG.NEXT.JOBS.workers", "$JS.ACK.JOBS.workers.>"]
-        subscribe: ["$JS.API.>", "$JS.ACK.>", "$JS.FC.>", "_INBOX.>"]
+        publish: ["metrics.mini", "results.mini.>", "$JS.API.CONSUMER.INFO.JOBS.workers_mini", "$JS.API.CONSUMER.MSG.NEXT.JOBS.workers_mini", "$JS.ACK.JOBS.workers_mini.>"]
+        subscribe: ["_INBOX_mini.>"]
       }
     }
     {
       user: nucbox
       password: "{{NUCBOX_TOKEN}}"
       permissions: {
-        publish: ["metrics.nucbox", "results.>", "jobs.>", "$JS.API.>", "$JS.ACK.JOBS.workers.>"]
-        subscribe: ["$JS.API.>", "$JS.ACK.>", "$JS.FC.>", "_INBOX.>", "results.>"]
+        publish: ["metrics.nucbox", "results.nucbox.>", "jobs.>", "$JS.API.>", "$JS.ACK.JOBS.workers_nucbox.>"]
+        subscribe: ["_INBOX_nucbox.>", "results.>"]
       }
     }
     {
       user: macbook
       password: "{{MACBOOK_TOKEN}}"
       permissions: {
-        publish: ["metrics.macbook", "results.>", "$JS.API.CONSUMER.INFO.JOBS.workers", "$JS.API.CONSUMER.MSG.NEXT.JOBS.workers", "$JS.ACK.JOBS.workers.>"]
-        subscribe: ["$JS.API.>", "$JS.ACK.>", "$JS.FC.>", "_INBOX.>"]
+        publish: ["metrics.macbook", "results.macbook.>", "$JS.API.CONSUMER.INFO.JOBS.workers_macbook", "$JS.API.CONSUMER.MSG.NEXT.JOBS.workers_macbook", "$JS.ACK.JOBS.workers_macbook.>"]
+        subscribe: ["_INBOX_macbook.>"]
       }
     }
     {

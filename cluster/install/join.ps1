@@ -4,9 +4,6 @@
   Windows join helper: runs the bash installer inside WSL Ubuntu.
 #>
 param(
-    # Prefer passing the code via $env:BOB_JOIN_CODE (what bobctl prints) so it
-    # stays out of the process list and shell history.
-    [string]$Code = $env:BOB_JOIN_CODE,
     [string]$Ref,
     [string]$Sha256,
     [int]$Lanes = 0,
@@ -17,10 +14,8 @@ $ErrorActionPreference = 'Stop'
 if ($Ref -cnotmatch '^[0-9a-fA-F]{40}$' -or $Sha256 -cnotmatch '^[0-9a-fA-F]{64}$') {
     throw 'A full 40-hex Ref and 64-hex archive Sha256 are required.'
 }
-if (-not $Code) {
-    $secureCode = Read-Host 'Join code (hidden)' -AsSecureString
-    $Code = [System.Net.NetworkCredential]::new('', $secureCode).Password
-}
+$secureCode = Read-Host 'Join code (hidden)' -AsSecureString
+$Code = [System.Net.NetworkCredential]::new('', $secureCode).Password
 # wsl.exe prints UTF-16; ask for UTF-8 and strip stray NULs so matching works on PS 5.1.
 $env:WSL_UTF8 = '1'
 

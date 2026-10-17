@@ -20,7 +20,7 @@ from pathlib import Path
 from typing import Any, Iterator
 
 from cluster.capabilities import (
-    NODE_NAME_PATTERN, CapError, allowed_caps_for_role, cap_consumer, validate_grant,
+    NODE_NAME_PATTERN, CapError, allowed_caps_for_role, cap_consumer, guest_consumer, validate_grant,
 )
 
 REGISTRY_VERSION = 1
@@ -359,13 +359,11 @@ def _q(items: list[str]) -> str:
 
 
 def member_permissions(name: str, caps: list[str]) -> dict[str, Any]:
-    pub = [f"caps.{name}", f"metrics.{name}", f"results.{name}.>",
-           "$JS.API.CONSUMER.INFO.JOBS.workers", "$JS.API.CONSUMER.MSG.NEXT.JOBS.workers",
-           "$JS.ACK.JOBS.workers.>"]
+    pub = [f"caps.{name}", f"metrics.{name}", f"results.{name}.>"]
     for c in caps:
         if c.startswith("sandbox."):
             continue
-        cons = cap_consumer(c)
+        cons = cap_consumer(c, name)
         pub += [f"$JS.API.CONSUMER.INFO.{STREAM_CAPJOBS}.{cons}",
                 f"$JS.API.CONSUMER.MSG.NEXT.{STREAM_CAPJOBS}.{cons}",
                 f"$JS.ACK.{STREAM_CAPJOBS}.{cons}.>"]
@@ -373,18 +371,19 @@ def member_permissions(name: str, caps: list[str]) -> dict[str, Any]:
 
 
 def guest_permissions(name: str, caps: list[str] | None = None) -> dict[str, Any]:
+    consumer = guest_consumer(name)
     pub = [f"sandbox.caps.{name}", f"sandbox.results.{name}.>"]
     if caps is None or "sandbox.test" in caps:
-        pub += [f"$JS.API.CONSUMER.INFO.{STREAM_SANDBOX}.{CONSUMER_GUESTS}",
-                f"$JS.API.CONSUMER.MSG.NEXT.{STREAM_SANDBOX}.{CONSUMER_GUESTS}",
-                f"$JS.ACK.{STREAM_SANDBOX}.{CONSUMER_GUESTS}.>"]
+        pub += [f"$JS.API.CONSUMER.INFO.{STREAM_SANDBOX}.{consumer}",
+                f"$JS.API.CONSUMER.MSG.NEXT.{STREAM_SANDBOX}.{consumer}",
+                f"$JS.ACK.{STREAM_SANDBOX}.{consumer}.>"]
     return {"publish": pub, "subscribe": [f"{inbox_prefix(name)}.>"]}
 
 
 # guestops: enqueue sandbox jobs and manage only the two GUEST streams; no
 # delete, no message reads, no other streams.
 GUESTOPS_PERMS = {
-    "publish": ["sandbox.jobs.*", "$JS.API.INFO",
+    "publish": ["sandbox.jobs.*.*", "$JS.API.INFO",
                 f"$JS.API.STREAM.CREATE.{STREAM_SANDBOX}", f"$JS.API.STREAM.UPDATE.{STREAM_SANDBOX}",
                 f"$JS.API.STREAM.INFO.{STREAM_SANDBOX}",
                 f"$JS.API.STREAM.CREATE.{STREAM_SANDBOX_RESULTS}", f"$JS.API.STREAM.UPDATE.{STREAM_SANDBOX_RESULTS}",
@@ -396,16 +395,15 @@ GUESTOPS_PERMS = {
 
 
 LEGACY_PERMS = {
-    "mini": {"publish": ["metrics.mini", "results.>", "$JS.API.CONSUMER.INFO.JOBS.workers",
-                         "$JS.API.CONSUMER.MSG.NEXT.JOBS.workers", "$JS.ACK.JOBS.workers.>"],
-             "subscribe": ["$JS.API.>", "$JS.ACK.>", "$JS.FC.>", "_INBOX.>"]},
-    "macbook": {"publish": ["metrics.macbook", "results.>", "$JS.API.CONSUMER.INFO.JOBS.workers",
-                            "$JS.API.CONSUMER.MSG.NEXT.JOBS.workers", "$JS.ACK.JOBS.workers.>"],
-                "subscribe": ["$JS.API.>", "$JS.ACK.>", "$JS.FC.>", "_INBOX.>"]},
-    # Operator: everything it had, plus enqueueing capability jobs and reading caps.
-    "nucbox": {"publish": ["metrics.nucbox", "results.>", "jobs.>", "cap.>", "$JS.API.>", "$JS.ACK.JOBS.workers.>",
-                           "$JS.ACK.CAPJOBS.>"],
-               "subscribe": ["$JS.API.>", "$JS.ACK.>", "$JS.FC.>", "_INBOX.>", "results.>", "caps.>",
+    **{node: {"publish": [f"metrics.{node}", f"results.{node}.>",
+                          f"$JS.API.CONSUMER.INFO.JOBS.workers_{node}",
+                          f"$JS.API.CONSUMER.MSG.NEXT.JOBS.workers_{node}",
+                          f"$JS.ACK.JOBS.workers_{node}.>"],
+              "subscribe": [f"_INBOX_{node}.>"]} for node in ("mini", "macbook")},
+    # Hub operator manages streams; responses use only its private inbox.
+    "nucbox": {"publish": ["metrics.nucbox", "results.nucbox.>", "jobs.>", "cap.>", "$JS.API.>",
+                           "$JS.ACK.JOBS.workers_nucbox.>"],
+               "subscribe": ["_INBOX_nucbox.>", "results.>", "caps.>",
                              "sandbox.caps.>", "sandbox.results.>"]},
     "dashboard": {"publish": [],
                   "subscribe": ["metrics.>", "results.>", "caps.>", "sandbox.caps.>", "sandbox.results.>"]},

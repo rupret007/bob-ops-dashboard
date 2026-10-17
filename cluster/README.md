@@ -6,20 +6,29 @@ NATS JetStream-backed job queue for distributed test/build/render work across Mi
 
 ```text
  submit.py / nuc-verify-queue
-        │  jobs.<class>.<id>
+        │  jobs.n.<node>.<class>.<id>
         ▼
    Stream JOBS (workqueue, 24h)
-        │  pull consumer "workers"
+        │  pull consumer "workers_<node>"
         ▼
    worker.py (each machine)
-        │  results.<id>
+        │  results.<node>.<id>
         ▼
    Stream RESULTS (limits, 7d)
         │
  metrics.<node> ──► dashboard (read-only) / live aggregator (--also-post)
 ```
 
-- **NATS** runs on NucBox (`127.0.0.1:4222`), reachable on the tailnet via userspace Tailscale on `nuc-wsl` (tailnet IP from `tailscale ip -4`).
+- **NATS** runs on NucBox WSL. Recommended: kernel-mode Tailscale in WSL,
+  NATS bound to its tailnet interface (`bobctl` and `joind --host <tailnet-address>`;
+  use the same bind setting for every render/revoke). Friends connect through
+  Tailscale node sharing; Jeff's ACL permits only `tcp:4222` on `nuc-wsl`.
+  Keep monitoring on loopback. This preserves each remote joiner's tailnet source.
+- Userspace forwarding to loopback hides remote source addresses. Joind refuses
+  loopback joins unless explicitly started with `--allow-loopback`. The fallback
+  has three attempts per authenticated code and six total loopback attempts per
+  rolling minute; it is deliberately capacity-limited and cannot provide remote
+  IP isolation. Missing or ambiguous monitoring data is always refused.
 - **Workers** are identical; filter job `class` with `--classes`.
 - **SSH** `nuc-run` / legacy `~/bin/nuc-verify` remain the fallback when the queue is unreachable or git is not clean/pushed.
 
@@ -28,7 +37,7 @@ NATS JetStream-backed job queue for distributed test/build/render work across Mi
 | Subject | Purpose |
 |---------|---------|
 | `jobs.>` | Job specs (work queue) |
-| `results.<id>` | Completion payload per job |
+| `results.<node>.<id>` | Completion payload per job |
 | `metrics.<node_id>` | Node telemetry JSON |
 
 ## Job spec v1
@@ -91,7 +100,7 @@ python3 cluster/worker.py --node-id mini --also-post http://127.0.0.1:8787/api/n
 Design: [MESH.md](MESH.md). Auth review and open items: [AUTH-DESIGN.md](AUTH-DESIGN.md).
 
 Every node advertises what it can do (`caps.<node>` heartbeat: which LLM CLIs are signed in locally,
-CPU/RAM/load, lanes). Jobs go to `cap.<capability>.<id>` and only nodes holding that capability's NATS
+CPU/RAM/load, lanes). Jobs go to `cap.<capability_token>.n.<node>.<id>` and only nodes holding that capability's NATS
 permission *and* the local login can pull them. Each subscription only ever runs on its owner's
 machine; keys and logins never leave it.
 
@@ -112,14 +121,17 @@ There is no branch fallback; direct installer use requires `--ref` and `--sha256
 Revoke any time: `python3 -m cluster.bobctl revoke <name>`. Revoke always sends
 SIGHUP and waits for `/varz.config_load_time` to change on the pidfile's server.
 Failure to confirm is a loud nonzero exit; the registry remains revoked. The
+PID must resolve through Linux procfs to an executable named `nats-server`; the
 server must have been started with the absolute `--conf-out` path via `-c`/`--config`.
 Use `--pidfile` and `--http` for that server. This is a live operation even without
 `--live`; do not run it against a production hub during a source-only review.
 
 Until Karen's gate, `bobctl` only renders `~/.config/bob-cluster/nats.mesh.conf`; the live `nats.conf`
 is not touched unless `--live` is passed, except for revoke as described above.
-Joind limits redemption to 30 attempts per source IP per rolling minute, resolved
-from loopback NATS `/connz` data. Broker permissions bind each pending user to its
+Joind limits redemption to 30 attempts per authenticated join user and per
+source IP per rolling minute, resolved from loopback NATS `/connz` data.
+Per-user rejection happens before charging the source bucket. Loopback uses
+the explicit opt-in and stricter limits described above. Broker permissions bind each pending user to its
 own `join.redeem.<user>` subject. Missing or ambiguous source data is refused.
 Clients and joind must use this protocol together; older shared-subject clients
 must be updated. Throwaway end-to-end check: `bash cluster/e2e-local.sh <sha> [--llm]`.
@@ -127,7 +139,7 @@ must be updated. Throwaway end-to-end check: `bash cluster/e2e-local.sh <sha> [-
 ## Submit
 
 ```bash
-python3 cluster/submit.py --spec-file job.json --wait
+python3 cluster/submit.py --node mini --spec-file job.json --wait
 ```
 
 Enqueue requires a user with `jobs.>` publish (default **nucbox** token on the operator host).
@@ -140,9 +152,9 @@ Install `cluster/nuc-verify-queue` ahead of `~/bin/nuc-verify` on the PATH (or s
 
 ## Security
 
-- Tailscale-only exposure of `<nucbox-tailnet-ip>:4222`; bind address remains loopback on NucBox.
+- Tailscale-only exposure: kernel-mode tailnet bind recommended; no public listener or Funnel.
 - Per-node passwords in `~/.config/bob-cluster/tokens.env` (never committed).
-- Mini/MacBook publish metrics, results, consumer-info/pull requests for `JOBS.workers`,
+- Mini/MacBook publish only their own metrics and results, consumer-info/pull requests for `JOBS.workers_<node>`,
   and acknowledgements for that consumer. They cannot administer streams or consumers.
   Run `setup_streams.py` with the NucBox credential before starting workers.
 - Monitoring binds only to `127.0.0.1:8232` (8222 is reserved for Vaultwarden).
@@ -157,3 +169,21 @@ bash cluster/install-nats.sh --ci /tmp/nats-bin   # optional local binary
 export PATH="/tmp/nats-bin:$PATH"
 PYTHONPATH=. python3 -m unittest discover -s cluster/tests -v
 ```
+
+## Queue migration
+
+This is a coordinated hard cutover, not a rolling-compatible update. Stop
+submissions and workers, drain or inventory unfinished old jobs, remove the old
+shared consumers, and provision per-node consumers before restarting workers.
+`bobctl setup-streams` reads active nodes from the registry. `bobctl submit`
+selects a free node from fresh authenticated capability heartbeats, ensures its
+consumer, and publishes to that node's disjoint filter. A newly joined worker
+waits for its consumer to be provisioned. No worker can create consumers.
+Jobs remain assigned to a node across retries; failed nodes require operator
+reconciliation and explicit resubmission, never automatic double execution.
+
+Legacy identities remain narrowly scoped for updated v1 workers. To migrate to
+mesh, mint new names (for example `mini-mesh`), install the pinned new worker,
+verify its capabilities, then revoke the old reserved identity. Regenerate all
+join instructions and invalidate outstanding codes during the cutover; only
+`join.redeem.<user>` is accepted, with no shared-subject compatibility window.

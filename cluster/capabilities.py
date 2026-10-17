@@ -56,12 +56,22 @@ def cap_subject(cap: str, job_id: str) -> str:
     return f"cap.{cap_token(cap)}.{job_id}"
 
 
-def cap_consumer(cap: str) -> str:
-    return f"cap_{cap_token(cap)}"
+def node_token(node: str) -> str:
+    if not isinstance(node, str) or not NODE_NAME_PATTERN.fullmatch(node):
+        raise CapError("invalid node")
+    return node
 
 
-def cap_filter(cap: str) -> str:
-    return f"cap.{cap_token(cap)}.*"
+def cap_consumer(cap: str, node: str | None = None) -> str:
+    return f"cap_{cap_token(cap)}" + (f"_n_{node_token(node)}" if node is not None else "")
+
+
+def guest_consumer(node: str) -> str:
+    return f"guests_n_{node_token(node)}"
+
+
+def cap_filter(cap: str, node: str | None = None) -> str:
+    return f"cap.{cap_token(cap)}." + (f"n.{node_token(node)}.*" if node is not None else "*")
 
 
 def allowed_caps_for_role(role: str) -> frozenset[str]:
@@ -196,7 +206,7 @@ def detected_caps(providers: dict[str, ProviderStatus],
 
 
 def sandbox_runtime(which: Which = _default_which) -> str | None:
-    for rt in ("podman", "docker"):
+    for rt in ("podman",):
         if which(rt):
             return rt
     return None

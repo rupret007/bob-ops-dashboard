@@ -26,6 +26,20 @@ MUTANTS = [
     ('global-rate-limit', 'joind.py', 'window = self.windows.setdefault(source, [])',
      'window = self.windows.setdefault("global", [])'),
     ('rate-limit-not-wired', 'joind.py', 'if not limiter.allow(source):', 'if False:'),
+    ('joind-serial-lock-removed', 'joind.py', 'async with serial:', 'async with asyncio.Lock():'),
+    ('secret-length-cap-removed', 'registry.py', ' or len(secret) > 200', ''),
+    ('secret-length-cap-raised', 'registry.py', 'len(secret) > 200', 'len(secret) > 256'),
+    ('body-user-check-removed', 'joind.py', 'if json.loads(msg.data).get("user") != user:', 'if False:'),
+    ('monitor-loopback-guard-removed', 'joind.py', 'host != "127.0.0.1" or ', ''),
+    ('member-shared-ack-permissions', 'registry.py', 'cons = cap_consumer(c, name)', 'cons = cap_consumer(c)'),
+    ('guest-shared-ack-permissions', 'registry.py', 'consumer = guest_consumer(name)', 'consumer = CONSUMER_GUESTS'),
+    ('per-user-bucket-removed', 'joind.py', 'if not users.allow(user):', 'if False:'),
+    ('local-user-bucket-removed', 'joind.py', 'not local_users.allow(user) or ', ''),
+    ('loopback-opt-in-bypassed', 'joind.py', 'if loopback and not allow_loopback:', 'if False:'),
+    ('executable-check-removed', 'joind.py', 'if Path(os.readlink(f"/proc/{pid}/exe")).name != "nats-server":', 'if False:'),
+    ('legacy-wildcard-restored', 'registry.py', '"subscribe": [f"_INBOX_{node}.>"]',
+     '"subscribe": [f"_INBOX_{node}.>", "_INBOX.>", "$JS.ACK.>", "$JS.API.>"]'),
+
 ]
 
 

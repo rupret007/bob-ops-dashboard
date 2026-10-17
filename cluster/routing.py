@@ -5,7 +5,7 @@ from __future__ import annotations
 import math
 from typing import Any
 
-from cluster.capabilities import CAPABILITIES, GUEST_CAPS, cap_subject
+from cluster.capabilities import CAPABILITIES, GUEST_CAPS, cap_subject, cap_token, node_token
 from cluster.config import ALLOWED_ARGV, ALLOWED_REPOS, MAX_LOAD_CEILING, MAX_TIMEOUT_S
 from cluster.spec import (
     JOB_ID_PATTERN, REF_PATTERN, SHA_PATTERN, SpecError, _check_secrets_in_argv,
@@ -126,7 +126,12 @@ def checkout_spec(spec: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def subject_for(spec: dict[str, Any]) -> str:
+def subject_for(spec: dict[str, Any], node: str | None = None) -> str:
+    if node is not None:
+        node = node_token(node)
+        if spec["cap"] in GUEST_CAPS:
+            return f"sandbox.jobs.{node}.{spec['id']}"
+        return f"cap.{cap_token(spec['cap'])}.n.{node}.{spec['id']}"
     if spec["cap"] in GUEST_CAPS:
         return f"sandbox.jobs.{spec['id']}"
     return cap_subject(spec["cap"], spec["id"])

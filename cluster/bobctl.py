@@ -27,9 +27,9 @@ import sys
 import time
 from pathlib import Path
 
-from cluster.capabilities import CAPABILITIES, GUEST_CAPS, cap_consumer, cap_filter
+from cluster.capabilities import CAPABILITIES, GUEST_CAPS, cap_consumer, cap_filter, guest_consumer, node_token
 from cluster.registry import (
-    CONSUMER_GUESTS, STREAM_CAPJOBS, STREAM_SANDBOX, STREAM_SANDBOX_RESULTS, RegistryError,
+    STREAM_CAPJOBS, STREAM_SANDBOX, STREAM_SANDBOX_RESULTS, RegistryError,
 )
 
 CFG = Path.home() / ".config" / "bob-cluster"
@@ -41,6 +41,8 @@ def add_hub_args(ap: argparse.ArgumentParser) -> None:
     ap.add_argument("--conf-out", default=str(CFG / "nats.mesh.conf"))
     ap.add_argument("--store-dir", default=str(Path.home() / ".local/state/bob-cluster/js"))
     ap.add_argument("--pidfile", default=str(CFG / "nats-server.pid"))
+    ap.add_argument("--host", default=os.environ.get("BOB_NATS_HOST", "127.0.0.1"),
+                    help="NATS bind address; use the kernel Tailscale interface address")
     ap.add_argument("--port", type=int, default=4222)
     ap.add_argument("--http", default="127.0.0.1:8232", help="monitoring bind (loopback only)")
     ap.add_argument("--live", action="store_true",
@@ -57,7 +59,7 @@ def hub_from_args(args):
             print("note: not live; rendered config only (rollout pending)", file=sys.stderr)
     if not args.http.startswith("127.0.0.1:"):
         raise SystemExit("--http must stay on 127.0.0.1")
-    return Hub(Path(args.config_dir), Path(args.conf_out), args.store_dir, reload, port=args.port, http=args.http)
+    return Hub(Path(args.config_dir), Path(args.conf_out), args.store_dir, reload, port=args.port, http=args.http, host=args.host)
 
 
 def hub_url(args) -> str:
@@ -196,9 +198,9 @@ def cmd_list(args) -> int:
     return 0
 
 
-async def setup_streams(url: str, bob_user: str, bob_pw: str, guest_pw: str | None) -> list[str]:
+async def setup_streams(url: str, bob_user: str, bob_pw: str, guest_pw: str | None, nodes: dict | None = None) -> list[str]:
     import nats
-    from nats.js.api import AckPolicy, ConsumerConfig, RetentionPolicy, StorageType, StreamConfig
+    from nats.js.api import RetentionPolicy, StorageType, StreamConfig
     from nats.js.errors import BadRequestError
 
     done = []
@@ -211,36 +213,33 @@ async def setup_streams(url: str, bob_user: str, bob_pw: str, guest_pw: str | No
         done.append(f"stream {cfg.name}")
 
     async def upsert_consumer(js, stream, cfg):
-        try:
-            await js.add_consumer(stream, cfg)
-        except BadRequestError:
-            pass
+        await js.add_consumer(stream, cfg)
         done.append(f"consumer {stream}.{cfg.durable_name}")
 
-    nc = await nats.connect(url, user=bob_user, password=bob_pw)
+    nc = await nats.connect(url, user=bob_user, password=bob_pw,
+                            inbox_prefix=f"_INBOX_{bob_user}".encode())
     js = nc.jetstream()
     await upsert_stream(js, StreamConfig(name=STREAM_CAPJOBS, subjects=["cap.>"],
                                          retention=RetentionPolicy.WORK_QUEUE,
                                          storage=StorageType.FILE, max_age=24 * 3600))
-    for cap in sorted(CAPABILITIES):
-        if cap in GUEST_CAPS:
+    for node, info in (nodes or {}).items():
+        if info.get("revoked") or info["role"] != "member":
             continue
-        await upsert_consumer(js, STREAM_CAPJOBS, ConsumerConfig(
-            durable_name=cap_consumer(cap), ack_policy=AckPolicy.EXPLICIT, ack_wait=30 * 60,
-            max_deliver=3, filter_subject=cap_filter(cap)))
+        for cap in info["caps"]:
+            await upsert_consumer(js, STREAM_CAPJOBS, delivery_consumer(cap, node))
     await nc.close()
     if guest_pw:
         nc = await nats.connect(url, user="guestops", password=guest_pw, inbox_prefix=b"_INBOX_guestops")
         js = nc.jetstream()
-        await upsert_stream(js, StreamConfig(name=STREAM_SANDBOX, subjects=["sandbox.jobs.*"],
+        await upsert_stream(js, StreamConfig(name=STREAM_SANDBOX, subjects=["sandbox.jobs.*.*"],
                                              retention=RetentionPolicy.WORK_QUEUE,
                                              storage=StorageType.FILE, max_age=24 * 3600))
         await upsert_stream(js, StreamConfig(name=STREAM_SANDBOX_RESULTS, subjects=["sandbox.results.>"],
                                              retention=RetentionPolicy.LIMITS,
                                              storage=StorageType.FILE, max_age=7 * 24 * 3600))
-        await upsert_consumer(js, STREAM_SANDBOX, ConsumerConfig(
-            durable_name=CONSUMER_GUESTS, ack_policy=AckPolicy.EXPLICIT, ack_wait=30 * 60,
-            max_deliver=3, filter_subject="sandbox.jobs.*"))
+        for node, info in (nodes or {}).items():
+            if not info.get("revoked") and info["role"] == "guest" and "sandbox.test" in info["caps"]:
+                await upsert_consumer(js, STREAM_SANDBOX, delivery_consumer("sandbox.test", node))
         await nc.close()
     return done
 
@@ -257,34 +256,92 @@ def _nucbox_token(config_dir: Path) -> str:
 def cmd_setup_streams(args) -> int:
     hub = hub_from_args(args)
     gp = hub.reg.service_password("guestops")
-    for line in asyncio.run(setup_streams(args.nats, "nucbox", _nucbox_token(Path(args.config_dir)), gp)):
+    for line in asyncio.run(setup_streams(args.nats, "nucbox", _nucbox_token(Path(args.config_dir)), gp, hub.reg.read()["nodes"])):
         print("ok", line)
     return 0
 
 
-async def submit_spec(url: str, user: str, pw: str, spec: dict, wait: float = 0.0) -> dict | None:
+def delivery_consumer(cap: str, node: str):
+    from nats.js.api import AckPolicy, ConsumerConfig
+
+    node = node_token(node)
+    guest = cap in GUEST_CAPS
+    return ConsumerConfig(
+        durable_name=guest_consumer(node) if guest else cap_consumer(cap, node),
+        ack_policy=AckPolicy.EXPLICIT, ack_wait=30 * 60, max_deliver=3,
+        filter_subject=f"sandbox.jobs.{node}.*" if guest else cap_filter(cap, node))
+
+
+async def select_node(nc, cap: str, seconds: float = 16.0) -> str:
+    """Choose a node from authenticated, fresh capability heartbeats.
+
+    Heartbeat subjects are broker-scoped to the publisher. Ignore the body node
+    as an authority. Fail closed if nobody advertises a runnable capability.
+    """
+    import math
+    from cluster.routing import llm_argv
+    from cluster.spec import SpecError
+
+    if cap.startswith("llm."):
+        llm_argv(cap, "probe")  # don't route to advertised but unsupported runners
+    guest = cap in GUEST_CAPS
+    seen = {}
+
+    async def receive(msg):
+        try:
+            node = node_token(msg.subject.split(".")[-1])
+            seen.pop(node, None)
+            data = json.loads(msg.data)
+            if not isinstance(data, dict) or not isinstance(data.get("caps"), list):
+                return
+            age = time.time() - float(data["ts"])
+            active, lanes = data["active"], data["max_lanes"]
+            if (data.get("v") == "caps/v1" and data.get("role") == ("guest" if guest else "member")
+                    and cap in data["caps"] and math.isfinite(age) and -5 <= age <= 45
+                    and type(active) is int and type(lanes) is int and 0 <= active < lanes <= 16):
+                seen[node] = active / lanes
+        except (KeyError, TypeError, ValueError):
+            return
+
+    sub = await nc.subscribe("sandbox.caps.*" if guest else "caps.*", cb=receive)
+    try:
+        await nc.flush()
+        await asyncio.sleep(seconds)
+    finally:
+        await sub.unsubscribe()
+    if not seen:
+        raise SpecError("no online node offers this capability with a free lane")
+    return min(seen, key=lambda node: (seen[node], node))
+
+
+async def submit_spec(url: str, user: str, pw: str, spec: dict, wait: float = 0.0, node: str | None = None) -> dict | None:
     import nats
 
     from cluster.routing import subject_for
 
-    kw = {"inbox_prefix": b"_INBOX_guestops"} if user == "guestops" else {}
+    kw = {"inbox_prefix": f"_INBOX_{user}".encode()}
     nc = await nats.connect(url, user=user, password=pw, **kw)
     js = nc.jetstream()
     result = None
-    sub = None
-    if wait > 0:
-        subj = (f"sandbox.results.*.{spec['id']}" if spec["cap"] in GUEST_CAPS else f"results.*.{spec['id']}")
-        sub = await nc.subscribe(subj)
-        await nc.flush()
-    ack = await js.publish(subject_for(spec), json.dumps(spec).encode())
-    if sub is not None:
-        try:
-            msg = await sub.next_msg(timeout=wait)
-            result = json.loads(msg.data)
-        except asyncio.TimeoutError:
-            result = None
-    await nc.close()
-    return {"stream": ack.stream, "seq": ack.seq, "result": result}
+    try:
+        target = node_token(node) if node is not None else await select_node(nc, spec["cap"])
+        stream = STREAM_SANDBOX if spec["cap"] in GUEST_CAPS else STREAM_CAPJOBS
+        await js.add_consumer(stream, delivery_consumer(spec["cap"], target))
+        sub = None
+        if wait > 0:
+            prefix = "sandbox.results" if spec["cap"] in GUEST_CAPS else "results"
+            sub = await nc.subscribe(f"{prefix}.{target}.{spec['id']}")
+            await nc.flush()
+        ack = await js.publish(subject_for(spec, target), json.dumps(spec).encode())
+        if sub is not None:
+            try:
+                msg = await sub.next_msg(timeout=wait)
+                result = json.loads(msg.data)
+            except asyncio.TimeoutError:
+                pass
+        return {"stream": ack.stream, "seq": ack.seq, "node": target, "result": result}
+    finally:
+        await nc.close()
 
 
 def cmd_submit(args) -> int:

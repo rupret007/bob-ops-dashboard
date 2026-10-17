@@ -338,13 +338,13 @@ class JoinCodeAndRegistryTests(unittest.TestCase):
 
     def test_permissions_are_minimal(self):
         m = member_permissions("box", ["llm.composer", "sandbox.test"])
-        self.assertIn("$JS.API.CONSUMER.MSG.NEXT.CAPJOBS.cap_llm_composer", m["publish"])
+        self.assertIn("$JS.API.CONSUMER.MSG.NEXT.CAPJOBS.cap_llm_composer_n_box", m["publish"])
         self.assertFalse(any("cap_llm_codex" in s for s in m["publish"]))
         self.assertFalse(any(s in ("cap.>", "jobs.>", ">", "$JS.API.>") for s in m["publish"]))
         self.assertEqual(m["subscribe"], ["_INBOX_box.>"])
         g = guest_permissions("friend")
-        self.assertTrue(all(s.startswith(("sandbox.", "$JS.API.CONSUMER.INFO.SANDBOX.guests",
-                                          "$JS.API.CONSUMER.MSG.NEXT.SANDBOX.guests", "$JS.ACK.SANDBOX.guests."))
+        self.assertTrue(all(s.startswith(("sandbox.", "$JS.API.CONSUMER.INFO.SANDBOX.guests_n_friend",
+                                          "$JS.API.CONSUMER.MSG.NEXT.SANDBOX.guests_n_friend", "$JS.ACK.SANDBOX.guests_n_friend."))
                             for s in g["publish"]))
         self.assertEqual(g["subscribe"], ["_INBOX_friend.>"])
 
@@ -363,8 +363,8 @@ class JoinCodeAndRegistryTests(unittest.TestCase):
             render_conf(data, "/tmp/js")
 
     def test_guest_without_sandbox_grant_cannot_pull_and_members_cannot_get_sandbox(self):
-        self.assertFalse(any("SANDBOX" in s for s in guest_permissions("g", [])["publish"]))
-        self.assertTrue(any("SANDBOX.guests" in s for s in guest_permissions("g", ["sandbox.test"])["publish"]))
+        self.assertFalse(any("SANDBOX" in s for s in guest_permissions("gg", [])["publish"]))
+        self.assertTrue(any("SANDBOX.guests" in s for s in guest_permissions("gg", ["sandbox.test"])["publish"]))
         with self.assertRaises(RegistryError):
             self.reg.mint("box", "member", ["sandbox.test"], URL)
         self.assertNotIn("sandbox.test", self.reg.mint("box2", "member", None, URL)[1]["caps"])

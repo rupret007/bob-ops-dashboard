@@ -5,7 +5,7 @@
 
 Members pull CAPJOBS consumers for the capabilities they are both granted (by
 the hub, enforced by NATS permissions) and actually signed in to locally.
-Guests pull only SANDBOX.guests and run every job in a container sandbox.
+Guests pull only their own SANDBOX durable and run every job in Podman.
 Credentials for LLM CLIs never leave this machine: the CLI uses its own login.
 """
 
@@ -22,10 +22,10 @@ from pathlib import Path
 from typing import Any
 
 from cluster.capabilities import (
-    CAPABILITIES, GUEST_CAPS, build_heartbeat, cap_consumer, detect_providers, detected_caps,
+    CAPABILITIES, GUEST_CAPS, build_heartbeat, cap_consumer, guest_consumer, detect_providers, detected_caps,
     effective_caps, heartbeat_subject, load_quota_hints, sandbox_runtime, _default_which,
 )
-from cluster.registry import CONSUMER_GUESTS, STREAM_CAPJOBS, STREAM_SANDBOX, _read_env, inbox_prefix
+from cluster.registry import STREAM_CAPJOBS, STREAM_SANDBOX, _read_env, inbox_prefix
 from cluster.routing import CLI_FOR_PROVIDER, checkout_spec, llm_argv, validate_cap_spec
 from cluster.sanitize import sanitize_tail
 from cluster.spec import SpecError
@@ -91,7 +91,7 @@ class Executor:
         if cap in GUEST_CAPS:
             rt = sandbox_runtime(self.which)
             if not rt:
-                return "refused", -1, "no docker/podman: sandbox jobs are never run on the host"
+                return "refused", -1, "no podman: sandbox jobs are never run on the host"
             from cluster.sandbox import sandbox_argv
 
             argv = sandbox_argv(rt, wd, spec["cmd"], spec["id"])
@@ -216,7 +216,17 @@ class MeshWorker:
                 await msg.nak(delay=15)
 
     async def pull_loop(self, stream: str, consumer: str, cap: str, stop: asyncio.Event) -> None:
-        psub = await self.js.pull_subscribe_bind(durable=consumer, stream=stream)
+        from nats.js.errors import NotFoundError
+
+        while not stop.is_set():
+            try:
+                await self.js.consumer_info(stream, consumer)
+                psub = await self.js.pull_subscribe_bind(durable=consumer, stream=stream)
+                break
+            except NotFoundError:
+                await asyncio.sleep(0.2)
+        else:
+            return
         while not stop.is_set():
             free = self.cfg.max_lanes - self.active
             if free <= 0:
@@ -229,7 +239,7 @@ class MeshWorker:
     def consumers(self) -> list[tuple[str, str, str]]:
         caps = self.refresh_caps()
         if self.cfg.role == "guest":
-            return [(STREAM_SANDBOX, CONSUMER_GUESTS, "sandbox.test")] if "sandbox.test" in caps else []
+            return [(STREAM_SANDBOX, guest_consumer(self.cfg.user), "sandbox.test")] if "sandbox.test" in caps else []
         out = []
         for c in caps:
             if c in GUEST_CAPS:
@@ -239,7 +249,7 @@ class MeshWorker:
                     llm_argv(c, "probe")
                 except SpecError:
                     continue  # advertised (e.g. MiniMax key present) but no v1 runner: do not pull
-            out.append((STREAM_CAPJOBS, cap_consumer(c), c))
+            out.append((STREAM_CAPJOBS, cap_consumer(c, self.cfg.user), c))
         return out
 
     async def run(self, stop: asyncio.Event | None = None) -> None:

@@ -23,6 +23,9 @@ from cluster.registry import PENDING_USER_PATTERN, Registry, RegistryError, inbo
 log = logging.getLogger("bob-joind")
 MAX_REQ_BYTES = 2048
 FAIL_DELAY_S = 1.0          # slows online guessing; codes are 192-bit anyway
+MAX_ATTEMPTS_PER_USER = 30
+LOCAL_ATTEMPTS_PER_USER = 3
+LOCAL_ATTEMPTS_PER_MIN = 6
 MAX_ATTEMPTS_PER_MIN = 30   # per source IP (all join users at that IP share a bucket)
 SWEEP_S = 60.0              # drop expired codes from the live config
 
@@ -31,7 +34,7 @@ class Hub:
     """Registry + config output + reload hook, shared by bobctl and joind."""
 
     def __init__(self, config_dir: Path, conf_out: Path, store_dir: str, reload: Callable[[], None],
-                 port: int = 4222, http: str = "127.0.0.1:8232", clock=None):
+                 port: int = 4222, http: str = "127.0.0.1:8232", clock=None, host: str = "127.0.0.1"):
         import time
 
         self.reg = Registry(config_dir, clock=clock or time.time)
@@ -40,11 +43,12 @@ class Hub:
         self.reload_cb = reload
         self.port = port
         self.http = http
+        self.host = str(ipaddress.ip_address(host))
 
     def render(self) -> None:
         from cluster.registry import _atomic_write
 
-        _atomic_write(self.conf_out, render_conf(self.reg.read(), self.store_dir, port=self.port, http=self.http))
+        _atomic_write(self.conf_out, render_conf(self.reg.read(), self.store_dir, port=self.port, http=self.http, host=self.host))
 
     def apply(self) -> None:
         self.render()
@@ -120,8 +124,9 @@ def source_address(http: str, user: str) -> str:
 
 
 class SourceRateLimiter:
-    def __init__(self, clock=time.monotonic):
+    def __init__(self, clock=time.monotonic, limit=MAX_ATTEMPTS_PER_MIN):
         self.clock = clock
+        self.limit = limit
         self.windows: dict[str, list[float]] = {}
 
     def allow(self, source: str) -> bool:
@@ -129,20 +134,23 @@ class SourceRateLimiter:
         self.windows = {key: [t for t in times if now - t < 60]
                         for key, times in self.windows.items() if times[-1] > now - 60}
         window = self.windows.setdefault(source, [])
-        if len(window) >= MAX_ATTEMPTS_PER_MIN:
+        if len(window) >= self.limit:
             return False
         window.append(now)
         return True
 
 
 async def serve(hub: Hub, url: str, password: str, reload_delay: float = 1.0,
-                stop: asyncio.Event | None = None) -> None:
+                stop: asyncio.Event | None = None, allow_loopback: bool = False) -> None:
     import nats
 
     nc = await nats.connect(url, user="joind", password=password, max_reconnect_attempts=-1)
     pending_reload: list[asyncio.Task] = []
     serial = asyncio.Lock()   # one bcrypt-heavy redeem at a time
     limiter = SourceRateLimiter()
+    users = SourceRateLimiter(limit=MAX_ATTEMPTS_PER_USER)
+    local_users = SourceRateLimiter(limit=LOCAL_ATTEMPTS_PER_USER)
+    local = SourceRateLimiter(limit=LOCAL_ATTEMPTS_PER_MIN)
 
     async def on_msg(msg):
         user = msg.subject.removeprefix("join.redeem.")
@@ -152,6 +160,15 @@ async def serve(hub: Hub, url: str, password: str, reload_delay: float = 1.0,
             source = await asyncio.to_thread(source_address, hub.http, user)
         except (OSError, ValueError, KeyError, TypeError, RuntimeError):
             log.warning("join source lookup failed; refusing request")
+            return
+        loopback = ipaddress.ip_address(source).is_loopback
+        if loopback and not allow_loopback:
+            return  # uniform refusal: no response, as for missing/ambiguous sources
+        # Charge the authenticated user first: exhausted codes cannot drain the
+        # shared source bucket. Local forwarding still has a small aggregate cap.
+        if not users.allow(user):
+            return
+        if loopback and (not local_users.allow(user) or not local.allow("loopback")):
             return
         if not limiter.allow(source):
             log.warning("redeem rate limit hit")
@@ -215,6 +232,8 @@ def signal_reload_from_pidfile(pidfile: Path, http: str = "127.0.0.1:8232",
             pid = int(Path(pidfile).read_text().strip())
             if pid <= 1:
                 raise ValueError("invalid server PID")
+            if Path(os.readlink(f"/proc/{pid}/exe")).name != "nats-server":
+                raise RuntimeError("PID executable is not nats-server")
             before = monitor_json(http, "varz")
             # nats-server /varz exposes no PID; the target is bound by its config
             # path (below) and a stable server_id whose config_load_time changes
@@ -252,11 +271,13 @@ def main() -> int:
     ap = argparse.ArgumentParser(description="Bob cluster join responder")
     add_hub_args(ap)
     ap.add_argument("--nats", default=os.environ.get("BOB_NATS_URL", "nats://127.0.0.1:4222"))
+    ap.add_argument("--allow-loopback", action="store_true",
+                    help="allow local/userspace joins with strict per-code and aggregate limits")
     args = ap.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(message)s")
     hub = hub_from_args(args)
     pw = hub.reg.service_password("joind")
-    asyncio.run(serve(hub, args.nats, pw))
+    asyncio.run(serve(hub, args.nats, pw, allow_loopback=args.allow_loopback))
     return 0
 
 
