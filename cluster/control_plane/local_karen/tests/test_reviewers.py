@@ -16,6 +16,7 @@ from cluster.control_plane.local_karen.reviewers import (
     CodexReviewer,
     GeminiReviewer,
     MiniMaxReviewer,
+    ReviewFindings,
     ReviewResult,
     ReviewTier,
     ReviewVerdict,
@@ -280,28 +281,75 @@ class TestReviewChain(unittest.TestCase):
             deleted_files=[],
         )
 
-    def test_chain_stops_on_first_success(self):
+    def test_chain_requires_two_pass_agreements(self):
+        """Two-reviewer agreement required for PASS in live mode."""
         pr = self._make_pr()
         config = KarenConfig(reviewer_order=["codex", "gemini"])
 
+        findings = ReviewFindings(
+            security_issues=[],
+            functional_issues=[],
+            test_coverage_issues=[],
+            code_quality_issues=[],
+            risk_notes=["Reviewed all changes"],
+        )
         mock_codex_result = ReviewResult(
             reviewer="codex",
             verdict=ReviewVerdict.PASS,
-            reason="Looks good",
+            reason="Looks good after thorough review",
             tier=ReviewTier.LOW,
+            findings=findings,
+        )
+        mock_gemini_result = ReviewResult(
+            reviewer="gemini",
+            verdict=ReviewVerdict.PASS,
+            reason="Confirmed safe changes",
+            tier=ReviewTier.LOW,
+            findings=findings,
         )
 
         with patch.object(CodexReviewer, "is_available", return_value=(True, "ok")):
             with patch.object(CodexReviewer, "review", return_value=mock_codex_result):
                 with patch.object(GeminiReviewer, "is_available", return_value=(True, "ok")):
-                    with patch.object(GeminiReviewer, "review") as mock_gemini:
-                        result, all_results = run_review_chain(pr, config)
+                    with patch.object(GeminiReviewer, "review", return_value=mock_gemini_result):
+                        result, all_results = run_review_chain(pr, config, require_two_pass=True)
 
                         self.assertEqual(result.verdict, ReviewVerdict.PASS)
-                        self.assertEqual(result.reviewer, "codex")
-                        mock_gemini.assert_not_called()
+                        self.assertIn("codex", result.reviewer)
+                        self.assertIn("gemini", result.reviewer)
+
+    def test_chain_single_pass_needs_minimax_confirmation(self):
+        """Single PASS needs MiniMax confirmation."""
+        pr = self._make_pr()
+        config = KarenConfig(reviewer_order=["codex", "gemini", "minimax"])
+
+        findings = ReviewFindings(risk_notes=["Reviewed"])
+        mock_codex_result = ReviewResult(
+            reviewer="codex",
+            verdict=ReviewVerdict.PASS,
+            reason="Looks good after thorough review",
+            tier=ReviewTier.LOW,
+            findings=findings,
+        )
+        mock_minimax_confirm = ReviewResult(
+            reviewer="minimax",
+            verdict=ReviewVerdict.PASS,
+            reason="Confirmed",
+            tier=ReviewTier.LOW,
+        )
+
+        with patch.object(CodexReviewer, "is_available", return_value=(True, "ok")):
+            with patch.object(CodexReviewer, "review", return_value=mock_codex_result):
+                with patch.object(GeminiReviewer, "is_available", return_value=(False, "no key")):
+                    with patch.object(MiniMaxReviewer, "is_available", return_value=(True, "ok")):
+                        with patch.object(MiniMaxReviewer, "review_as_second_judge", return_value=mock_minimax_confirm):
+                            result, all_results = run_review_chain(pr, config, require_two_pass=True)
+
+                            self.assertEqual(result.verdict, ReviewVerdict.PASS)
+                            self.assertIn("minimax", result.reviewer)
 
     def test_chain_falls_back_on_error(self):
+        """Fallback to next reviewer on error, but single PASS fails closed."""
         pr = self._make_pr()
         config = KarenConfig(reviewer_order=["codex", "gemini"])
 
@@ -311,24 +359,28 @@ class TestReviewChain(unittest.TestCase):
             reason="CLI failed",
             tier=ReviewTier.LOW,
         )
+        findings = ReviewFindings(risk_notes=["Reviewed"])
         mock_gemini_pass = ReviewResult(
             reviewer="gemini",
             verdict=ReviewVerdict.PASS,
-            reason="Approved",
+            reason="Approved after thorough review",
             tier=ReviewTier.LOW,
+            findings=findings,
         )
 
         with patch.object(CodexReviewer, "is_available", return_value=(True, "ok")):
             with patch.object(CodexReviewer, "review", return_value=mock_codex_error):
                 with patch.object(GeminiReviewer, "is_available", return_value=(True, "ok")):
                     with patch.object(GeminiReviewer, "review", return_value=mock_gemini_pass):
-                        result, all_results = run_review_chain(pr, config)
+                        with patch.object(MiniMaxReviewer, "is_available", return_value=(False, "no key")):
+                            result, all_results = run_review_chain(pr, config, require_two_pass=True)
 
-                        self.assertEqual(result.verdict, ReviewVerdict.PASS)
-                        self.assertEqual(result.reviewer, "gemini")
-                        self.assertEqual(len(all_results), 2)
+                            self.assertEqual(result.verdict, ReviewVerdict.FAIL)
+                            self.assertIn("FAIL-CLOSED", result.reason)
+                            self.assertEqual(len(all_results), 2)
 
     def test_second_judge_on_borderline(self):
+        """Borderline treated as FAIL, so chain returns FAIL."""
         pr = self._make_pr()
         config = KarenConfig(reviewer_order=["codex", "gemini", "minimax"])
 
@@ -338,30 +390,23 @@ class TestReviewChain(unittest.TestCase):
             reason="Needs review",
             tier=ReviewTier.HIGH,
         )
-        mock_minimax_fail = ReviewResult(
-            reviewer="minimax",
-            verdict=ReviewVerdict.FAIL,
-            reason="Ken agreed with Karen",
-            tier=ReviewTier.HIGH,
-        )
 
         with patch.object(CodexReviewer, "is_available", return_value=(True, "ok")):
             with patch.object(CodexReviewer, "review", return_value=mock_codex_borderline):
-                with patch.object(MiniMaxReviewer, "is_available", return_value=(True, "ok")):
-                    with patch.object(MiniMaxReviewer, "review_as_second_judge", return_value=mock_minimax_fail):
-                        result, all_results = run_review_chain(pr, config)
+                with patch.object(GeminiReviewer, "is_available", return_value=(False, "no key")):
+                    result, all_results = run_review_chain(pr, config, require_two_pass=True)
 
-                        self.assertEqual(result.verdict, ReviewVerdict.FAIL)
-                        self.assertEqual(result.reviewer, "minimax")
+                    self.assertEqual(result.verdict, ReviewVerdict.FAIL)
+                    self.assertIn("chain", result.reviewer)
 
 
 class TestCodexArgs(unittest.TestCase):
     """Tests for exact Codex CLI arguments."""
 
     def test_build_codex_args_low_effort(self):
-        """Verify codex args use -c model_reasoning_effort, not --effort."""
+        """Verify codex args use -c model_reasoning_effort, prompt via stdin (-)."""
         reviewer = CodexReviewer()
-        args = reviewer._build_codex_args("Test prompt", "low")
+        args = reviewer._build_codex_args("low")
 
         self.assertEqual(args[0], "codex")
         self.assertEqual(args[1], "exec")
@@ -382,21 +427,20 @@ class TestCodexArgs(unittest.TestCase):
         self.assertNotIn("--quiet", args)
         self.assertNotIn("--no-full-auto", args)
 
-        self.assertEqual(args[-1], "Test prompt")
+        self.assertEqual(args[-1], "-")
 
     def test_build_codex_args_high_effort(self):
         """Verify high effort uses correct model_reasoning_effort value."""
         reviewer = CodexReviewer()
-        args = reviewer._build_codex_args("Security review prompt", "high")
+        args = reviewer._build_codex_args("high")
 
         c_index = args.index("-c")
         self.assertEqual(args[c_index + 1], 'model_reasoning_effort="high"')
 
     def test_codex_args_exact_order(self):
-        """Verify the exact argument structure for codex exec."""
+        """Verify the exact argument structure for codex exec with stdin."""
         reviewer = CodexReviewer()
-        prompt = "Review this code"
-        args = reviewer._build_codex_args(prompt, "low")
+        args = reviewer._build_codex_args("low")
 
         expected = [
             "codex", "exec",
@@ -404,7 +448,7 @@ class TestCodexArgs(unittest.TestCase):
             "--sandbox", "read-only",
             "--skip-git-repo-check",
             "-o",
-            prompt,
+            "-",
         ]
         self.assertEqual(args, expected)
 
