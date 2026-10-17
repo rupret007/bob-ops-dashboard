@@ -37,6 +37,8 @@ Grok Bot (conserve-only) is always explicitly unknown without a direct source.
   Default bind is loopback, port 8787. An explicit tailnet literal is accepted;
   all wildcard, public, DNS-name and ordinary LAN binds are refused. Configure
   tailnet ACLs before any future enablement. No public reverse proxy or Funnel.
+  A tailnet bind has no application-layer authentication on the HTTP bridge; access
+  control is tailnet membership and ACLs only.
 - Open the exact bound address/port to preserve Host/Origin checks. The bridge
   serves its own page and JavaScript, with no cross-origin API or write endpoint.
   No credential is exposed to the browser. Use a private tunnel for loopback access.
