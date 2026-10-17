@@ -27,4 +27,5 @@ jobs:
       - name: Run cluster unit tests
         env:
           PYTHONPATH: .
-        run: python3 -m unittest discover -s cluster/tests -v
+          BOB_REQUIRE_NATS: "1"
+        run: python3 -m cluster.tests.run_strict

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import asyncio
+import functools
 import unittest
 import os
 import re
@@ -12,6 +14,45 @@ import subprocess
 import tempfile
 import time
 from pathlib import Path
+
+
+def strict_mode() -> bool:
+    ci = os.environ.get("CI", "").lower()
+    if ci in ("1", "true", "yes"):
+        return True
+    if os.environ.get("BOB_REQUIRE_NATS") == "1":
+        return True
+    return False
+
+
+def require_or_skip(condition: bool, reason: str):
+    if condition:
+        def decorator(obj):
+            return obj
+        return decorator
+
+    def decorator(obj):
+        if strict_mode():
+            if isinstance(obj, type):
+                @classmethod
+                def setUpClass(cls):
+                    raise AssertionError(f"required dependency missing in strict mode: {reason}")
+                obj.setUpClass = setUpClass
+                return obj
+            else:
+                if asyncio.iscoroutinefunction(obj):
+                    @functools.wraps(obj)
+                    async def async_wrapper(*args, **kwargs):
+                        raise AssertionError(f"required dependency missing in strict mode: {reason}")
+                    return async_wrapper
+                else:
+                    @functools.wraps(obj)
+                    def sync_wrapper(*args, **kwargs):
+                        raise AssertionError(f"required dependency missing in strict mode: {reason}")
+                    return sync_wrapper
+        else:
+            return unittest.skip(reason)(obj)
+    return decorator
 
 
 def find_nats_binary() -> str | None:

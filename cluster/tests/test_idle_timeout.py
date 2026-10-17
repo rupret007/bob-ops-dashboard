@@ -8,6 +8,7 @@ import unittest
 from pathlib import Path
 
 from cluster.submit import wait_result_from_sub
+from cluster.tests.nats_test_util import require_or_skip
 from cluster.worker_logic import fetch_or_empty
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -123,7 +124,7 @@ class TestFetchOrEmpty(unittest.IsolatedAsyncioTestCase):
         psub = FakePsub([TimeoutError()])
         self.assertEqual(await fetch_or_empty(psub, 1, timeout=1), [])
 
-    @unittest.skipUnless(_HAS_NATS_PY, "nats-py not installed")
+    @require_or_skip(_HAS_NATS_PY, "nats-py not installed")
     async def test_non_idle_errors_propagate(self):
         """Non-timeout errors must escape; fails if except is widened to Exception/BaseException."""
         import nats.errors
@@ -209,7 +210,7 @@ class TestNatsDependentSkipGuard(unittest.TestCase):
         )
         self.assertEqual(proc.returncode, 0, (proc.stdout, proc.stderr))
 
-    @unittest.skipUnless(_HAS_NATS_PY, "nats-py not installed")
+    @require_or_skip(_HAS_NATS_PY, "nats-py not installed")
     def test_non_idle_errors_runs_when_nats_available(self):
         import nats
 

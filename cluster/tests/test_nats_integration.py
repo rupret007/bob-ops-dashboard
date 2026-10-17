@@ -4,7 +4,7 @@ import json
 import unittest
 
 from cluster.spec import job_subject, validate_job_spec
-from cluster.tests.nats_test_util import EphemeralNats, find_nats_binary
+from cluster.tests.nats_test_util import EphemeralNats, find_nats_binary, require_or_skip
 from cluster.worker_logic import JobAction, parse_job_payload
 
 def _nats_py_available() -> bool:
@@ -64,7 +64,7 @@ class TestFakeJobSource(unittest.TestCase):
         self.assertEqual(len(deliveries), 3)
 
 
-@unittest.skipUnless(
+@require_or_skip(
     _nats_integration_available(),
     "nats-server binary or nats-py not installed",
 )
@@ -134,7 +134,7 @@ class TestNatsIntegration(unittest.TestCase):
         await nc.close()
 
 
-@unittest.skipUnless(
+@require_or_skip(
     _nats_integration_available(),
     "nats-server binary or nats-py not installed",
 )

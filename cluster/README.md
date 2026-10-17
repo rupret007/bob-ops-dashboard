@@ -119,3 +119,10 @@ bash cluster/install-nats.sh --ci /tmp/nats-bin   # optional local binary
 export PATH="/tmp/nats-bin:$PATH"
 PYTHONPATH=. python3 -m unittest discover -s cluster/tests -v
 ```
+
+## Tests
+
+CI runs `PYTHONPATH=. BOB_REQUIRE_NATS=1 python3 -m cluster.tests.run_strict`. It fails on any skipped test and on any
+required security/integration test (see `DEFAULT_REQUIRE` in `cluster/tests/run_strict.py`) that does not run and pass.
+With `CI` or `BOB_REQUIRE_NATS=1` set, `require_or_skip` turns a missing nats-py / nats-server into a failure instead of a skip.
+Locally without those variables, NATS-dependent tests still skip cleanly under `python3 -m unittest discover -s cluster/tests`.
