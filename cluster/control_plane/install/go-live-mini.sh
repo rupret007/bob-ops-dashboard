@@ -44,21 +44,23 @@ update_worktree() {
     
     cd "$REPO_ROOT"
     
-    if ! git fetch origin 2>&1; then
+    local target_branch="cursor/storypool-all-in-one-47c7"
+    
+    if ! git fetch origin "$target_branch" 2>&1; then
         log_fail "git fetch failed"
         FAILURES+=("git fetch")
         ALL_PASS=false
         return 1
     fi
     
-    local branch
-    branch=$(git rev-parse --abbrev-ref HEAD)
-    
-    if ! git pull origin "$branch" 2>&1; then
-        log_fail "git pull failed"
-        FAILURES+=("git pull")
-        ALL_PASS=false
-        return 1
+    if git merge-base --is-ancestor HEAD "origin/$target_branch" 2>/dev/null; then
+        if ! git checkout "$target_branch" 2>/dev/null; then
+            git checkout -B "$target_branch" "origin/$target_branch" 2>&1
+        fi
+        git merge --ff-only "origin/$target_branch" 2>&1 || true
+    else
+        log_info "HEAD diverged or detached, resetting to origin/$target_branch"
+        git checkout -B "$target_branch" "origin/$target_branch" 2>&1
     fi
     
     log_pass "Worktree updated to $(git rev-parse --short HEAD)"
@@ -119,32 +121,36 @@ run_self_check() {
     fi
     
     log_info "Testing shadow tick..."
-    local shadow_output
+    local shadow_tmp
+    shadow_tmp=$(mktemp)
     local shadow_exit
-    shadow_output=$(cd "$REPO_ROOT" && PYTHONPATH="$REPO_ROOT" python3 -m cluster.control_plane.shadow_runner --machine mini --json 2>&1)
+    (cd "$REPO_ROOT" && PYTHONPATH="$REPO_ROOT" python3 -m cluster.control_plane.shadow_runner --machine mini --json > "$shadow_tmp" 2>&1)
     shadow_exit=$?
-    if [[ $shadow_exit -eq 0 ]] && echo "$shadow_output" | head -1 | grep -q '"timestamp"'; then
+    if [[ $shadow_exit -eq 0 ]] && python3 -c "import json,sys; json.load(open(sys.argv[1]))" "$shadow_tmp" 2>/dev/null; then
         log_pass "shadow tick ran successfully"
     else
         log_fail "shadow tick failed (exit $shadow_exit)"
-        echo "    Output: ${shadow_output:0:300}"
+        echo "    Output: $(head -c 300 "$shadow_tmp")"
         FAILURES+=("shadow-tick")
         ALL_PASS=false
     fi
+    rm -f "$shadow_tmp"
     
     log_info "Testing conductor tick..."
-    local conductor_output
+    local conductor_tmp
+    conductor_tmp=$(mktemp)
     local conductor_exit
-    conductor_output=$(cd "$REPO_ROOT" && PYTHONPATH="$REPO_ROOT" python3 -m cluster.control_plane.conductor --json 2>&1)
+    (cd "$REPO_ROOT" && PYTHONPATH="$REPO_ROOT" python3 -m cluster.control_plane.conductor --json > "$conductor_tmp" 2>&1)
     conductor_exit=$?
-    if [[ $conductor_exit -eq 0 ]] && echo "$conductor_output" | grep -q '"timestamp"'; then
+    if [[ $conductor_exit -eq 0 ]] && python3 -c "import json,sys; json.load(open(sys.argv[1]))" "$conductor_tmp" 2>/dev/null; then
         log_pass "conductor tick ran successfully"
     else
         log_fail "conductor tick failed (exit $conductor_exit)"
-        echo "    Output: ${conductor_output:0:300}"
+        echo "    Output: $(head -c 300 "$conductor_tmp")"
         FAILURES+=("conductor-tick")
         ALL_PASS=false
     fi
+    rm -f "$conductor_tmp"
 }
 
 enable_live_mode() {
