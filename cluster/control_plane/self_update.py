@@ -5,6 +5,9 @@ Each tick, the poller/dispatcher can:
 1. git fetch origin cursor/storypool-all-in-one-47c7
 2. Fast-forward if ahead (never if dirty or tests fail)
 3. Reinstall only if HEAD changed
+4. Re-copy karen module to ~/.local/share/karen/module
+5. Clear __pycache__ directories
+6. Migrate config to enable auto-discovery
 """
 
 from __future__ import annotations
@@ -12,6 +15,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import shutil
 import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
@@ -21,6 +25,7 @@ logger = logging.getLogger(__name__)
 
 BRANCH = "cursor/storypool-all-in-one-47c7"
 INSTALL_DIR = Path(os.environ.get("STORYPOOL_INSTALL_DIR", "~/storypool-install")).expanduser()
+KAREN_MODULE_DIR = Path("~/.local/share/karen/module").expanduser()
 
 
 def get_current_head(repo_dir: Path) -> Optional[str]:
@@ -147,6 +152,125 @@ def run_tests(repo_dir: Path) -> bool:
         return False
 
 
+def clear_pycache(directory: Path) -> int:
+    """Clear all __pycache__ directories and .pyc files.
+    
+    Returns count of items removed.
+    """
+    count = 0
+    if not directory.is_dir():
+        return count
+    
+    for pycache in directory.rglob("__pycache__"):
+        if pycache.is_dir():
+            try:
+                shutil.rmtree(pycache)
+                count += 1
+            except OSError:
+                pass
+
+    for pyc in directory.rglob("*.pyc"):
+        try:
+            pyc.unlink()
+            count += 1
+        except OSError:
+            pass
+
+    return count
+
+
+def copy_karen_module(repo_dir: Path, module_dir: Optional[Path] = None) -> bool:
+    """Copy karen module from repo to installed location.
+    
+    Copies:
+    - cluster/control_plane/local_karen -> module/cluster/control_plane/local_karen
+    - cluster/control_plane/backlog.py -> module/cluster/control_plane/backlog.py
+    - cluster/control_plane/self_update.py -> module/cluster/control_plane/self_update.py
+    - cluster/never_touch.py -> module/cluster/never_touch.py
+    """
+    if module_dir is None:
+        module_dir = KAREN_MODULE_DIR
+    
+    src_karen = repo_dir / "cluster" / "control_plane" / "local_karen"
+    src_backlog = repo_dir / "cluster" / "control_plane" / "backlog.py"
+    src_self_update = repo_dir / "cluster" / "control_plane" / "self_update.py"
+    src_never_touch = repo_dir / "cluster" / "never_touch.py"
+    
+    if not src_karen.is_dir():
+        logger.error("Source karen module not found: %s", src_karen)
+        return False
+    
+    dst_control_plane = module_dir / "cluster" / "control_plane"
+    dst_karen = dst_control_plane / "local_karen"
+    
+    try:
+        dst_control_plane.mkdir(parents=True, exist_ok=True)
+        
+        if dst_karen.exists():
+            shutil.rmtree(dst_karen)
+        shutil.copytree(src_karen, dst_karen)
+        
+        if src_backlog.is_file():
+            shutil.copy2(src_backlog, dst_control_plane / "backlog.py")
+        
+        if src_self_update.is_file():
+            shutil.copy2(src_self_update, dst_control_plane / "self_update.py")
+        
+        if src_never_touch.is_file():
+            shutil.copy2(src_never_touch, module_dir / "cluster" / "never_touch.py")
+        
+        (module_dir / "cluster" / "__init__.py").touch()
+        (dst_control_plane / "__init__.py").touch()
+        
+        clear_pycache(module_dir)
+        
+        logger.info("Copied karen module to %s", module_dir)
+        return True
+    except OSError as e:
+        logger.error("Failed to copy karen module: %s", e)
+        return False
+
+
+def migrate_config() -> bool:
+    """Migrate karen config to enable auto-discovery.
+    
+    Returns True if config was migrated.
+    """
+    try:
+        from cluster.control_plane.local_karen.config import KarenConfig
+        return KarenConfig.migrate_config()
+    except ImportError:
+        pass
+    
+    config_path = Path("~/.config/karen/config.json").expanduser()
+    if not config_path.is_file():
+        return False
+    
+    try:
+        data = json.loads(config_path.read_text())
+    except json.JSONDecodeError:
+        return False
+    
+    migrated = False
+    
+    if "repos" not in data:
+        data["repos"] = "auto"
+        migrated = True
+    elif isinstance(data["repos"], list):
+        if not data["repos"] or len(data["repos"]) <= 1:
+            data["repos"] = "auto"
+            migrated = True
+    elif data["repos"] is None or data["repos"] == "":
+        data["repos"] = "auto"
+        migrated = True
+    
+    if migrated:
+        config_path.write_text(json.dumps(data, indent=2))
+        logger.info("Migrated config: repos set to 'auto'")
+    
+    return migrated
+
+
 def reinstall(repo_dir: Path, machine: str) -> bool:
     """Run the install script for the machine."""
     script = "install-all-mini.sh" if machine == "mini" else "install-all-nucbox.sh"
@@ -172,6 +296,14 @@ def reinstall(repo_dir: Path, machine: str) -> bool:
 def self_update(machine: str = "mini", install_dir: Optional[Path] = None) -> dict:
     """Attempt self-update if safe.
     
+    Steps:
+    1. Fetch and fast-forward git
+    2. Run quick tests
+    3. Re-copy karen module to ~/.local/share/karen/module
+    4. Clear __pycache__ everywhere
+    5. Migrate config to enable auto-discovery
+    6. Run full reinstall script
+    
     Returns dict with update status.
     """
     repo_dir = install_dir or INSTALL_DIR
@@ -181,8 +313,11 @@ def self_update(machine: str = "mini", install_dir: Optional[Path] = None) -> di
         "repo_dir": str(repo_dir),
         "updated": False,
         "reinstalled": False,
+        "module_copied": False,
+        "config_migrated": False,
+        "pycache_cleared": 0,
         "reason": "",
-    }
+    }  # type: dict
     
     if not repo_dir.is_dir():
         result["reason"] = "repo_dir does not exist"
@@ -229,6 +364,15 @@ def self_update(machine: str = "mini", install_dir: Optional[Path] = None) -> di
         result["reason"] = "tests failed after update"
         result["updated"] = False
         return result
+    
+    result["pycache_cleared"] = clear_pycache(repo_dir / "cluster")
+    result["pycache_cleared"] += clear_pycache(KAREN_MODULE_DIR)
+    
+    if copy_karen_module(repo_dir):
+        result["module_copied"] = True
+    
+    if migrate_config():
+        result["config_migrated"] = True
     
     if reinstall(repo_dir, machine):
         result["reinstalled"] = True

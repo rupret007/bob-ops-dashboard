@@ -187,7 +187,10 @@ def run_poll_once(config=None, auto_discover=True, auto_label=True, auto_update=
         auto_update: Whether to self-update from git (default True)
 
     Reads repos from environment or config, or auto-discovers if enabled.
+    Auto-discovery wins over single-repo config (repos=[] or 'auto' triggers discovery).
     """
+    KarenConfig.migrate_config()
+    
     if config is None:
         config = KarenConfig.load()
 
@@ -200,9 +203,11 @@ def run_poll_once(config=None, auto_discover=True, auto_label=True, auto_update=
         try:
             update_result = self_update(machine=machine, install_dir=install_dir)
             if update_result.get("updated"):
-                logger.info("Self-updated: %s -> %s", 
+                logger.info("Self-updated: %s -> %s (module_copied=%s, config_migrated=%s)", 
                            update_result.get("old_head", "?"),
-                           update_result.get("new_head", "?"))
+                           update_result.get("new_head", "?"),
+                           update_result.get("module_copied", False),
+                           update_result.get("config_migrated", False))
             else:
                 logger.debug("No update needed: %s", update_result.get("reason", "unknown"))
         except Exception as e:
@@ -211,12 +216,20 @@ def run_poll_once(config=None, auto_discover=True, auto_label=True, auto_update=
     repos_env = os.environ.get("KAREN_REPOS", "")
     if repos_env:
         repos = [r.strip() for r in repos_env.split(",") if r.strip()]
-    elif auto_discover and BACKLOG_AVAILABLE:
-        logger.info("Auto-discovering repos...")
+    elif auto_discover and BACKLOG_AVAILABLE and config.should_auto_discover():
+        logger.info("Auto-discovering repos (config.repos='%s')...", config.repos)
         repos = discover_repos(owner="rupret007")
         logger.info("Discovered %d repos", len(repos))
+    elif config.get_repos_list():
+        repos = config.get_repos_list()
+        logger.info("Using %d repo(s) from config", len(repos))
     else:
-        repos = ["rupret007/webjam", "rupret007/bob-ops-dashboard"]
+        logger.info("Auto-discovering repos (fallback)...")
+        if BACKLOG_AVAILABLE:
+            repos = discover_repos(owner="rupret007")
+            logger.info("Discovered %d repos", len(repos))
+        else:
+            repos = ["rupret007/webjam", "rupret007/bob-ops-dashboard"]
 
     if auto_label and BACKLOG_AVAILABLE:
         logger.info("Auto-labeling queued PRs...")

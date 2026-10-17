@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import json
 import os
+import shutil
 import subprocess
 import tempfile
 import unittest
@@ -11,6 +13,7 @@ from unittest.mock import patch, MagicMock
 
 from cluster.control_plane.self_update import (
     BRANCH,
+    KAREN_MODULE_DIR,
     get_current_head,
     is_working_tree_dirty,
     fetch_branch,
@@ -19,6 +22,9 @@ from cluster.control_plane.self_update import (
     run_tests,
     reinstall,
     self_update,
+    clear_pycache,
+    copy_karen_module,
+    migrate_config,
 )
 
 
@@ -197,6 +203,131 @@ class TestReinstall(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             result = reinstall(Path(tmpdir), "mini")
             self.assertFalse(result)
+
+
+class TestClearPycache(unittest.TestCase):
+    """Test pycache clearing."""
+
+    def test_clears_pycache_dirs(self):
+        """Should remove __pycache__ directories."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmppath = Path(tmpdir)
+            pycache = tmppath / "subdir" / "__pycache__"
+            pycache.mkdir(parents=True)
+            (pycache / "module.cpython-39.pyc").touch()
+            
+            count = clear_pycache(tmppath)
+            
+            self.assertGreater(count, 0)
+            self.assertFalse(pycache.exists())
+
+    def test_clears_pyc_files(self):
+        """Should remove .pyc files."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmppath = Path(tmpdir)
+            pyc = tmppath / "module.pyc"
+            pyc.touch()
+            
+            count = clear_pycache(tmppath)
+            
+            self.assertEqual(count, 1)
+            self.assertFalse(pyc.exists())
+
+    def test_handles_nonexistent_dir(self):
+        """Should handle nonexistent directory."""
+        count = clear_pycache(Path("/nonexistent/path"))
+        self.assertEqual(count, 0)
+
+
+class TestCopyKarenModule(unittest.TestCase):
+    """Test karen module copying."""
+
+    def test_copies_module_files(self):
+        """Should copy karen module to destination."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmppath = Path(tmpdir)
+            
+            src = tmppath / "repo"
+            src_karen = src / "cluster" / "control_plane" / "local_karen"
+            src_karen.mkdir(parents=True)
+            (src_karen / "__init__.py").write_text("# karen init")
+            (src_karen / "config.py").write_text("# config")
+            (src / "cluster" / "control_plane" / "backlog.py").write_text("# backlog")
+            (src / "cluster" / "control_plane" / "self_update.py").write_text("# self_update")
+            (src / "cluster" / "never_touch.py").write_text("# never_touch")
+            
+            dst = tmppath / "module"
+            
+            result = copy_karen_module(src, dst)
+            
+            self.assertTrue(result)
+            self.assertTrue((dst / "cluster" / "control_plane" / "local_karen" / "config.py").exists())
+            self.assertTrue((dst / "cluster" / "control_plane" / "backlog.py").exists())
+            self.assertTrue((dst / "cluster" / "control_plane" / "self_update.py").exists())
+            self.assertTrue((dst / "cluster" / "never_touch.py").exists())
+            self.assertTrue((dst / "cluster" / "__init__.py").exists())
+
+    def test_handles_missing_source(self):
+        """Should fail if source doesn't exist."""
+        result = copy_karen_module(Path("/nonexistent/repo"))
+        self.assertFalse(result)
+
+
+class TestMigrateConfig(unittest.TestCase):
+    """Test config migration."""
+
+    def test_migrates_empty_repos_list(self):
+        """Should migrate repos: [] to repos: 'auto'."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config_path = Path(tmpdir) / "config.json"
+            config_path.write_text(json.dumps({"repos": []}))
+            
+            with patch("cluster.control_plane.self_update.Path") as mock_path:
+                mock_path.return_value.expanduser.return_value = config_path
+                mock_path.return_value.is_file.return_value = True
+                
+                with patch.dict(os.environ, {"KAREN_CONFIG": str(config_path)}):
+                    result = migrate_config()
+            
+            data = json.loads(config_path.read_text())
+            self.assertEqual(data["repos"], "auto")
+
+    def test_migrates_single_repo_list(self):
+        """Should migrate repos: ['one/repo'] to repos: 'auto'."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config_path = Path(tmpdir) / "config.json"
+            config_path.write_text(json.dumps({"repos": ["rupret007/webjam"]}))
+            
+            with patch.dict(os.environ, {"KAREN_CONFIG": str(config_path)}):
+                result = migrate_config()
+            
+            data = json.loads(config_path.read_text())
+            self.assertEqual(data["repos"], "auto")
+
+    def test_preserves_multi_repo_list(self):
+        """Should convert repos: ['a', 'b'] to comma-separated string."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config_path = Path(tmpdir) / "config.json"
+            config_path.write_text(json.dumps({"repos": ["rupret007/a", "rupret007/b"]}))
+            
+            with patch.dict(os.environ, {"KAREN_CONFIG": str(config_path)}):
+                result = migrate_config()
+            
+            data = json.loads(config_path.read_text())
+            self.assertEqual(data["repos"], "rupret007/a,rupret007/b")
+
+    def test_adds_repos_if_missing(self):
+        """Should add repos: 'auto' if not present."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config_path = Path(tmpdir) / "config.json"
+            config_path.write_text(json.dumps({"codex_host": "nuc"}))
+            
+            with patch.dict(os.environ, {"KAREN_CONFIG": str(config_path)}):
+                result = migrate_config()
+            
+            data = json.loads(config_path.read_text())
+            self.assertEqual(data["repos"], "auto")
+            self.assertEqual(data["codex_host"], "nuc")
 
 
 if __name__ == "__main__":
