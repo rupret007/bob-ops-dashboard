@@ -7,6 +7,7 @@ import json
 import math
 import time
 from usage_collect import collect_machine_snapshot, HOST_LABELS
+from nats.errors import Error as NatsError
 
 PROVIDERS = ('codex', 'gemini', 'cursor', 'claude', 'minimax')
 NUMBERS = ('load1', 'load5', 'mem_used_gb', 'swap_used_gb', 'disk_free_gb',
@@ -48,11 +49,13 @@ class Publisher:
     nc MUST be a dedicated metrics identity, never a LeaseService/worker client.
     Usage callback reads local sources; machine sampling is off the event loop.
     """
-    def __init__(self, nc, host, usage=lambda: {}, machine=collect_machine_snapshot):
+    def __init__(self, nc, host, usage=lambda: {}, machine=collect_machine_snapshot, providers=PROVIDERS):
         if host not in HOST_LABELS:
             raise ValueError('expected mini or nucbox')
         self.nc, self.host, self.usage, self.machine = nc, host, usage, machine
-        self.lanes = {p: 0 for p in PROVIDERS}
+        if any(p not in PROVIDERS for p in providers):
+            raise ValueError("unsupported provider")
+        self.lanes = {p: 0 if p in providers else None for p in PROVIDERS}
         self.lock = asyncio.Lock()
 
     async def emit(self):
@@ -60,8 +63,12 @@ class Publisher:
             machine, usage = await asyncio.gather(asyncio.to_thread(self.machine),
                                                    asyncio.to_thread(self.usage))
             payload = aggregate(self.host, machine, self.lanes, usage)
-            await self.nc.publish('metrics.' + self.host, json.dumps(payload, allow_nan=False).encode())
-            await self.nc.flush(timeout=2)
+            try:
+                await self.nc.publish('metrics.' + self.host, json.dumps(payload, allow_nan=False).encode())
+                await self.nc.flush(timeout=2)
+            except (OSError, asyncio.TimeoutError, NatsError):
+                return False
+            return True
 
     async def periodic(self, interval=2):
         if not 1 <= interval <= 2:
@@ -73,7 +80,7 @@ class Publisher:
 
     @asynccontextmanager
     async def lane(self, provider):
-        if provider not in PROVIDERS:
+        if provider not in PROVIDERS or self.lanes[provider] is None:
             raise ValueError('unsupported lane provider; Grok Bot is conserve-only')
         self.lanes[provider] += 1
         try:

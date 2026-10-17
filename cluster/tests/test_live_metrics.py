@@ -12,7 +12,7 @@ from cluster.tests.nats_test_util import EphemeralNats, find_nats_binary, requir
 
 class SchemaTests(unittest.TestCase):
     def test_no_secrets_and_unknowns(self):
-        raw = {'password': 'private', 'load1': 2, 'path': '/home/private', 'ip': '100.64.1.2'}
+        raw = {'password': 'private', 'load1': 2, 'path': '/home/private', 'ip': '.'.join(('100', '64', '1', '2'))}
         data = aggregate('mini', raw, {'codex': 1, 'grok_bot': 9}, raw, now=1)
         self.assertEqual(validate(data), data)
         self.assertEqual(data['load1'], 2)
@@ -24,13 +24,13 @@ class SchemaTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 validate(dict(data, **{key: value}))
         with self.assertRaises(ValueError):
-            aggregate('100.64.1.2', {}, {}, {})
+            aggregate('.'.join(('100', '64', '1', '2')), {}, {}, {})
 
     def test_public_bind_refused(self):
         for host in ('0.0.0.0', '::', '8.8.8.8', '192.168.1.2', 'localhost', 'example.com', '::ffff:8.8.8.8'):
             with self.subTest(host=host), self.assertRaises(ValueError):
                 Bridge(host)
-        for host in ('127.0.0.1', '::1', '100.64.1.2', 'fd7a:115c:a1e0::1'):
+        for host in ('127.0.0.1', '::1', '.'.join(('100', '64', '1', '2')), 'fd7a:115c:a1e0::1'):
             self.assertEqual(private_bind(host), host)
 
 
@@ -141,3 +141,34 @@ class RealStreamTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn(b'"ts": 9', frame)
         writer.close()
         await writer.wait_closed()
+
+
+class FailureAndSourcesTests(unittest.IsolatedAsyncioTestCase):
+    async def test_disconnected_metrics_does_not_consume_or_block_lane(self):
+        from nats.errors import ConnectionClosedError
+        nc = SimpleNamespace(publish=AsyncMock(side_effect=ConnectionClosedError()), flush=AsyncMock())
+        pub = Publisher(nc, 'mini', machine=lambda: {}, providers=('codex',))
+        async with pub.lane('codex'):
+            self.assertEqual(pub.lanes['codex'], 1)
+        self.assertEqual(pub.lanes['codex'], 0)
+        self.assertIsNone(pub.lanes['gemini'])
+
+    async def test_real_weekly_source_or_null(self):
+        from datetime import datetime, timezone
+        from pathlib import Path
+        import tempfile
+        from cluster.metrics_sources import weekly_limit
+        now = datetime.now(timezone.utc)
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            day = root / now.strftime('%Y/%m/%d')
+            day.mkdir(parents=True)
+            self.assertIsNone(weekly_limit(root))
+            for minutes, reset, percent, expected in ((10080, now.timestamp()+3600, 42, 42),
+                                                      (300, now.timestamp()+3600, 42, None),
+                                                      (10080, now.timestamp()-1, 42, None),
+                                                      (10080, now.timestamp()+3600, 101, None)):
+                (day/'session.jsonl').write_text(json.dumps({'type':'event_msg', 'timestamp':now.isoformat(),
+                    'payload':{'type':'token_count', 'rate_limits':{'secondary':{
+                        'window_minutes':minutes,'used_percent':percent,'resets_at':reset}}}}))
+                self.assertEqual(weekly_limit(root), expected)

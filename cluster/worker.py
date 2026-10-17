@@ -167,6 +167,9 @@ async def run_worker(args: argparse.Namespace) -> None:
     live_metrics = metrics_nc = None
     if getattr(args, "live_metrics", False):
         from functools import partial
+        from urllib.parse import urlsplit
+        if urlsplit(args.nats).username or urlsplit(args.nats).password:
+            raise ValueError("use separate private metrics credentials")
         from usage_collect import default_paths
         from cluster.live_metrics import Publisher
         from cluster.metrics_sources import usage_today
@@ -175,7 +178,8 @@ async def run_worker(args: argparse.Namespace) -> None:
         metrics_nc = await nats.connect(
             args.nats, user=os.environ["BOB_METRICS_PUBLISHER_USER"],
             password=os.environ["BOB_METRICS_PUBLISHER_PASSWORD"], error_cb=quiet_error)
-        live_metrics = Publisher(metrics_nc, args.node_id, partial(usage_today, *default_paths()))
+        live_metrics = Publisher(metrics_nc, args.node_id, partial(usage_today, *default_paths()),
+                                 providers=(args.metrics_provider,))
     interval = 10.0 if args.light else 2.0
     metrics_task = asyncio.create_task(
         live_metrics.periodic() if live_metrics else

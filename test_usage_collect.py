@@ -429,9 +429,6 @@ class UsageMachinesPanelTests(unittest.TestCase):
         self.assertIn("reasoning unknown", html)
 
 
-if __name__ == "__main__":
-    unittest.main()
-
 
 class MissingTotalTokensTests(unittest.TestCase):
     def test_missing_total_poisoned_daily_and_merged_sum(self):
@@ -456,3 +453,21 @@ class MissingTotalTokensTests(unittest.TestCase):
 
     def test_explicit_zero_is_preserved(self):
         self.assertEqual((TokenTotals(total_tokens=0) + TokenTotals(total_tokens=0)).total_tokens, 0)
+
+
+class GeminiMissingMeasurementsTests(unittest.TestCase):
+    def test_labeled_tokens_count_once_and_missing_stays_unknown(self):
+        self.assertEqual(parse_gemini_spend_line('2026-10-16 12:00:00 in=2 out=3 $0.50'), ('2026-10-16', 5, .5))
+        self.assertEqual(parse_gemini_spend_line('2026-10-16 12:00:00 model'), ('2026-10-16', None, None))
+
+    def test_trailing_missing_total_invalidates_previous_total(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / 'session.jsonl'
+            path.write_text('\n'.join(json.dumps({'type':'event_msg', 'payload': {
+                'type':'token_count', 'info':{'total_token_usage':usage}}})
+                for usage in ({'total_tokens':42}, {})))
+            self.assertIsNone(last_codex_token_usage(path).total_tokens)
+
+
+if __name__ == "__main__":
+    unittest.main()

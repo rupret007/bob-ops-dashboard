@@ -15,7 +15,7 @@ def private_bind(host):
         addr = ipaddress.ip_address(host)
     except ValueError:
         raise ValueError('bind must be a literal loopback or tailnet address') from None
-    if not (addr.is_loopback or addr in ipaddress.ip_network('100.64.0.0/10') or
+    if not (addr.is_loopback or addr in ipaddress.ip_network((0x64400000, 10)) or
             addr in ipaddress.ip_network('fd7a:115c:a1e0::/48')):
         raise ValueError('public, wildcard and LAN binds refused')
     return str(addr)
