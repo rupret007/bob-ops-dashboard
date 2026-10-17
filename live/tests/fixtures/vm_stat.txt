@@ -1,0 +1,6 @@
+Mach virtual page size: 4096 bytes
+Pages free:                            4000.
+Pages active:                           120000.
+Pages inactive:                         30000.
+Pages wired down:                       80000.
+Pages occupied by compressor:           5000.

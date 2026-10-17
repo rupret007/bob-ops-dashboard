@@ -1,0 +1,105 @@
+#!/usr/bin/env bash
+# Drop-in front for ~/bin/nuc-verify: enqueue via NATS when possible, else legacy SSH.
+set -euo pipefail
+
+ORIG="${HOME}/bin/nuc-verify"
+REPO_ROOT=""
+# Tailnet address is private: set BOB_NATS_URL or put the URL in
+# ~/.config/bob-cluster/nats-url (never commit it).
+NATS_URL="${BOB_NATS_URL:-$(cat "${HOME}/.config/bob-cluster/nats-url" 2>/dev/null || true)}"
+NATS_TIMEOUT=2
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --repo-root)
+      REPO_ROOT="$2"
+      shift 2
+      ;;
+    *)
+      break
+      ;;
+  esac
+done
+
+if [[ -z "${REPO_ROOT}" ]]; then
+  REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+fi
+
+fallback() {
+  if [[ -x "${ORIG}" ]]; then
+    exec "${ORIG}" "$@"
+  fi
+  echo "NATS queue unavailable and ${ORIG} not found" >&2
+  exit 1
+}
+
+nats_reachable() {
+  python3 - <<PY
+import socket, sys
+url = "${NATS_URL}"
+host = url.split("://", 1)[-1].split("@")[-1].split(":")[0]
+port = int(url.rsplit(":", 1)[-1].split("/")[0])
+s = socket.socket()
+s.settimeout(${NATS_TIMEOUT})
+try:
+    s.connect((host, port))
+except OSError:
+    sys.exit(1)
+finally:
+    s.close()
+PY
+}
+
+cd "${REPO_ROOT}"
+if ! git diff --quiet || ! git diff --cached --quiet; then
+  echo "Worktree dirty; falling back to SSH nuc-verify" >&2
+  fallback "$@"
+fi
+
+REF="$(git rev-parse HEAD)"
+git fetch origin --quiet 2>/dev/null || true
+if ! git branch -r --contains "${REF}" 2>/dev/null | grep -q .; then
+  echo "HEAD ${REF} not on origin; falling back to SSH nuc-verify" >&2
+  fallback "$@"
+fi
+
+if [[ -z "${NATS_URL}" ]]; then
+  echo "BOB_NATS_URL not configured; falling back to SSH nuc-verify" >&2
+  fallback "$@"
+fi
+
+if ! nats_reachable; then
+  echo "NATS not reachable at ${NATS_URL}; falling back to SSH nuc-verify" >&2
+  fallback "$@"
+fi
+
+REMOTE="$(git remote get-url origin 2>/dev/null || true)"
+REPO_SLUG=""
+if [[ "${REMOTE}" =~ github.com[:/]([^/]+/[^/.]+) ]]; then
+  REPO_SLUG="${BASH_REMATCH[1]%.git}"
+else
+  echo "Cannot determine GitHub repo slug; falling back" >&2
+  fallback "$@"
+fi
+
+JOB_ID="nuc-verify-$(date +%Y%m%d%H%M%S)-$(git rev-parse --short HEAD)"
+SPEC=$(python3 - <<PY
+import json
+print(json.dumps({
+  "v": 1,
+  "id": "${JOB_ID}",
+  "class": "test",
+  "repo": "${REPO_SLUG}",
+  "ref": "${REF}",
+  "cmd": ["python3", "-m", "unittest", "discover", "-s", "cluster/tests", "-v"],
+  "timeout_s": 1800,
+  "load_ceiling": 8.0,
+}))
+PY
+)
+
+export BOB_NATS_URL="${NATS_URL}"
+export BOB_NATS_USER="${BOB_NATS_USER:-nucbox}"
+python3 "${SCRIPT_DIR}/submit.py" --spec "${SPEC}" --wait --wait-timeout 3600
+exit $?
