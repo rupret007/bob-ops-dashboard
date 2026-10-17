@@ -1,0 +1,121 @@
+{
+  "now": 2000000000,
+  "records": [
+    {
+      "kind": "pr",
+      "repo": "owner/repo",
+      "provider": "codex",
+      "pr": 1,
+      "state": "closed",
+      "opened_at": 1999996400,
+      "merged_at": 1999998200,
+      "first_push_green": true
+    },
+    {
+      "kind": "pr",
+      "repo": "owner/repo",
+      "provider": "codex",
+      "pr": 2,
+      "state": "open",
+      "opened_at": 1999975000,
+      "head_changed_at": 1999978400,
+      "first_push_green": false
+    },
+    {
+      "kind": "pr",
+      "repo": "owner/repo",
+      "provider": "codex",
+      "pr": 3,
+      "state": "closed",
+      "opened_at": 1999700000,
+      "merged_at": 1999800000,
+      "reverted_at": 1999900000
+    },
+    {
+      "kind": "review",
+      "repo": "owner/repo",
+      "provider": "codex",
+      "pr": 1,
+      "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "verdict": "PASS",
+      "round": 1,
+      "at": 1999998100
+    },
+    {
+      "kind": "review",
+      "repo": "owner/repo",
+      "provider": "codex",
+      "pr": 2,
+      "sha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "verdict": "FAIL",
+      "round": 1,
+      "at": 1999998000
+    },
+    {
+      "kind": "review",
+      "repo": "owner/repo",
+      "provider": "codex",
+      "pr": 2,
+      "sha": "cccccccccccccccccccccccccccccccccccccccc",
+      "verdict": "PASS",
+      "round": 2,
+      "at": 1999998200
+    },
+    {
+      "kind": "comparison",
+      "repo": "owner/repo",
+      "provider": "codex",
+      "at": 1999999000,
+      "adjudicated": true,
+      "karen_blockers": [
+        "one",
+        "two"
+      ],
+      "gemini_blockers": [
+        "one",
+        "three"
+      ]
+    },
+    {
+      "kind": "spend",
+      "repo": "owner/repo",
+      "provider": "codex",
+      "at": 1999999000,
+      "tokens": 200,
+      "usd": 10
+    },
+    {
+      "kind": "run",
+      "repo": "owner/repo",
+      "provider": "codex",
+      "at": 1999999000,
+      "usable_output": false,
+      "empty_gemini": true,
+      "refused": true
+    },
+    {
+      "kind": "run",
+      "repo": "owner/repo",
+      "provider": "codex",
+      "at": 1999998000,
+      "usable_output": true,
+      "empty_gemini": false,
+      "refused": false
+    },
+    {
+      "kind": "idle",
+      "host": "mini",
+      "start": 1999996400,
+      "end": 2000000000,
+      "idle_slots": 2
+    },
+    {
+      "kind": "limit",
+      "provider": "codex",
+      "repo": "owner/repo",
+      "at": 1999998000,
+      "percent": 42,
+      "reset_at": 2000001000
+    }
+  ]
+}

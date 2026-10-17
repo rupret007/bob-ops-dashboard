@@ -45,10 +45,11 @@ def _optional_token_int(raw: dict[str, Any], key: str) -> int | None:
     if key not in raw:
         return None
     val = raw.get(key)
-    if val is None:
+    if val is None or isinstance(val, bool):
         return None
     try:
-        return int(val)
+        n = int(val)
+        return n if n >= 0 else None
     except (TypeError, ValueError):
         return None
 
@@ -61,7 +62,7 @@ def _sum_optional_tokens(a: int | None, b: int | None) -> int | None:
 
 @dataclass(frozen=True)
 class TokenTotals:
-    total_tokens: int = 0
+    total_tokens: int | None = None
     cached_tokens: int | None = None
     output_tokens: int | None = None
     reasoning_tokens: int | None = None
@@ -76,7 +77,7 @@ class TokenTotals:
 
     def __add__(self, other: TokenTotals) -> TokenTotals:
         return TokenTotals(
-            total_tokens=self.total_tokens + other.total_tokens,
+            total_tokens=_sum_optional_tokens(self.total_tokens, other.total_tokens),
             cached_tokens=_sum_optional_tokens(self.cached_tokens, other.cached_tokens),
             output_tokens=_sum_optional_tokens(self.output_tokens, other.output_tokens),
             reasoning_tokens=_sum_optional_tokens(
@@ -120,7 +121,7 @@ def _day_from_timestamp(value: str) -> str:
 
 
 def last_codex_token_usage(session_path: Path) -> TokenTotals | None:
-    if session_path.name == "auth.json" or "auth" in session_path.name.lower():
+    if session_path.suffix != ".jsonl" or session_path.is_symlink() or "auth" in session_path.name.lower():
         return None
     last: dict[str, Any] | None = None
     try:
@@ -133,21 +134,20 @@ def last_codex_token_usage(session_path: Path) -> TokenTotals | None:
                     row = json.loads(line)
                 except json.JSONDecodeError:
                     continue
-                if row.get("type") != "event_msg":
+                if not isinstance(row, dict) or row.get("type") != "event_msg":
                     continue
                 payload = row.get("payload") or {}
-                if payload.get("type") != "token_count":
+                if not isinstance(payload, dict) or payload.get("type") != "token_count":
                     continue
                 info = payload.get("info") or {}
-                usage = info.get("total_token_usage") or {}
-                if usage:
-                    last = usage
+                usage = info.get("total_token_usage") or {} if isinstance(info, dict) else {}
+                last = usage if isinstance(usage, dict) else {}
     except OSError:
         return None
-    if not last:
+    if last is None:
         return None
     return TokenTotals(
-        total_tokens=int(last.get("total_tokens") or 0),
+        total_tokens=_optional_token_int(last, "total_tokens"),
         cached_tokens=_optional_token_int(last, "cached_input_tokens"),
         output_tokens=_optional_token_int(last, "output_tokens"),
         reasoning_tokens=_optional_token_int(last, "reasoning_output_tokens"),
@@ -164,6 +164,8 @@ def collect_codex_for_day(sessions_root: Path, day: str) -> TokenTotals:
         if fp.name.startswith(".") or "auth" in fp.name.lower():
             continue
         row = last_codex_token_usage(fp)
+        if row is None:
+            row = TokenTotals()
         if row:
             # No observations is distinct from an observation with unknown fields.
             total = row if total is None else total + row
@@ -194,20 +196,15 @@ def collect_codex_by_day(
     return out
 
 
-def _parse_gemini_numbers(rest: str) -> tuple[int, float]:
-    tokens = 0
-    usd = 0.0
-    m_usd = _USD_RE.search(rest)
-    if m_usd:
-        usd = float(m_usd.group("usd"))
-        rest = rest[: m_usd.start()].strip()
-    nums = [int(x) for x in re.findall(r"\b\d+\b", rest)]
-    if len(nums) >= 2:
-        tokens = nums[-2] + nums[-1]
-    elif len(nums) == 1:
-        tokens = nums[0]
-    for m in _INT_FIELDS.finditer(rest):
-        tokens += int(m.group("n"))
+def _parse_gemini_numbers(rest: str) -> tuple[int | None, float | None]:
+    cost = re.search(r"\$(\d+(?:\.\d+)?)\s*$", rest)
+    usd = float(cost[1]) if cost else None
+    labels = dict(re.findall(r"\b(in|out|tokens)=(\d+)\b", rest))
+    tokens = int(labels['tokens']) if 'tokens' in labels else (
+        int(labels['in']) + int(labels['out']) if 'in' in labels and 'out' in labels else None)
+    positional = re.fullmatch(r"\S+\s+\S+\s+(\d+)\s+(\d+)\s+\$\d+(?:\.\d+)?", rest)
+    if positional and not labels:
+        tokens = int(positional[1]) + int(positional[2])
     return tokens, usd
 
 
@@ -240,8 +237,8 @@ def aggregate_gemini_spend(path: Path) -> dict[str, dict[str, float | int]]:
             continue
         day, tokens, usd = parsed
         bucket = out.setdefault(day, {"tokens": 0, "usd": 0.0})
-        bucket["tokens"] = int(bucket["tokens"]) + int(tokens)
-        bucket["usd"] = round(float(bucket["usd"]) + float(usd), 4)
+        bucket["tokens"] = _sum_optional_tokens(bucket["tokens"], tokens)
+        bucket["usd"] = round(bucket["usd"] + usd, 4) if bucket["usd"] is not None and usd is not None else None
     return out
 
 
@@ -348,9 +345,13 @@ def tokens_for_merged_prs(
         return {"count": 0, "tokens_total": None, "tokens_per_pr": None}
     tokens_total = 0
     if gemini_day:
-        tokens_total += int(gemini_day.get("tokens") or 0)
+        if gemini_day.get("tokens") is None:
+            return {"count": merged_count, "tokens_total": None, "tokens_per_pr": None}
+        tokens_total += int(gemini_day["tokens"])
     if codex_day:
-        tokens_total += int(codex_day.total_tokens)
+        if codex_day.total_tokens is None:
+            return {"count": merged_count, "tokens_total": None, "tokens_per_pr": None}
+        tokens_total += codex_day.total_tokens
     for _prov, n in (provider_usage or {}).items():
         tokens_total += int(n) * 0  # lane rows are counts only; tokens from spend/codex
     if tokens_total <= 0:
@@ -404,11 +405,11 @@ def collect_host_snapshot(
             merged_count,
             lane_day,
             gemini_day,
-            codex_totals if codex_totals.total_tokens else None,
+            codex_totals,
         )
         row: dict[str, Any] = {
             "date": day,
-            "codex": codex_totals.to_dict() if codex_totals.total_tokens else None,
+            "codex": codex_totals.to_dict(),
             "gemini": gemini_day,
             # No direct source exists; lanes never consume this tracked budget.
             "grok_bot": {"status": "unknown", "source": None},
@@ -451,11 +452,9 @@ def _merge_gemini(
 ) -> dict[str, float | int] | None:
     if not a and not b:
         return None
-    tokens = int((a or {}).get("tokens") or 0) + int((b or {}).get("tokens") or 0)
-    usd = round(float((a or {}).get("usd") or 0) + float((b or {}).get("usd") or 0), 4)
-    if tokens <= 0 and usd <= 0:
-        return None
-    return {"tokens": tokens, "usd": usd}
+    observed = [x for x in (a, b) if x is not None]
+    return {k: (sum(x[k] for x in observed) if all(x.get(k) is not None for x in observed) else None)
+            for k in ('tokens', 'usd')}
 
 
 def _merge_lanes(
@@ -545,13 +544,13 @@ def merge_host_snapshots(snapshots: list[dict[str, Any]]) -> dict[str, Any]:
             for metrics in codex_hosts.values():
                 if isinstance(metrics, dict):
                     observed = TokenTotals(
-                        total_tokens=int(metrics.get("total_tokens") or 0),
+                        total_tokens=_optional_token_int(metrics, "total_tokens"),
                         cached_tokens=_optional_token_int(metrics, "cached_tokens"),
                         output_tokens=_optional_token_int(metrics, "output_tokens"),
                         reasoning_tokens=_optional_token_int(metrics, "reasoning_tokens"),
                     )
                     combined = observed if combined is None else combined + observed
-            codex_combined = combined.to_dict() if combined and combined.total_tokens else None
+            codex_combined = combined.to_dict() if combined else None
         days_out.append(
             {
                 "date": day,
@@ -615,7 +614,7 @@ def load_host_partials(root: Path) -> list[dict[str, Any]]:
     return out
 
 
-def load_merged_usage(root: Path) -> dict[str, Any]:
+def _load_merged_usage(root: Path) -> dict[str, Any]:
     partials = load_host_partials(root)
     base_path = root / "usage-machines.json"
     base: dict[str, Any] = {}
@@ -676,6 +675,19 @@ def main(argv: list[str] | None = None) -> int:
     else:
         print(text)
     return 0
+
+
+
+def load_merged_usage(root: Path) -> dict[str, Any]:
+    from scorecards import normalize_scorecards
+    data = _load_merged_usage(root)
+    path = root / "scorecards.json"
+    if path.is_file() and not path.is_symlink():
+        try:
+            data["scorecards"] = normalize_scorecards(json.loads(path.read_text(encoding="utf-8")))
+        except (OSError, ValueError, TypeError, AttributeError):
+            data["scorecards"] = normalize_scorecards(None)
+    return data
 
 
 if __name__ == "__main__":

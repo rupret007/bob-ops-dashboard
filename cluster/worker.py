@@ -74,6 +74,8 @@ async def handle_message(
     active_jobs: dict[str, int],
     sem: asyncio.Semaphore,
     dry_run: bool,
+    live_metrics=None,
+    provider: str | None = None,
 ) -> None:
     delivery = msg.metadata.num_delivered if msg.metadata else 1
     spec, decision = parse_job_payload(msg.data, supported)
@@ -96,6 +98,9 @@ async def handle_message(
 
     async with sem:
         active_jobs["n"] = active_jobs.get("n", 0) + 1
+        if live_metrics is not None:
+            live_metrics.lanes[provider] += 1
+            await live_metrics.emit()
         hb_stop = asyncio.Event()
 
         async def heartbeat() -> None:
@@ -141,6 +146,9 @@ async def handle_message(
             hb_stop.set()
             hb_task.cancel()
             active_jobs["n"] = max(0, active_jobs.get("n", 1) - 1)
+            if live_metrics is not None:
+                live_metrics.lanes[provider] -= 1
+                await live_metrics.emit()
 
 
 async def run_worker(args: argparse.Namespace) -> None:
@@ -156,18 +164,44 @@ async def run_worker(args: argparse.Namespace) -> None:
 
     active_jobs: dict[str, int] = {"n": 0}
     sem = asyncio.Semaphore(args.max_parallel)
+    live_metrics = metrics_nc = None
+    queue_state = {"depth": None}
+    if getattr(args, "live_metrics", False):
+        from urllib.parse import urlsplit
+        if urlsplit(args.nats).username or urlsplit(args.nats).password:
+            raise ValueError("use separate private metrics credentials")
+        from usage_collect import default_paths
+        from cluster.live_metrics import Publisher
+        from cluster.metrics_sources import usage_today
+        async def quiet_error(_error):
+            pass
+        metrics_nc = await nats.connect(
+            args.nats, user=os.environ["BOB_METRICS_PUBLISHER_USER"],
+            password=os.environ["BOB_METRICS_PUBLISHER_PASSWORD"], error_cb=quiet_error)
+        source_paths = default_paths()
+        def measured_usage():
+            usage = usage_today(*source_paths)
+            usage["queue_depth"] = queue_state["depth"]
+            return usage
+        live_metrics = Publisher(metrics_nc, args.node_id, measured_usage,
+                                 providers=(args.metrics_provider,))
     interval = 10.0 if args.light else 2.0
     metrics_task = asyncio.create_task(
+        live_metrics.periodic() if live_metrics else
         metrics_loop(nc, args.node_id, active_jobs, args.light, interval, args.also_post)
     )
 
     try:
         while True:
             msgs = await fetch_or_empty(psub, args.max_parallel, timeout=5)
+            if live_metrics is not None:
+                from cluster.live_metrics import delivery_queue_depth
+                queue_state["depth"] = delivery_queue_depth(msgs)
             tasks = [
                 asyncio.create_task(
                     handle_message(
-                        m, js, nc, supported, args.max_parallel, active_jobs, sem, args.dry_run
+                        m, js, nc, supported, args.max_parallel, active_jobs, sem, args.dry_run,
+                        live_metrics, getattr(args, "metrics_provider", None)
                     )
                 )
                 for m in msgs
@@ -176,6 +210,9 @@ async def run_worker(args: argparse.Namespace) -> None:
                 await asyncio.gather(*tasks)
     finally:
         metrics_task.cancel()
+        await asyncio.gather(metrics_task, return_exceptions=True)
+        if metrics_nc:
+            await metrics_nc.close()
         await nc.close()
 
 
@@ -189,7 +226,11 @@ def main() -> int:
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--light", action="store_true", help="Low-overhead metrics (Mini)")
     parser.add_argument("--also-post", help="Also POST node/v1 metrics to this URL")
+    parser.add_argument("--live-metrics", action="store_true", help="Disabled by default; Karen gate required")
+    parser.add_argument("--metrics-provider", choices=("codex", "gemini", "cursor", "claude", "minimax"))
     args = parser.parse_args()
+    if args.live_metrics and (not args.metrics_provider or args.node_id not in ("mini", "nucbox")):
+        parser.error("live metrics requires mini/nucbox and an explicit provider")
     try:
         asyncio.run(run_worker(args))
     except KeyboardInterrupt:

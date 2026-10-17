@@ -2902,6 +2902,7 @@ def _usage_gb_or_unknown(value: Any) -> str:
 
 def normalize_usage_machines(raw: Any) -> dict[str, Any]:
     """Public-safe usage snapshot for status.json."""
+    from scorecards import normalize_scorecards
     if not isinstance(raw, dict):
         return {"v": USAGE_MACHINES_V, "days": [], "generated_at": "", "timezone": BOARD_TZ}
     days_out: list[dict[str, Any]] = []
@@ -2940,6 +2941,7 @@ def normalize_usage_machines(raw: Any) -> dict[str, Any]:
         "generated_at": str(raw.get("generated_at") or "").strip(),
         "timezone": str(raw.get("timezone") or BOARD_TZ),
         "hosts": list(raw.get("hosts") or []),
+        "scorecards": normalize_scorecards(raw.get("scorecards")),
         "days": days_out,
     }
 
@@ -2949,16 +2951,16 @@ def usage_machines_chart_bars(days: list[dict[str, Any]]) -> list[dict[str, Any]
     vals: list[int] = []
     for row in days:
         codex = row.get("codex") if isinstance(row.get("codex"), dict) else {}
-        vals.append(int(codex.get("total_tokens") or 0))
-    peak = max(vals) if vals else 0
+        vals.append(codex.get("total_tokens"))
+    peak = max((v for v in vals if v is not None), default=0)
     out: list[dict[str, Any]] = []
     for row, val in zip(days, vals):
-        pct = 0 if peak <= 0 else min(100, max(4, int(100 * val / peak)))
+        pct = 0 if val is None or peak <= 0 else min(100, max(4, int(100 * val / peak)))
         out.append({"date": row.get("date"), "value": val, "height_pct": pct})
     return out
 
 
-def usage_machines_html(data: Any) -> str:
+def _usage_machines_html(data: Any) -> str:
     """Server-rendered Usage & machines panel (aggregate numbers only)."""
     snap = normalize_usage_machines(data)
     days = snap.get("days") or []
@@ -2977,7 +2979,7 @@ def usage_machines_html(data: Any) -> str:
     bar_bits: list[str] = []
     for bar in bars:
         label = html_lib.escape(str(bar.get("date") or "")[5:])
-        tip = html_lib.escape(_usage_millions(bar.get("value")))
+        tip = html_lib.escape(_usage_millions_or_unknown(bar.get("value")))
         height = int(bar.get("height_pct") or 0)
         bar_bits.append(
             f'<div class="usage-bar" title="{label} Codex {tip}">'
@@ -2993,7 +2995,7 @@ def usage_machines_html(data: Any) -> str:
     if codex:
         rows.append(
             "<tr><th>Codex</th><td>"
-            + html_lib.escape(_usage_millions(codex.get("total_tokens")))
+            + html_lib.escape(_usage_millions_or_unknown(codex.get("total_tokens")))
             + " total · "
             + html_lib.escape(_usage_millions_or_unknown(codex.get("output_tokens")))
             + " out · cached "
@@ -3007,9 +3009,9 @@ def usage_machines_html(data: Any) -> str:
     if gemini:
         rows.append(
             "<tr><th>Gemini</th><td>"
-            + html_lib.escape(_usage_millions(gemini.get("tokens")))
+            + html_lib.escape(_usage_millions_or_unknown(gemini.get("tokens")))
             + " tok · $"
-            + html_lib.escape(f"{float(gemini.get('usd') or 0):.2f}")
+            + html_lib.escape(f"{float(gemini['usd']):.2f}" if gemini.get("usd") is not None else "unknown")
             + "</td></tr>"
         )
     else:
@@ -3281,3 +3283,8 @@ def load_gemini_lane_rows(path: Any, *, now: float | None = None) -> list[dict[s
     if not rows:
         return gemini_lane_rows_unknown("malformed")
     return rows
+
+
+def usage_machines_html(data: Any) -> str:
+    from scorecards import scorecards_html
+    return _usage_machines_html(data) + scorecards_html((data or {}).get("scorecards") if isinstance(data, dict) else None)
