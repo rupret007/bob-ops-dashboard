@@ -10,8 +10,14 @@ Public aggregate history for the **Usage** tab on the Bob Ops Dashboard. The col
 | Gemini tokens & USD | `~/lane-wt/logs/gemini-spend.txt` |
 | Lane counts | `~/lane-wt/logs/provider-usage.tsv` (timestamp, task, lane, model, tier) |
 | Cursor / Claude / MiniMax | `~/lane-wt/logs/{provider}-spend.txt` when present; otherwise **no data** (never estimated) |
+| Grok Bot (conserve-only) | No direct usage source on these hosts; **unknown**, never zero or estimated |
 | Machine load / swap / disk | Local host metrics at collect time |
 | Merged PRs | `gh api search/issues` with `org:rupret007 is:pr is:merged merged:YYYY-MM-DD` |
+
+Grok Bot usage is a **CONSERVE-ONLY tracked budget**; lanes never consume it.
+Each collected and merged daily row emits `grok_bot: {"status":"unknown","source":null}`.
+The panel shows **Grok Bot (conserve-only)** with **unknown** and the note
+"no usage source; conserve-only", including when there is no usage history.
 
 Host label: `USAGE_MACHINE_LABEL=mini|nucbox`, else Darwin → `mini`, Linux/WSL → `nucbox`.
 

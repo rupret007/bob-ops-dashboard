@@ -385,6 +385,8 @@ def collect_host_snapshot(
             "date": day,
             "codex": codex_totals.to_dict() if codex_totals.total_tokens else None,
             "gemini": gemini_day,
+            # No direct source exists; lanes never consume this tracked budget.
+            "grok_bot": {"status": "unknown", "source": None},
             "lanes": lane_day or None,
             "machines": {host: machine},
             "merged_prs": merged,
@@ -530,6 +532,7 @@ def merge_host_snapshots(snapshots: list[dict[str, Any]]) -> dict[str, Any]:
                 "codex": codex_combined,
                 "codex_by_host": codex_hosts or None,
                 "gemini": raw.get("gemini"),
+                "grok_bot": {"status": "unknown", "source": None},
                 "lanes": raw.get("lanes"),
                 "cursor": raw.get("cursor"),
                 "claude": raw.get("claude"),

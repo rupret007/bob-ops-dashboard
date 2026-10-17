@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import json
 import unittest
+import tempfile
 from pathlib import Path
 
 from usage_collect import (
@@ -100,6 +101,21 @@ class UsageCollectBaselineTests(unittest.TestCase):
         self.assertEqual(697_000_000, day["codex"]["total_tokens"])
         self.assertEqual(697_000_000, day["codex_by_host"]["mini"]["total_tokens"])
 
+    def test_grok_bot_without_source_is_unknown_not_zero(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            snapshots = [
+                collect_host_snapshot(
+                    host=host, sessions_root=root / "sessions", lane_logs=root / "logs",
+                    days=["2026-10-16"], collect_merged=False,
+                )
+                for host in ("mini", "nucbox")
+            ]
+        for snapshot in [*snapshots, merge_host_snapshots(snapshots)]:
+            grok = snapshot["days"][0]["grok_bot"]
+            self.assertEqual({"status": "unknown", "source": None}, grok)
+            self.assertNotEqual(0, grok["status"])
+
     def test_parse_gemini_line_rejects_garbage(self):
         self.assertIsNone(parse_gemini_spend_line("not a log line"))
 
@@ -130,6 +146,17 @@ class UsageMachinesPanelTests(unittest.TestCase):
         self.assertIn("no data", html)
         self.assertIn("Codex", html)
         self.assertNotIn("/home/", html)
+
+    def test_grok_bot_placeholder_with_legacy_or_empty_history(self):
+        from board_meta import normalize_usage_machines, usage_machines_html
+
+        for blob in ({}, {"days": [{"date": "2026-10-16"}]}):
+            normalized = normalize_usage_machines(blob)
+            for day in normalized["days"]:
+                self.assertEqual({"status": "unknown", "source": None}, day["grok_bot"])
+            html = usage_machines_html(normalized)
+            self.assertIn("Grok Bot (conserve-only)", html)
+            self.assertIn("unknown — no usage source; conserve-only", html)
 
     def test_committed_baseline_json_matches_codex(self):
         path = ROOT / "usage-machines.json"

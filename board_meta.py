@@ -2908,6 +2908,7 @@ def normalize_usage_machines(raw: Any) -> dict[str, Any]:
                 "cursor": row.get("cursor") if isinstance(row.get("cursor"), dict) else None,
                 "claude": row.get("claude") if isinstance(row.get("claude"), dict) else None,
                 "minimax": row.get("minimax") if isinstance(row.get("minimax"), dict) else None,
+                "grok_bot": {"status": "unknown", "source": None},
                 "machines": row.get("machines")
                 if isinstance(row.get("machines"), dict)
                 else None,
@@ -2946,11 +2947,16 @@ def usage_machines_html(data: Any) -> str:
     """Server-rendered Usage & machines panel (aggregate numbers only)."""
     snap = normalize_usage_machines(data)
     days = snap.get("days") or []
+    grok_row = (
+        "<tr><th>Grok Bot (conserve-only)</th>"
+        "<td class='muted'>unknown — no usage source; conserve-only</td></tr>"
+    )
     if not days:
         return (
             '<div class="usage-panel" id="usage-machines-panel">'
             '<p class="usage-empty">No usage history yet. Run '
-            "<code>python3 usage_collect.py</code> on mini and nucbox.</p></div>"
+            "<code>python3 usage_collect.py</code> on mini and nucbox.</p>"
+            + "<table class='usage-table'><tbody>" + grok_row + "</tbody></table></div>"
         )
     bars = usage_machines_chart_bars(days)
     bar_bits: list[str] = []
@@ -3003,6 +3009,7 @@ def usage_machines_html(data: Any) -> str:
                 f"<tr><th>{html_lib.escape(label)}</th>"
                 "<td class='muted'>no data</td></tr>"
             )
+    rows.append(grok_row)
     if merged.get("count"):
         tpp = merged.get("tokens_per_pr")
         tpp_s = html_lib.escape(_usage_millions(tpp)) if tpp else "no data"
