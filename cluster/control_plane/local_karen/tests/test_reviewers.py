@@ -6,7 +6,7 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, patch, call
 
 from cluster.control_plane.local_karen.checks import PRInfo
 from cluster.control_plane.local_karen.config import KarenConfig
@@ -168,11 +168,22 @@ class TestCodexReviewer(unittest.TestCase):
     """Tests for Codex reviewer."""
 
     def test_not_available_when_cli_missing(self):
-        with patch("subprocess.run") as mock_run:
-            mock_run.return_value = MagicMock(returncode=1)
-            reviewer = CodexReviewer()
-            config = KarenConfig()
+        """Codex unavailable when neither local nor SSH works."""
+        reviewer = CodexReviewer()
+        config = KarenConfig(codex_host="nuc")
 
+        with patch.object(reviewer, "_codex_available_locally", return_value=False):
+            with patch.object(reviewer, "_can_ssh_to_host", return_value=False):
+                ok, reason = reviewer.is_available(config)
+                self.assertFalse(ok)
+                self.assertIn("SSH", reason)
+
+    def test_not_available_when_local_only_missing(self):
+        """Codex unavailable when no host set and local missing."""
+        reviewer = CodexReviewer()
+        config = KarenConfig(codex_host="local")
+
+        with patch.object(reviewer, "_codex_available_locally", return_value=False):
             ok, reason = reviewer.is_available(config)
             self.assertFalse(ok)
             self.assertIn("not found", reason)
@@ -342,6 +353,127 @@ class TestReviewChain(unittest.TestCase):
 
                         self.assertEqual(result.verdict, ReviewVerdict.FAIL)
                         self.assertEqual(result.reviewer, "minimax")
+
+
+class TestCodexArgs(unittest.TestCase):
+    """Tests for exact Codex CLI arguments."""
+
+    def test_build_codex_args_low_effort(self):
+        """Verify codex args use -c model_reasoning_effort, not --effort."""
+        reviewer = CodexReviewer()
+        args = reviewer._build_codex_args("Test prompt", "low")
+
+        self.assertEqual(args[0], "codex")
+        self.assertEqual(args[1], "exec")
+
+        self.assertIn("-c", args)
+        c_index = args.index("-c")
+        self.assertEqual(args[c_index + 1], 'model_reasoning_effort="low"')
+
+        self.assertIn("--sandbox", args)
+        sandbox_index = args.index("--sandbox")
+        self.assertEqual(args[sandbox_index + 1], "read-only")
+
+        self.assertIn("--skip-git-repo-check", args)
+
+        self.assertIn("-o", args)
+
+        self.assertNotIn("--effort", args)
+        self.assertNotIn("--quiet", args)
+        self.assertNotIn("--no-full-auto", args)
+
+        self.assertEqual(args[-1], "Test prompt")
+
+    def test_build_codex_args_high_effort(self):
+        """Verify high effort uses correct model_reasoning_effort value."""
+        reviewer = CodexReviewer()
+        args = reviewer._build_codex_args("Security review prompt", "high")
+
+        c_index = args.index("-c")
+        self.assertEqual(args[c_index + 1], 'model_reasoning_effort="high"')
+
+    def test_codex_args_exact_order(self):
+        """Verify the exact argument structure for codex exec."""
+        reviewer = CodexReviewer()
+        prompt = "Review this code"
+        args = reviewer._build_codex_args(prompt, "low")
+
+        expected = [
+            "codex", "exec",
+            "-c", 'model_reasoning_effort="low"',
+            "--sandbox", "read-only",
+            "--skip-git-repo-check",
+            "-o",
+            prompt,
+        ]
+        self.assertEqual(args, expected)
+
+
+class TestGeminiConfig(unittest.TestCase):
+    """Tests for Gemini configuration."""
+
+    def test_default_gemini_model(self):
+        """Verify default Gemini model is gemini-2.5-flash."""
+        reviewer = GeminiReviewer()
+        config = KarenConfig()
+        model = reviewer._get_model(config)
+        self.assertEqual(model, "gemini-2.5-flash")
+
+    def test_custom_gemini_model(self):
+        """Verify custom Gemini model can be configured."""
+        reviewer = GeminiReviewer()
+        config = KarenConfig(gemini_model="gemini-2.5-pro")
+        model = reviewer._get_model(config)
+        self.assertEqual(model, "gemini-2.5-pro")
+
+    def test_gemini_skips_without_key(self):
+        """Verify Gemini skips without making HTTP call when no key."""
+        tmpdir = tempfile.mkdtemp()
+        config = KarenConfig(
+            gemini_api_key_file=f"{tmpdir}/nonexistent.key",
+        )
+
+        reviewer = GeminiReviewer()
+        ok, reason = reviewer.is_available(config)
+
+        self.assertFalse(ok)
+        self.assertIn("SKIP", reason)
+        self.assertIn("no Gemini key", reason)
+
+
+class TestCodexSSH(unittest.TestCase):
+    """Tests for Codex SSH to remote host."""
+
+    def test_uses_ssh_when_host_configured(self):
+        """Verify SSH is used when codex_host is set and reachable."""
+        reviewer = CodexReviewer()
+
+        with patch.object(reviewer, "_can_ssh_to_host", return_value=True):
+            with patch.object(reviewer, "_codex_available_locally", return_value=False):
+                config = KarenConfig(codex_host="nuc")
+                ok, reason = reviewer.is_available(config)
+                self.assertTrue(ok)
+
+    def test_falls_back_to_local_when_ssh_fails(self):
+        """Verify fallback to local codex when SSH fails."""
+        reviewer = CodexReviewer()
+
+        with patch.object(reviewer, "_can_ssh_to_host", return_value=False):
+            with patch.object(reviewer, "_codex_available_locally", return_value=True):
+                config = KarenConfig(codex_host="nuc")
+                ok, reason = reviewer.is_available(config)
+                self.assertTrue(ok)
+
+    def test_fails_when_neither_ssh_nor_local(self):
+        """Verify failure when neither SSH nor local codex available."""
+        reviewer = CodexReviewer()
+
+        with patch.object(reviewer, "_can_ssh_to_host", return_value=False):
+            with patch.object(reviewer, "_codex_available_locally", return_value=False):
+                config = KarenConfig(codex_host="nuc")
+                ok, reason = reviewer.is_available(config)
+                self.assertFalse(ok)
+                self.assertIn("SSH", reason)
 
 
 if __name__ == "__main__":

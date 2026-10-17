@@ -36,6 +36,7 @@ class KarenConfig:
     codex_weekly_cap_pct: float = CODEX_WEEKLY_BUDGET_PCT
 
     gemini_api_key_file: str = "~/.config/storypool/gemini.key"
+    gemini_model: str = "gemini-2.5-flash"
     minimax_api_key_file: str = "~/.config/storypool/minimax.key"
 
     claude_enabled: bool = False
