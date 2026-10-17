@@ -6,6 +6,7 @@ import argparse
 import hmac
 import ipaddress
 import json
+import re
 import os
 import socket
 import subprocess
@@ -293,6 +294,44 @@ def _now_wall(clock):
     return datetime.now(CT)
 
 
+CLUSTER_OFFLINE_SEC = 60
+MAX_CLUSTER_NODES = 64
+_CLUSTER_NODE_RE = re.compile(r"[a-z][a-z0-9-]{1,30}")
+_CLUSTER_PROVIDERS = ("codex", "cursor", "claude", "gemini", "minimax")
+
+
+def clean_cluster_caps(p) -> dict | None:
+    """Whitelist a caps/v1 heartbeat; anything unexpected is dropped, never echoed."""
+    if not isinstance(p, dict) or p.get("v") != "caps/v1":
+        return None
+    node = p.get("node")
+    if not isinstance(node, str) or not _CLUSTER_NODE_RE.fullmatch(node):
+        return None
+    role = p.get("role") if p.get("role") in ("member", "guest") else "member"
+
+    def num(v, hi):
+        return max(0, min(hi, v)) if isinstance(v, (int, float)) and not isinstance(v, bool) else 0
+
+    llm = {}
+    for prov in _CLUSTER_PROVIDERS:
+        st = (p.get("llm") or {}).get(prov) if isinstance(p.get("llm"), dict) else None
+        if not isinstance(st, dict) or role == "guest":
+            continue
+        row = {"installed": st.get("installed") is True, "logged_in": st.get("logged_in") is True}
+        q = st.get("quota")
+        if isinstance(q, dict) and "remaining_pct" in q:
+            row["remaining_pct"] = num(q.get("remaining_pct"), 100)
+        llm[prov] = row
+    caps = [c for c in (p.get("caps") or []) if isinstance(c, str) and re.fullmatch(r"[a-z][a-z0-9.]{2,40}", c)]
+    return {
+        "node": node, "role": role,
+        "os": str(p.get("os") or "")[:12], "arch": str(p.get("arch") or "")[:12],
+        "cpu_count": int(num(p.get("cpu_count"), 1024)), "mem_total_gb": num(p.get("mem_total_gb"), 4096),
+        "load1": num(p.get("load1"), 1000), "max_lanes": int(num(p.get("max_lanes"), 64)),
+        "active": int(num(p.get("active"), 64)), "llm": llm, "caps": caps[:16],
+    }
+
+
 class LiveStore:
     def __init__(self, clock=time.time, nodes_config=None, needs_manual=None):
         self.clock = clock
@@ -306,6 +345,27 @@ class LiveStore:
         self.speed_history: deque = deque(maxlen=RING_SECONDS // 2)
         self.merge_history: deque = deque(maxlen=RING_SECONDS // 2)
         self._seen_gates: set[tuple] = set()
+        self.cluster_caps: dict[str, dict] = {}
+
+    def ingest_cluster(self, payload: dict) -> bool:
+        """Store a caps/v1 heartbeat from the mesh (via cluster/caps_bridge.py)."""
+        row = clean_cluster_caps(payload)
+        if row is None:
+            return False
+        with self._lock:
+            row["_received_at"] = self.clock()
+            if row["node"] not in self.cluster_caps and len(self.cluster_caps) >= MAX_CLUSTER_NODES:
+                return False
+            self.cluster_caps[row["node"]] = row
+        return True
+
+    def _cluster_out(self) -> list[dict]:
+        out = []
+        for node, r in sorted(self.cluster_caps.items()):
+            age = self.clock() - r.get("_received_at", 0)
+            out.append({**{k: v for k, v in r.items() if not k.startswith("_")},
+                        "online": age <= CLUSTER_OFFLINE_SEC, "age_s": round(age, 1)})
+        return out
 
     def ingest_node(self, payload: dict):
         nid = payload.get("node_id")
@@ -456,6 +516,7 @@ class LiveStore:
                     )[:30],
                     "routines": routines,
                     "ai_capacity": ai_all,
+                    "cluster_caps": self._cluster_out(),
                     "formula": {
                         "description": "Speed index 0-100",
                         "weights": speed["weights"],
@@ -815,7 +876,7 @@ class AggregatorServer:
                 if not self._check_token():
                     self._reject(401)
                     return
-                if path != "/api/node":
+                if path not in ("/api/node", "/api/cluster"):
                     self.send_response(404)
                     self.end_headers()
                     return
@@ -837,6 +898,14 @@ class AggregatorServer:
                     payload = json.loads(raw.decode("utf-8"))
                 except (ValueError, OSError, RecursionError):
                     self._reject(400)
+                    return
+                if path == "/api/cluster":
+                    if not isinstance(payload, dict) or not server.store.ingest_cluster(payload):
+                        self._reject(400)
+                        return
+                    server._notify_sse()
+                    self.send_response(204)
+                    self.end_headers()
                     return
                 if not isinstance(payload, dict) or payload.get("version") != "node/v1":
                     self._reject(400)

@@ -71,7 +71,8 @@ svg{display:block;max-width:100%}.mc small{display:block;color:var(--mu);margin-
 <div id="gauges"></div>
 <section id="needs"><h2>Needs you <span id="needsCount">0</span></h2><div id="needsList"></div></section>
 <section id="health"><h2>Health</h2><div class="mach" id="machines"></div>
-<h2 style="margin-top:12px">AI capacity</h2><div id="aiCap"></div></section>
+<h2 style="margin-top:12px">AI capacity</h2><div id="aiCap"></div>
+<h2 style="margin-top:12px">Cluster LLM capacity</h2><div id="clusterCap"></div></section>
 <section id="live"><h2>Live work</h2><div id="lanes"></div></section>
 <section id="pipe"><h2>Pipeline</h2><div class="pipe" id="pipeCounts"></div><div id="pipeRows"></div></section>
 <section id="thru"><h2>Throughput</h2><svg id="thruSpark" viewBox="0 0 300 80" width="100%" height="80"></svg><div id="thruRows"></div></section>
@@ -295,6 +296,18 @@ function render(state){
     return `<div class="row"><div class="m">${esc(a.provider)}<div class="bar ${unk?'unknown':''}">${unk?'':`<i style="width:${pct}%;background:${pct<10?'var(--bad)':'var(--ok)'}"></i>`}</div></div>
       <span class="${unk?'unk':pct<10?'bad':'ok'}">${unk?'unknown':pct+'%'} · ${esc(a.reset_ct||'')}</span></div>`;
   }).join(''):'<div class="row"><div class="m">No AI capacity reports</div></div>';
+
+  const cc=document.getElementById('clusterCap');
+  const cnodes=state.cluster_caps||[];
+  cc.innerHTML=cnodes.length?cnodes.map(n=>{
+    const llm=Object.entries(n.llm||{}).filter(([,v])=>v.installed).map(([k,v])=>{
+      const q=v.remaining_pct==null?'':' '+Math.round(v.remaining_pct)+'%';
+      return `<span class="pill ${v.logged_in?'ok':'warn'}">${esc(k)}${v.logged_in?'':' (signed out)'}${esc(q)}</span>`;
+    }).join(' ')||'<small class="unk">no LLM sign-ins</small>';
+    return `<div class="row"><div class="m"><b>${esc(n.node)}</b> <small>${esc(n.role)} · ${esc(n.os)} · lanes ${esc(n.active)}/${esc(n.max_lanes)} · load ${esc(n.load1)}</small>
+      <div>${llm}</div><small class="unk">${esc((n.caps||[]).join(', '))}</small></div>
+      <span class="${n.online?'ok':'bad'}">${n.online?'online':'offline'}</span></div>`;
+  }).join(''):'<div class="row"><div class="m">No cluster heartbeats yet</div></div>';
 
   const lanesEl=document.getElementById('lanes');
   const nodeById=Object.create(null);
