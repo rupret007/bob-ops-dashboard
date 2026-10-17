@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-10-16T23:07:27.132944-05:00",
-  "generated_at_display": "Fri Oct 16, 2026 \u00b7 11:07 PM CDT",
+  "generated_at": "2026-10-16T23:20:01.893955-05:00",
+  "generated_at_display": "Fri Oct 16, 2026 \u00b7 11:20 PM CDT",
   "timezone": "America/Chicago",
   "owner": "rupret007",
   "dashboard": "bob-ops-dashboard",
@@ -46,8 +46,8 @@
           "url": "https://github.com/rupret007/webjam",
           "repo_url": "https://github.com/rupret007/webjam",
           "private": false,
-          "status": "yellow",
-          "chip": "Yellow",
+          "status": "green",
+          "chip": "Green",
           "default_branch": "master",
           "tip_sha": "95bb2c0",
           "tip_date": "2026-10-17T03:53:28Z",
@@ -59,12 +59,12 @@
           "pr_listing_complete": true,
           "agent_url": null,
           "ci": {
-            "name": "WebJam CI",
-            "conclusion": "in_progress",
+            "name": "Cross-network acceptance",
+            "conclusion": "success",
             "branch": "master",
             "sha": "95bb2c0",
             "created": "2026-10-17T03:53:31Z",
-            "html_url": "https://github.com/rupret007/webjam/actions/runs/39000505302"
+            "html_url": "https://github.com/rupret007/webjam/actions/runs/39000505300"
           },
           "release": "v0.29.0",
           "release_sha": "7aa74be",
@@ -495,8 +495,8 @@
           "status": "green",
           "chip": "Green",
           "default_branch": "main",
-          "tip_sha": "cc69172",
-          "tip_date": "2026-10-17T04:05:12Z",
+          "tip_sha": "369ce9c",
+          "tip_date": "2026-10-17T04:14:45Z",
           "open_prs": 0,
           "open_pr_url": null,
           "open_pr_number": null,
@@ -504,7 +504,14 @@
           "open_pr_stack": [],
           "pr_listing_complete": true,
           "agent_url": null,
-          "ci": null,
+          "ci": {
+            "name": "Cluster tests",
+            "conclusion": "success",
+            "branch": "main",
+            "sha": "369ce9c",
+            "created": "2026-10-17T04:14:48Z",
+            "html_url": "https://github.com/rupret007/bob-ops-dashboard/actions/runs/39001835980"
+          },
           "release": null,
           "release_sha": null,
           "release_url": null,
@@ -657,22 +664,22 @@
           "status": "yellow",
           "chip": "Yellow",
           "default_branch": "main",
-          "tip_sha": "dea0b83",
-          "tip_date": "2026-10-14T20:11:08Z",
-          "open_prs": 1,
-          "open_pr_url": "https://github.com/rupret007/Andrea_NanoBot/pull/51",
-          "open_pr_number": 51,
+          "tip_sha": "b77b65e",
+          "tip_date": "2026-10-17T04:16:05Z",
+          "open_prs": 0,
+          "open_pr_url": null,
+          "open_pr_number": null,
           "open_pr_draft": false,
           "open_pr_stack": [],
           "pr_listing_complete": true,
           "agent_url": null,
           "ci": {
-            "name": "CI",
-            "conclusion": "success",
+            "name": "AGI Layer CI",
+            "conclusion": "in_progress",
             "branch": "main",
-            "sha": "dea0b83",
-            "created": "2026-10-14T20:11:12Z",
-            "html_url": "https://github.com/rupret007/Andrea_NanoBot/actions/runs/38629912202"
+            "sha": "b77b65e",
+            "created": "2026-10-17T04:16:08Z",
+            "html_url": "https://github.com/rupret007/Andrea_NanoBot/actions/runs/39001924631"
           },
           "release": null,
           "release_sha": null,
@@ -880,7 +887,7 @@
     "barker"
   ],
   "publish_notes": "Public board -- no secrets or customer paths. Private repositories stay high-level; AI Music Vault stays private-content-boundary only.",
-  "refresh_started_ms": 1792210013657,
+  "refresh_started_ms": 1792210773883,
   "agents_source": "file:stale->unknown",
   "agents": [
     {
@@ -1026,7 +1033,7 @@
     }
   ],
   "llm_work_now_freshness": {
-    "generated_at": "2026-10-16 23:07 CT",
+    "generated_at": "2026-10-16 23:20 CT",
     "warn_ttl_sec": 1200,
     "warnings": [],
     "ok": true
