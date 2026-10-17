@@ -11,6 +11,7 @@ import sys
 import time
 
 from cluster.spec import SpecError, job_subject, validate_job_spec
+from cluster.worker_logic import idle_timeout_exceptions
 
 
 def load_token(user: str, token_file: str) -> str:
@@ -41,23 +42,32 @@ async def publish_job(nc_url: str, user: str, token: str, spec: dict) -> None:
     print(f"enqueued {subj}")
 
 
+async def wait_result_from_sub(sub, job_id: str, timeout: float) -> dict | None:
+    """Wait for a results message matching job_id; idle per-iteration timeouts do not end the wait."""
+    deadline = time.monotonic() + timeout
+    idle_timeout = idle_timeout_exceptions()
+    while True:
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            return None
+        try:
+            msg = await sub.next_msg(timeout=min(5.0, remaining))
+        except idle_timeout:
+            continue
+        data = json.loads(msg.data.decode("utf-8"))
+        if data.get("id") == job_id:
+            return data
+
+
 async def wait_result(nc_url: str, user: str, token: str, job_id: str, timeout: float) -> dict | None:
     import nats
 
     nc = await nats.connect(nc_url, user=user, password=token)
     sub = await nc.subscribe(f"results.{job_id}")
-    deadline = time.time() + timeout
     try:
-        while time.time() < deadline:
-            msg = await sub.next_msg(timeout=min(5.0, deadline - time.time()))
-            data = json.loads(msg.data.decode("utf-8"))
-            if data.get("id") == job_id:
-                return data
-    except asyncio.TimeoutError:
-        return None
+        return await wait_result_from_sub(sub, job_id, timeout)
     finally:
         await nc.close()
-    return None
 
 
 def main() -> int:
