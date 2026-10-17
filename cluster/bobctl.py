@@ -40,6 +40,7 @@ def add_hub_args(ap: argparse.ArgumentParser) -> None:
     ap.add_argument("--store-dir", default=str(Path.home() / ".local/state/bob-cluster/js"))
     ap.add_argument("--pidfile", default=str(CFG / "nats-server.pid"))
     ap.add_argument("--port", type=int, default=4222)
+    ap.add_argument("--http", default="127.0.0.1:8232", help="monitoring bind (loopback only)")
     ap.add_argument("--live", action="store_true",
                     help="reload the running nats-server after changes (rollout only)")
 
@@ -52,7 +53,9 @@ def hub_from_args(args):
     else:
         def reload() -> None:
             print("note: not live; rendered config only (rollout pending)", file=sys.stderr)
-    return Hub(Path(args.config_dir), Path(args.conf_out), args.store_dir, reload, port=args.port)
+    if not args.http.startswith("127.0.0.1:"):
+        raise SystemExit("--http must stay on 127.0.0.1")
+    return Hub(Path(args.config_dir), Path(args.conf_out), args.store_dir, reload, port=args.port, http=args.http)
 
 
 def hub_url(args) -> str:
