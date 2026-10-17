@@ -147,6 +147,36 @@ class TestExecutionSecurity(unittest.TestCase):
                 run.assert_not_called()
                 self.assertEqual(marker.read_text(), "keep")
 
+    def test_job_workdir_rejects_root_alias_directly(self):
+        (self.root / "alias").symlink_to(self.root, target_is_directory=True)
+        with self.assertRaisesRegex(SpecError, "must not alias the jobs root"):
+            job_exec.job_workdir("alias")
+        # A root-aliasing symlink must also never reach rmtree or git.
+        with patch.object(job_exec.shutil, "rmtree") as delete, patch.object(job_exec.subprocess, "run") as run:
+            with self.assertRaisesRegex(SpecError, "must not alias the jobs root"):
+                job_exec.prepare_worktree(valid_spec(id="alias"), False)
+            delete.assert_not_called()
+            run.assert_not_called()
+
+    def test_job_workdir_rejects_preplanted_symlink_directly(self):
+        outside = self.root.parent / "outside"
+        outside.mkdir()
+        sibling = self.root / "sibling"
+        sibling.mkdir()
+        (self.root / "escape").symlink_to(outside, target_is_directory=True)
+        (self.root / "sibling-alias").symlink_to(sibling, target_is_directory=True)
+        (self.root / "dangling").symlink_to(self.root / "not-there", target_is_directory=True)
+        for job_id in ("escape", "sibling-alias", "dangling"):
+            with self.subTest(job_id=job_id):
+                with self.assertRaisesRegex(SpecError, "must not be a symlink"):
+                    job_exec.job_workdir(job_id)
+                with patch.object(job_exec.shutil, "rmtree") as delete, \
+                        patch.object(job_exec.subprocess, "run") as run:
+                    with self.assertRaisesRegex(SpecError, "must not be a symlink"):
+                        job_exec.prepare_worktree(valid_spec(id=job_id), False)
+                    delete.assert_not_called()
+                    run.assert_not_called()
+
     def test_existing_job_cleanup_and_git_option_terminators(self):
         wd = self.root / "job-1"
         wd.mkdir()
