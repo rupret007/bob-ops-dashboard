@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-10-17T12:36:35.045065-05:00",
-  "generated_at_display": "Sat Oct 17, 2026 \u00b7 12:36 PM CDT",
+  "generated_at": "2026-10-17T12:51:42.492993-05:00",
+  "generated_at_display": "Sat Oct 17, 2026 \u00b7 12:51 PM CDT",
   "timezone": "America/Chicago",
   "owner": "rupret007",
   "dashboard": "bob-ops-dashboard",
@@ -298,13 +298,13 @@
           "default_branch": "main",
           "tip_sha": "76b7bc8",
           "tip_date": "2026-10-17T09:14:30Z",
-          "open_prs": 0,
-          "open_pr_url": null,
-          "open_pr_number": null,
+          "open_prs": 1,
+          "open_pr_url": "https://github.com/rupret007/Turdanoid/pull/88",
+          "open_pr_number": 88,
           "open_pr_draft": false,
           "open_pr_stack": [],
           "pr_listing_complete": true,
-          "agent_url": null,
+          "agent_url": "https://cursor.com/agents/bc-61d5fce3-5c7c-5e61-953d-bf055f389dd0",
           "ci": {
             "name": "CI",
             "conclusion": "failure",
@@ -495,8 +495,8 @@
           "status": "green",
           "chip": "Green",
           "default_branch": "main",
-          "tip_sha": "5850682",
-          "tip_date": "2026-10-17T17:21:50Z",
+          "tip_sha": "a91de03",
+          "tip_date": "2026-10-17T17:36:47Z",
           "open_prs": 0,
           "open_pr_url": null,
           "open_pr_number": null,
@@ -900,7 +900,7 @@
     "barker"
   ],
   "publish_notes": "Public board -- no secrets or customer paths. Private repositories stay high-level; AI Music Vault stays private-content-boundary only.",
-  "refresh_started_ms": 1792258569933,
+  "refresh_started_ms": 1792259472434,
   "agents_source": "file:stale->unknown",
   "agents": [
     {
@@ -946,7 +946,17 @@
       "checked_at": null
     }
   ],
-  "cloud_agents": [],
+  "cloud_agents": [
+    {
+      "id": "bc-61d5fce3-5c7c-5e61-953d-bf055f389dd0",
+      "name": "PR #88",
+      "state": "unknown",
+      "detail": "fix(css): lift Clr toggle above menu buttons on small screens",
+      "url": "https://cursor.com/agents/bc-61d5fce3-5c7c-5e61-953d-bf055f389dd0",
+      "pr_url": "https://github.com/rupret007/Turdanoid/pull/88",
+      "checked_at": null
+    }
+  ],
   "llm_work": [
     {
       "id": "codex",
@@ -1071,7 +1081,7 @@
     }
   ],
   "llm_work_now_freshness": {
-    "generated_at": "2026-10-17 12:36 CT",
+    "generated_at": "2026-10-17 12:51 CT",
     "warn_ttl_sec": 1200,
     "warnings": [],
     "ok": true
@@ -1102,7 +1112,7 @@
     ],
     "scorecards": {
       "v": "scorecards/v1",
-      "generated_at": "2026-10-17T17:36:36.088302+00:00",
+      "generated_at": "2026-10-17T17:51:43.663166+00:00",
       "windows": {
         "24h": {
           "providers": {
