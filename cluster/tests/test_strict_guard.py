@@ -6,6 +6,8 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+import yaml
+
 from cluster.tests.nats_test_util import require_or_skip
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -18,7 +20,39 @@ PINNED_DEFAULT_REQUIRE = [
     "cluster.tests.test_idle_timeout.TestNatsDependentSkipGuard.test_non_idle_errors_runs_when_nats_available",
 ]
 
-_WORKFLOW_STRICT_RUN_LINE = "run: python3 -m cluster.tests.run_strict"
+# Exact cluster job steps for .github/workflows/cluster-tests.yml (BaseLoader strings).
+_PINNED_NATS_INSTALL_RUN = (
+    "set -euo pipefail\n"
+    'NAT_DIR="${RUNNER_TEMP}/nats-bin"\n'
+    'mkdir -p "${NAT_DIR}"\n'
+    'bash cluster/install-nats.sh --ci "${NAT_DIR}"\n'
+    'echo "${NAT_DIR}" >> "${GITHUB_PATH}"\n'
+)
+PINNED_CLUSTER_STEPS = [
+    {
+        "name": "Checkout",
+        "uses": "actions/checkout@v4",
+        "with": {"persist-credentials": "false"},
+    },
+    {
+        "name": "Install Python dependencies",
+        "run": "pip install -r cluster/requirements.txt",
+    },
+    {
+        "name": "Install nats-server",
+        "run": _PINNED_NATS_INSTALL_RUN,
+    },
+    {
+        "name": "Run strict guard unit tests",
+        "env": {"PYTHONPATH": ".", "BOB_REQUIRE_NATS": "1"},
+        "run": "python3 -m unittest -v cluster.tests.test_strict_guard",
+    },
+    {
+        "name": "Run cluster unit tests",
+        "env": {"PYTHONPATH": ".", "BOB_REQUIRE_NATS": "1"},
+        "run": "python3 -m cluster.tests.run_strict",
+    },
+]
 
 
 def _flatten_tests(suite):
@@ -217,22 +251,53 @@ class TestStrictGuard(unittest.TestCase):
             )
 
     def test_workflow_file_contents(self):
-        wf = _REPO_ROOT / ".github" / "workflows" / "cluster-tests.yml"
-        content = wf.read_text()
-        self.assertIn('BOB_REQUIRE_NATS: "1"', content)
-        self.assertNotIn("unittest discover", content)
+        wf_path = _REPO_ROOT / ".github" / "workflows" / "cluster-tests.yml"
+        content = wf_path.read_text()
+        # BaseLoader keeps keys like "on" as strings (SafeLoader turns on -> True).
+        data = yaml.load(content, Loader=yaml.BaseLoader)
+        self.assertIsInstance(data, dict)
 
-        strict_lines = [
+        jobs = data.get("jobs")
+        self.assertIsInstance(jobs, dict)
+        self.assertEqual(list(jobs.keys()), ["cluster"])
+
+        job = jobs["cluster"]
+        self.assertIsInstance(job, dict)
+        self.assertEqual(job.get("runs-on"), "ubuntu-latest")
+        self.assertNotIn("continue-on-error", job)
+        self.assertNotIn("if", job)
+
+        steps = job.get("steps")
+        self.assertIsInstance(steps, list)
+        self.assertEqual(len(steps), len(PINNED_CLUSTER_STEPS))
+        for i, (got, want) in enumerate(zip(steps, PINNED_CLUSTER_STEPS)):
+            self.assertIsInstance(got, dict, f"step {i}")
+            self.assertNotIn("continue-on-error", got, f"step {i} continue-on-error")
+            self.assertNotIn("if", got, f"step {i} if")
+            self.assertEqual(got, want, f"step {i} mismatch")
+
+        # Text-level belts: no discover, no swallowed exit, no require override.
+        self.assertNotIn("unittest discover", content)
+        run_strict_lines = [
             line for line in content.splitlines() if "cluster.tests.run_strict" in line
         ]
+        self.assertEqual(len(run_strict_lines), 1, run_strict_lines)
         self.assertEqual(
-            len(strict_lines),
-            1,
-            f"expected exactly one run_strict line, got {strict_lines!r}",
+            run_strict_lines[0].strip(),
+            "run: python3 -m cluster.tests.run_strict",
         )
-        self.assertEqual(strict_lines[0].strip(), _WORKFLOW_STRICT_RUN_LINE)
-        self.assertNotIn("--require", strict_lines[0])
-        self.assertNotIn("||", strict_lines[0])
+        self.assertNotIn("--require", run_strict_lines[0])
+        self.assertNotIn("||", run_strict_lines[0])
+        guard_lines = [
+            line
+            for line in content.splitlines()
+            if "cluster.tests.test_strict_guard" in line
+        ]
+        self.assertEqual(len(guard_lines), 1, guard_lines)
+        self.assertEqual(
+            guard_lines[0].strip(),
+            "run: python3 -m unittest -v cluster.tests.test_strict_guard",
+        )
 
     def test_zero_tests_run_fails(self):
         empty = Path(self.tmp) / "empty_start"

@@ -24,6 +24,11 @@ jobs:
           mkdir -p "${NAT_DIR}"
           bash cluster/install-nats.sh --ci "${NAT_DIR}"
           echo "${NAT_DIR}" >> "${GITHUB_PATH}"
+      - name: Run strict guard unit tests
+        env:
+          PYTHONPATH: .
+          BOB_REQUIRE_NATS: "1"
+        run: python3 -m unittest -v cluster.tests.test_strict_guard
       - name: Run cluster unit tests
         env:
           PYTHONPATH: .
