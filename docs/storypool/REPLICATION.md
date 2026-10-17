@@ -14,7 +14,7 @@ Deliver a versioned manifest, platform prerequisites, local configuration wizard
 
 | Component per person | Required behavior | Completion evidence |
 | --- | --- | --- |
-| Worker | Local execution sandbox, resource limits, pause switch, queue adapter; donated jobs isolated from personal services | Synthetic job completes and cancellation works without accessing private files |
+| Worker | Local execution sandbox, resource limits, pause switch, queue adapter; friends' (other people's) jobs run in a rootless podman sandbox with **no** keys or credentials available; donated jobs isolated from personal services | Synthetic job completes and cancellation works without accessing private files |
 | Chat assistant | Private conversations, memory, retrieval, and model selection; local model or person's own approved API access | Owner can chat; another tenant cannot retrieve history or memory |
 | Andrea-style messaging bridge | Owner's messaging identity, local inbound context, draft preview, approval-gated send adapter | Synthetic draft reaches review; unapproved send is rejected |
 | Email-drafting assistant | Owner-authorized mailbox integration, minimum scopes, private draft store; send capability behind the local approval gate | Draft can be reviewed without sending; wrong-owner approval fails |
@@ -24,7 +24,9 @@ Deliver a versioned manifest, platform prerequisites, local configuration wizard
 
 ## Isolation model
 
-Use a separate private service boundary per person: OS account or dedicated machine, local storage and search indexes, encryption keys, browser session, and backup policy. Run donated work in a separate sandbox with no mounts of the assistant's data or secret store. Containers alone do not protect private data from the machine's administrator; a dedicated trusted machine is the stronger option.
+Use a separate private service boundary per person: OS account or dedicated machine, local storage and search indexes, encryption keys, browser session, and backup policy. Friends' (other people's) donated jobs run in a rootless podman sandbox with **no** keys or credentials available and no mounts of the assistant's data or secret store. Other donated work uses a separate sandbox with the same no-mount rule. Containers alone do not protect private data from the machine's administrator; a dedicated trusted machine is the stronger option.
+
+Joining the shared pool is via a **Tailscale share** of the queue node, with an ACL limited to **port 4222 (NATS) only**—no SSH, dashboards, or other ports on the operator's network.
 
 At the shared broker, assign separate NATS accounts to tenants and a separate pool account. NATS accounts provide isolated subject spaces; cross-account sharing requires explicit exports/imports. Subject prefixes alone are not the tenant boundary. Apply narrow per-component publish/subscribe permissions and per-tenant storage/connection quotas. Never give members system/operator identities or unrestricted wildcards. These choices build on [NATS accounts](https://docs.nats.io/learn/security/accounts-and-multitenancy) and [subject authorization](https://docs.nats.io/learn/security/authorization).
 
@@ -87,7 +89,7 @@ Safe donation **types for this architecture**, subject to their actual licenses/
 - Local models whose licenses permit the intended workload and sharing arrangement.
 - CPU/GPU compute for approved shareable tasks, without access to personal subscriptions or data.
 
-These categories are not blanket provider approval. [Anthropic commercial terms](https://www.anthropic.com/legal/commercial-terms) permit powering customer-facing products but include restrictions, including on resale. [xAI enterprise terms](https://x.ai/legal/terms-of-service-enterprise) govern API/business use separately from consumer access. Check the applicable account agreement, permitted users, redistribution/resale, automation, regions, workload, and rate limits before enabling a provider. Disable an integration whose permission is unclear; use local compute or a reviewed API arrangement instead. Grok Bot also has [separate terms](https://x.ai/legal/grok-bot-terms); neither API access nor a subscription proves Bot entitlement or a spendable Bot balance.
+These categories are not blanket provider approval. [Anthropic commercial terms](https://www.anthropic.com/legal/commercial-terms) permit powering customer-facing products but include restrictions, including on resale. [xAI enterprise terms](https://x.ai/legal/terms-of-service-enterprise) govern API/business use separately from consumer access. Check the applicable account agreement, permitted users, redistribution/resale, automation, regions, workload, and rate limits before enabling a provider. Disable an integration whose permission is unclear; use local compute or a reviewed API arrangement instead. **Grok Bot terms are unverified** (the `x.ai/legal/grok-bot-terms` URL returned HTTP 403 during this research and was not opened).
 
 ## Grok Bot budget
 
@@ -123,7 +125,7 @@ No milestone completion is claimed by this documentation. Pool rollout is gated 
 - What exact applications, versions, bridge behavior, and dashboard capabilities define parity with his entire current setup?
 - Which platforms and email providers are supported first, and what reduced capability is acceptable without a Mac/iPhone?
 - Who operates the shared broker, issues/revokes public identities, and verifies tenant-isolation evidence without accessing private data?
-- Who owns the HIGH LeaseService fix and the publish-only protocol review? What tracked issue/evidence will establish closure?
+- Who owns the HIGH LeaseService lease-reply fix ([bob-ops-dashboard #76](https://github.com/rupret007/bob-ops-dashboard/pull/76)) and the publish-only protocol review? The bug stays **open (HIGH)** until #76 merges; what evidence will establish closure?
 - Which workloads are explicitly shareable, which donor/API arrangements have been reviewed, and who sets resource/spending ceilings?
 - Which local approval UX and identity verification will each send adapter use? How will ambiguous delivery be reconciled?
 - Is there an authoritative, read-only Grok Bot usage source, who may read it, and what units/window does it report? Until answered, keep all quantities unknown and all lanes excluded.
@@ -141,6 +143,5 @@ Only provider/documentation URLs opened during this research are listed. Terms a
 - [Anthropic: Commercial Terms of Service](https://www.anthropic.com/legal/commercial-terms)
 - [xAI: Consumer Terms of Service](https://x.ai/legal/terms-of-service)
 - [xAI: Enterprise Terms of Service](https://x.ai/legal/terms-of-service-enterprise)
-- [xAI: Grok Bot Terms](https://x.ai/legal/grok-bot-terms)
 
-Repository evidence inspected: `cluster/LANES.md`, `cluster/lanes.py`, `cluster/lanes_perms.py`, and the Grok status probe in `probe-agents-status.sh`. The HIGH severity/open status is a task-supplied constraint; no issue number or closure is invented here.
+Repository evidence inspected: `cluster/LANES.md`, `cluster/lanes.py`, `cluster/lanes_perms.py`, and the Grok status probe in `probe-agents-status.sh`. The HIGH lease-reply bug is tracked in [bob-ops-dashboard #76](https://github.com/rupret007/bob-ops-dashboard/pull/76) and remains **open (HIGH)** until that PR merges. Grok Bot terms are unverified (see Provider-terms risks).
