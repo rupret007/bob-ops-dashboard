@@ -49,9 +49,16 @@ def _bcrypt():
     return bcrypt
 
 
-def hash_secret(secret: str, rounds: int = 11) -> str:
+def _rounds() -> int:
+    try:
+        return max(4, min(14, int(os.environ.get("BOB_BCRYPT_ROUNDS", "11"))))
+    except ValueError:
+        return 11
+
+
+def hash_secret(secret: str, rounds: int | None = None) -> str:
     b = _bcrypt()
-    return b.hashpw(secret.encode(), b.gensalt(rounds=rounds)).decode()
+    return b.hashpw(secret.encode(), b.gensalt(rounds=rounds or _rounds())).decode()
 
 
 def check_secret(secret: str, hashed: str) -> bool:
