@@ -451,12 +451,12 @@ def render_conf(reg: dict[str, Any], store_dir: str, port: int = 4222, http: str
     if svc.get("guestops"):
         guest.append(_user_block("guestops", svc["guestops"], GUESTOPS_PERMS))
     if svc.get("joind"):
-        join.append(_user_block("joind", svc["joind"], {"publish": [], "subscribe": ["join.redeem"]},
+        join.append(_user_block("joind", svc["joind"], {"publish": [], "subscribe": ["join.redeem.*"]},
                                 allow_responses=True))
     for user, p in sorted(reg["pending"].items()):
         if p["expires"] <= now:
             continue  # expired codes never authenticate, even before the sweep runs
-        join.append(_user_block(user, p["pw"], {"publish": ["join.redeem"], "subscribe": [f"{inbox_prefix(user)}.>"]}))
+        join.append(_user_block(user, p["pw"], {"publish": [f"join.redeem.{user}"], "subscribe": [f"{inbox_prefix(user)}.>"]}))
 
     def users(blocks: list[str]) -> str:
         return "[\n" + "\n".join(blocks) + "\n    ]" if blocks else "[]"

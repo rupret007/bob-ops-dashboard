@@ -81,7 +81,7 @@ async def redeem(code: str, timeout: float = 15.0) -> tuple[str, dict]:
     try:
         req = {"user": data["user"], "secret": data["s"], "name": data["n"],
                "os": platform.system().lower(), "host": socket.gethostname()[:63]}
-        msg = await nc.request("join.redeem", json.dumps(req).encode(), timeout=timeout)
+        msg = await nc.request(f"join.redeem.{data['user']}", json.dumps(req).encode(), timeout=timeout)
     finally:
         await nc.close()
     try:

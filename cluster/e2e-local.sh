@@ -41,10 +41,11 @@ step "mint single-use member code (not printed)"
 sleep 1
 grep -E "^Join code|^Caps" "$T/mint.txt" | sed 's/^/   /'
 CODE="$(grep -o "bobjoin1:[A-Za-z0-9_-]*" "$T/mint.txt" | head -1)"
+SHA256="$(sed -n 's/.*--sha256 \([0-9a-f]\{64\}\).*/\1/p' "$T/mint.txt" | head -1)"
 
 step "run the one-command installer from GitHub at $REF (isolated HOME, no service)"
 curl -fsSL "https://raw.githubusercontent.com/rupret007/bob-ops-dashboard/${REF}/cluster/install/join.sh" -o "$T/join.sh"
-HOME="$HOME2" BOB_JOIN_CODE="$CODE" bash "$T/join.sh" --ref "$REF" --no-service --lanes 2 2>&1 | sed 's/^/   /'
+HOME="$HOME2" BOB_JOIN_CODE="$CODE" bash "$T/join.sh" --ref "$REF" --sha256 "$SHA256" --no-service --lanes 2 2>&1 | sed 's/^/   /'
 sleep 2
 NODE_ENV="$HOME2/.config/bob-cluster/node.env"
 stat -c '   node.env mode %a' "$NODE_ENV"

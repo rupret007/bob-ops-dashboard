@@ -7,15 +7,19 @@ param(
     # Prefer passing the code via $env:BOB_JOIN_CODE (what bobctl prints) so it
     # stays out of the process list and shell history.
     [string]$Code = $env:BOB_JOIN_CODE,
-    [string]$Ref = 'main',
+    [string]$Ref,
+    [string]$Sha256,
     [int]$Lanes = 0,
     [switch]$DryRun
 )
 
 $ErrorActionPreference = 'Stop'
+if ($Ref -cnotmatch '^[0-9a-fA-F]{40}$' -or $Sha256 -cnotmatch '^[0-9a-fA-F]{64}$') {
+    throw 'A full 40-hex Ref and 64-hex archive Sha256 are required.'
+}
 if (-not $Code) {
-    Write-Error 'Set $env:BOB_JOIN_CODE (or pass -Code) to the join code Jeff gave you.'
-    exit 1
+    $secureCode = Read-Host 'Join code (hidden)' -AsSecureString
+    $Code = [System.Net.NetworkCredential]::new('', $secureCode).Password
 }
 # wsl.exe prints UTF-16; ask for UTF-8 and strip stray NULs so matching works on PS 5.1.
 $env:WSL_UTF8 = '1'
@@ -57,7 +61,7 @@ $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIden
 if ($DryRun) {
     Write-Host "DRY: wsl -d $distro -- bash -lc (BOB_JOIN_CODE via WSLENV)"
     Write-Host "DRY: set env:BOB_JOIN_CODE and WSLENV=BOB_JOIN_CODE/u"
-    Write-Host "DRY: curl join.sh | bash -s -- --ref $Ref$lanesArg"
+    Write-Host "DRY: curl join.sh | bash -s -- --ref $Ref --sha256 $Sha256$lanesArg"
     $wslUser = (& wsl -d $distro -- whoami).Trim()
     Write-Host "DRY: wsl -d $distro -u root loginctl enable-linger $wslUser"
     $taskRun = "wsl.exe -d $distro --exec /usr/bin/sleep infinity"
@@ -72,7 +76,7 @@ if ($DryRun) {
 $env:BOB_JOIN_CODE = $Code
 if ($env:WSLENV) { $env:WSLENV = "$($env:WSLENV):BOB_JOIN_CODE/u" } else { $env:WSLENV = 'BOB_JOIN_CODE/u' }
 
-$bashCmd = "curl -fsSL '$joinUrl' | bash -s -- --ref '$Ref'$lanesArg"
+$bashCmd = "curl -fsSL '$joinUrl' | bash -s -- --ref '$Ref' --sha256 '$Sha256'$lanesArg"
 & wsl -d $distro -- bash -lc $bashCmd
 $rc = $LASTEXITCODE
 Remove-Item Env:BOB_JOIN_CODE -ErrorAction SilentlyContinue

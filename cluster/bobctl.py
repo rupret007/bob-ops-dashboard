@@ -12,7 +12,8 @@
   python3 -m cluster.bobctl caps --seconds 12          # live capability heartbeats
 
 Until the rollout is approved this writes ~/.config/bob-cluster/nats.mesh.conf
-and does NOT reload the live nats-server unless --live is given.
+and does NOT reload nats-server unless --live is given, except revoke, which
+always requires a confirmed live reload.
 """
 
 from __future__ import annotations
@@ -21,6 +22,7 @@ import argparse
 import asyncio
 import json
 import os
+import re
 import sys
 import time
 from pathlib import Path
@@ -48,8 +50,8 @@ def add_hub_args(ap: argparse.ArgumentParser) -> None:
 def hub_from_args(args):
     from cluster.joind import Hub, signal_reload_from_pidfile
 
-    if getattr(args, "live", False) or os.environ.get("BOB_MESH_LIVE") == "1":
-        reload = signal_reload_from_pidfile(Path(args.pidfile))
+    if getattr(args, "cmd", None) == "revoke" or getattr(args, "live", False) or os.environ.get("BOB_MESH_LIVE") == "1":
+        reload = signal_reload_from_pidfile(Path(args.pidfile), args.http, Path(args.conf_out))
     else:
         def reload() -> None:
             print("note: not live; rendered config only (rollout pending)", file=sys.stderr)
@@ -69,13 +71,34 @@ def hub_url(args) -> str:
     raise SystemExit("set --url nats://<nucbox tailscale ip>:4222 (or write it to ~/.config/bob-cluster/hub-url)")
 
 
-def install_lines(code: str, ref: str) -> dict[str, str]:
+def install_lines(code: str, ref: str, sha256: str) -> dict[str, str]:
+    validate_install_pin(ref, sha256)
+    # Prompt input is not a shell command: no credential in history or argv.
     sh = (f"curl -fsSL {REPO_RAW}/{ref}/cluster/install/join.sh | "
-          f"bash -s -- --ref {ref} --code '{code}'")
-    ps = (f"$env:BOB_JOIN_CODE='{code}'; iwr -useb {REPO_RAW}/{ref}/cluster/install/join.ps1 "
+          f"bash -s -- --ref {ref} --sha256 {sha256} --prompt-code")
+    ps = (f"iwr -useb {REPO_RAW}/{ref}/cluster/install/join.ps1 "
           f"-OutFile $env:TEMP\\bob-join.ps1; powershell -ExecutionPolicy Bypass -File "
-          f"$env:TEMP\\bob-join.ps1 -Ref {ref}")
+          f"$env:TEMP\\bob-join.ps1 -Ref {ref} -Sha256 {sha256}")
     return {"macos_linux": sh, "windows": ps}
+
+
+def validate_install_pin(ref: str, sha256: str | None = None) -> None:
+    if not re.fullmatch(r"[0-9a-fA-F]{40}", ref):
+        raise ValueError("installer ref must be a full 40-hex commit SHA")
+    if sha256 is not None and not re.fullmatch(r"[0-9a-fA-F]{64}", sha256):
+        raise ValueError("installer sha256 must be 64 hex characters")
+
+
+def tarball_sha256(ref: str) -> str:
+    import hashlib
+    from urllib.request import urlopen
+
+    validate_install_pin(ref)
+    digest = hashlib.sha256()
+    with urlopen(f"https://codeload.github.com/rupret007/bob-ops-dashboard/tar.gz/{ref}", timeout=30) as response:
+        while chunk := response.read(1024 * 1024):
+            digest.update(chunk)
+    return digest.hexdigest()
 
 
 def _git_ref() -> str:
@@ -85,11 +108,11 @@ def _git_ref() -> str:
         root = Path(__file__).resolve().parents[1]
         sha = subprocess.run(["git", "-C", str(root), "rev-parse", "HEAD"], capture_output=True,
                              text=True, timeout=5).stdout.strip()
-        if len(sha) == 40:
+        if re.fullmatch(r"[0-9a-fA-F]{40}", sha):
             return sha
     except (OSError, subprocess.SubprocessError):
         pass
-    return "main"
+    raise ValueError("cannot determine commit SHA; supply --ref with a full 40-hex SHA")
 
 
 # ------------------------------------------------------------------ commands
@@ -106,6 +129,12 @@ def cmd_init(args) -> int:
 
 
 def cmd_mint(args) -> int:
+    try:
+        ref = args.ref or _git_ref()
+        sha256 = tarball_sha256(ref)
+    except (OSError, ValueError):
+        print("mint: cannot pin installer; require a full 40-hex SHA and a downloadable archive", file=sys.stderr)
+        return 2
     hub = hub_from_args(args)
     caps = [c.strip() for c in args.caps.split(",") if c.strip()] if args.caps else None
     try:
@@ -114,10 +143,11 @@ def cmd_mint(args) -> int:
         print(f"mint: {e}", file=sys.stderr)
         return 2
     hub.apply()
-    lines = install_lines(code, args.ref or _git_ref())
+    lines = install_lines(code, ref, sha256)
     exp = time.strftime("%I:%M %p %Z", time.localtime(info["expires"]))
     print(f"Join code for '{info['name']}' ({info['role']}), single use, expires {exp}.")
     print(f"Caps granted: {', '.join(info['caps'])}")
+    print("Enter this code at the installer's hidden prompt (never paste it as a shell command):\n" + code)
     print("\nOn macOS / Linux, paste:\n  " + lines["macos_linux"])
     print("\nOn Windows (PowerShell), paste:\n  " + lines["windows"])
     return 0
@@ -126,11 +156,17 @@ def cmd_mint(args) -> int:
 def cmd_revoke(args) -> int:
     hub = hub_from_args(args)
     if not hub.reg.revoke(args.name):
-        print(f"revoke: no active node or code named {args.name}", file=sys.stderr)
-        return 1
-    hub.apply()
-    print(f"revoked {args.name}; its user is gone from the config"
-          + (" and nats-server was reloaded" if args.live else " (apply live with --live after rollout)"))
+        registry = hub.reg.read()
+        if not registry.get("nodes", {}).get(args.name, {}).get("revoked") and args.name not in registry.get("legacy_revoked", []):
+            print(f"revoke: no active node or code named {args.name}", file=sys.stderr)
+            return 1
+    try:
+        hub.apply()
+    except (OSError, RuntimeError, ValueError):
+        print("REVOKE FAILED: registry updated but live reload NOT CONFIRMED; "
+              "the node may still be connected. Fix the config/monitor/pidfile and retry revoke.", file=sys.stderr)
+        return 2
+    print(f"revoked {args.name}; nats-server reload confirmed")
     return 0
 
 

@@ -245,6 +245,51 @@ class MeshIntegration(unittest.TestCase):
             return closed
         self.assertTrue(asyncio.run(run()))
 
+    def test_cli_revoke_without_live_flag_confirms_reload_and_disconnect(self):
+        from cluster.bobctl import main
+        from cluster.joind import monitor_json
+
+        rep = self.member("cli-doomed", ["shell.build"])
+        pidfile = self.m.cfg_dir / "nats.pid"
+        pidfile.write_text(str(self.m.proc.pid))
+
+        async def run():
+            nc = await connect(self.m.url, "cli-doomed", rep["token"])
+            try:
+                before = await asyncio.to_thread(monitor_json, self.m.http, "varz")
+                args = ["revoke", "cli-doomed", "--config-dir", str(self.m.cfg_dir),
+                        "--conf-out", str(self.m.conf), "--pidfile", str(pidfile),
+                        "--store-dir", self.m.store, "--port", str(self.m.port), "--http", self.m.http]
+                self.assertEqual(await asyncio.to_thread(main, args), 0)
+                after = await asyncio.to_thread(monitor_json, self.m.http, "varz")
+                self.assertNotEqual(before["config_load_time"], after["config_load_time"])
+                for _ in range(20):
+                    if not nc.is_connected:
+                        break
+                    await asyncio.sleep(0.05)
+                self.assertFalse(nc.is_connected)
+                with self.assertRaises(Exception):
+                    await connect(self.m.url, "cli-doomed", rep["token"])
+            finally:
+                await nc.close()
+        asyncio.run(run())
+
+    def test_pending_user_cannot_spoof_other_source_subject(self):
+        first = decode_join_code(self.join("first", "member"))
+        second = decode_join_code(self.join("second", "member"))
+
+        async def run():
+            nc = await connect(self.m.url, first["user"], first["s"],
+                               inbox_prefix=inbox_prefix(first["user"]).encode())
+            try:
+                self.assertTrue(await perm_violation(nc, lambda: nc.publish(
+                    f"join.redeem.{second['user']}", b"{}")))
+                self.assertFalse(await perm_violation(nc, lambda: nc.publish(
+                    f"join.redeem.{first['user']}", b"{}")))
+            finally:
+                await nc.close()
+        asyncio.run(run())
+
     def test_guestops_cannot_delete_or_read_streams_and_legacy_revoke_disconnects(self):
         async def run():
             go = await connect(self.m.url, "guestops", self.hub.reg.service_password("guestops"),

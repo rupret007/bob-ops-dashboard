@@ -13,6 +13,8 @@ import asyncio
 import json
 import logging
 import os
+import ipaddress
+import time
 from pathlib import Path
 from typing import Callable
 
@@ -21,7 +23,7 @@ from cluster.registry import PENDING_USER_PATTERN, Registry, RegistryError, inbo
 log = logging.getLogger("bob-joind")
 MAX_REQ_BYTES = 2048
 FAIL_DELAY_S = 1.0          # slows online guessing; codes are 192-bit anyway
-MAX_ATTEMPTS_PER_MIN = 30   # global cap on redeem attempts
+MAX_ATTEMPTS_PER_MIN = 30   # per source IP (all join users at that IP share a bucket)
 SWEEP_S = 60.0              # drop expired codes from the live config
 
 
@@ -81,6 +83,58 @@ def handle_redeem(hub: Hub, raw: bytes, reply: str | None = "") -> tuple[dict, b
     return {"ok": True, **out}, True
 
 
+def monitor_json(http: str, path: str) -> dict:
+    from urllib.request import ProxyHandler, build_opener
+
+    host, port = http.rsplit(":", 1)
+    if host != "127.0.0.1" or not port.isdigit() or not 1 <= int(port) <= 65535:
+        raise ValueError("monitor must bind to 127.0.0.1")
+    # Never send monitoring traffic (including authenticated usernames) to a proxy.
+    with build_opener(ProxyHandler({})).open(f"http://{http}/{path}", timeout=1) as response:
+        return json.load(response)
+
+
+def source_address(http: str, user: str) -> str:
+    """Resolve a broker-authorized subject's user to its connected source IP.
+
+    Refuse ambiguous users connected from multiple IPs, or missing monitoring
+    data. A client-supplied body/header/hostname is never an address authority.
+    """
+    addresses = set()
+    offset = 0
+    while True:
+        data = monitor_json(http, f"connz?auth=1&offset={offset}&limit=1024")
+        connections = data["connections"]
+        for conn in connections:
+            if conn.get("authorized_user") == user:
+                ip = ipaddress.ip_address(conn["ip"])
+                addresses.add(str(getattr(ip, "ipv4_mapped", None) or ip))
+        offset += len(connections)
+        if offset >= data["total"]:
+            break
+        if not connections:
+            raise RuntimeError("incomplete connection monitoring data")
+    if len(addresses) != 1:
+        raise RuntimeError("join source cannot be established uniquely")
+    return addresses.pop()
+
+
+class SourceRateLimiter:
+    def __init__(self, clock=time.monotonic):
+        self.clock = clock
+        self.windows: dict[str, list[float]] = {}
+
+    def allow(self, source: str) -> bool:
+        now = self.clock()
+        self.windows = {key: [t for t in times if now - t < 60]
+                        for key, times in self.windows.items() if times[-1] > now - 60}
+        window = self.windows.setdefault(source, [])
+        if len(window) >= MAX_ATTEMPTS_PER_MIN:
+            return False
+        window.append(now)
+        return True
+
+
 async def serve(hub: Hub, url: str, password: str, reload_delay: float = 1.0,
                 stop: asyncio.Event | None = None) -> None:
     import nats
@@ -88,19 +142,25 @@ async def serve(hub: Hub, url: str, password: str, reload_delay: float = 1.0,
     nc = await nats.connect(url, user="joind", password=password, max_reconnect_attempts=-1)
     pending_reload: list[asyncio.Task] = []
     serial = asyncio.Lock()   # one bcrypt-heavy redeem at a time
-    window: list[float] = []
+    limiter = SourceRateLimiter()
 
     async def on_msg(msg):
-        import time as _t
-
-        if not msg.reply:
+        user = msg.subject.removeprefix("join.redeem.")
+        if not reply_ok_for(user, msg.reply) or len(msg.data) > MAX_REQ_BYTES:
             return
-        now = _t.monotonic()
-        window[:] = [t for t in window if now - t < 60]
-        if len(window) >= MAX_ATTEMPTS_PER_MIN:
+        try:
+            source = await asyncio.to_thread(source_address, hub.http, user)
+        except (OSError, ValueError, KeyError, TypeError, RuntimeError):
+            log.warning("join source lookup failed; refusing request")
+            return
+        if not limiter.allow(source):
             log.warning("redeem rate limit hit")
             return  # silent drop; the client times out
-        window.append(now)
+        try:
+            if json.loads(msg.data).get("user") != user:
+                return
+        except (ValueError, AttributeError):
+            return
         async with serial:
             reply, changed = await asyncio.to_thread(handle_redeem, hub, msg.data, msg.reply)
             if not reply.get("ok"):
@@ -127,7 +187,7 @@ async def serve(hub: Hub, url: str, password: str, reload_delay: float = 1.0,
             except Exception as e:  # noqa: BLE001
                 log.error("sweep failed: %s", type(e).__name__)
 
-    await nc.subscribe("join.redeem", cb=on_msg)
+    await nc.subscribe("join.redeem.*", cb=on_msg)
     await nc.flush()
     sweeper = asyncio.create_task(sweep())
     log.info("joind listening on join.redeem")
@@ -144,15 +204,45 @@ async def serve(hub: Hub, url: str, password: str, reload_delay: float = 1.0,
         await nc.drain()
 
 
-def signal_reload_from_pidfile(pidfile: Path) -> Callable[[], None]:
+def signal_reload_from_pidfile(pidfile: Path, http: str = "127.0.0.1:8232",
+                               conf_out: Path | None = None, timeout: float = 5.0) -> Callable[[], None]:
     def _reload() -> None:
         import signal
+        import shlex
+        import subprocess
 
         try:
             pid = int(Path(pidfile).read_text().strip())
+            if pid <= 1:
+                raise ValueError("invalid server PID")
+            before = monitor_json(http, "varz")
+            # nats-server /varz exposes no PID; the target is bound by its config
+            # path (below) and a stable server_id whose config_load_time changes
+            # only after our SIGHUP.
+            if not before.get("server_id") or not before.get("config_load_time"):
+                raise RuntimeError("monitor did not report server identity")
+            if conf_out is not None:
+                # /varz has no config_file field. Check the target process's
+                # config argument without logging its command line.
+                command = subprocess.run(["ps", "-p", str(pid), "-o", "command="],
+                                         capture_output=True, text=True, check=True, timeout=2)
+                argv = shlex.split(command.stdout)
+                configs = [argv[i + 1] for i, arg in enumerate(argv[:-1]) if arg in ("-c", "--config")]
+                configs += [arg.split("=", 1)[1] for arg in argv if arg.startswith(("--config=", "-c="))]
+                if len(configs) != 1 or not Path(configs[0]).is_absolute() or Path(configs[0]).resolve() != conf_out.resolve():
+                    raise RuntimeError("server must use the rendered configuration's absolute path")
             os.kill(pid, signal.SIGHUP)
-        except (OSError, ValueError) as e:
-            log.error("reload failed: %s", e)
+            deadline = time.monotonic() + timeout
+            while time.monotonic() < deadline:
+                after = monitor_json(http, "varz")
+                if (after.get("server_id") == before.get("server_id")
+                        and after.get("config_load_time")
+                        and after["config_load_time"] != before["config_load_time"]):
+                    return
+                time.sleep(0.05)
+        except (OSError, ValueError, KeyError, TypeError, subprocess.SubprocessError) as e:
+            raise RuntimeError("live NATS reload could not be confirmed") from e
+        raise RuntimeError("live NATS reload was not confirmed before timeout")
     return _reload
 
 

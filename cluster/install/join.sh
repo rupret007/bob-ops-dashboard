@@ -3,26 +3,32 @@
 # One-command Bob cluster node join (macOS, Linux, WSL). Never enable xtrace (secrets).
 set -euo pipefail
 
-REF="main"
+REF=""
+SHA256=""
 CODE=""
+PROMPT_CODE=0
 LANES=""
 DRY_RUN=0
 NO_SERVICE=0
 
 usage() {
-  echo "Usage: join.sh --code 'bobjoin1:...' [--ref <git sha or branch>] [--lanes N] [--dry-run] [--no-service]" >&2
-  echo "       join.sh [--ref ...] (with BOB_JOIN_CODE in the environment)" >&2
+  echo "Usage: join.sh --ref <40-hex SHA> --sha256 <archive SHA256> [--prompt-code] [--lanes N] [--dry-run] [--no-service]" >&2
+  echo "       Set BOB_JOIN_CODE via hidden input, or use --prompt-code." >&2
   exit 1
 }
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --code)
-      CODE="${2:?--code requires a value}"
-      shift 2
+    --prompt-code)
+      PROMPT_CODE=1
+      shift
       ;;
     --ref)
       REF="${2:?--ref requires a value}"
+      shift 2
+      ;;
+    --sha256)
+      SHA256="${2:?--sha256 requires a value}"
       shift 2
       ;;
     --lanes)
@@ -41,18 +47,33 @@ while [[ $# -gt 0 ]]; do
       usage
       ;;
     *)
-      echo "Unknown argument: $1" >&2
+      echo "join.sh: unsupported argument (codes must not be passed in argv)" >&2
       usage
       ;;
   esac
 done
+
+if [[ ! "$REF" =~ ^[0-9a-fA-F]{40}$ ]]; then
+  echo "join.sh: --ref must be a full 40-hex commit SHA" >&2
+  exit 1
+fi
+if [[ ! "$SHA256" =~ ^[0-9a-fA-F]{64}$ ]]; then
+  echo "join.sh: --sha256 must be a 64-hex archive checksum" >&2
+  exit 1
+fi
+SHA256="$(printf '%s' "$SHA256" | tr 'A-F' 'a-f')"
+
+if [[ "$PROMPT_CODE" -eq 1 ]]; then
+  read -r -s -p 'Join code (hidden): ' CODE </dev/tty
+  printf '\n' >/dev/tty
+fi
 
 if [[ -z "$CODE" && -n "${BOB_JOIN_CODE:-}" ]]; then
   CODE="$BOB_JOIN_CODE"
 fi
 
 if [[ -z "$CODE" ]]; then
-  echo "join.sh: --code or BOB_JOIN_CODE is required" >&2
+  echo "join.sh: --prompt-code or BOB_JOIN_CODE is required" >&2
   exit 1
 fi
 
@@ -77,6 +98,10 @@ fi
 
 dry() {
   echo "DRY: $*"
+}
+
+sha256_of() {
+  if command -v sha256sum >/dev/null 2>&1; then sha256sum "$1" | cut -d' ' -f1; else shasum -a 256 "$1" | cut -d' ' -f1; fi
 }
 
 need_cmd() {
@@ -178,6 +203,7 @@ if [[ "$DRY_RUN" -eq 1 ]]; then
   check_prereqs
   dry "would verify python3 >= 3.10, git, curl, tar"
   dry "would download ${TARBALL_URL} to a temporary directory"
+  dry "would verify archive SHA256 ${SHA256} before extraction"
   dry "would extract cluster/ into ${APP}/cluster (atomic replace via ${APP}.new)"
   dry "would install nats-py via venv+pip, else pip --target, else the pinned wheel (sha256-checked) into ${PYDEPS}"
   dry "would write launcher ${BOBPY}"
@@ -207,7 +233,7 @@ print(decode_join_code(os.environ["BOB_JOIN_CODE_DECODE"])["r"])
   if [[ "$NO_SERVICE" -eq 0 ]]; then
     case "$OS_KIND" in
       darwin)
-        dry "would write ~/Library/LaunchAgents/com.bob.cluster-node.plist and launchctl bootstrap"
+        dry "would write launchd plist ~/Library/LaunchAgents/com.bob.cluster-node.plist and launchctl bootstrap"
         ;;
       *)
         if systemctl --user show-environment >/dev/null 2>&1; then
@@ -261,6 +287,10 @@ trap 'rm -rf "${TMP}"' EXIT
 
 echo "Downloading cluster installer payload (${REF})..."
 curl -fsSL -o "${TMP}/repo.tgz" "${TARBALL_URL}"
+if [[ "$(sha256_of "${TMP}/repo.tgz")" != "${SHA256}" ]]; then
+  echo "join.sh: archive checksum mismatch; refusing to install" >&2
+  exit 1
+fi
 tar -xzf "${TMP}/repo.tgz" -C "${TMP}"
 CLUSTER_SRC="$(find "${TMP}" -mindepth 1 -maxdepth 2 -type d -name cluster | head -n 1)"
 if [[ -z "$CLUSTER_SRC" || ! -d "$CLUSTER_SRC" ]]; then
@@ -273,10 +303,6 @@ mkdir -p "${APP}.new"
 mv "$CLUSTER_SRC" "${APP}.new/cluster"
 rm -rf "${APP}"
 mv "${APP}.new" "${APP}"
-
-sha256_of() {
-  if command -v sha256sum >/dev/null 2>&1; then sha256sum "$1" | cut -d' ' -f1; else shasum -a 256 "$1" | cut -d' ' -f1; fi
-}
 
 install_deps() {
   mkdir -p "$(dirname "${BOBPY}")"

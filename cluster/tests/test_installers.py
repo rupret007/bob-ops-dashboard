@@ -13,6 +13,7 @@ from cluster.registry import encode_join_code
 REPO_ROOT = Path(__file__).resolve().parents[2]
 JOIN_SH = REPO_ROOT / "cluster" / "install" / "join.sh"
 JOIN_PS1 = REPO_ROOT / "cluster" / "install" / "join.ps1"
+PIN_ARGS = ["--ref", "a" * 40, "--sha256", "b" * 64]
 
 
 def fake_join_code() -> str:
@@ -35,11 +36,12 @@ class TestJoinInstallers(unittest.TestCase):
         env = {
             **os.environ,
             "PYTHONPATH": str(REPO_ROOT),
+            "BOB_JOIN_CODE": code,
             "HTTPS_PROXY": "http://127.0.0.1:9",
             "HTTP_PROXY": "http://127.0.0.1:9",
         }
         proc = subprocess.run(
-            ["bash", str(JOIN_SH), "--dry-run", "--code", code],
+            ["bash", str(JOIN_SH), "--dry-run", *PIN_ARGS],
             capture_output=True,
             text=True,
             env=env,
@@ -62,7 +64,7 @@ class TestJoinInstallers(unittest.TestCase):
 
     def test_join_sh_missing_code(self):
         proc = subprocess.run(
-            ["bash", str(JOIN_SH), "--dry-run"],
+            ["bash", str(JOIN_SH), "--dry-run", *PIN_ARGS],
             capture_output=True,
             text=True,
             cwd=str(REPO_ROOT),
@@ -78,7 +80,7 @@ class TestJoinInstallers(unittest.TestCase):
             "HTTPS_PROXY": "http://127.0.0.1:9",
         }
         proc = subprocess.run(
-            ["bash", str(JOIN_SH), "--dry-run"],
+            ["bash", str(JOIN_SH), "--dry-run", *PIN_ARGS],
             capture_output=True,
             text=True,
             env=env,

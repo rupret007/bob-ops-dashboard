@@ -102,11 +102,27 @@ python3 -m cluster.bobctl mint --name <name> --role member     # or --role guest
 ```
 
 It prints one line to paste on the new machine (macOS/Linux `curl … | bash`, or a PowerShell line for
-Windows + WSL). The code is single-use, expires in 30 minutes, and installs a background service.
-Revoke any time: `python3 -m cluster.bobctl revoke <name>`.
+Windows + WSL). Enter the separately displayed code at the hidden installer prompt;
+never paste the code as a shell command or argument. The code is single-use, expires
+in 30 minutes, and installs a background service. Mint requires a full 40-hex commit
+SHA (defaults to the checkout's HEAD), downloads its GitHub archive, and embeds its
+SHA256 in both paste commands. The installer verifies that digest before extraction.
+There is no branch fallback; direct installer use requires `--ref` and `--sha256`.
+
+Revoke any time: `python3 -m cluster.bobctl revoke <name>`. Revoke always sends
+SIGHUP and waits for `/varz.config_load_time` to change on the pidfile's server.
+Failure to confirm is a loud nonzero exit; the registry remains revoked. The
+server must have been started with the absolute `--conf-out` path via `-c`/`--config`.
+Use `--pidfile` and `--http` for that server. This is a live operation even without
+`--live`; do not run it against a production hub during a source-only review.
 
 Until Karen's gate, `bobctl` only renders `~/.config/bob-cluster/nats.mesh.conf`; the live `nats.conf`
-is not touched unless `--live` is passed. Throwaway end-to-end check: `bash cluster/e2e-local.sh <sha> [--llm]`.
+is not touched unless `--live` is passed, except for revoke as described above.
+Joind limits redemption to 30 attempts per source IP per rolling minute, resolved
+from loopback NATS `/connz` data. Broker permissions bind each pending user to its
+own `join.redeem.<user>` subject. Missing or ambiguous source data is refused.
+Clients and joind must use this protocol together; older shared-subject clients
+must be updated. Throwaway end-to-end check: `bash cluster/e2e-local.sh <sha> [--llm]`.
 
 ## Submit
 
