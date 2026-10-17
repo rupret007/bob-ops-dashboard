@@ -177,6 +177,30 @@ class TestExecutionSecurity(unittest.TestCase):
                     delete.assert_not_called()
                     run.assert_not_called()
 
+    def _resolve_job_to(self, job_id, target):
+        real_resolve = Path.resolve
+        candidate = self.root / job_id
+
+        def fake_resolve(path, *args, **kwargs):
+            if path == candidate:
+                return target
+            return real_resolve(path, *args, **kwargs)
+
+        return patch.object(Path, "resolve", fake_resolve)
+
+    def test_job_workdir_outside_root_check_fires_alone(self):
+        # Not a symlink and not the root: only the outside-root check can reject.
+        outside = self.root.parent / "outside" / "job1"
+        with self._resolve_job_to("job1", outside):
+            with self.assertRaisesRegex(SpecError, "strictly under jobs root"):
+                job_exec.job_workdir("job1")
+
+    def test_job_workdir_must_resolve_to_itself_check_fires_alone(self):
+        # Resolves inside root to a different entry without being a symlink.
+        with self._resolve_job_to("job1", self.root / "other-job"):
+            with self.assertRaisesRegex(SpecError, "must resolve to itself"):
+                job_exec.job_workdir("job1")
+
     def test_existing_job_cleanup_and_git_option_terminators(self):
         wd = self.root / "job-1"
         wd.mkdir()

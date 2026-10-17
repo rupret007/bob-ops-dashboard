@@ -36,8 +36,10 @@ def job_workdir(job_id: str) -> Path:
         raise SpecError("job work directory must not alias the jobs root")
     if candidate.is_symlink():
         raise SpecError("job work directory must not be a symlink")
-    if root not in wd.parents or wd != candidate:
+    if root not in wd.parents:
         raise SpecError("job work directory must be strictly under jobs root")
+    if wd != candidate:
+        raise SpecError("job work directory must resolve to itself")
     return wd
 
 

@@ -156,6 +156,27 @@ class HttpSecurityTests(unittest.TestCase):
         self.assertEqual(sock.output.getvalue().count(b'event: state'), 1)
         self.assertEqual(self.server._sse_clients, [])
 
+    def test_expired_stream_closes_keep_alive_connection(self):
+        cookie = self.login_cookie()
+        first = f'GET /api/stream HTTP/1.1\r\nHost: localhost\r\nCookie: {cookie}\r\n\r\n'
+        second = f'GET /api/state HTTP/1.1\r\nHost: localhost\r\nCookie: {cookie}\r\n\r\n'
+        sock = MemorySocket((first + second).encode(), self.server)
+
+        def receive(data):
+            sock.output.write(data)
+            if b'event: state' in data:
+                self.now += 1  # stays valid for the pipelined request if the socket were reused
+
+        expires = self.now + 1
+        with patch.object(sock, 'sendall', side_effect=receive), \
+                patch('live.aggregator.threading.Condition'), \
+                patch.object(self.server, 'session_expiry', return_value=expires):
+            self.server.make_handler()(sock, ('127.0.0.1', 12345), object())
+        out = sock.output.getvalue()
+        self.assertEqual(out.count(b'event: state'), 1)
+        # After the stream ends the server must not serve another request on the socket.
+        self.assertEqual(out.count(b'HTTP/1.'), 1)
+
     def test_cookie_timestamp_is_signed_and_future_cookies_rejected(self):
         cookie = self.login_cookie()
         tampered = cookie.replace(str(self.now), str(self.now + 1))
