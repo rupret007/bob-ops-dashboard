@@ -17,7 +17,7 @@ Environment="HOME=/home/%u"
 ExecStart=/usr/bin/python3 -m cluster.control_plane.dashboard --host 127.0.0.1 --port 8790
 
 Restart=always
-RestartSec=10
+RestartSec=60
 
 # Resource limits
 Nice=10
