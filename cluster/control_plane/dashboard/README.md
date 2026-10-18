@@ -16,3 +16,10 @@ stale evidence is yellow, failed fresh checks red. The endpoint never infers
 remote health from the current machine's load. `MONITOR.md` and activity strings
 are rendered as text, never HTML. Dashboard assets ship with self-update's
 existing package copy on both machines.
+
+Node maintenance controls use `/api/control/node` (POST only): JSON contains
+`machine` (`mini` or `nucbox`), boolean `maintenance`, and literal `confirm: true`.
+A same-origin browser confirmation is required. Requests must originate from
+loopback or the tailnet. The state persists until an explicit return to service.
+Running work finishes; new work is deferred. HANDOFF.md supplies the audit panel.
+Peer controls require the peer dashboard to have received this deployment.

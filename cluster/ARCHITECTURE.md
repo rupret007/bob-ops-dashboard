@@ -17,7 +17,7 @@ remote SHA, and requests Karen review. Only the Karen gate can merge.
 Each dispatch tick reconciles running PIDs before allocating lanes. A missing
 worker becomes failed with error `worker-died`; queued leases expire separately.
 A successful process exit alone is not a verified fix. The dashboard reads state
-and logs without mutating jobs. Watchdog diagnoses health; self-update deploys
+and logs without mutating jobs; its separate confirmed POST controls persist node maintenance. Watchdog diagnoses health; self-update deploys
 pushed branch commits outside the monitor sandbox. Peer health and complete
 provider preflight coverage remain outstanding; unknown health is not success.
 
@@ -25,3 +25,25 @@ The regression suite checks Linux transient service submission, failure without
 unsafe fallback, macOS process-group preservation, dead-PID reconciliation, and
 Python 3.9 compatibility. Real service survival on each host must also be verified
 from post-deployment jobs; unit tests do not establish deployment health.
+
+Node maintenance lives in `~/.local/share/storypool/node-control.json`, survives
+reboots, and fails closed on malformed state. A locked atomic write records each
+operator action in HANDOFF.md with America/Chicago time and source address.
+Dashboards bind :8790 and restrict requests to loopback or Tailscale addresses.
+Control POSTs additionally require a literal confirmation, JSON, and matching
+Origin/Host; public Host names are rejected to prevent DNS rebinding. Both node
+buttons proxy only to configured peer URLs, with no public proxy and a bounded
+timeout. Unreachable peers return an explicit unconfirmed result and never change
+local maintenance. Acknowledged remote state updates the badge without claiming
+fresh remote job telemetry.
+
+Draining stops dispatcher allocations, queued workers before execution, Karen
+reviews, conductor actions, ops-doctor repairs, and mesh worker fetches/capability
+advertisement. Mesh messages already fetched are negatively acknowledged for
+redispatch. Running jobs finish normally; stale/dead leases use existing failure
+reconciliation and become eligible for redispatch. Watchdog records maintenance
+without restarting or escalating the node. Engine health renders drained nodes
+grey and excludes them from failed health. Self-update remains available so a
+maintenance host can receive repairs; returning to service requires another
+confirmed POST. The independent Web Bob shell driver still needs the planned
+single-scheduler migration; these controls cover repository-managed services.

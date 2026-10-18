@@ -73,6 +73,9 @@ def repair(root, log, stamp):
 
 
 def main():
+    from .node_control import is_draining
+    if is_draining():
+        return 0
     root = Path(__file__).resolve().parents[2]
     state_dir = Path(os.environ.get('STORYPOOL_DOCTOR_DIR', '~/.local/share/storypool/doctor')).expanduser()
     state_dir.mkdir(parents=True, exist_ok=True, mode=0o700)

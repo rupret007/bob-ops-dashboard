@@ -1355,6 +1355,10 @@ This PR reverts commit {merge_sha[:12]} which broke main CI.
         4. Execute validated actions (if live mode)
         5. Write digest
         """
+        from .node_control import is_draining
+        if is_draining():
+            return {"timestamp": _now_iso(), "machine": os.environ.get("STORYPOOL_MACHINE", "unknown"), "live": live,
+                    "maintenance": True, "actions_executed": 0}
         self._write_log({"action": "cycle_start", "live": live})
         
         snapshot = self.build_state_snapshot()
@@ -1464,6 +1468,10 @@ This PR reverts commit {merge_sha[:12]} which broke main CI.
 
 def main() -> int:
     """CLI entry point for conductor."""
+    from .node_control import is_draining
+    if is_draining():
+        print("Node in maintenance; conductor deferred")
+        return 0
     import argparse
     
     parser = argparse.ArgumentParser(

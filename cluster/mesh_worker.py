@@ -147,7 +147,8 @@ class MeshWorker:
         return effective_caps(self.cfg.role, self.cfg.granted, det)
 
     def heartbeat(self) -> dict[str, Any]:
-        caps = self.refresh_caps()
+        from .control_plane.node_control import is_draining
+        caps = [] if is_draining() else self.refresh_caps()
         return build_heartbeat(self.cfg.user, self.cfg.role, self._providers or {}, caps,
                                self.cfg.max_lanes, self.active, load_quota_hints(self.quota_path))
 
@@ -171,6 +172,10 @@ class MeshWorker:
         return f"results.{self.cfg.user}.{job_id}"
 
     async def handle(self, msg, cap: str) -> None:
+        from .control_plane.node_control import is_draining
+        if is_draining():
+            await msg.nak(delay=60)
+            return
         guest = self.cfg.role == "guest"
         try:
             spec = validate_cap_spec(json.loads(msg.data), guest=guest)
@@ -187,6 +192,9 @@ class MeshWorker:
             await msg.nak(delay=dec.delay_s)
             return
         async with self.sem:
+            if is_draining():
+                await msg.nak(delay=60)
+                return
             self.active += 1
             t0 = time.time()
             hb_stop = asyncio.Event()
@@ -236,6 +244,10 @@ class MeshWorker:
         else:
             return
         while not stop.is_set():
+            from .control_plane.node_control import is_draining
+            if is_draining():
+                await asyncio.sleep(1)
+                continue
             free = self.cfg.max_lanes - self.active
             if free <= 0:
                 await asyncio.sleep(1)

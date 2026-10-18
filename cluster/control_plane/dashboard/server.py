@@ -58,6 +58,8 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             display: flex;
             justify-content: space-between;
             align-items: center;
+            flex-wrap: wrap;
+            gap: .5rem;
             margin-bottom: 1.5rem;
             padding-bottom: 1rem;
             border-bottom: 1px solid var(--border);
@@ -77,10 +79,12 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         .mode-shadow {{ background: var(--warning); color: var(--bg); }}
         .grid {{
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            grid-template-columns: repeat(auto-fit, minmax(min(100%, 350px), 1fr));
             gap: 1rem;
         }}
         .card {{
+            min-width: 0;
+            overflow-wrap: anywhere;
             background: var(--card-bg);
             border: 1px solid var(--border);
             border-radius: 6px;
@@ -100,6 +104,8 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         .card-full {{ grid-column: 1 / -1; }}
         table {{
             width: 100%;
+            table-layout: fixed;
+            overflow-wrap: anywhere;
             border-collapse: collapse;
             font-size: 0.875rem;
         }}
@@ -624,6 +630,10 @@ class DashboardHandler(BaseHTTPRequestHandler):
     
     def do_GET(self) -> None:
         """Handle GET requests."""
+        from ..node_control import allowed_address
+        if not allowed_address(self.client_address[0]):
+            self.send_error(403, "Localhost or tailnet required")
+            return
         parsed = urlparse(self.path)
         
         if parsed.path == "/" or parsed.path == "/index.html":
@@ -658,7 +668,68 @@ class DashboardHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def _control_node(self):
+        from ..node_control import audit_action, authorized_post, set_maintenance
+        if not authorized_post(self.client_address[0], self.headers.get('Host', ''),
+                               self.headers.get('Origin', ''), self.headers.get('Content-Type', '')):
+            self.send_error(403, 'Localhost/tailnet and same origin required')
+            return
+        try:
+            length = int(self.headers.get('Content-Length', '0'))
+            if not 0 < length <= 1024:
+                raise ValueError('Invalid body size')
+            self.connection.settimeout(5)
+            body = json.loads(self.rfile.read(length))
+            if body.get('confirm') is not True or type(body.get('maintenance')) is not bool:
+                raise ValueError('Explicit confirmation required')
+            source = self.collector or DataCollector()
+            target = body.get('machine')
+            if target not in ('mini', 'nucbox'):
+                raise ValueError('Unknown node')
+            if target != source.machine:
+                from ..watchdog import PEER_URLS
+                import urllib.request
+                url = PEER_URLS[target]
+                request = urllib.request.Request(url + '/api/control/node',
+                    data=json.dumps(body).encode(), method='POST',
+                    headers={'Content-Type': 'application/json', 'Origin': url})
+                # Never use a public proxy for tailnet control traffic.
+                opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+                with opener.open(request, timeout=5) as response:
+                    result = json.loads(response.read(4096))
+                if result.get('maintenance') is not body['maintenance']:
+                    raise ValueError('Invalid peer receipt')
+                # Update only acknowledged control state, never job freshness.
+                peer_file = source.data_dir / 'machines' / target / 'engine.json'
+                from .tachometer import read_json
+                snapshot = read_json(peer_file) or {}
+                audit_action('Jeff/operator via ' + self.client_address[0] + ': ' + target + ' confirmed ' + ('maintenance' if body['maintenance'] else 'return to service'), source.data_dir)
+                snapshot['control'] = result
+                peer_file.parent.mkdir(parents=True, exist_ok=True)
+                temp = peer_file.with_suffix('.control.tmp')
+                temp.write_text(json.dumps(snapshot))
+                temp.replace(peer_file)
+            else:
+                result = set_maintenance(body['maintenance'],
+                    'Jeff/operator via ' + self.client_address[0], source.data_dir)
+            engine = getattr(self.server, 'engine_collector', None)
+            if engine:
+                engine._at = 0
+            payload = json.dumps(result).encode()
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json')
+            self.send_header('Cache-Control', 'no-store')
+            self.end_headers()
+            self.wfile.write(payload)
+        except (ValueError, TypeError, AttributeError):
+            self.send_error(400, 'Invalid confirmed node control')
+        except Exception:
+            self.send_error(503, 'Node control unavailable; state not confirmed')
+
     def do_POST(self) -> None:
+        if self.path == '/api/control/node':
+            self._control_node()
+            return
         from ..local_karen.verdict_push import PUSH_PATH, MAX_BYTES, receive
         if self.path != PUSH_PATH:
             self._serve_404()

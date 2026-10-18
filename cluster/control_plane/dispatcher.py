@@ -273,6 +273,9 @@ class Dispatcher:
     
     def check_machine_guards(self) -> tuple[bool, str, dict]:
         """Check if this machine can accept work."""
+        from .node_control import is_draining
+        if is_draining(self.machine):
+            return False, "Node in maintenance; running jobs may finish", {}
         guards = MachineGuards(self.machine)
         result = guards.check_all()
         guard_values = {
@@ -407,6 +410,8 @@ class Dispatcher:
         """
         decisions = []
         
+        # Reconcile even during maintenance; draining must not hide dead workers.
+        self.ledger.expire_stale_leases()
         guards_ok, guards_reason, guard_values = self.check_machine_guards()
         if not guards_ok:
             decision = DispatchDecision(
@@ -443,8 +448,6 @@ class Dispatcher:
         if self.machine == "nucbox":
             remaining_capacity = self.get_nucbox_lane_capacity(active_lanes)
             max_dispatch = min(max_dispatch, remaining_capacity)
-        
-        self.ledger.expire_stale_leases()
         
         for pr in candidates[:15]:
             if dispatched >= max_dispatch:
@@ -496,6 +499,9 @@ class Dispatcher:
             spawn_error = ""
             
             if live:
+                from .node_control import is_draining
+                if is_draining(self.machine):
+                    break
                 try:
                     job = self.ledger.create_job(
                         repo=repo,

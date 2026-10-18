@@ -148,6 +148,10 @@ def execute(job_id):
     if not jobs:
         raise RuntimeError('Job missing from ledger')
     job = jobs[0]
+    from .node_control import is_draining
+    if is_draining(job.machine):
+        ledger.fail_job(job_id, "maintenance-before-start; eligible for redispatch")
+        return 0
     ledger.start_job(job_id, os.getpid(), model=model_label())
     try:
         findings = findings_for_pr(job.repo, job.pr_number, job.head_sha)

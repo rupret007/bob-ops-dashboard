@@ -4,8 +4,8 @@
 <!--
 StoryPool Dashboard - Mac mini launchd plist
 
-Serves local dashboard on 127.0.0.1:8790.
-Read-only view of cluster status, auto-refreshes every 30s.
+Serves local dashboard on :8790 (localhost/tailnet requests only).
+Read-only status plus confirmed operator maintenance controls.
 Accessible over Tailscale.
 -->
 <dict>
@@ -18,7 +18,7 @@ Accessible over Tailscale.
         <string>-m</string>
         <string>cluster.control_plane.dashboard</string>
         <string>--host</string>
-        <string>127.0.0.1</string>
+        <string>0.0.0.0</string>
         <string>--port</string>
         <string>8790</string>
     </array>

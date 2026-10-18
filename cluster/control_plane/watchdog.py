@@ -164,7 +164,7 @@ def store_peer_engine(peer: str, data: dict) -> bool:
     if not isinstance(jobs, dict) or jobs.get("source") != "local":
         return False
     snapshot = {"synced_at": datetime.now(timezone.utc).isoformat(), "machine": peer,
-                "peer_timestamp": data.get("timestamp"),
+                "peer_timestamp": data.get("timestamp"), "control": data.get("control", {}),
                 "jobs": dict(jobs, running=list(jobs.get("running") or [])[:50]),
                 "llm_local": [g for g in (data.get("llm_local") or []) if isinstance(g, dict)][:20]}
     out = LOG_DIR / "machines" / peer / "engine.json"
@@ -610,6 +610,13 @@ def run_watchdog(machine: Optional[str] = None) -> WatchdogResult:
         machine=machine,
     )
     
+    from .node_control import is_draining
+    if is_draining(machine):
+        result.checks.append(HealthCheck(name="maintenance", passed=True,
+                            message="Operator maintenance; repairs suspended", can_repair=False))
+        _write_watchdog_log(result.to_dict())
+        return result
+
     for service, log_path in SERVICE_LOG_FILES.items():
         if service == "poller" and machine == "nucbox":
             continue

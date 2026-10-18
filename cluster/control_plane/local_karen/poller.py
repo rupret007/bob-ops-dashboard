@@ -222,6 +222,10 @@ def poll_and_run(
                                 "reason": "Draft PR awaits author decision"})
                 continue
 
+            from ..node_control import is_draining
+            if is_draining(guard_machine):
+                logger.info("Remaining reviews deferred: node in maintenance")
+                return results
             if guard_machine:
                 from ..guards import MachineGuards
                 guard = MachineGuards(guard_machine).check_all()

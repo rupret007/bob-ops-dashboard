@@ -200,7 +200,14 @@ class EngineCollector:
         if capacity is None and self.machine == 'nucbox':
             from ..guards import NUCBOX_MAX_LANES
             capacity = NUCBOX_MAX_LANES
-        overall = 'red' if any(v['state'] == 'red' for v in health.values()) else ('green' if all(v['state'] == 'green' for v in health.values()) else 'yellow')
+        from ..node_control import read_control
+        control = read_control(self.data_dir)
+        for name in health:
+            peer = read_json(self.data_dir / 'machines' / name / 'engine.json') or {}
+            node = control if name == self.machine else peer.get('control', {})
+            if node.get('maintenance'):
+                health[name].update(state='maintenance', detail=node.get('reason', 'Operator maintenance'))
+        overall = 'red' if any(v['state'] == 'red' for v in health.values()) else ('green' if all(v['state'] in ('green', 'maintenance') for v in health.values()) else 'yellow')
         job_view, llm_local, llm = self._jobs_and_llm(latest, verdicts, verdict_dir.is_dir(), now.timestamp(), capacity)
         monitor = [line for line in tail(self.data_dir / 'MONITOR.md', 32768) if line.strip()]
         def gauge(label, value, maximum=None, unit=''):
@@ -212,7 +219,8 @@ class EngineCollector:
                            gauge('Merges today · UTC', merges if merge_state is not None else None, 30),
                            gauge('Fix success · last hour', round(100 * sum(j.get('state') == 'done' and bool(j.get('outcome_verified')) for j in attempts) / len(attempts), 1) if attempts else None, 100, '%'),
                            gauge('Backlog remaining', backlog_count)],
-                'jobs': job_view, 'llm_local': llm_local, 'llm': llm,
+                'jobs': job_view, 'llm_local': llm_local, 'llm': llm, 'control': control, 'local_machine': self.machine,
+                'audit': tail(self.data_dir / 'HANDOFF.md', 16384)[-20:],
                 'activity': sorted(events, key=lambda e: stamp(e['timestamp']), reverse=True)[:15],
                 'monitor': monitor[-1] if monitor else 'No monitor status yet',
                 'parity': next(iter(tail(self.data_dir / 'PARITY.md', 32768)), 'Parity audit unavailable'),
