@@ -35,6 +35,7 @@ try:
         undraft_green_prs,
         collect_backlog,
         write_backlog_report,
+        ensure_label_exists,
         EXCLUDED_REPOS,
         MAX_UNDRAFTS_PER_TICK,
     )
@@ -43,6 +44,7 @@ try:
 except ImportError:
     BACKLOG_AVAILABLE = False
     MAX_UNDRAFTS_PER_TICK = 5
+    ensure_label_exists = None  # type: ignore
 
 logging.basicConfig(
     level=logging.INFO,
@@ -50,6 +52,27 @@ logging.basicConfig(
     datefmt="%Y-%m-%d %H:%M:%S",
 )
 logger = logging.getLogger("karen-poller")
+
+# Cache of repos where we've ensured result labels exist
+_result_labels_ensured = set()  # type: set
+
+
+def _ensure_result_label(repo, label):
+    # type: (str, str) -> None
+    """Ensure karen-pass or karen-fail label exists in repo."""
+    cache_key = f"{repo}:{label}"
+    if cache_key in _result_labels_ensured:
+        return
+    if ensure_label_exists is None:
+        return
+    
+    color = "0e8a16" if label == "karen-pass" else "d93f0b"
+    desc = "Karen gate passed" if label == "karen-pass" else "Karen gate failed"
+    try:
+        ensure_label_exists(repo, label, color=color, description=desc)
+        _result_labels_ensured.add(cache_key)
+    except Exception as e:
+        logger.debug(f"Could not ensure label {label} in {repo}: {e}")
 
 
 @dataclass
@@ -164,6 +187,7 @@ def poll_and_run(
                         logger.info(f"Removed {config.poll_label} label from {owner}/{repo}#{pr_number}")
 
                         result_label = "karen-pass" if result.verdict.passed else "karen-fail"
+                        _ensure_result_label(f"{owner}/{repo}", result_label)
                         add_label(owner, repo, pr_number, result_label)
                     except GitHubError as e:
                         logger.warning(f"Failed to update labels on {owner}/{repo}#{pr_number}: {e}")
@@ -179,6 +203,7 @@ def poll_and_run(
                 if remove_label_on_complete:
                     try:
                         remove_label(owner, repo, pr_number, config.poll_label)
+                        _ensure_result_label(f"{owner}/{repo}", "karen-fail")
                         add_label(owner, repo, pr_number, "karen-fail")
                         logger.info(f"Marked {owner}/{repo}#{pr_number} as karen-fail due to gate error")
                     except GitHubError as label_err:
