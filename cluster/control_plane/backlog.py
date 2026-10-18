@@ -585,5 +585,172 @@ def main():
     return 1
 
 
+KAREN_FAILS_PATH = Path("~/.local/share/storypool/karen-fails.md").expanduser()
+
+
+def collect_karen_failures(repos=None):
+    # type: (Optional[List[str]]) -> Dict[str, Any]
+    """Collect Karen gate failures across all repos.
+    
+    Returns dict with failures grouped by reason category.
+    """
+    if repos is None:
+        repos = discover_repos()
+    
+    failures = {
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "total": 0,
+        "by_category": {},  # type: Dict[str, List[Dict]]
+        "by_repo": {},  # type: Dict[str, List[Dict]]
+    }  # type: Dict[str, Any]
+    
+    for repo in repos:
+        prs = get_open_prs(repo)
+        
+        for pr in prs:
+            labels = [l.get("name", "").lower() for l in pr.get("labels", [])]
+            if "karen-fail" not in labels and "karenfail" not in labels:
+                continue
+            
+            pr_num = pr.get("number")
+            if not pr_num:
+                continue
+            
+            # Try to get verdict details from verdict dir
+            verdict_dir = Path("~/.local/share/storypool/verdicts").expanduser()
+            if not verdict_dir.exists():
+                verdict_dir = Path("~/.local/share/karen/verdicts").expanduser()
+            
+            reason = "unknown"
+            tier = "unknown"
+            verdict_file = None
+            
+            safe_repo = repo.replace("/", "_")
+            pattern = f"{safe_repo}_{pr_num}_*_KARENFAIL.json"
+            
+            if verdict_dir.is_dir():
+                matches = list(verdict_dir.glob(pattern))
+                if matches:
+                    # Get most recent
+                    matches.sort(key=lambda p: p.stat().st_mtime, reverse=True)
+                    verdict_file = matches[0]
+                    try:
+                        verdict = json.loads(verdict_file.read_text())
+                        reason = verdict.get("reason", "unknown")[:100]
+                        tier = verdict.get("tier", "unknown")
+                    except (json.JSONDecodeError, OSError):
+                        pass
+            
+            # Categorize by reason pattern
+            reason_lower = reason.lower()
+            if "ci" in reason_lower or "test" in reason_lower or "build" in reason_lower:
+                category = "CI/Test Failures"
+            elif "security" in reason_lower or "auth" in reason_lower:
+                category = "Security Concerns"
+            elif "lint" in reason_lower or "format" in reason_lower or "style" in reason_lower:
+                category = "Lint/Style Issues"
+            elif "agreement" in reason_lower or "reviewer" in reason_lower:
+                category = "Review Agreement Missing"
+            elif "deterministic" in reason_lower or "check" in reason_lower:
+                category = "Deterministic Check Failed"
+            else:
+                category = "Other"
+            
+            failure = {
+                "repo": repo,
+                "pr": pr_num,
+                "title": pr.get("title", "")[:60],
+                "author": (pr.get("author") or {}).get("login", "unknown"),
+                "sha": pr.get("headRefOid", "")[:12],
+                "url": pr.get("url", ""),
+                "reason": reason,
+                "tier": tier,
+            }
+            
+            if category not in failures["by_category"]:
+                failures["by_category"][category] = []
+            failures["by_category"][category].append(failure)
+            
+            if repo not in failures["by_repo"]:
+                failures["by_repo"][repo] = []
+            failures["by_repo"][repo].append(failure)
+            
+            failures["total"] += 1
+    
+    return failures
+
+
+def format_karen_fails_md(failures):
+    # type: (Dict[str, Any]) -> str
+    """Format Karen failures as markdown, grouped by reason category."""
+    lines = [
+        "# Karen Gate Failures Report",
+        "",
+        f"Generated: {failures['timestamp']}",
+        f"Total failures: {failures['total']}",
+        "",
+    ]
+    
+    # Group by category
+    lines.append("## Failures by Category")
+    lines.append("")
+    
+    for category in sorted(failures["by_category"].keys()):
+        fails = failures["by_category"][category]
+        lines.append(f"### {category} ({len(fails)})")
+        lines.append("")
+        lines.append("| PR | Title | Author | Reason |")
+        lines.append("|----|-------|--------|--------|")
+        
+        for f in fails:
+            reason_short = f["reason"][:50] + "..." if len(f["reason"]) > 50 else f["reason"]
+            lines.append(f"| [{f['repo']}#{f['pr']}]({f['url']}) | {f['title'][:30]} | {f['author']} | {reason_short} |")
+        
+        lines.append("")
+    
+    # Group by repo
+    lines.append("## Failures by Repository")
+    lines.append("")
+    
+    for repo in sorted(failures["by_repo"].keys()):
+        fails = failures["by_repo"][repo]
+        lines.append(f"### {repo} ({len(fails)})")
+        lines.append("")
+        
+        for f in fails:
+            lines.append(f"- **#{f['pr']}** - {f['title'][:40]}")
+            lines.append(f"  - Author: {f['author']}, Tier: {f['tier']}")
+            lines.append(f"  - Reason: {f['reason']}")
+            lines.append(f"  - URL: {f['url']}")
+            lines.append("")
+    
+    lines.extend([
+        "---",
+        "",
+        "*This report is auto-generated by StoryPool.*",
+    ])
+    
+    return "\n".join(lines)
+
+
+def write_karen_fails_report(failures=None, output_path=None):
+    # type: (Optional[Dict[str, Any]], Optional[Path]) -> Path
+    """Write Karen failures report to markdown file.
+    
+    Returns path to written file.
+    """
+    if failures is None:
+        failures = collect_karen_failures()
+    
+    path = output_path or KAREN_FAILS_PATH
+    path.parent.mkdir(parents=True, exist_ok=True)
+    
+    md = format_karen_fails_md(failures)
+    path.write_text(md)
+    
+    logger.info("Wrote Karen failures report to %s (%d failures)", path, failures["total"])
+    return path
+
+
 if __name__ == "__main__":
     raise SystemExit(main())

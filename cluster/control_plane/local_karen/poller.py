@@ -36,6 +36,7 @@ try:
         collect_backlog,
         write_backlog_report,
         ensure_label_exists,
+        write_karen_fails_report,
         EXCLUDED_REPOS,
         MAX_UNDRAFTS_PER_TICK,
     )
@@ -50,6 +51,7 @@ except ImportError:
     ensure_label_exists = None  # type: ignore
     dispatch_fix = None  # type: ignore
     should_attempt_fix = None  # type: ignore
+    write_karen_fails_report = None  # type: ignore
 
 logging.basicConfig(
     level=logging.INFO,
@@ -356,6 +358,14 @@ def run_poll_once(config=None, auto_discover=True, auto_label=True, auto_update=
                        len(undrafted))
         except Exception as e:
             logger.warning("Backlog report failed: %s", e)
+        
+        # Write Karen failures report
+        if write_karen_fails_report is not None:
+            try:
+                fails_path = write_karen_fails_report()
+                logger.info("Wrote Karen failures report to %s", fails_path)
+            except Exception as e:
+                logger.warning("Karen failures report failed: %s", e)
 
     return results
 
