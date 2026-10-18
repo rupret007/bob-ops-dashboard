@@ -259,3 +259,7 @@ Recovery outcomes and failures use rotating structured `logs/guardian.jsonl`;
 The dashboard shows recovery counts and peer sync age; reachable peers with old
 health evidence stay yellow with a stale-report explanation. Guardian telemetry is
 copied with peer engine snapshots, never echoed back as the local host's state.
+
+Mini peer health defaults to its verified tailnet HTTPS hostname on port 8790;
+`STORYPOOL_MINI_URL` remains the explicit deployment override. Plain HTTP to the
+TLS listener returns 400 and cannot be treated as machine failure.

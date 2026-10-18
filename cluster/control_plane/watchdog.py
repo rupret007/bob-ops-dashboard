@@ -140,7 +140,7 @@ def _escalate_to_jeff(issue: str, details: str) -> None:
 
 
 PEER_URLS = {
-    "mini": os.environ.get("STORYPOOL_MINI_URL", "http://100.67.108.113:8790"),
+    "mini": os.environ.get("STORYPOOL_MINI_URL", "https://jeffs-mac-mini.tail758ab4.ts.net:8790"),
     "nucbox": os.environ.get("STORYPOOL_NUCBOX_URL", "http://100.93.165.1:8790"),
 }
 

@@ -332,3 +332,26 @@ def test_store_peer_engine_keeps_only_peer_local_section(tmp_path, monkeypatch):
     assert snap["jobs"]["count"] == 1 and snap["llm_local"] == [{"service": "codex", "active": 1}] and snap["synced_at"]
     assert watchdog.store_peer_engine("mini", data) is False
     assert not (tmp_path / "machines" / "mini").exists()
+
+
+def test_mini_peer_default_uses_verified_tailnet_https_endpoint():
+    import os
+    import subprocess
+    import sys
+    env = {k: v for k, v in os.environ.items() if k != 'STORYPOOL_MINI_URL'}
+    code = ('from cluster.control_plane.watchdog import PEER_URLS; '
+            'assert PEER_URLS["mini"] == "https://jeffs-mac-mini.tail758ab4.ts.net:8790"')
+    result = subprocess.run([sys.executable, '-c', code], env=env,
+                            capture_output=True, text=True, timeout=10)
+    assert result.returncode == 0
+
+
+def test_peer_engine_carries_only_remote_guardian_evidence(tmp_path, monkeypatch):
+    monkeypatch.setattr(watchdog, 'LOG_DIR', tmp_path)
+    data = {'timestamp': '2026-10-18T20:00:00+00:00',
+            'jobs': {'mini': {'source': 'local', 'running': []}},
+            'machines': {'mini': {'guardian': {'reloads': 2}},
+                         'nucbox': {'guardian': {'reloads': 99}}}}
+    assert watchdog.store_peer_engine('mini', data)
+    stored = json.loads((tmp_path / 'machines/mini/engine.json').read_text())
+    assert stored['guardian'] == {'reloads': 2}
