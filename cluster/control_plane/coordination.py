@@ -70,7 +70,7 @@ class ClaimClient:
     async def _operation(self, operation, claim=None, bootstrap=False):
         import nats
         from nats.js.api import KeyValueConfig
-        from nats.js.errors import KeyWrongLastSequenceError, APIError
+        from nats.js.errors import KeyWrongLastSequenceError, KeyNotFoundError, APIError
 
         async def quiet_error(_):
             # NATS exceptions can include URLs/credentials. Only stable errors
@@ -109,8 +109,14 @@ class ClaimClient:
         except KeyWrongLastSequenceError:
             error = ClaimBusy if operation == 'acquire' else ClaimLost
             raise error('Work already claimed' if operation == 'acquire' else 'Cluster claim lost') from None
+        except KeyNotFoundError:
+            # A key can expire between create's CAS and its follow-up read.
+            # Defer admission; the next cycle repeats the atomic create.
+            error = ClaimBusy if operation == 'acquire' else ClaimLost
+            raise error('Claim expired during admission; retry next cycle' if operation == 'acquire'
+                        else 'Cluster claim lost') from None
         except APIError as exc:
-            if exc.err_code == 10071:
+            if getattr(exc, 'err_code', None) == 10071:
                 raise ClaimLost('Cluster claim lost') from None
             raise CoordinationError('Coordination unavailable or permission denied; new work paused') from None
         except CoordinationError:

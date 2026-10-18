@@ -263,11 +263,21 @@ class EngineCollector:
             if node.get('maintenance'):
                 health[name].update(state='maintenance', detail=node.get('reason', 'Operator maintenance'))
         overall = 'red' if any(v['state'] == 'red' for v in health.values()) else ('green' if all(v['state'] in ('green', 'maintenance') for v in health.values()) else 'yellow')
+        admission = {'state': 'unknown', 'reason': 'Work admission has no recent dispatcher report.'}
+        if isinstance(dispatch, dict) and now.timestamp() - 900 <= stamp(dispatch.get('timestamp')) <= now.timestamp() + 60:
+            decisions = dispatch.get('summary', {}).get('decisions', [])
+            paused = any(d.get('action') == 'dispatch_failed' and 'coordination' in str(d.get('reason', '')).lower()
+                         for d in decisions if isinstance(d, dict))
+            admission = {'state': 'paused' if paused else 'ready',
+                         'reason': 'New fixes paused: shared coordination unavailable. Verify broker permissions and retry storage.'
+                         if paused else 'Latest dispatcher report has no coordination blocker.'}
+            if paused and overall == 'green':
+                overall = 'yellow'
         job_view, llm_local, llm = self._jobs_and_llm(latest, verdicts, verdict_dir.is_dir(), now.timestamp(), capacity)
         monitor = [line for line in tail(self.data_dir / 'MONITOR.md', 32768) if line.strip()]
         def gauge(label, value, maximum=None, unit=''):
             return {'label': label, 'value': value, 'max': maximum, 'unit': unit}
-        return {'timestamp': now.isoformat(), 'engine': overall, 'machines': health,
+        return {'timestamp': now.isoformat(), 'engine': overall, 'machines': health, 'admission': admission,
                 'gauges': [gauge('Active lanes', running, capacity), gauge('Verified jobs / hour', jobs_hour),
                            gauge('Karen reviews / hour', len(recent)),
                            gauge('PASS rate · last hour', round(100 * sum(review_state(v) == 'PASS' for v in recent) / len(recent), 1) if recent else None, 100, '%'),

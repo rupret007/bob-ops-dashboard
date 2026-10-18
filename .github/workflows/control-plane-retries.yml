@@ -34,4 +34,4 @@ jobs:
           BOB_REQUIRE_NATS: '1'
         run: |
           python -m compileall -q cluster
-          python -m pytest -q cluster/control_plane/tests/test_retry_policy.py cluster/control_plane/tests/test_fix_worker.py cluster/control_plane/tests/test_coordination.py cluster/control_plane/tests/test_service_logging.py cluster/control_plane/dashboard/tests cluster/tests/test_dispatcher.py cluster/tests/test_job_ledger.py cluster/tests/test_python39.py cluster/tests/test_python39_runtime.py
+          python -m pytest -q cluster/control_plane/tests/test_retry_policy.py cluster/control_plane/tests/test_fix_worker.py cluster/control_plane/tests/test_coordination.py cluster/control_plane/tests/test_claim_expiry_errors.py cluster/control_plane/tests/test_service_logging.py cluster/control_plane/dashboard/tests cluster/tests/test_dispatcher.py cluster/tests/test_job_ledger.py cluster/tests/test_python39.py cluster/tests/test_python39_runtime.py

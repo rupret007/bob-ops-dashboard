@@ -347,3 +347,15 @@ budget. Existing lockfile, test, secret, protected-repo and exact-head Karen mer
 gates remain required. Dashboard shows blocked PR, head, reason and next action
 in a safe-text, read-only list. Real deployment requires provisioning/permissions;
 unit-test success does not establish that the live bucket is ready.
+
+Claim expiry and operator visibility: JetStream can expire a key between the
+create-only CAS and the client's follow-up read. A missing key at admission is a
+busy/deferred attempt; missing keys during renewal or release mean claim lost.
+Neither path authorizes work, exposes broker details, or deletes a successor.
+Incomplete broker API errors become a generic coordination pause. Real expiry
+races and injected client exceptions are covered on Python 3.9 and 3.14.
+The engine snapshot separately reports fresh dispatcher admission state; shared
+coordination failures turn the overall engine yellow while machine health badges
+retain their actual health. Reports older than fifteen minutes are unknown.
+The Python 3.9 CI job installs the pinned test broker, and shared requirements
+include pytest so unittest discovery can import every safety test module.
