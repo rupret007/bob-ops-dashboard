@@ -48,6 +48,7 @@ from ..never_touch import check_merge_allowed, NEVER_TOUCH_REPOS
 from .budget_tracker import BudgetTracker
 from .dispatcher import _get_open_prs, _run_gh, REPOS
 from .guards import MachineGuards, mini_guards_pass, nucbox_guards_pass
+from .metrics import MetricsTracker
 
 CONDUCTOR_LOG_DIR = Path(
     os.environ.get("STORYPOOL_CONDUCTOR_LOG_DIR", "~/.local/share/storypool/conductor")
@@ -571,6 +572,8 @@ class Conductor:
     Uses Codex (primary) or Gemini (fallback) to reason about system state
     and propose actions. All proposals are validated against hard rails
     before execution.
+    
+    BETTER-THAN-GROK: Tracks metrics for week-over-week comparison.
     """
     
     def __init__(
@@ -580,6 +583,7 @@ class Conductor:
         budget_tracker: Optional[BudgetTracker] = None,
         codex_client: Optional[CodexClient] = None,
         gemini_client: Optional[GeminiClient] = None,
+        metrics_tracker: Optional[MetricsTracker] = None,
         use_claude: bool = False,
     ):
         self.log_dir = log_dir or CONDUCTOR_LOG_DIR
@@ -589,6 +593,7 @@ class Conductor:
         self.budget = budget_tracker or BudgetTracker()
         self.codex = codex_client or CodexClient()
         self.gemini = gemini_client or GeminiClient()
+        self.metrics = metrics_tracker or MetricsTracker()
         self.use_claude = use_claude
         self.validated_actions = []  # type: list
         
@@ -976,7 +981,7 @@ class Conductor:
         return ValidatedAction(action, True, "Validated")
     
     def execute_action(self, validated: ValidatedAction, live: bool = False) -> ValidatedAction:
-        """Execute a validated action."""
+        """Execute a validated action and record metrics."""
         if not validated.validated:
             return validated
         
@@ -989,6 +994,8 @@ class Conductor:
         
         try:
             if action.action_type == ActionType.MERGE_PR.value:
+                merge_start = time.time()
+                
                 subprocess.run(
                     ["gh", "pr", "merge", str(action.pr_number), "--repo", action.repo,
                      "--squash", "--delete-branch", "--match-head-commit", action.head_sha],
@@ -998,6 +1005,10 @@ class Conductor:
                 validated.execution_result = "merged"
                 
                 self._record_merge(action.repo, action.pr_number, action.head_sha)
+                
+                merge_duration_hours = (time.time() - merge_start) / 3600
+                time_to_merge = action.extra.get("time_to_merge_hours", merge_duration_hours)
+                self.metrics.record_merge(time_to_merge, successful=True)
                 
                 time.sleep(10)
                 ci_ok, ci_status = self._check_main_ci_after_merge(action.repo)
@@ -1021,14 +1032,22 @@ class Conductor:
         except subprocess.SubprocessError as e:
             validated.executed = False
             validated.execution_result = f"error: {str(e)[:100]}"
+            if action.action_type == ActionType.MERGE_PR.value:
+                self.metrics.record_merge(0, successful=False)
         
         return validated
     
     def write_digest(self, snapshot: StateSnapshot, proposals: Optional[dict], 
                      validated_actions: list[ValidatedAction]) -> None:
-        """Write twice-daily human-readable digest (8 AM / 8 PM CT)."""
+        """Write twice-daily human-readable digest (8 AM / 8 PM CT).
+        
+        BETTER-THAN-GROK: Includes week-over-week comparison.
+        """
         now = datetime.now(timezone.utc)
         ct_hour = _get_ct_hour()
+        
+        stuck_prs = self._count_stuck_prs(snapshot.open_prs)
+        self.metrics.update_pr_counts(len(snapshot.open_prs), stuck_prs)
         
         lines = [
             f"# StoryPool Conductor Digest",
@@ -1086,8 +1105,14 @@ class Conductor:
         
         lines.extend([
             "",
+            self.metrics.format_comparison_markdown(),
+            "",
+        ])
+        
+        lines.extend([
+            "",
             "## System State",
-            f"- Open PRs: {len(snapshot.open_prs)} ({len(priority_prs)} priority)",
+            f"- Open PRs: {len(snapshot.open_prs)} ({len(priority_prs)} priority, {stuck_prs} stuck)",
             f"- Mini: load={snapshot.machine_guards.get('mini', {}).get('load', '?')}, "
             f"passed={snapshot.machine_guards.get('mini', {}).get('passed', '?')}",
             f"- NucBox: load={snapshot.machine_guards.get('nucbox', {}).get('load', '?')}, "
@@ -1101,6 +1126,31 @@ class Conductor:
             cost = data.get("cost_usd", 0)
             cap = "⚠️" if pct > 70 else "✓"
             lines.append(f"- {provider}: ${cost:.2f} ({pct:.1f}%) {cap}")
+        
+        lines.extend([
+            "",
+            "---",
+            f"*Log: {self._log_file()}*",
+        ])
+        
+        self._digest_file().write_text("\n".join(lines))
+    
+    def _count_stuck_prs(self, open_prs: list) -> int:
+        """Count PRs with no progress for >24 hours."""
+        stuck = 0
+        cutoff = datetime.now(timezone.utc) - timedelta(hours=24)
+        
+        for pr in open_prs:
+            updated_at = pr.get("updatedAt", "")
+            if updated_at:
+                try:
+                    updated = datetime.fromisoformat(updated_at.replace("Z", "+00:00"))
+                    if updated < cutoff and not pr.get("isDraft"):
+                        stuck += 1
+                except (ValueError, TypeError):
+                    pass
+        
+        return stuck
         
         lines.extend([
             "",
