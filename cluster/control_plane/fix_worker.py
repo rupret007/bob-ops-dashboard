@@ -66,9 +66,22 @@ def _run_claimed(args, cwd, lease, **kwargs):
     guard = _execution_guard.get()
     if guard is not None:
         guard()  # Final fence after run() renewal/logging, immediately before spawn.
-    process = subprocess.Popen(args, cwd=cwd, text=True, stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE, stdin=subprocess.PIPE if prompt is not None else None,
-        start_new_session=True, **kwargs)
+    containment = None
+    if guard is not None:
+        from .owner_process_containment import OwnerProcessContainment
+        containment = OwnerProcessContainment()
+        if 'preexec_fn' in kwargs:
+            containment.close()
+            raise ValueError('Owner commands may not replace containment preexec')
+        kwargs['preexec_fn'] = containment.attach_before_exec
+    try:
+        process = subprocess.Popen(args, cwd=cwd, text=True, stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE, stdin=subprocess.PIPE if prompt is not None else None,
+            start_new_session=True, **kwargs)
+    except BaseException:
+        if containment is not None:
+            containment.close()
+        raise
     deadline = time.monotonic() + 1800
     try:
         while True:
@@ -89,7 +102,12 @@ def _run_claimed(args, cwd, lease, **kwargs):
             raise subprocess.CalledProcessError(process.returncode, args, stdout, stderr)
         return subprocess.CompletedProcess(args, process.returncode, stdout, stderr)
     finally:
-        if process.poll() is None:
+        if containment is not None:
+            # Always tear down, including after the leader exited successfully.
+            # Cleanup errors replace success and prevent tests/diff/push followups.
+            containment.close()
+            process.communicate()
+        elif process.poll() is None:
             try:
                 os.killpg(process.pid, signal.SIGTERM)
                 process.communicate(timeout=2)
@@ -105,6 +123,9 @@ def run(args, cwd=None, **kwargs):
     if guard is not None:
         guard()
     lease = _lease.get()
+    if guard is not None and lease is None:
+        from .coordination import CoordinationError
+        raise CoordinationError('Owner command requires a cluster lease and containment')
     if lease is not None:
         lease.renew()
     started = time.monotonic()
