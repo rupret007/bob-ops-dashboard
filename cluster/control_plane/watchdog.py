@@ -45,6 +45,7 @@ SERVICE_LOG_FILES = {
     "dispatch": LOG_DIR / "dispatch" / "dispatch.log",
     "conductor": LOG_DIR / "conductor",
     "poller": Path("~/.local/share/karen/poller.log").expanduser(),
+    "dashboard": LOG_DIR / "dashboard.log",
 }
 
 logging.basicConfig(

@@ -241,6 +241,7 @@ def copy_karen_module(repo_dir: Path, module_dir: Optional[Path] = None) -> bool
     
     Copies:
     - cluster/control_plane/local_karen -> module/cluster/control_plane/local_karen
+    - cluster/control_plane/dashboard -> module/cluster/control_plane/dashboard
     - cluster/control_plane/backlog.py -> module/cluster/control_plane/backlog.py
     - cluster/control_plane/self_update.py -> module/cluster/control_plane/self_update.py
     - cluster/never_touch.py -> module/cluster/never_touch.py
@@ -249,6 +250,7 @@ def copy_karen_module(repo_dir: Path, module_dir: Optional[Path] = None) -> bool
         module_dir = KAREN_MODULE_DIR
     
     src_karen = repo_dir / "cluster" / "control_plane" / "local_karen"
+    src_dashboard = repo_dir / "cluster" / "control_plane" / "dashboard"
     src_backlog = repo_dir / "cluster" / "control_plane" / "backlog.py"
     src_self_update = repo_dir / "cluster" / "control_plane" / "self_update.py"
     src_never_touch = repo_dir / "cluster" / "never_touch.py"
@@ -259,6 +261,7 @@ def copy_karen_module(repo_dir: Path, module_dir: Optional[Path] = None) -> bool
     
     dst_control_plane = module_dir / "cluster" / "control_plane"
     dst_karen = dst_control_plane / "local_karen"
+    dst_dashboard = dst_control_plane / "dashboard"
     
     try:
         dst_control_plane.mkdir(parents=True, exist_ok=True)
@@ -266,6 +269,11 @@ def copy_karen_module(repo_dir: Path, module_dir: Optional[Path] = None) -> bool
         if dst_karen.exists():
             shutil.rmtree(dst_karen)
         shutil.copytree(src_karen, dst_karen)
+        
+        if src_dashboard.is_dir():
+            if dst_dashboard.exists():
+                shutil.rmtree(dst_dashboard)
+            shutil.copytree(src_dashboard, dst_dashboard)
         
         if src_backlog.is_file():
             shutil.copy2(src_backlog, dst_control_plane / "backlog.py")

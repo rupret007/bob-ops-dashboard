@@ -326,6 +326,29 @@ CONFIG
     fi
 }
 
+install_dashboard() {
+    log_header "Installing Dashboard"
+
+    mkdir -p "$SYSTEMD_DIR"
+
+    local service_src="$SCRIPT_DIR/storypool-dashboard.service"
+
+    if [[ ! -f "$service_src" ]]; then
+        log_warn "Dashboard service not found — skipping"
+        return
+    fi
+
+    sed -e "s|__REPO_PATH__|$REPO_ROOT|g" \
+        "$service_src" > "$SYSTEMD_DIR/storypool-dashboard.service"
+
+    systemctl --user daemon-reload
+    systemctl --user enable storypool-dashboard.service 2>/dev/null || true
+    systemctl --user restart storypool-dashboard.service 2>/dev/null || systemctl --user start storypool-dashboard.service
+
+    log_info "Dashboard installed on http://127.0.0.1:8790/"
+    log_info "Accessible over Tailscale"
+}
+
 run_self_check() {
     log_header "Self-Check"
 
@@ -477,6 +500,7 @@ main() {
     install_conductor
     install_selfupdate
     install_watchdog
+    install_dashboard
     install_karen_cli
     run_self_check
 

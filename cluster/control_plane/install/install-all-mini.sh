@@ -262,6 +262,38 @@ install_watchdog() {
     log_info "Logs: ~/.local/share/storypool/watchdog.log"
 }
 
+install_dashboard() {
+    log_header "Installing Dashboard"
+
+    local log_dir="$HOME/.local/share/storypool"
+    mkdir -p "$log_dir"
+
+    local plist_src="$SCRIPT_DIR/com.storypool.dashboard.plist"
+    local plist_dst="$HOME/Library/LaunchAgents/com.storypool.dashboard.plist"
+
+    if [[ ! -f "$plist_src" ]]; then
+        log_warn "Dashboard plist not found at $plist_src — skipping"
+        return
+    fi
+
+    mkdir -p "$HOME/Library/LaunchAgents"
+
+    sed -e "s|__REPO_PATH__|$REPO_ROOT|g" \
+        -e "s|__HOME__|$HOME|g" \
+        -e "s|__PATH__|$LAUNCHD_PATH|g" \
+        "$plist_src" > "$plist_dst"
+
+    clear_pycache "$REPO_ROOT/cluster"
+
+    if launchctl list com.storypool.dashboard &>/dev/null; then
+        launchctl unload "$plist_dst" 2>/dev/null || true
+    fi
+    launchctl load "$plist_dst"
+
+    log_info "Dashboard installed on http://127.0.0.1:8790/"
+    log_info "Accessible over Tailscale"
+}
+
 install_karen_cli() {
     log_header "Installing Karen Gate CLI"
 
@@ -425,7 +457,7 @@ run_self_check() {
 uninstall_all() {
     log_header "Uninstalling All Components"
 
-    for label in com.storypool.shadow com.storypool.dispatch com.storypool.conductor com.storypool.watchdog com.storypool.karen-poller; do
+    for label in com.storypool.shadow com.storypool.dispatch com.storypool.conductor com.storypool.watchdog com.storypool.dashboard com.storypool.karen-poller; do
         local plist="$HOME/Library/LaunchAgents/$label.plist"
         if launchctl list "$label" &>/dev/null; then
             log_info "Unloading $label..."
@@ -472,6 +504,7 @@ main() {
     install_dispatcher
     install_conductor
     install_watchdog
+    install_dashboard
     install_karen_cli
     run_self_check
 
