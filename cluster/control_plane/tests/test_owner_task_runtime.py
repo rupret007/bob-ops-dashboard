@@ -101,7 +101,7 @@ def test_owner_worker_never_runs_outside_runtime(setup_runtime):
         create_owner_draft(request, authority)
 
 
-@pytest.mark.parametrize('attack', ['none', 'missing_evidence', 'mutated_tests'])
+@pytest.mark.parametrize('attack', ['none', 'missing_evidence', 'mutated_tests', 'changed_commit_tree'])
 def test_real_generic_worker_pipeline_checks_tests_and_creates_only_draft(setup_runtime, attack):
     runtime, request, inbox, authority = setup_runtime
     calls = []
@@ -126,7 +126,7 @@ def test_real_generic_worker_pipeline_checks_tests_and_creates_only_draft(setup_
         raw = args
         if args[0] == 'git':
             operation = next(i for i, arg in enumerate(args[1:], 1)
-                if arg in ('clone', 'checkout', 'rev-parse', 'ls-remote', 'diff', 'add', 'commit', 'push'))
+                if arg in ('clone', 'checkout', 'rev-parse', 'ls-remote', 'diff', 'add', 'commit', 'push', 'write-tree', 'ls-tree'))
             args = ['git'] + args[operation:]
             if args[1] != 'clone':
                 assert any(a.startswith('--git-dir=') for a in raw)
@@ -139,7 +139,19 @@ def test_real_generic_worker_pipeline_checks_tests_and_creates_only_draft(setup_
                 tree = Path(args[-1])
                 tree.mkdir()
                 (tree / '.git').write_text('gitdir: ' + str(git_dir) + '\n')
+                (tree / 'tests').mkdir()
+                (tree / 'tests' / 'test_chat.py').write_text('def test_chat():\n    assert 1 == 1\n')
         calls.append(args)
+        if args[:3] == ['git', 'rev-parse', 'HEAD^{tree}']:
+            return ('e' if attack == 'changed_commit_tree' else 'd') * 40
+        if args[:2] == ['git', 'write-tree']:
+            return 'd' * 40
+        if args[:2] == ['git', 'ls-tree']:
+            import hashlib
+            content = b'def test_chat():\n    assert 1 == 1\n'
+            blob = hashlib.sha1(b'blob ' + str(len(content)).encode() + b'\0' + content).hexdigest()
+            return '100644 blob ' + blob + '\ttests/test_chat.py\0'
+
         if args[:3] == ['git', 'rev-parse', 'HEAD']:
             return 'c'*40 if committed else request['head_sha']
         if args[:2] == ['git', 'commit']:
@@ -158,9 +170,11 @@ def test_real_generic_worker_pipeline_checks_tests_and_creates_only_draft(setup_
     with patch('cluster.control_plane.owner_task_runtime.Lease'), patch.object(fix_worker, 'run', side_effect=command), patch.object(fix_worker, 'test_command', return_value=['pytest']):
         runtime(request, branch_lease=MagicMock())
         if attack != 'none':
-            with pytest.raises(CoordinationError, match='regression evidence|workspace changed'):
+            with pytest.raises(CoordinationError, match='regression evidence|workspace changed|Committed Git tree'):
                 runtime.execute(request['request_id'])
-            assert not any(c[:2] == ['git', 'commit'] or c[:2] == ['git', 'push'] for c in calls)
+            assert not any(c[:2] == ['git', 'push'] for c in calls)
+            if attack != 'changed_commit_tree':
+                assert not any(c[:2] == ['git', 'commit'] for c in calls)
             return
         assert runtime.execute(request['request_id']) == 'complete'
     assert any(c[0] == 'operator-test-isolation-adapter' for c in calls)

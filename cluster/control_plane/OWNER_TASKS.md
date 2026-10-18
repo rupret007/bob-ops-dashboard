@@ -114,3 +114,10 @@ not satisfy this requirement. Unsupported test identifiers fail closed. The
 receipt's marker alone is not provenance: the OS-isolated external observer,
 read-only mount, full teardown barrier, and authority integration still require
 implementation and review. Production admission/execution stays hard-disabled.
+
+The snapshot is now restricted to the exact staged Git tree (`write-tree` plus
+NUL-delimited `ls-tree`). Every retained file's raw Git blob hash and executable
+mode must equal that tree. Ignored/untracked helpers are excluded from tests and
+publication; filters/normalization that change bytes fail closed. Before push,
+the resulting commit's tree must equal the tested staged tree. Dependencies and
+runner caches must remain outside the code tree under the future trusted adapter.
