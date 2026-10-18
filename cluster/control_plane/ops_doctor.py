@@ -49,7 +49,7 @@ def repair(root, log, stamp):
                   'create tags/releases, or commit/push. The supervisor handles commits and a draft PR.\n'
                   + log.read_text()[-24000:])
         with log.open('a') as output:
-            subprocess.run([str(codex), 'exec', '--full-auto', '-c', 'model_reasoning_effort=low', '-'],
+            subprocess.run([str(codex), 'exec', '-s', 'workspace-write', '-c', 'model_reasoning_effort=low', '-c', 'sandbox_workspace_write.network_access=true', '-'],
                            cwd=tree, input=prompt, text=True, stdout=output,
                            stderr=subprocess.STDOUT, timeout=1800, check=True)
             subprocess.run([sys.executable, '-m', 'pytest', 'cluster', '-q'], cwd=tree,

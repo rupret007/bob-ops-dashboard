@@ -65,7 +65,7 @@ def fix_pr(repo, pr_number, head_sha, findings):
                   'Do not weaken tests. Do not commit or push; the supervisor does that. '
                   'No sudo, force-push, main pushes, tags, releases, merges, secrets, or rad-dad-show-night.\n'
                   f'Test command: {" ".join(tests)}')
-        run([str(codex), 'exec', '--full-auto', '-c', 'model_reasoning_effort=low', '-'],
+        run([str(codex), 'exec', '-s', 'workspace-write', '-c', 'model_reasoning_effort=low', '-c', 'sandbox_workspace_write.network_access=true', '-'],
             tree, input=prompt)
         run(tests, tree, env={**os.environ,
             'STORYPOOL_JOBS_DIR': str(Path(temp) / 'test-jobs'),
