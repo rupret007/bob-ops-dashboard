@@ -22,6 +22,8 @@ import re
 import shutil
 import subprocess
 import time
+from collections import deque
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field, asdict
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
@@ -66,6 +68,7 @@ class HealthCheck:
     can_repair: bool = True
     repaired: bool = False
     repair_action: str = ""
+    execution_error: bool = False
     
     def to_dict(self) -> dict:
         return asdict(self)
@@ -291,7 +294,7 @@ def check_tracebacks(service: str, log_path: Path) -> HealthCheck:
         traceback_count = 0
         
         with open(log_path, "r") as f:
-            lines = f.readlines()[-500:]
+            lines = deque(f, maxlen=500)
             for line in lines:
                 if "Traceback" in line or "Error:" in line or "Exception:" in line:
                     traceback_count += 1
@@ -403,8 +406,8 @@ def check_labels_exist(repo: str) -> HealthCheck:
         if result.returncode != 0:
             return HealthCheck(
                 name=f"labels_{repo.replace('/', '_')}",
-                passed=True,
-                message=f"Could not list labels: {result.stderr[:100]}",
+                passed=False, can_repair=False, execution_error=True,
+                message="Could not list labels; GitHub CLI failed",
             )
         
         labels = json.loads(result.stdout)
@@ -426,11 +429,11 @@ def check_labels_exist(repo: str) -> HealthCheck:
             passed=True,
             message="All required labels exist",
         )
-    except (subprocess.SubprocessError, json.JSONDecodeError) as e:
+    except (OSError, subprocess.SubprocessError, json.JSONDecodeError):
         return HealthCheck(
             name=f"labels_{repo.replace('/', '_')}",
-            passed=True,
-            message=f"Could not check labels: {e}",
+            passed=False, can_repair=False, execution_error=True,
+            message="Could not execute label check",
         )
 
 
@@ -453,8 +456,8 @@ def check_head_lag() -> HealthCheck:
     if lag_info.get("error"):
         return HealthCheck(
             name="head_lag",
-            passed=True,
-            message=f"Could not check: {lag_info['error']}",
+            passed=False, can_repair=False, execution_error=True,
+            message="Could not execute install head check",
         )
     
     if not lag_info.get("lagging"):
@@ -516,6 +519,9 @@ def check_install_stale() -> HealthCheck:
             text=True,
             timeout=30,
         )
+        if result.returncode:
+            return HealthCheck('install_stale', False, 'Install fetch check failed',
+                               can_repair=False, execution_error=True)
         
         result = subprocess.run(
             ["git", "rev-list", "--count", "HEAD..origin/cursor/storypool-all-in-one-47c7"],
@@ -536,16 +542,19 @@ def check_install_stale() -> HealthCheck:
                     repair_action="self_update",
                 )
         
+        if result.returncode:
+            return HealthCheck('install_stale', False, 'Install revision check failed',
+                               can_repair=False, execution_error=True)
         return HealthCheck(
             name="install_stale",
             passed=True,
             message="Install is up to date",
         )
-    except (subprocess.SubprocessError, ValueError) as e:
+    except (OSError, subprocess.SubprocessError, ValueError):
         return HealthCheck(
             name="install_stale",
-            passed=True,
-            message=f"Could not check: {e}",
+            passed=False, can_repair=False, execution_error=True,
+            message="Could not execute install revision check",
         )
 
 
@@ -619,7 +628,7 @@ def repair_self_update(machine: str) -> bool:
         return False
 
 
-def run_watchdog(machine: Optional[str] = None) -> WatchdogResult:
+def run_watchdog(machine: Optional[str] = None, check_only: bool = False) -> WatchdogResult:
     """Run all watchdog checks and attempt repairs."""
     if machine is None:
         machine = _get_machine()
@@ -636,25 +645,30 @@ def run_watchdog(machine: Optional[str] = None) -> WatchdogResult:
         _write_watchdog_log(result.to_dict())
         return result
 
+    from .watchdog_check import run_check
+    tasks = []
     for service, log_path in SERVICE_LOG_FILES.items():
         if service == "poller" and machine == "nucbox":
             continue
         
-        stuck_check = check_service_stuck(service, log_path)
-        result.checks.append(stuck_check)
-        
-        traceback_check = check_tracebacks(service, log_path)
-        result.checks.append(traceback_check)
-    
-    result.checks.append(check_gh_in_path())
-    result.checks.append(check_codex_in_path())
+        tasks.extend([(check_service_stuck, service, log_path),
+                      (check_tracebacks, service, log_path)])
+    tasks.extend([(check_gh_in_path,), (check_codex_in_path,)])
     
     sample_repos = ["rupret007/webjam", "rupret007/bob-ops-dashboard"]
     for repo in sample_repos[:1]:
-        result.checks.append(check_labels_exist(repo))
+        tasks.append((check_labels_exist, repo))
     
-    result.checks.append(check_install_stale())
-    result.checks.append(check_head_lag())
+    tasks.extend([(check_install_stale,), (check_head_lag,)])
+    # Four bounded subprocesses at a time. Repairs stay sequential and outside
+    # the pool so a timed-out check cannot later perform a repair.
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        pending = [pool.submit(run_check, *task) for task in tasks]
+        result.checks.extend(future.result() for future in pending)
+
+    if check_only:
+        _write_watchdog_log(result.to_dict())
+        return result
     
     for check in result.checks:
         if not check.passed:
@@ -694,12 +708,15 @@ def main() -> int:
     parser.add_argument("--machine", choices=["mini", "nucbox"], default=None)
     parser.add_argument("--json", action="store_true", help="Output as JSON")
     parser.add_argument("--check-only", action="store_true", help="Don't attempt repairs")
+    parser.add_argument("--findings-only", action="store_true",
+                        help="Report findings without repairs; execution errors still fail")
     
     args = parser.parse_args()
     
-    result = run_watchdog(machine=args.machine)
+    check_only = args.check_only or args.findings_only
+    result = run_watchdog(machine=args.machine, check_only=check_only)
     sync_peer_health(result.machine)
-    if not args.check_only:
+    if not check_only:
         from .node_control import is_draining
         if not is_draining():
             from .main_ci import reconcile_recent
@@ -725,6 +742,10 @@ def main() -> int:
             status = "✓" if check.passed else ("⚠ REPAIRED" if check.repaired else "✗")
             print(f"  {status} {check.name}: {check.message}")
     
+    if any(c.execution_error for c in result.checks):
+        return 2
+    if args.findings_only:
+        return 0
     return 0 if all(c.passed or c.repaired for c in result.checks) else 1
 
 

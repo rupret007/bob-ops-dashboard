@@ -115,7 +115,7 @@ def test_busy_doctor_defers_without_failed_service_or_jeff_spam(tmp_path, monkey
          patch.object(doctor.subprocess, 'run', return_value=CompletedProcess([], 1)), \
          patch.object(doctor, 'repair', side_effect=ClaimBusy('Task already claimed')), \
          patch.object(doctor, 'escalate') as escalate:
-        assert doctor.main() == 0
+        assert doctor.main([]) == 0
     escalate.assert_not_called()
     assert 'REPAIR DEFERRED: Task already claimed' in next(tmp_path.glob('*.log')).read_text()
 

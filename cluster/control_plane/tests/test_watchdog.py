@@ -168,6 +168,16 @@ class TestRepairFunctions:
 class TestWatchdogRun:
     """Tests for full watchdog run."""
 
+    @pytest.fixture(autouse=True)
+    def inline_check_runner(self):
+        # These tests exercise result/repair handling with mocked checks. The
+        # subprocess deadline and parallelism have separate integration tests.
+        with mock.patch('cluster.control_plane.watchdog_check.run_check',
+                        side_effect=lambda check, *args: check(*args)), \
+                mock.patch.object(watchdog, 'check_head_lag', return_value=
+                                  watchdog.HealthCheck('head_lag', True, 'current')):
+            yield
+
     @mock.patch.object(watchdog, "check_service_stuck")
     @mock.patch.object(watchdog, "check_tracebacks")
     @mock.patch.object(watchdog, "check_gh_in_path")

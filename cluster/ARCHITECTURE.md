@@ -443,3 +443,21 @@ Runtime workers never provision or broaden permissions. Regression coverage adds
 a future bucket to prove stale ACLs fail and regeneration includes it, plus a
 real broker check of claim/retry access, restricted operator bootstrap, and
 service denial of stream administration and rollup.
+
+# Watchdog and hourly diagnostic boundary
+
+The watchdog runs at most four isolated read-only checks concurrently. Each has
+a 20-second wall deadline; the supervisor kills the check's process group at
+completion or timeout so git/gh descendants cannot outlive it. Check failures
+retain their identity and never become a healthy result. Repairs remain serial.
+The installer preserves `TimeoutStartSec=600` for repair/follow-up headroom;
+timer intervals are unchanged. Log scanning keeps only the last 500 lines in
+memory. `--check-only` now actually suppresses repairs and main-CI mutations.
+
+Both hourly doctor installers use `--findings-only`. In this mode incomplete
+pipeline evidence and health findings are retained in private doctor logs and
+exit successfully; they do not create speculative repair jobs. Check startup
+errors, crashes, nonzero execution statuses and timeouts still fail the doctor.
+The smoke verifier distinguishes missing success evidence from execution errors;
+its exact-SHA and PASS requirements are unchanged. Explicit repair mode retains
+the shared claim, daily limit, draft PR and nonzero repair-failure behavior.

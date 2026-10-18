@@ -101,10 +101,15 @@ def _repair_claimed(root, log, stamp, sha):
                     '--body-file', str(body)], tree)
 
 
-def main():
+def main(argv=None):
     from .node_control import is_draining
     if is_draining():
         return 0
+    import argparse
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--findings-only', action='store_true',
+                        help='Report health findings without starting repair jobs')
+    args = parser.parse_args(argv)
     root = Path(__file__).resolve().parents[2]
     state_dir = Path(os.environ.get('STORYPOOL_DOCTOR_DIR', '~/.local/share/storypool/doctor')).expanduser()
     state_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
@@ -117,19 +122,33 @@ def main():
         stamp = now.strftime('%Y%m%dT%H%M%S%fZ')
         log = state_dir / f'{stamp}.log'
         failed = False
+        execution_failed = False
         machine = os.environ.get('STORYPOOL_MACHINE', 'mini' if platform.system() == 'Darwin' else 'nucbox')
         with log.open('w') as output:
             os.chmod(log, 0o600)
             for command in ([sys.executable, '-m', 'cluster.control_plane.smoke'],
-                            [sys.executable, '-m', 'cluster.control_plane.watchdog', '--machine', machine]):
-                output.write(f'CHECK {command[-1]}\n')
+                            [sys.executable, '-m', 'cluster.control_plane.watchdog', '--machine', machine,
+                             '--check-only']):
+                if args.findings_only:
+                    command.append('--findings-only')
+                output.write(f'CHECK {command[2]}\n')
                 output.flush()
                 try:
                     result = subprocess.run(command, cwd=root, stdout=output, stderr=subprocess.STDOUT,
                                             timeout=600, env={**os.environ, 'PYTHONPATH': str(root)})
                     failed = failed or result.returncode != 0
-                except (OSError, subprocess.SubprocessError):
+                    allowed = (0,) if args.findings_only else (0, 1)
+                    execution_failed = execution_failed or result.returncode not in allowed
+                    output.write(f'CHECK EXIT {result.returncode}\n')
+                except (OSError, subprocess.SubprocessError) as exc:
                     failed = True
+                    execution_failed = True
+                    output.write(f'CHECK ERROR: {type(exc).__name__}\n')
+        if execution_failed:
+            return 1
+        if args.findings_only:
+            print(f'Ops doctor: diagnostic run completed; findings retained in {log}')
+            return 0
         if not failed:
             return 0
         try:
