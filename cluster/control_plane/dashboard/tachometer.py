@@ -268,6 +268,11 @@ class EngineCollector:
             key = (value.get('owner'), value.get('repo'), value.get('pr_number'))
             if stamp(value.get('timestamp')) > stamp(latest_observed.get(key, {}).get('timestamp')):
                 latest_observed[key] = value
+        latest_counts = {state: sum(review_state(v) == state for v in latest_observed.values())
+                         for state in ('PASS', 'FAIL', 'ERROR')}
+        review_evidence['latest_counts'] = latest_counts
+        review_evidence['reason'] += ' Latest observed PR results: {} PASS, {} FAIL, {} ERROR.'.format(
+            latest_counts['PASS'], latest_counts['FAIL'], latest_counts['ERROR'])
         security_stops = 0
         for value in latest_observed.values():
             try:

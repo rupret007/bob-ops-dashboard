@@ -85,3 +85,22 @@ def test_verdict_evidence_banner_renders_without_html_injection():
     page = render_dashboard(DashboardData(timestamp='', machine='nucbox', live_mode=True))
     assert 'id="engine-review-evidence"' in page
     assert '.textContent=data.review_evidence?.reason' in page
+
+
+
+def test_latest_pr_result_counts_do_not_hide_failures_or_count_old_heads(tmp_path):
+    older = review(timestamp=(datetime.now(timezone.utc) - timedelta(minutes=10)).isoformat())
+    newer = review(head_sha='b' * 40, passed=False)
+    error = review(pr_number=4, status='ERROR', passed=False)
+    passed = review(pr_number=5)
+    data = snapshot(tmp_path, {'old.json': older, 'new.json': newer,
+                              'error.json': error, 'pass.json': passed,
+                              'copy_LATEST.json': newer})
+    assert data['review_evidence']['latest_counts'] == {'PASS': 1, 'FAIL': 1, 'ERROR': 1}
+    assert 'Latest observed PR results: 1 PASS, 1 FAIL, 1 ERROR.' in data['review_evidence']['reason']
+
+
+def test_missing_pr_results_are_zero_observations(tmp_path):
+    data = snapshot(tmp_path, {})
+    assert data['review_evidence']['latest_counts'] == {'PASS': 0, 'FAIL': 0, 'ERROR': 0}
+    assert data['review_evidence']['state'] == 'stale'

@@ -494,3 +494,12 @@ codes into watchdog sync status and the dashboard. No hostname, address, raw
 CLI output or transport exception is copied into the diagnostic. The badge
 labels last peer contact separately from the last machine health report;
 successful discovery alone never makes stale health green or authorizes work.
+
+
+Karen command/security scanners recognize the complete literal
+`STRUCTURED_REVIEW_PROMPT` assignment only in the reviewer module. Contiguous
+new-side diff context must parse as one string assignment; computed strings,
+gaps and executable suffixes receive no exception. Secret scans still inspect
+prompt text. Model reviewers still review policy changes at the exact head.
+The dashboard shows counts for the latest observed PR results, replacing old
+heads and counting synced copies once; observations never grant approval.

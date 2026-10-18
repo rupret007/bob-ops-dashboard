@@ -477,6 +477,50 @@ def _inert_scanner_rules(diff):
     return safe
 
 
+def _inert_review_prompt(diff):
+    """Recognize the complete literal policy prompt, never computed code.
+
+    Require contiguous new-side source and exactly one string assignment in
+    the known module. Secret scanning deliberately does not use this exemption.
+    """
+    import ast
+
+    path = 'cluster/control_plane/local_karen/reviewers.py'
+    source, current, number = {}, None, 1
+    for line in diff.splitlines():
+        if line.startswith('diff --git '):
+            current = line.split(' b/', 1)[-1]
+        elif line.startswith('@@'):
+            hunk = re.search(r'\+(\d+)(?:,\d+)? @@', line)
+            number = int(hunk.group(1)) if hunk else 1
+        elif current == path and line.startswith((' ', '+')) and not line.startswith('+++'):
+            source[number] = line[1:]
+            number += 1
+    safe = set()
+    for first, text in source.items():
+        if not re.match(r'^STRUCTURED_REVIEW_PROMPT\s*=', text):
+            continue
+        body = []
+        for last in range(first, first + 200):
+            if last not in source:
+                break
+            body.append(source[last])
+            try:
+                tree = ast.parse('\n'.join(body))
+            except SyntaxError:
+                continue
+            if len(tree.body) == 1 and isinstance(tree.body[0], ast.Assign):
+                assignment = tree.body[0]
+                if (len(assignment.targets) == 1
+                        and isinstance(assignment.targets[0], ast.Name)
+                        and assignment.targets[0].id == 'STRUCTURED_REVIEW_PROMPT'
+                        and isinstance(assignment.value, ast.Constant)
+                        and isinstance(assignment.value.value, str)):
+                    safe.update((path, n) for n in range(first, last + 1))
+            break
+    return safe
+
+
 def check_no_secrets_in_diff(pr: PRInfo, config: KarenConfig) -> CheckResult:
     """Check that no secrets are added in the diff.
 
@@ -575,7 +619,7 @@ def check_no_dangerous_commands(pr: PRInfo, config: KarenConfig) -> CheckResult:
     ]
 
     issues = []
-    inert_rules = _inert_scanner_rules(pr.diff)
+    inert_rules = _inert_scanner_rules(pr.diff) | _inert_review_prompt(pr.diff)
     for current_file, number, added_line in _added_lines(pr.diff):
         if _prose_or_comment(current_file, added_line) or (current_file, number) in inert_rules:
             continue
@@ -634,7 +678,7 @@ def check_security_patterns(pr: PRInfo, config: KarenConfig) -> CheckResult:
     - Permissive CORS
     """
     findings = []  # type: list
-    inert_rules = _inert_scanner_rules(pr.diff)
+    inert_rules = _inert_scanner_rules(pr.diff) | _inert_review_prompt(pr.diff)
     current_file = None
     line_num = 0
     in_diff_hunk = False
@@ -937,7 +981,7 @@ def run_static_security_scan(pr: PRInfo, config: KarenConfig) -> CheckResult:
         (r"yaml\.load\s*\([^)]*\)", "unsafe yaml.load", "security"),
         (r"marshal\.load", "marshal deserialization", "security"),
     ]
-    inert_rules = _inert_scanner_rules(pr.diff)
+    inert_rules = _inert_scanner_rules(pr.diff) | _inert_review_prompt(pr.diff)
     for filepath, number, line in _added_lines(pr.diff):
         if _prose_or_comment(filepath, line) or (filepath, number) in inert_rules:
             continue
