@@ -175,6 +175,14 @@ def poll_and_run(
                     "pr": pr_number,
                     "error": str(e),
                 })
+                
+                if remove_label_on_complete:
+                    try:
+                        remove_label(owner, repo, pr_number, config.poll_label)
+                        add_label(owner, repo, pr_number, "karen-fail")
+                        logger.info(f"Marked {owner}/{repo}#{pr_number} as karen-fail due to gate error")
+                    except GitHubError as label_err:
+                        logger.warning(f"Failed to update labels after gate error: {label_err}")
 
     return results
 
