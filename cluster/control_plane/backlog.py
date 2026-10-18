@@ -25,6 +25,8 @@ EXCLUDED_REPOS = frozenset([
 BACKLOG_PATH = Path("~/.local/share/storypool/backlog.md").expanduser()
 DOCS_BACKLOG_PATH = Path("docs/storypool-backlog.md")
 
+MAX_UNDRAFTS_PER_TICK = 5
+
 
 def _run_gh(args, default=None):
     # type: (List[str], Any) -> Any
@@ -87,10 +89,44 @@ def get_open_prs(repo):
     return prs if isinstance(prs, list) else []
 
 
+def is_ci_all_green(pr):
+    # type: (Dict) -> bool
+    """Check if all CI checks are passing (green).
+    
+    Returns True only if there is at least one check AND all checks pass.
+    Returns False if any check is pending, failing, or there are no checks.
+    """
+    ci_checks = pr.get("statusCheckRollup", []) or []
+    
+    if not ci_checks:
+        return False
+    
+    for check in ci_checks:
+        state = (check.get("conclusion") or check.get("state") or "").lower()
+        bucket = check.get("bucket", "").lower()
+        
+        if bucket == "pass" or state in ("success", "neutral"):
+            continue
+        return False
+    
+    return True
+
+
+def is_never_touch_repo(repo):
+    # type: (str) -> bool
+    """Check if repo is in the never-touch list."""
+    return repo.lower() in {e.lower() for e in EXCLUDED_REPOS}
+
+
 def get_pr_state(pr, verdicts_dir=None):
     # type: (Dict, Optional[Path]) -> str
-    """Determine PR state: queued, under_review, passed, failed, blocked."""
-    if pr.get("isDraft"):
+    """Determine PR state: queued, under_review, passed, failed, blocked, draft_green."""
+    is_draft = pr.get("isDraft", False)
+    ci_green = is_ci_all_green(pr)
+    
+    if is_draft:
+        if ci_green:
+            return "draft_green"
         return "draft"
     
     labels = [l.get("name", "").lower() for l in pr.get("labels", [])]
@@ -134,6 +170,7 @@ def collect_backlog(repos=None):
     backlog = {
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "repos": [],
+        "undrafted_this_tick": [],
         "summary": {
             "total_repos": 0,
             "total_prs": 0,
@@ -142,6 +179,7 @@ def collect_backlog(repos=None):
             "passed": 0,
             "failed": 0,
             "draft": 0,
+            "draft_green": 0,
             "ci_failing": 0,
             "ci_pending": 0,
         },
@@ -196,13 +234,36 @@ def format_backlog_md(backlog):
         "| Under Review | {} |".format(backlog["summary"].get("under_review", 0)),
         "| Passed | {} |".format(backlog["summary"].get("passed", 0)),
         "| Failed | {} |".format(backlog["summary"].get("failed", 0)),
-        "| Draft | {} |".format(backlog["summary"].get("draft", 0)),
+        "| Draft (CI green) | {} |".format(backlog["summary"].get("draft_green", 0)),
+        "| Draft (other) | {} |".format(backlog["summary"].get("draft", 0)),
         "| CI Failing | {} |".format(backlog["summary"].get("ci_failing", 0)),
         "| CI Pending | {} |".format(backlog["summary"].get("ci_pending", 0)),
         "",
+    ]
+    
+    undrafted = backlog.get("undrafted_this_tick", [])
+    if undrafted:
+        lines.extend([
+            "## Undrafted This Tick",
+            "",
+            "| PR | Title | Author | SHA |",
+            "|----|-------|--------|-----|",
+        ])
+        for pr in undrafted:
+            lines.append("| [{}#{}]({}) | {} | {} | {} |".format(
+                pr.get("repo", ""),
+                pr.get("pr", ""),
+                pr.get("url", ""),
+                pr.get("title", "")[:40],
+                pr.get("author", ""),
+                pr.get("sha", ""),
+            ))
+        lines.append("")
+    
+    lines.extend([
         "## PRs by Repository",
         "",
-    ]
+    ])
     
     state_emoji = {
         "queued": "🔵",
@@ -210,6 +271,7 @@ def format_backlog_md(backlog):
         "passed": "✅",
         "failed": "❌",
         "draft": "📝",
+        "draft_green": "🟢",
         "ci_failing": "🔴",
         "ci_pending": "⏳",
     }
@@ -297,6 +359,110 @@ def ensure_label_exists(repo, label, color="d4c5f9", description=""):
         return False
 
 
+def undraft_green_prs(repos=None, dry_run=True, max_undrafts=None):
+    # type: (Optional[List[str]], bool, Optional[int]) -> List[Dict]
+    """Mark draft PRs as ready when all CI checks pass.
+    
+    Only undrafts PRs that:
+    - Are drafts
+    - Have all CI checks passing (green)
+    - Are NOT in never-touch repos
+    
+    After undrafting, adds needs-karen label.
+    Capped at max_undrafts per tick (default MAX_UNDRAFTS_PER_TICK).
+    
+    Returns list of PRs that were undrafted.
+    """
+    if repos is None:
+        repos = discover_repos()
+    
+    if max_undrafts is None:
+        max_undrafts = MAX_UNDRAFTS_PER_TICK
+    
+    undrafted = []  # type: List[Dict]
+    labels_ensured = set()  # type: set
+    
+    for repo in repos:
+        if len(undrafted) >= max_undrafts:
+            logger.info("Reached undraft cap (%d), stopping", max_undrafts)
+            break
+        
+        if is_never_touch_repo(repo):
+            logger.debug("Skipping never-touch repo: %s", repo)
+            continue
+        
+        prs = get_open_prs(repo)
+        
+        for pr in prs:
+            if len(undrafted) >= max_undrafts:
+                break
+            
+            if not pr.get("isDraft"):
+                continue
+            
+            if not is_ci_all_green(pr):
+                continue
+            
+            pr_num = pr.get("number")
+            if not pr_num:
+                continue
+            
+            pr_info = {
+                "repo": repo,
+                "pr": pr_num,
+                "sha": pr.get("headRefOid", "")[:12],
+                "title": pr.get("title", "")[:50],
+                "author": (pr.get("author") or {}).get("login", "unknown"),
+                "url": pr.get("url", ""),
+            }
+            
+            if dry_run:
+                logger.info("[DRY-RUN] Would undraft %s#%d (CI green)", repo, pr_num)
+                undrafted.append(pr_info)
+                continue
+            
+            try:
+                result = subprocess.run(
+                    ["gh", "pr", "ready", str(pr_num), "--repo", repo],
+                    capture_output=True,
+                    text=True,
+                    timeout=30,
+                )
+                if result.returncode != 0:
+                    logger.warning("Failed to undraft %s#%d: %s", repo, pr_num, result.stderr[:100])
+                    continue
+                
+                logger.info("Undrafted %s#%d (CI green)", repo, pr_num)
+                
+                if repo not in labels_ensured:
+                    ensure_label_exists(
+                        repo, "needs-karen",
+                        color="d4c5f9",
+                        description="Ready for Karen gate review"
+                    )
+                    labels_ensured.add(repo)
+                
+                label_result = subprocess.run(
+                    ["gh", "pr", "edit", str(pr_num), "--repo", repo, "--add-label", "needs-karen"],
+                    capture_output=True,
+                    text=True,
+                    timeout=30,
+                )
+                if label_result.returncode == 0:
+                    logger.info("Labeled %s#%d with needs-karen after undraft", repo, pr_num)
+                else:
+                    logger.warning("Failed to label %s#%d after undraft: %s", 
+                                  repo, pr_num, label_result.stderr[:100])
+                
+                undrafted.append(pr_info)
+                
+            except subprocess.SubprocessError as e:
+                logger.warning("Failed to undraft %s#%d: %s", repo, pr_num, e)
+                continue
+    
+    return undrafted
+
+
 def label_queued_prs(repos=None, dry_run=True):
     # type: (Optional[List[str]], bool) -> List[Dict]
     """Label all queued PRs with needs-karen.
@@ -370,8 +536,11 @@ def main():
     parser.add_argument("--discover", action="store_true", help="Discover repos")
     parser.add_argument("--report", action="store_true", help="Generate backlog report")
     parser.add_argument("--label", action="store_true", help="Label queued PRs with needs-karen")
-    parser.add_argument("--live", action="store_true", help="Actually apply labels (default is dry-run)")
+    parser.add_argument("--undraft", action="store_true", help="Undraft green draft PRs and label them")
+    parser.add_argument("--live", action="store_true", help="Actually apply changes (default is dry-run)")
     parser.add_argument("--json", action="store_true", help="Output as JSON")
+    parser.add_argument("--max-undrafts", type=int, default=MAX_UNDRAFTS_PER_TICK, 
+                       help="Max undrafts per tick (default: {})".format(MAX_UNDRAFTS_PER_TICK))
     
     args = parser.parse_args()
     
@@ -390,6 +559,16 @@ def main():
             print(json.dumps(backlog, indent=2))
         else:
             print(format_backlog_md(backlog))
+        return 0
+    
+    if args.undraft:
+        undrafted = undraft_green_prs(dry_run=not args.live, max_undrafts=args.max_undrafts)
+        if args.json:
+            print(json.dumps(undrafted, indent=2))
+        else:
+            for pr in undrafted:
+                print("{repo}#{pr} ({sha}): {title}".format(**pr))
+            print("\nTotal: {} PRs undrafted".format(len(undrafted)))
         return 0
     
     if args.label:

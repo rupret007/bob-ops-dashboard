@@ -32,14 +32,17 @@ try:
     from ..backlog import (
         discover_repos,
         label_queued_prs,
+        undraft_green_prs,
         collect_backlog,
         write_backlog_report,
         EXCLUDED_REPOS,
+        MAX_UNDRAFTS_PER_TICK,
     )
     from ..self_update import self_update
     BACKLOG_AVAILABLE = True
 except ImportError:
     BACKLOG_AVAILABLE = False
+    MAX_UNDRAFTS_PER_TICK = 5
 
 logging.basicConfig(
     level=logging.INFO,
@@ -231,7 +234,18 @@ def run_poll_once(config=None, auto_discover=True, auto_label=True, auto_update=
         else:
             repos = ["rupret007/webjam", "rupret007/bob-ops-dashboard"]
 
+    undrafted = []  # type: list
     if auto_label and BACKLOG_AVAILABLE:
+        logger.info("Auto-undrafting green draft PRs...")
+        try:
+            undrafted = undraft_green_prs(repos=repos, dry_run=False, max_undrafts=MAX_UNDRAFTS_PER_TICK)
+            if undrafted:
+                logger.info("Undrafted %d PR(s) with green CI", len(undrafted))
+                for pr in undrafted:
+                    logger.info("  Undrafted: %s#%d (%s)", pr["repo"], pr["pr"], pr["title"][:40])
+        except Exception as e:
+            logger.warning("Auto-undraft failed: %s", e)
+        
         logger.info("Auto-labeling queued PRs...")
         try:
             labeled = label_queued_prs(repos=repos, dry_run=False)
@@ -254,10 +268,14 @@ def run_poll_once(config=None, auto_discover=True, auto_label=True, auto_update=
         logger.info("Writing backlog report...")
         try:
             backlog = collect_backlog(repos=repos)
+            backlog["undrafted_this_tick"] = undrafted
             repo_root_env = os.environ.get("STORYPOOL_INSTALL_DIR")
             repo_root = Path(repo_root_env).expanduser() if repo_root_env else None
             write_backlog_report(backlog, repo_root=repo_root)
-            logger.info("Backlog: %d PRs queued", backlog["summary"].get("queued", 0))
+            logger.info("Backlog: %d PRs queued, %d draft_green, %d undrafted this tick", 
+                       backlog["summary"].get("queued", 0),
+                       backlog["summary"].get("draft_green", 0),
+                       len(undrafted))
         except Exception as e:
             logger.warning("Backlog report failed: %s", e)
 

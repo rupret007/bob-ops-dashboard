@@ -12,13 +12,17 @@ from unittest.mock import patch, MagicMock, Mock
 
 from cluster.control_plane.backlog import (
     EXCLUDED_REPOS,
+    MAX_UNDRAFTS_PER_TICK,
     discover_repos,
     get_open_prs,
     get_pr_state,
+    is_ci_all_green,
+    is_never_touch_repo,
     collect_backlog,
     format_backlog_md,
     write_backlog_report,
     label_queued_prs,
+    undraft_green_prs,
     ensure_label_exists,
     BACKLOG_PATH,
 )
@@ -41,12 +45,88 @@ class TestExcludedRepos(unittest.TestCase):
         self.assertIsInstance(EXCLUDED_REPOS, frozenset)
 
 
+class TestIsCiAllGreen(unittest.TestCase):
+    """Test CI status detection."""
+
+    def test_all_success(self):
+        """All passing checks should return True."""
+        pr = {"statusCheckRollup": [
+            {"conclusion": "success"},
+            {"conclusion": "success"},
+        ]}
+        self.assertTrue(is_ci_all_green(pr))
+
+    def test_bucket_pass(self):
+        """bucket=pass should count as green."""
+        pr = {"statusCheckRollup": [{"bucket": "pass"}]}
+        self.assertTrue(is_ci_all_green(pr))
+
+    def test_neutral_is_green(self):
+        """neutral state should count as green."""
+        pr = {"statusCheckRollup": [{"state": "neutral"}]}
+        self.assertTrue(is_ci_all_green(pr))
+
+    def test_any_failure(self):
+        """Any failure should return False."""
+        pr = {"statusCheckRollup": [
+            {"conclusion": "success"},
+            {"conclusion": "failure"},
+        ]}
+        self.assertFalse(is_ci_all_green(pr))
+
+    def test_any_pending(self):
+        """Any pending should return False."""
+        pr = {"statusCheckRollup": [
+            {"conclusion": "success"},
+            {"conclusion": "pending"},
+        ]}
+        self.assertFalse(is_ci_all_green(pr))
+
+    def test_no_checks(self):
+        """No checks should return False."""
+        pr = {"statusCheckRollup": []}
+        self.assertFalse(is_ci_all_green(pr))
+
+    def test_none_checks(self):
+        """None checks should return False."""
+        pr = {"statusCheckRollup": None}
+        self.assertFalse(is_ci_all_green(pr))
+
+
+class TestIsNeverTouchRepo(unittest.TestCase):
+    """Test never-touch repo detection."""
+
+    def test_rad_dad(self):
+        """rad-dad-show-night is never-touch."""
+        self.assertTrue(is_never_touch_repo("rupret007/rad-dad-show-night"))
+
+    def test_hang_out(self):
+        """Hang Out is never-touch (case insensitive)."""
+        self.assertTrue(is_never_touch_repo("rupret007/Hang-Out"))
+        self.assertTrue(is_never_touch_repo("rupret007/hang-out"))
+
+    def test_normal_repo(self):
+        """Normal repos are not never-touch."""
+        self.assertFalse(is_never_touch_repo("rupret007/webjam"))
+        self.assertFalse(is_never_touch_repo("rupret007/bob-ops-dashboard"))
+
+
 class TestGetPrState(unittest.TestCase):
     """Test PR state detection."""
 
-    def test_draft_pr(self):
-        """Draft PRs should be marked as draft."""
+    def test_draft_pr_no_ci(self):
+        """Draft PRs with no CI should be marked as draft."""
         pr = {"isDraft": True, "labels": [], "statusCheckRollup": []}
+        self.assertEqual(get_pr_state(pr), "draft")
+
+    def test_draft_pr_green_ci(self):
+        """Draft PRs with green CI should be marked as draft_green."""
+        pr = {"isDraft": True, "labels": [], "statusCheckRollup": [{"conclusion": "success"}]}
+        self.assertEqual(get_pr_state(pr), "draft_green")
+
+    def test_draft_pr_failing_ci(self):
+        """Draft PRs with failing CI should be marked as draft."""
+        pr = {"isDraft": True, "labels": [], "statusCheckRollup": [{"conclusion": "failure"}]}
         self.assertEqual(get_pr_state(pr), "draft")
 
     def test_karen_pass_label(self):
@@ -336,6 +416,208 @@ class TestEnsureLabelExists(unittest.TestCase):
         
         self.assertFalse(result)
         self.assertEqual(mock_run.call_count, 1)
+
+
+class TestUndraftGreenPrs(unittest.TestCase):
+    """Test auto-undrafting of green draft PRs."""
+
+    def test_max_undrafts_constant(self):
+        """MAX_UNDRAFTS_PER_TICK should be 5."""
+        self.assertEqual(MAX_UNDRAFTS_PER_TICK, 5)
+
+    @patch("cluster.control_plane.backlog.get_open_prs")
+    @patch("cluster.control_plane.backlog.discover_repos")
+    def test_dry_run_does_not_undraft(self, mock_discover, mock_prs):
+        """Dry run should not actually undraft PRs."""
+        mock_discover.return_value = ["rupret007/webjam"]
+        mock_prs.return_value = [{
+            "number": 42,
+            "title": "Green Draft",
+            "headRefOid": "abc123",
+            "isDraft": True,
+            "labels": [],
+            "statusCheckRollup": [{"conclusion": "success"}],
+            "author": {"login": "jeff"},
+            "url": "https://github.com/rupret007/webjam/pull/42",
+        }]
+        
+        with patch("subprocess.run") as mock_run:
+            undrafted = undraft_green_prs(dry_run=True)
+        
+        mock_run.assert_not_called()
+        self.assertEqual(len(undrafted), 1)
+        self.assertEqual(undrafted[0]["pr"], 42)
+
+    @patch("cluster.control_plane.backlog.get_open_prs")
+    @patch("cluster.control_plane.backlog.discover_repos")
+    def test_skips_never_touch_repos(self, mock_discover, mock_prs):
+        """Should skip never-touch repos."""
+        mock_discover.return_value = ["rupret007/rad-dad-show-night"]
+        mock_prs.return_value = [{
+            "number": 1,
+            "title": "Green Draft",
+            "headRefOid": "abc123",
+            "isDraft": True,
+            "labels": [],
+            "statusCheckRollup": [{"conclusion": "success"}],
+        }]
+        
+        undrafted = undraft_green_prs(dry_run=True)
+        
+        self.assertEqual(len(undrafted), 0)
+
+    @patch("cluster.control_plane.backlog.get_open_prs")
+    @patch("cluster.control_plane.backlog.discover_repos")
+    def test_skips_non_draft_prs(self, mock_discover, mock_prs):
+        """Should skip non-draft PRs."""
+        mock_discover.return_value = ["rupret007/webjam"]
+        mock_prs.return_value = [{
+            "number": 1,
+            "title": "Not a draft",
+            "headRefOid": "abc123",
+            "isDraft": False,
+            "labels": [],
+            "statusCheckRollup": [{"conclusion": "success"}],
+        }]
+        
+        undrafted = undraft_green_prs(dry_run=True)
+        
+        self.assertEqual(len(undrafted), 0)
+
+    @patch("cluster.control_plane.backlog.get_open_prs")
+    @patch("cluster.control_plane.backlog.discover_repos")
+    def test_skips_non_green_drafts(self, mock_discover, mock_prs):
+        """Should skip draft PRs with failing/pending CI."""
+        mock_discover.return_value = ["rupret007/webjam"]
+        mock_prs.return_value = [
+            {
+                "number": 1,
+                "title": "Failing CI",
+                "headRefOid": "abc123",
+                "isDraft": True,
+                "labels": [],
+                "statusCheckRollup": [{"conclusion": "failure"}],
+            },
+            {
+                "number": 2,
+                "title": "Pending CI",
+                "headRefOid": "def456",
+                "isDraft": True,
+                "labels": [],
+                "statusCheckRollup": [{"conclusion": "pending"}],
+            },
+            {
+                "number": 3,
+                "title": "No CI",
+                "headRefOid": "ghi789",
+                "isDraft": True,
+                "labels": [],
+                "statusCheckRollup": [],
+            },
+        ]
+        
+        undrafted = undraft_green_prs(dry_run=True)
+        
+        self.assertEqual(len(undrafted), 0)
+
+    @patch("cluster.control_plane.backlog.get_open_prs")
+    @patch("cluster.control_plane.backlog.discover_repos")
+    def test_respects_max_undrafts(self, mock_discover, mock_prs):
+        """Should stop at max_undrafts."""
+        mock_discover.return_value = ["rupret007/webjam"]
+        mock_prs.return_value = [
+            {
+                "number": i,
+                "title": "Green Draft {}".format(i),
+                "headRefOid": "sha{}".format(i),
+                "isDraft": True,
+                "labels": [],
+                "statusCheckRollup": [{"conclusion": "success"}],
+                "author": {"login": "jeff"},
+                "url": "https://github.com/rupret007/webjam/pull/{}".format(i),
+            }
+            for i in range(10)
+        ]
+        
+        undrafted = undraft_green_prs(dry_run=True, max_undrafts=3)
+        
+        self.assertEqual(len(undrafted), 3)
+
+    @patch("cluster.control_plane.backlog.ensure_label_exists")
+    @patch("subprocess.run")
+    @patch("cluster.control_plane.backlog.get_open_prs")
+    @patch("cluster.control_plane.backlog.discover_repos")
+    def test_live_undraft_and_label(self, mock_discover, mock_prs, mock_run, mock_ensure):
+        """Live mode should undraft and add needs-karen label."""
+        mock_discover.return_value = ["rupret007/webjam"]
+        mock_prs.return_value = [{
+            "number": 42,
+            "title": "Green Draft",
+            "headRefOid": "abc123",
+            "isDraft": True,
+            "labels": [],
+            "statusCheckRollup": [{"conclusion": "success"}],
+            "author": {"login": "jeff"},
+            "url": "https://github.com/rupret007/webjam/pull/42",
+        }]
+        mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
+        mock_ensure.return_value = False
+        
+        undrafted = undraft_green_prs(dry_run=False)
+        
+        self.assertEqual(len(undrafted), 1)
+        self.assertEqual(mock_run.call_count, 2)
+        
+        ready_call = mock_run.call_args_list[0]
+        self.assertIn("ready", ready_call[0][0])
+        
+        label_call = mock_run.call_args_list[1]
+        self.assertIn("--add-label", label_call[0][0])
+
+
+class TestFormatBacklogMdWithUndrafted(unittest.TestCase):
+    """Test markdown formatting with undrafted PRs."""
+
+    def test_includes_undrafted_section(self):
+        """Backlog with undrafted PRs should include section."""
+        backlog = {
+            "timestamp": "2026-10-17T00:00:00Z",
+            "repos": [],
+            "undrafted_this_tick": [{
+                "repo": "rupret007/webjam",
+                "pr": 42,
+                "title": "Green Draft",
+                "author": "jeff",
+                "sha": "abc123",
+                "url": "https://github.com/rupret007/webjam/pull/42",
+            }],
+            "summary": {
+                "total_repos": 0,
+                "total_prs": 0,
+                "draft_green": 1,
+            },
+        }
+        md = format_backlog_md(backlog)
+        self.assertIn("Undrafted This Tick", md)
+        self.assertIn("#42", md)
+        self.assertIn("Green Draft", md)
+
+    def test_includes_draft_green_count(self):
+        """Summary should include draft_green count."""
+        backlog = {
+            "timestamp": "2026-10-17T00:00:00Z",
+            "repos": [],
+            "undrafted_this_tick": [],
+            "summary": {
+                "total_repos": 0,
+                "total_prs": 0,
+                "draft_green": 3,
+                "draft": 2,
+            },
+        }
+        md = format_backlog_md(backlog)
+        self.assertIn("Draft (CI green) | 3", md)
+        self.assertIn("Draft (other) | 2", md)
 
 
 if __name__ == "__main__":
