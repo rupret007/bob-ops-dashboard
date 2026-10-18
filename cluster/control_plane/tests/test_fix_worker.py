@@ -1,0 +1,66 @@
+import json
+from unittest.mock import patch
+import pytest
+from cluster.control_plane.fix_worker import fix_pr
+
+
+def test_fix_runs_tests_before_commit_push_and_label(tmp_path):
+    calls = []
+    def command(args, cwd=None, **kwargs):
+        calls.append(args)
+        if args[:3] == ['gh', 'pr', 'view']:
+            return json.dumps(dict(headRefName='fix/one', headRefOid='before', isCrossRepository=False, state='OPEN'))
+        if args[:3] == ['git', 'worktree', 'add']:
+            tree = __import__('pathlib').Path(args[-2])
+            tree.mkdir(parents=True)
+            (tree / 'tests').mkdir()
+        if args[:3] == ['git', 'rev-parse', 'HEAD']:
+            return 'after' if any(c[:2] == ['git', 'commit'] for c in calls) else 'before'
+        if args[:3] == ['git', 'diff', '--cached']:
+            return 'fix.py'
+        if args[:2] == ['git', 'ls-remote']:
+            return 'after refs/heads/fix/one'
+        return ''
+    with patch('cluster.control_plane.fix_worker._find_codex', return_value=tmp_path/'codex'), patch('cluster.control_plane.fix_worker.run', side_effect=command):
+        assert fix_pr('owner/repo', 1, 'before', ['repair finding']) == 'after'
+    tests = next(i for i,c in enumerate(calls) if '-m' in c and 'pytest' in c)
+    commit = next(i for i,c in enumerate(calls) if c[:2] == ['git', 'commit'])
+    push = next(i for i,c in enumerate(calls) if c[:2] == ['git', 'push'])
+    assert tests < commit < push < len(calls)-1
+    assert calls[push][-1] == 'HEAD:refs/heads/fix/one'
+    assert calls[-1][-2:] == ['--add-label', 'needs-karen']
+    assert any('model_reasoning_effort=low' in c and 'exec' in c for c in calls)
+
+
+def test_protected_branch_and_never_touch_cannot_run_codex(tmp_path):
+    with patch('cluster.control_plane.fix_worker._find_codex', return_value=tmp_path/'codex'), patch('cluster.control_plane.fix_worker.run') as run:
+        run.return_value = json.dumps(dict(headRefName='main', headRefOid='before', isCrossRepository=False, state='OPEN'))
+        with pytest.raises(RuntimeError, match='protected'):
+            fix_pr('owner/repo', 1, 'before', ['repair'])
+        assert run.call_count == 1
+        run.reset_mock()
+        with pytest.raises(ValueError, match='never-touch'):
+            fix_pr('rupret007/rad-dad-show-night', 1, 'before', ['repair'])
+        run.assert_not_called()
+
+
+def test_findings_ignore_stale_and_pass_comments():
+    from cluster.control_plane.fix_worker import findings_for_pr
+    comments = {'comments': [{'body': 'KARENFAIL stale1234567 repair'},
+                             {'body': 'KARENPASS current12345 good'},
+                             {'body': 'KARENFAIL current12345 repair this'}]}
+    with patch('cluster.control_plane.fix_worker.load_verdict', return_value=None), patch('cluster.control_plane.fix_worker.run', return_value=json.dumps(comments)):
+        assert findings_for_pr('owner/repo', 1, 'current12345full') == ['KARENFAIL current12345 repair this']
+
+
+def test_dispatch_skips_missing_findings_before_creating_job(tmp_path):
+    from unittest.mock import MagicMock
+    from cluster.control_plane.dispatcher import Dispatcher
+    ledger = MagicMock()
+    ledger.has_active_lease.return_value = False
+    dispatcher = Dispatcher(machine='nucbox', log_dir=tmp_path, job_ledger=ledger)
+    pr = {'number': 1, 'headRefOid': 'sha', 'isDraft': False}
+    with patch.object(dispatcher, 'check_machine_guards', return_value=(True, 'ok', {})), patch.object(dispatcher, 'select_provider', return_value='codex'), patch('cluster.control_plane.dispatcher.REPOS', ['owner/repo']), patch('cluster.control_plane.dispatcher._get_open_prs', return_value=[pr]), patch('cluster.control_plane.dispatcher._get_active_lanes', return_value={}), patch('cluster.control_plane.dispatcher._has_codex_work_queued', return_value=False), patch('cluster.control_plane.fix_worker.findings_for_pr', return_value=[]):
+        decisions = dispatcher.evaluate(live=True)
+    assert any(d.reason == 'No Karen findings available' for d in decisions)
+    ledger.create_job.assert_not_called()

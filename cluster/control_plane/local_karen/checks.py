@@ -316,8 +316,7 @@ def check_no_secrets_in_diff(pr: PRInfo, config: KarenConfig) -> CheckResult:
 
         for pattern, secret_type in SECRET_PATTERNS:
             if re.search(pattern, added_line):
-                snippet = added_line.strip()[:40]
-                issues.append(f"{secret_type} in {current_file}: {snippet}...")
+                issues.append(f"{secret_type} in {current_file or 'diff'} (value redacted)")
                 break
 
     if issues:
@@ -757,6 +756,8 @@ def run_all_checks(pr, config):
     checks = [
         check_blocked_repo,
         check_not_draft,
+        check_no_secrets_in_diff,
+        check_no_dangerous_commands,
         run_static_security_scan,
         check_ci_green,
         check_tests_not_weakened,

@@ -454,6 +454,22 @@ class Dispatcher:
             if not provider:
                 continue
             
+            if live:
+                from .fix_worker import findings_for_pr
+                try:
+                    findings = findings_for_pr(repo, pr_number, head_sha)
+                except (OSError, subprocess.SubprocessError, ValueError):
+                    findings = []
+                if not findings:
+                    decision = DispatchDecision(
+                        timestamp=_now_iso(), action="skip", reason="No Karen findings available",
+                        machine=self.machine, live=True, repo=repo, pr_number=pr_number,
+                        head_sha=head_sha, provider=provider,
+                    )
+                    self._write_decision(decision)
+                    decisions.append(decision)
+                    continue
+
             job = None
             pid = 0
             spawn_error = ""

@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -26,8 +27,17 @@ def test_command(tree):
         return [sys.executable, '-m', 'pytest', '-q']
     package = tree / 'package.json'
     if package.exists() and json.loads(package.read_text()).get('scripts', {}).get('test'):
-        return ['npm', 'test', '--', '--runInBand']
+        return ['npm', 'test']
     raise RuntimeError('No supported test command; leave for Jeff')
+
+
+def ensure_no_staged_secrets(tree):
+    from .local_karen.checks import SECRET_PATTERNS
+    diff = run(['git', 'diff', '--cached', '--no-ext-diff', '--unified=0'], tree)
+    for line in diff.splitlines():
+        if line.startswith('+') and not line.startswith('+++'):
+            if any(re.search(pattern, line[1:]) for pattern, _ in SECRET_PATTERNS):
+                raise RuntimeError('Potential staged secret; refusing commit (value redacted)')
 
 
 def fix_pr(repo, pr_number, head_sha, findings):
@@ -57,12 +67,17 @@ def fix_pr(repo, pr_number, head_sha, findings):
                   f'Test command: {" ".join(tests)}')
         run([str(codex), 'exec', '--full-auto', '-c', 'model_reasoning_effort=low', '-'],
             tree, input=prompt)
-        run(tests, tree)
+        run(tests, tree, env={**os.environ,
+            'STORYPOOL_JOBS_DIR': str(Path(temp) / 'test-jobs'),
+            'STORYPOOL_METRICS_DIR': str(Path(temp) / 'test-metrics'),
+            'STORYPOOL_DATA_DIR': str(Path(temp) / 'test-data'),
+            'STORYPOOL_FIX_STATE_DIR': str(Path(temp) / 'test-fixes')})
         if run(['git', 'rev-parse', 'HEAD'], tree) != head_sha:
             raise RuntimeError('Worker changed HEAD unexpectedly')
         run(['git', 'add', '-A'], tree)
         if not run(['git', 'diff', '--cached', '--name-only'], tree):
             raise RuntimeError('No fix produced')
+        ensure_no_staged_secrets(tree)
         run(['git', 'commit', '-m', f'fix: address Karen findings for PR #{pr_number}'], tree)
         sha = run(['git', 'rev-parse', 'HEAD'], tree)
         run(['git', 'push', 'origin', f'HEAD:refs/heads/{branch}'], tree)
@@ -73,6 +88,21 @@ def fix_pr(repo, pr_number, head_sha, findings):
         return sha
 
 
+def findings_for_pr(repo, pr_number, head_sha):
+    owner, name = repo.split('/')
+    verdict = load_verdict(owner, name, pr_number, head_sha, KarenConfig.load())
+    if verdict:
+        return extract_findings_from_verdict(verdict.to_dict()) if not verdict.passed else []
+    findings = []
+    if not findings:
+        comments = json.loads(run(['gh', 'pr', 'view', str(pr_number), '--repo', repo,
+                                  '--json', 'comments,reviews']))
+        findings = [c['body'] for c in comments.get('comments', []) + comments.get('reviews', [])
+                    if 'KARENFAIL' in c.get('body', '')
+                    and head_sha[:12] in c.get('body', '')]
+    return findings
+
+
 def execute(job_id):
     ledger = get_ledger()
     jobs = [j for j in ledger.get_recent_jobs(hours=24) if j.job_id == job_id]
@@ -81,14 +111,7 @@ def execute(job_id):
     job = jobs[0]
     ledger.start_job(job_id, os.getpid())
     try:
-        owner, name = job.repo.split('/')
-        verdict = load_verdict(owner, name, job.pr_number, job.head_sha, KarenConfig.load())
-        findings = extract_findings_from_verdict(verdict.to_dict()) if verdict else []
-        if not findings:
-            comments = json.loads(run(['gh', 'pr', 'view', str(job.pr_number), '--repo', job.repo,
-                                      '--json', 'comments,reviews']))
-            findings = [c['body'] for c in comments.get('comments', []) + comments.get('reviews', [])
-                        if 'karen' in c.get('body', '').lower()]
+        findings = findings_for_pr(job.repo, job.pr_number, job.head_sha)
         if not findings:
             raise RuntimeError('No Karen findings available for this PR')
         sha = fix_pr(job.repo, job.pr_number, job.head_sha, findings)

@@ -10,7 +10,7 @@ import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 from .fix_dispatcher import _find_codex
-from .fix_worker import run
+from .fix_worker import run, ensure_no_staged_secrets
 
 REPO = 'rupret007/bob-ops-dashboard'
 BRANCH = 'cursor/storypool-all-in-one-47c7'
@@ -54,10 +54,14 @@ def repair(root, log, stamp):
                            stderr=subprocess.STDOUT, timeout=1800, check=True)
             subprocess.run([sys.executable, '-m', 'pytest', 'cluster', '-q'], cwd=tree,
                            stdout=output, stderr=subprocess.STDOUT, timeout=900, check=True,
-                           env={**os.environ, 'STORYPOOL_JOBS_DIR': str(Path(temp) / 'test-jobs')})
+                           env={**os.environ, 'STORYPOOL_JOBS_DIR': str(Path(temp) / 'test-jobs'),
+                                'STORYPOOL_METRICS_DIR': str(Path(temp) / 'test-metrics'),
+                                'STORYPOOL_DATA_DIR': str(Path(temp) / 'test-data'),
+                                'STORYPOOL_FIX_STATE_DIR': str(Path(temp) / 'test-fixes')})
         run(['git', 'add', '-A'], tree)
         if not run(['git', 'diff', '--cached', '--name-only'], tree):
             raise RuntimeError('Codex produced no repair')
+        ensure_no_staged_secrets(tree)
         run(['git', 'commit', '-m', 'fix: repair StoryPool health checks'], tree)
         run(['git', 'push', 'origin', f'HEAD:refs/heads/{branch}'], tree)
         body = Path(temp) / 'pr-body.txt'
