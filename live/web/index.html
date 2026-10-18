@@ -299,15 +299,36 @@ function render(state){
 
   const cc=document.getElementById('clusterCap');
   const cnodes=state.cluster_caps||[];
-  cc.innerHTML=cnodes.length?cnodes.map(n=>{
-    const llm=Object.entries(n.llm||{}).filter(([,v])=>v.installed).map(([k,v])=>{
+  const capacityElement=(tag,className,text)=>{
+    const el=document.createElement(tag);
+    el.className=className;
+    if(text!==undefined)el.textContent=String(text??'');
+    return el;
+  };
+  const capacityRows=cnodes.map(n=>{
+    const details=capacityElement('div','m');
+    details.appendChild(capacityElement('b','',n.node));
+    details.appendChild(capacityElement('small','',` ${n.role??''} · ${n.os??''} · lanes ${n.active??''}/${n.max_lanes??''} · load ${n.load1??''}`));
+    const providers=capacityElement('div','');
+    Object.entries(n.llm||{}).filter(([,v])=>v.installed).forEach(([k,v])=>{
       const q=v.remaining_pct==null?'':' '+Math.round(v.remaining_pct)+'%';
-      return `<span class="pill ${v.logged_in?'ok':'warn'}">${esc(k)}${v.logged_in?'':' (signed out)'}${esc(q)}</span>`;
-    }).join(' ')||'<small class="unk">no LLM sign-ins</small>';
-    return `<div class="row"><div class="m"><b>${esc(n.node)}</b> <small>${esc(n.role)} · ${esc(n.os)} · lanes ${esc(n.active)}/${esc(n.max_lanes)} · load ${esc(n.load1)}</small>
-      <div>${llm}</div><small class="unk">${esc((n.caps||[]).join(', '))}</small></div>
-      <span class="${n.online?'ok':'bad'}">${n.online?'online':'offline'}</span></div>`;
-  }).join(''):'<div class="row"><div class="m">No cluster heartbeats yet</div></div>';
+      providers.appendChild(capacityElement('span','pill '+(v.logged_in?'ok':'warn'),
+        k+(v.logged_in?'':' (signed out)')+q));
+    });
+    if(!providers.children.length)providers.appendChild(capacityElement('small','unk','no LLM sign-ins'));
+    details.appendChild(providers);
+    details.appendChild(capacityElement('small','unk',(n.caps||[]).join(', ')));
+    const row=capacityElement('div','row');
+    row.appendChild(details);
+    row.appendChild(capacityElement('span',n.online?'ok':'bad',n.online?'online':'offline'));
+    return row;
+  });
+  if(!capacityRows.length){
+    const row=capacityElement('div','row');
+    row.appendChild(capacityElement('div','m','No cluster heartbeats yet'));
+    capacityRows.push(row);
+  }
+  cc.replaceChildren(...capacityRows);
 
   const lanesEl=document.getElementById('lanes');
   const nodeById=Object.create(null);

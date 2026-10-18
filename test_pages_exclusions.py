@@ -44,6 +44,19 @@ class PagesExclusionTests(unittest.TestCase):
                 self.assertTrue((ROOT / path).is_file())
                 self.assertFalse(self.excluded(path), path + " must remain available")
 
+    def test_internal_assets_and_future_files_in_private_trees_are_excluded(self):
+        for tree in ["cluster", "live", "scripts", "tests", "docs/design", "docs/incidents",
+                     "docs/research", "docs/research-notes", "docs/storypool", "docs/validation"]:
+            with self.subTest(tree=tree):
+                self.assertTrue(self.excluded(tree + "/future/private-record.json"))
+                for path in (ROOT / tree).rglob("*"):
+                    if path.is_file():
+                        self.assertTrue(self.excluded(path.relative_to(ROOT).as_posix()))
+
+    def test_pages_build_cannot_bypass_jekyll_exclusions(self):
+        self.assertFalse((ROOT / ".nojekyll").exists(), "raw Pages publication ignores exclude rules")
+        self.assertFalse(self.config.get("keep_files"), "old private build files must not be retained")
+
 
 if __name__ == "__main__":
     unittest.main()

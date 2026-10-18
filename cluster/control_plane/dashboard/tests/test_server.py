@@ -216,9 +216,11 @@ class TestDashboardServer:
         
         try:
             with urllib.request.urlopen(f"http://127.0.0.1:{port}/health", timeout=2) as resp:
+                assert resp.status == 200
+                assert resp.headers.get_content_type() == "application/json"
                 data = json.loads(resp.read().decode())
                 assert data["status"] == "ok"
-        except Exception:
-            pass
-        
-        server.stop()
+        finally:
+            server.stop()
+            thread.join(timeout=2)
+        assert not thread.is_alive()

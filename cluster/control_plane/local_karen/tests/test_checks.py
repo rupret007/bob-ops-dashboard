@@ -298,6 +298,40 @@ diff --git a/release.sh b/release.sh
 class TestRunAllChecks(TestCheckHelpers):
     """Tests for running all checks together."""
 
+    def test_every_prohibited_command_is_checked_by_the_full_gate(self):
+        # Build diff text only; these command arguments are never executed.
+        commands = [
+            ("sudo", "id"),
+            ("rm", "-rf", "/var/log/example"),
+            ("git", "push", "--force", "origin", "feature"),
+            ("git", "push", "-f", "origin", "feature"),
+            ("git", "tag", "v1.0.0"),
+            ("gh", "release", "create", "v1.0.0"),
+            ("git", "push", "origin", "--tags"),
+            ("chmod", "777", "example"),
+            ("eval('untrusted')",),
+            ("exec('untrusted')",),
+        ]
+        for args in commands:
+            with self.subTest(args=args):
+                pr = self._make_pr(diff="diff --git a/script.sh b/script.sh\n"
+                                       "@@ -0,0 +1 @@\n+" + " ".join(args) + "\n")
+                results = run_all_checks(pr, self._make_config())
+                self.assertFalse(all_checks_pass(results))
+                dangerous = [r for r in results if r.check_name == "no_dangerous_commands"]
+                self.assertEqual(len(dangerous), 1)
+                self.assertEqual(dangerous[0].verdict, CheckVerdict.FAIL)
+
+    def test_full_gate_always_runs_the_credential_check(self):
+        synthetic = "ghp_" + "x" * 36
+        pr = self._make_pr(diff="diff --git a/config.py b/config.py\n"
+                               "@@ -0,0 +1 @@\n+TOKEN = '" + synthetic + "'\n")
+        results = run_all_checks(pr, self._make_config())
+        credentials = [r for r in results if r.check_name == "no_secrets"]
+        self.assertEqual(len(credentials), 1)
+        self.assertEqual(credentials[0].verdict, CheckVerdict.FAIL)
+        self.assertNotIn(synthetic, credentials[0].details)
+
     def test_all_pass(self):
         pr = self._make_pr()
         config = self._make_config()

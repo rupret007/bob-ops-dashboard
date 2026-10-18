@@ -747,16 +747,20 @@ def run_all_checks(pr, config):
     Order (all run before LLM):
     1. Blocked repo check (never-touch list)
     2. Draft status
-    3. Static security scan (secrets, dangerous, vulnerabilities) - NEW
-    4. CI status (green required)
-    5. Test integrity (no weakening)
-    6. Security patterns (XSS, injection, auth bypass)
-    7. Pages exposure risk
-    8. Local repo tests at head SHA (if enabled) - NEW
+    3. Credential detection
+    4. Prohibited command detection
+    5. Static security scan
+    6. CI status (green required)
+    7. Test integrity (no weakening)
+    8. Security patterns
+    9. Pages exposure risk
+    10. Local repo tests at head SHA (if enabled)
     """
     checks = [
         check_blocked_repo,
         check_not_draft,
+        check_no_secrets_in_diff,
+        check_no_dangerous_commands,
         run_static_security_scan,
         check_ci_green,
         check_tests_not_weakened,

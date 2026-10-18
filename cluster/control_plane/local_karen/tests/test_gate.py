@@ -116,6 +116,18 @@ class TestGateRunner(unittest.TestCase):
                     self.assertTrue(result.verdict.passed)
                     self.assertEqual(result.verdict.reviewer, "codex")
 
+    def test_prohibited_command_stops_before_llm_review(self):
+        command = " ".join(("git", "tag", "v1.0.0"))
+        pr = self._mock_pr_info(diff="diff --git a/script.sh b/script.sh\n"
+                                    "@@ -0,0 +1 @@\n+" + command + "\n")
+        with patch("cluster.control_plane.local_karen.gate.fetch_pr_info", return_value=pr):
+            with patch("cluster.control_plane.local_karen.gate.verify_sha_current", return_value=True):
+                with patch("cluster.control_plane.local_karen.gate.run_review_chain") as review:
+                    result = GateRunner(self.config).run(pr.owner, pr.repo, pr.number)
+        self.assertFalse(result.verdict.passed)
+        self.assertIn("dangerous", result.verdict.reason.lower())
+        review.assert_not_called()
+
     def test_metrics_write_failure_preserves_failed_verdict_and_sha_check(self):
         pr = self._mock_pr_info(ci_status={"build": "failure"})
         with patch("cluster.control_plane.local_karen.gate.fetch_pr_info", return_value=pr):
