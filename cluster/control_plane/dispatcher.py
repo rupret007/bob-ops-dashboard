@@ -28,6 +28,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import subprocess
 import time
 import sys
@@ -183,7 +184,8 @@ def _spawn_worker(
     """Spawn a worker process for the job.
     
     OUTCOME-VERIFIED: The worker must push a commit or post a verdict.
-    Returns the PID of the spawned process.
+    Linux workers run in independent transient services. Returns 0 on Linux
+    (the worker records its own PID), or the spawned PID on macOS.
     """
     from .job_ledger import JOBS_DIR
     jobs_dir = JOBS_DIR
@@ -195,6 +197,25 @@ def _spawn_worker(
         raise ValueError(f"Provider has no implemented worker: {provider}")
     if is_never_touch(repo):
         raise ValueError("never-touch repository")
+    if sys.platform == "linux":
+        # A new session cannot escape the dispatcher's systemd cgroup. Submit
+        # an independent service and fail closed if the user manager rejects it.
+        if not re.fullmatch(r"[A-Za-z0-9_.-]+", job_id):
+            raise ValueError("Invalid worker job ID")
+        repo_dir = Path(__file__).resolve().parents[2]
+        subprocess.run(
+            ["systemd-run", "--user", f"--unit=storypool-job-{job_id}",
+             "--collect", "--property=Type=exec",
+             f"--working-directory={repo_dir}",
+             f"--property=StandardOutput=append:{worker_log}",
+             "--property=StandardError=inherit",
+             f"--setenv=STORYPOOL_JOBS_DIR={jobs_dir}",
+             f"--setenv=PYTHONPATH={repo_dir}",
+             f"--setenv=PATH={os.environ.get('PATH', '/usr/bin:/bin')}",
+             sys.executable, "-m", "cluster.control_plane.fix_worker", job_id],
+            check=True, capture_output=True, text=True, timeout=30,
+        )
+        return 0
     with open(worker_log, "w") as log_file:
         process = subprocess.Popen(
             [sys.executable, "-m", "cluster.control_plane.fix_worker", job_id],

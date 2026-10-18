@@ -29,8 +29,7 @@ Uninstall:    launchctl unload ~/Library/LaunchAgents/com.storypool.dispatch.pli
         <string>cluster.control_plane.dispatcher</string>
         <string>--machine</string>
         <string>mini</string>
-        <!-- Remove the comment below to enable live mode -->
-        <!-- <string>--live</string> -->
+        <!-- Live mode is enabled by the go-live installer. -->
     </array>
     
     <key>WorkingDirectory</key>
@@ -50,6 +49,10 @@ Uninstall:    launchctl unload ~/Library/LaunchAgents/com.storypool.dispatch.pli
         <string>__HOME__</string>
     </dict>
     
+    <!-- Workers outlive this short-lived dispatcher. -->
+    <key>AbandonProcessGroup</key>
+    <true/>
+
     <key>StartInterval</key>
     <integer>900</integer>
     

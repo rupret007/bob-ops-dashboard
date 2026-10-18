@@ -321,15 +321,16 @@ class JobLedger:
                 should_expire = False
                 reason = ""
                 
-                if not job.has_valid_lease():
+                if job.state == JobState.RUNNING.value and not job.is_process_running():
+                    should_expire = True
+                    reason = "worker-died"
+                elif not job.has_valid_lease():
                     should_expire = True
                     reason = "lease expired"
-                elif job.state == JobState.RUNNING.value and not job.is_process_running():
-                    should_expire = True
-                    reason = "process died"
                 
                 if should_expire:
-                    job.state = JobState.EXPIRED.value
+                    job.state = (JobState.FAILED.value if reason == "worker-died"
+                                 else JobState.EXPIRED.value)
                     job.end_time = _now_iso()
                     job.error = reason
                     expired.append(job)
