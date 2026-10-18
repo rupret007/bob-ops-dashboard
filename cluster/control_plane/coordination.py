@@ -28,6 +28,20 @@ class ClaimLost(CoordinationError):
     pass
 
 
+async def _provision_bucket(js, bucket, ttl):
+    """Operator-only migration, safe to repeat without resetting stream policy."""
+    from nats.js.api import KeyValueConfig
+    from nats.js.errors import BucketNotFoundError
+    try:
+        kv = await js.key_value(bucket)
+    except BucketNotFoundError:
+        kv = await js.create_key_value(config=KeyValueConfig(bucket=bucket, ttl=ttl, history=1))
+    status = await kv.status()
+    if abs(status.ttl - ttl) > 0.01:
+        raise CoordinationError('Coordination bucket TTL mismatch; operator review required')
+    await js.update_stream(status.stream_info.config.evolve(allow_rollup_hdrs=False))
+
+
 class ClaimClient:
     def __init__(self, url, bucket='STORYPOOL_CLAIMS', ttl=300, **connection):
         self.url, self.bucket, self.ttl = url, bucket, ttl
@@ -84,8 +98,7 @@ class ClaimClient:
                 **self.connection), timeout=3)
             js = nc.jetstream(timeout=2)
             if bootstrap:
-                await js.create_key_value(config=KeyValueConfig(
-                    bucket=self.bucket, ttl=self.ttl, history=1))
+                await _provision_bucket(js, self.bucket, self.ttl)
             kv = await js.key_value(self.bucket)
             status = await kv.status()
             if abs(status.ttl - self.ttl) > 0.01:
@@ -156,7 +169,7 @@ class ClaimClient:
             js = nc.jetstream(timeout=2)
             bucket = self.bucket + '_RETRIES'
             if operation == 'bootstrap':
-                await js.create_key_value(config=KeyValueConfig(bucket=bucket, ttl=0, history=1))
+                await _provision_bucket(js, bucket, 0)
                 return None
             kv = await js.key_value(bucket)
             if (await kv.status()).ttl:

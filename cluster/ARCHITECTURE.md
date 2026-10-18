@@ -411,3 +411,12 @@ provisioning avoids requiring a local tailscaled in WSL when its Windows host
 provides tailnet routing. Without either mapping, discovery still uses tailscale.
 Peer address failures are distinguished from transport failures in dashboard
 sync evidence, and last verified health is retained.
+
+Coordination bootstrap also disables stream-wide rollup headers on both KV
+streams. Ordinary CAS create/update/delete remains available, but a service
+credential cannot erase every claim/retry by publishing Nats-Rollup: all.
+Existing operators must rerun bootstrap with the operator identity when applying
+the restricted ACL migration; production rollout is not inferred from tests.
+Dashboard blocker projections survive log rotation and are validated before
+rendering; full-head observations supersede stale blockers. Verified successful
+exact-head ledger history prevents redispatch even if final KV persistence fails.

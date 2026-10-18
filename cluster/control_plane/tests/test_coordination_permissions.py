@@ -14,6 +14,7 @@ def test_installed_service_identity_can_fence_retries_but_cannot_administer():
         operator = ClaimClient(server.url, user='nucbox', password=server.passwords['nucbox'],
                                inbox_prefix=b'_INBOX_nucbox')
         operator.call('bootstrap', bootstrap=True)
+        operator.call('bootstrap', bootstrap=True)
         service = ClaimClient(server.url, user='coord', password=server.passwords.get('coord', 'fixture-only'),
                               inbox_prefix=b'_INBOX_coord')
         claim = service.acquire('owner/repo', 7, 'a' * 40, 'mini')
@@ -26,10 +27,28 @@ def test_installed_service_identity_can_fence_retries_but_cannot_administer():
             service.retry_state(claim, state)
             assert service.retry_state(claim)['code'] == 'missing-lockfile'
             asyncio.run(assert_admin_denied(server))
+            asyncio.run(assert_rollup_denied(server, claim))
         finally:
             service.call('release', claim)
     finally:
         server.stop()
+
+
+async def assert_rollup_denied(server, claim):
+    import nats
+    from nats.js.errors import APIError
+    nc = await nats.connect(server.url, user='coord', password=server.passwords['coord'],
+                            inbox_prefix=b'_INBOX_coord')
+    try:
+        js = nc.jetstream()
+        for bucket in ('STORYPOOL_CLAIMS', 'STORYPOOL_CLAIMS_RETRIES'):
+            with pytest.raises(APIError):
+                await js.publish('$KV.' + bucket + '.rollup_probe', b'fixture-only',
+                                 headers={'Nats-Rollup': 'all'})
+        kv = await js.key_value('STORYPOOL_CLAIMS')
+        assert (await kv.get(claim['key'])).revision == claim['revision']
+    finally:
+        await nc.close()
 
 
 async def assert_admin_denied(server):
