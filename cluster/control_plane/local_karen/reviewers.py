@@ -821,7 +821,9 @@ class MiniMaxReviewer(BaseReviewer):
             payload = json.dumps({
                 "model": config.minimax_model,
                 "messages": [{"role": "user", "content": prompt}],
-                "max_completion_tokens": 4096,
+                # MiniMax-M2 reasons before answering; on full PR diffs 4096
+                # tokens / 60s cut reviews off ("incomplete") every time.
+                "max_completion_tokens": 16384,
                 "temperature": 0.1,
             }).encode("utf-8")
 
@@ -835,7 +837,7 @@ class MiniMaxReviewer(BaseReviewer):
                 method="POST",
             )
 
-            with urllib.request.urlopen(req, timeout=60) as resp:
+            with urllib.request.urlopen(req, timeout=240) as resp:
                 result = json.loads(resp.read().decode("utf-8"))
 
             duration = time.time() - start_time
@@ -863,6 +865,8 @@ class MiniMaxReviewer(BaseReviewer):
             )
 
         except Exception as e:
+            # Log only the exception class/message (never the key or content).
+            logger.warning("MiniMax second judge failed: %s: %s", type(e).__name__, str(e)[:120])
             return ReviewResult(
                 reviewer=self.name,
                 verdict=ReviewVerdict.ERROR,
@@ -900,7 +904,8 @@ class MiniMaxReviewer(BaseReviewer):
             if data["verdict"] == "PASS" and any(findings[name] for name in fields if name != "risk_notes"):
                 raise ValueError("PASS contradicts reported issues")
             result = self._parse_structured_verdict(response, pr, primary.tier, key_source)
-        except (TypeError, ValueError, AttributeError):
+        except (TypeError, ValueError, AttributeError) as e:
+            logger.warning("MiniMax review rejected as malformed: %s", str(e)[:120])
             result = ReviewResult(
                 reviewer=self.name, verdict=ReviewVerdict.ERROR,
                 reason="Malformed MiniMax review", tier=primary.tier,
