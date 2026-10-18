@@ -1,7 +1,7 @@
 #!/bin/bash
 # Install script for Local Karen gate
 #
-# NO SUDO REQUIRED - installs to user directories only
+# USER-LEVEL INSTALLATION - installs to user directories only
 #
 # Usage:
 #   ./install.sh              # Install CLI and launchd agent

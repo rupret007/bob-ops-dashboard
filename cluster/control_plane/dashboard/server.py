@@ -13,6 +13,7 @@ from __future__ import annotations
 import html
 import json
 import os
+import re
 import socket
 from datetime import datetime, timezone
 from http.server import HTTPServer, BaseHTTPRequestHandler
@@ -233,11 +234,20 @@ def _escape(s: str) -> str:
     return html.escape(str(s))
 
 
+def _pr_href(repo: str, number: int) -> str:
+    """Build a PR link from validated identity rather than a stored URL."""
+    if (not isinstance(repo, str) or not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", repo)
+            or any(part in {".", ".."} for part in repo.split("/"))
+            or isinstance(number, bool) or not isinstance(number, int) or number <= 0):
+        return "#"
+    return f"https://github.com/{repo}/pull/{number}"
+
+
 def _render_services(data: DashboardData) -> str:
     """Render services card."""
     rows = []
     for svc in data.services:
-        status_class = f"status-{svc.status}"
+        status_class = f"status-{_escape(svc.status)}"
         rows.append(f"""
             <tr>
                 <td><span class="status {status_class}"></span>{_escape(svc.name)}</td>
@@ -248,7 +258,7 @@ def _render_services(data: DashboardData) -> str:
     
     return f"""
         <div class="card">
-            <div class="card-title">Services ({data.machine})</div>
+            <div class="card-title">Services ({_escape(data.machine)})</div>
             <table>
                 <tr><th>Service</th><th>Last Run</th><th>Status</th></tr>
                 {''.join(rows) if rows else '<tr><td colspan="3" class="empty-state">No services found</td></tr>'}
@@ -302,7 +312,7 @@ def _render_guards(data: DashboardData) -> str:
         <div class="progress-bar"><div class="progress-fill progress-{lanes_class}" style="width:{lanes_pct:.0f}%"></div></div>
         """)
     
-    status = "All guards passed" if g.guards_passed else f"⚠️ {g.reason}"
+    status = "All guards passed" if g.guards_passed else f"⚠️ {_escape(g.reason)}"
     status_class = "success" if g.guards_passed else "error"
     
     return f"""
@@ -325,7 +335,7 @@ def _render_merges(data: DashboardData) -> str:
     if data.merges_today_list:
         items = []
         for m in data.merges_today_list[:5]:
-            items.append(f"<li>{_escape(m.repo)} #{m.pr_number}</li>")
+            items.append(f"<li>{_escape(m.repo)} #{_escape(m.pr_number)}</li>")
         recent = f"<ul style='margin-top:0.5rem;padding-left:1.5rem;font-size:0.8rem'>{''.join(items)}</ul>"
     
     return f"""
@@ -358,7 +368,7 @@ def _render_providers(data: DashboardData) -> str:
                 <td>{_escape(p.name)}</td>
                 <td>{p.weekly_pct:.1f}%</td>
                 <td>${p.weekly_spend_usd:.2f}</td>
-                <td><span class="badge badge-{p.status}">{p.status}</span></td>
+                <td><span class="badge badge-{_escape(p.status)}">{_escape(p.status)}</span></td>
             </tr>
         """)
     
@@ -455,7 +465,7 @@ def _render_backlog(data: DashboardData) -> str:
         rows.append(f"""
             <tr>
                 <td>{_escape(pr.repo)}</td>
-                <td><a href="{_escape(pr.url)}" target="_blank">#{pr.pr_number}</a></td>
+                <td><a href="{_pr_href(pr.repo, pr.pr_number)}" target="_blank" rel="noopener noreferrer">#{_escape(pr.pr_number)}</a></td>
                 <td class="truncate" title="{_escape(pr.title)}">{_escape(pr.title)}</td>
                 <td><span class="badge badge-{state_class}">{_escape(pr.state)}</span></td>
                 <td><span class="badge badge-{ci_class}">{_escape(pr.ci_status)}</span></td>
@@ -489,8 +499,8 @@ def _render_verdicts(data: DashboardData) -> str:
         verdict_class = "pass" if v.verdict == "PASS" else "fail"
         rows.append(f"""
             <tr>
-                <td>{_escape(v.repo)} #{v.pr_number}</td>
-                <td><span class="badge badge-{verdict_class}">{v.verdict}</span></td>
+                <td>{_escape(v.repo)} #{_escape(v.pr_number)}</td>
+                <td><span class="badge badge-{verdict_class}">{_escape(v.verdict)}</span></td>
                 <td class="truncate" title="{_escape(v.reason)}">{_escape(v.reason)}</td>
                 <td>{_escape(v.reviewer)}</td>
             </tr>
@@ -523,7 +533,7 @@ def _render_fix_attempts(data: DashboardData) -> str:
         status_text = "success" if a.success else "failed"
         rows.append(f"""
             <tr>
-                <td>{_escape(a.repo)} #{a.pr_number}</td>
+                <td>{_escape(a.repo)} #{_escape(a.pr_number)}</td>
                 <td><span class="badge badge-{status_class}">{status_text}</span></td>
                 <td>{_escape(a.tool)}</td>
                 <td class="truncate" title="{_escape(a.error)}">{_escape(a.error) or '-'}</td>
@@ -595,7 +605,7 @@ def _render_alerts(data: DashboardData) -> str:
 def render_dashboard(data: DashboardData) -> str:
     """Render complete dashboard HTML."""
     return HTML_TEMPLATE.format(
-        machine=data.machine.upper(),
+        machine=_escape(data.machine.upper()),
         mode="LIVE" if data.live_mode else "SHADOW",
         mode_class="live" if data.live_mode else "shadow",
         timestamp=datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC"),
@@ -623,6 +633,12 @@ class DashboardHandler(BaseHTTPRequestHandler):
     
     def do_GET(self) -> None:
         """Handle GET requests."""
+        hosts = self.headers.get_all("Host", [])
+        port = self.server.server_port
+        allowed_hosts = {DEFAULT_HOST, "localhost", f"{DEFAULT_HOST}:{port}", f"localhost:{port}"}
+        if len(hosts) != 1 or hosts[0] not in allowed_hosts:
+            self.send_error(403, "Local dashboard host required")
+            return
         parsed = urlparse(self.path)
         
         if parsed.path == "/" or parsed.path == "/index.html":
@@ -633,6 +649,13 @@ class DashboardHandler(BaseHTTPRequestHandler):
             self._serve_health()
         else:
             self._serve_404()
+
+    def end_headers(self) -> None:
+        self.send_header("X-Content-Type-Options", "nosniff")
+        self.send_header("Content-Security-Policy",
+                         "default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; frame-ancestors 'none'")
+        self.send_header("Referrer-Policy", "no-referrer")
+        super().end_headers()
     
     def _serve_dashboard(self) -> None:
         """Serve main dashboard HTML."""
@@ -700,6 +723,8 @@ class DashboardServer:
         port: int = DEFAULT_PORT,
         collector: Optional[DataCollector] = None,
     ):
+        if host != DEFAULT_HOST:
+            raise ValueError("Dashboard must bind to 127.0.0.1; use an authenticated tunnel for remote access")
         self.host = host
         self.port = port
         self.collector = collector or DataCollector()

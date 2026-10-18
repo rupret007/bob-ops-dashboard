@@ -1,0 +1,26 @@
+{
+  "exclude": [
+    "cluster",
+    "live",
+    "scripts",
+    "tests",
+    "docs/design",
+    "docs/incidents",
+    "docs/research",
+    "docs/research-notes",
+    "docs/validation",
+    "docs/live-metrics-research.md",
+    "docs/live-metrics.md",
+    "docs/scorecards.md",
+    "docs/storypool-scorecard.md",
+    "docs/storypool",
+    "docs/usage-machines-collector.md",
+    "node_modules",
+    "package.json",
+    "package-lock.json",
+    "*.py",
+    "*.sh",
+    "test_*.js",
+    "agents-status.json"
+  ]
+}

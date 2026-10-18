@@ -8,7 +8,7 @@
 # - Karen gate CLI (karen-gate --dry-run)
 # - Karen poller is NOT loaded (shadow mode only)
 #
-# NO SUDO REQUIRED - uses systemd --user
+# USER-LEVEL INSTALLATION - uses systemd --user
 # Does NOT touch: ~/bob-ops-dashboard (may have local edits)
 # Does NOT load: Karen poller (shadow mode default)
 # Does NOT enable: --live mode on any component
@@ -54,7 +54,7 @@ check_dependencies() {
     log_info "python3: $(python3 --version)"
 
     if ! command -v gh &> /dev/null; then
-        log_error "gh CLI not found — install with: sudo apt install gh"
+        log_error "gh CLI not found — install gh in your user PATH before continuing"
         exit 1
     fi
     log_info "gh CLI: $(gh --version | head -1)"
@@ -469,11 +469,11 @@ uninstall_all() {
 
     echo ""
     log_info "To fully remove, manually delete:"
-    echo "    rm -rf ~/.local/share/storypool"
-    echo "    rm -rf ~/.local/share/karen"
-    echo "    rm -rf ~/.config/storypool"
-    echo "    rm -rf ~/.config/karen"
-    echo "    rm -f ~/.local/bin/karen-gate"
+    echo "    ~/.local/share/storypool (logs; review and back up first)"
+    echo "    ~/.local/share/karen (verdicts; review and back up first)"
+    echo "    ~/.config/storypool (configuration; review first)"
+    echo "    ~/.config/karen (configuration; review first)"
+    echo "    ~/.local/bin/karen-gate (CLI wrapper)"
 }
 
 main() {

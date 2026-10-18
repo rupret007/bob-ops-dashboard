@@ -33,7 +33,7 @@ Local Karen provides deterministic checks plus LLM review for PRs before merge:
 # Clone the repo and cd to it
 cd cluster/control_plane/local_karen
 
-# Run the install script (no sudo required)
+# Run the install script (runs as the current user)
 ./install.sh
 
 # Add ~/.local/bin to PATH if not already

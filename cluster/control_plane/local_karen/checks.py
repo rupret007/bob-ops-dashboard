@@ -316,8 +316,7 @@ def check_no_secrets_in_diff(pr: PRInfo, config: KarenConfig) -> CheckResult:
 
         for pattern, secret_type in SECRET_PATTERNS:
             if re.search(pattern, added_line):
-                snippet = added_line.strip()[:40]
-                issues.append(f"{secret_type} in {current_file}: {snippet}...")
+                issues.append(f"{secret_type} in {current_file}: [REDACTED]")
                 break
 
     if issues:
@@ -706,7 +705,7 @@ def run_static_security_scan(pr: PRInfo, config: KarenConfig) -> CheckResult:
                         "line": line_num,
                         "category": category,
                         "description": desc,
-                        "evidence": added_line.strip()[:50],
+                        "evidence": "[REDACTED]" if category == "secret" else added_line.strip()[:50],
                     })
                     break
         elif in_diff_hunk and not line.startswith("-"):

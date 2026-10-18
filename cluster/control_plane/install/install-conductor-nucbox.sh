@@ -6,7 +6,7 @@
 # - Installs systemd user service and timer
 # - Enables and starts the timer
 #
-# NO SUDO REQUIRED (uses systemd --user)
+# USER-LEVEL INSTALLATION (uses systemd --user)
 # Does NOT touch: ~/.cursor, Codex/Claude auth, Keychain, svc-* screens
 #
 # Default is shadow/dry-run mode. To enable live actions:
@@ -45,7 +45,7 @@ uninstall() {
     
     echo "Done. Log directory preserved at $LOG_DIR"
     echo "Verdict directory preserved at $VERDICT_DIR"
-    echo "To remove: rm -rf $LOG_DIR $VERDICT_DIR"
+    echo "Review and back up $LOG_DIR and $VERDICT_DIR before deleting them manually."
 }
 
 install() {
@@ -61,7 +61,7 @@ install() {
     
     # Check for gh CLI
     if ! command -v gh &>/dev/null; then
-        echo "ERROR: gh CLI not found. Install with: sudo apt install gh"
+        echo "ERROR: gh CLI not found. Install gh in your user PATH before continuing"
         exit 1
     fi
     

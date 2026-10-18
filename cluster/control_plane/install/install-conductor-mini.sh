@@ -6,7 +6,7 @@
 # - Installs the launchd plist to ~/Library/LaunchAgents
 # - Loads the agent
 #
-# NO SUDO REQUIRED
+# USER-LEVEL INSTALLATION
 # Does NOT touch: ~/.cursor, Codex/Claude auth, Keychain, svc-* screens
 #
 # Default is shadow/dry-run mode. To enable live actions:
@@ -42,7 +42,7 @@ uninstall() {
     
     echo "Done. Log directory preserved at $LOG_DIR"
     echo "Verdict directory preserved at $VERDICT_DIR"
-    echo "To remove: rm -rf $LOG_DIR $VERDICT_DIR"
+    echo "Review and back up $LOG_DIR and $VERDICT_DIR before deleting them manually."
 }
 
 install() {

@@ -117,29 +117,28 @@ need_cmd() {
 python_hint() {
   case "$OS_KIND" in
     darwin) echo "Install Python 3.10+: brew install python@3.12" ;;
-    wsl)    echo "Install Python 3.10+: sudo apt update && sudo apt install -y python3 python3-venv python3-pip" ;;
-    *)      echo "Install Python 3.10+: sudo apt install -y python3 python3-venv || sudo dnf install -y python3" ;;
+    *)      echo "Install Python 3.10+ with venv support in your user PATH before joining." ;;
   esac
 }
 
 git_hint() {
   case "$OS_KIND" in
     darwin) echo "Install git: xcode-select --install  OR  brew install git" ;;
-    *)      echo "Install git: sudo apt install -y git  OR  sudo dnf install -y git" ;;
+    *)      echo "Install git in your user PATH before joining." ;;
   esac
 }
 
 curl_hint() {
   case "$OS_KIND" in
     darwin) echo "Install curl: brew install curl" ;;
-    *)      echo "Install curl: sudo apt install -y curl  OR  sudo dnf install -y curl" ;;
+    *)      echo "Install curl in your user PATH before joining." ;;
   esac
 }
 
 tar_hint() {
   case "$OS_KIND" in
     darwin) echo "Install gnu-tar: brew install gnu-tar" ;;
-    *)      echo "Install tar: sudo apt install -y tar" ;;
+    *)      echo "Install tar in your user PATH before joining." ;;
   esac
 }
 
@@ -261,18 +260,19 @@ print(d["n"], d["r"])
   case "$OS_KIND" in
     darwin)
       echo "Logs: tail -f ~/Library/Logs/bob-cluster-node.log"
-      echo "Remove: launchctl bootout gui/$(id -u)/com.bob.cluster-node; rm -rf ~/.local/share/bob-cluster ~/.config/bob-cluster/node.env"
+      echo "Stop: launchctl bootout gui/$(id -u)/com.bob.cluster-node"
       ;;
     *)
       if systemctl --user show-environment >/dev/null 2>&1; then
         echo "Logs: journalctl --user -u bob-cluster-node -f"
-        echo "Remove: systemctl --user disable --now bob-cluster-node; rm -rf ~/.local/share/bob-cluster ~/.config/bob-cluster/node.env"
+        echo "Stop: systemctl --user disable --now bob-cluster-node"
       else
         echo "Logs: tail -f ~/.local/share/bob-cluster/node.log"
-        echo "Remove: rm -f ~/.local/bin/bob-cluster-node; rm -rf ~/.local/share/bob-cluster ~/.config/bob-cluster/node.env"
+        echo "Stop the bob-cluster-node wrapper before removing it from ~/.local/bin."
       fi
       ;;
   esac
+  echo "Data and configuration remain in ~/.local/share/bob-cluster and ~/.config/bob-cluster; review and back up before manual removal."
   exit 0
 fi
 
@@ -431,7 +431,7 @@ UNIT
         systemctl --user daemon-reload
         systemctl --user enable --now bob-cluster-node.service
         if ! loginctl enable-linger "$USER" 2>/dev/null; then
-          echo "Run: sudo loginctl enable-linger $USER" >&2
+          echo "User lingering is unavailable; services may stop after logout. Ask the host administrator to configure lingering." >&2
         fi
       else
         mkdir -p "${HOME}/.local/bin" "${HOME}/.local/share/bob-cluster"
@@ -470,17 +470,18 @@ echo "Bob cluster node: ${node_name:-joined} (${node_role:-$ROLE})"
 case "$OS_KIND" in
   darwin)
     echo "Logs: tail -f ~/Library/Logs/bob-cluster-node.log"
-    echo "Remove: launchctl bootout gui/$(id -u)/com.bob.cluster-node; rm -rf ~/.local/share/bob-cluster ~/.config/bob-cluster/node.env"
+    echo "Stop: launchctl bootout gui/$(id -u)/com.bob.cluster-node"
     ;;
   *)
     if systemctl --user show-environment >/dev/null 2>&1; then
       echo "Logs: journalctl --user -u bob-cluster-node -f"
-      echo "Remove: systemctl --user disable --now bob-cluster-node; rm -rf ~/.local/share/bob-cluster ~/.config/bob-cluster/node.env"
+      echo "Stop: systemctl --user disable --now bob-cluster-node"
     else
       echo "Logs: tail -f ~/.local/share/bob-cluster/node.log"
-      echo "Remove: rm -f ~/.local/bin/bob-cluster-node; rm -rf ~/.local/share/bob-cluster ~/.config/bob-cluster/node.env"
+      echo "Stop the bob-cluster-node wrapper before removing it from ~/.local/bin."
     fi
     ;;
 esac
+echo "Data and configuration remain in ~/.local/share/bob-cluster and ~/.config/bob-cluster; review and back up before manual removal."
 
 unset BOB_JOIN_CODE_DECODE

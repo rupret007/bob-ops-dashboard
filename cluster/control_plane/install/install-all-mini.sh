@@ -8,7 +8,7 @@
 # - Karen gate CLI (karen-gate --dry-run)
 # - Karen poller is NOT loaded (shadow mode only)
 #
-# NO SUDO REQUIRED - installs to user directories only
+# USER-LEVEL INSTALLATION - installs to user directories only
 # Does NOT touch: ~/bob-ops-dashboard (may have local edits)
 # Does NOT load: Karen poller (shadow mode default)
 # Does NOT enable: --live mode on any component
@@ -475,11 +475,11 @@ uninstall_all() {
 
     echo ""
     log_info "To fully remove, manually delete:"
-    echo "    rm -rf ~/.local/share/storypool"
-    echo "    rm -rf ~/.local/share/karen"
-    echo "    rm -rf ~/.config/storypool"
-    echo "    rm -rf ~/.config/karen"
-    echo "    rm -f ~/.local/bin/karen-gate"
+    echo "    ~/.local/share/storypool (logs; review and back up first)"
+    echo "    ~/.local/share/karen (verdicts; review and back up first)"
+    echo "    ~/.config/storypool (configuration; review first)"
+    echo "    ~/.config/karen (configuration; review first)"
+    echo "    ~/.local/bin/karen-gate (CLI wrapper)"
 }
 
 main() {

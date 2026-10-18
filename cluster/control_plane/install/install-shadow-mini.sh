@@ -6,7 +6,7 @@
 # - Installs the launchd plist to ~/Library/LaunchAgents
 # - Loads the agent
 #
-# NO SUDO REQUIRED
+# USER-LEVEL INSTALLATION
 # Does NOT touch: ~/.cursor, Codex/Claude auth, Keychain, svc-* screens
 #
 # Usage: bash install-shadow-mini.sh
@@ -35,7 +35,7 @@ uninstall() {
     fi
     
     echo "Done. Log directory preserved at $LOG_DIR"
-    echo "To remove logs: rm -rf $LOG_DIR"
+    echo "Review and back up $LOG_DIR before deleting logs manually."
 }
 
 install() {
