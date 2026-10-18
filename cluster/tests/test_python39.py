@@ -21,4 +21,3 @@ def test_cluster_python39_compatible():
             for annotation in annotations:
                 assert not any(isinstance(n, ast.BinOp) and isinstance(n.op, ast.BitOr)
                                for n in ast.walk(annotation)), str(path)
-
