@@ -36,7 +36,9 @@ def test_two_conductors_only_one_merge_command(client, tmp_path):
         return subprocess.CompletedProcess(args, 0)
     with patch.object(ClaimClient, 'from_env', return_value=client), \
          patch.object(c.subprocess, 'run', side_effect=merge) as command, \
-         patch.object(c.time, 'sleep'):
+         patch.object(c.time, 'sleep'), \
+         patch('cluster.control_plane.main_ci.merged_pr', return_value={}), \
+         patch('cluster.control_plane.main_ci.observe', return_value='pending'):
         with concurrent.futures.ThreadPoolExecutor(2) as pool:
             first = pool.submit(runners[0].execute_action, action(), True)
             try:

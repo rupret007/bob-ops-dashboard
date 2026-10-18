@@ -680,6 +680,17 @@ def main() -> int:
     
     result = run_watchdog(machine=args.machine)
     sync_peer_health(result.machine)
+    if not args.check_only:
+        from .node_control import is_draining
+        if not is_draining():
+            from .main_ci import reconcile_recent
+            from .coordination import CoordinationError
+            try:
+                _write_watchdog_log({"timestamp": _now_iso(), "action": "main_ci_followup",
+                                     "results": reconcile_recent()})
+            except (CoordinationError, OSError, subprocess.SubprocessError, ValueError):
+                _write_watchdog_log({"timestamp": _now_iso(), "action": "main_ci_followup",
+                                     "status": "deferred"})
     
     if args.json:
         print(json.dumps(result.to_dict(), indent=2))

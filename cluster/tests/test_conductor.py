@@ -590,7 +590,13 @@ class TestConductorExecution(unittest.TestCase):
         def mock_run_side_effect(cmd, **kwargs):
             result = MagicMock(returncode=0)
             if "gh" in cmd and "api" in cmd:
-                result.stdout = '{"state": "success"}'
+                if any("check-runs" in value for value in cmd):
+                    result.stdout = '[{"check_runs":[{"id":1,"name":"tests","status":"completed","conclusion":"success"}]}]'
+                else:
+                    result.stdout = '{"state":"success","statuses":[{}]}'
+            elif cmd[:3] == ["gh", "pr", "view"]:
+                result.stdout = json.dumps({"state":"MERGED", "mergeCommit":{"oid":"b"*40},
+                                           "baseRefName":"main"})
             return result
         mock_run.side_effect = mock_run_side_effect
         mock_client.return_value.ttl = 300

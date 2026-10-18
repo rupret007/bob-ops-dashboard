@@ -846,87 +846,28 @@ class Conductor:
         
         Returns (passing, status).
         """
-        try:
-            result = subprocess.run(
-                ["gh", "api", "/repos/{}/commits/main/status".format(repo)],
-                capture_output=True, text=True, timeout=30,
-            )
-            if result.returncode != 0:
-                return True, "unknown"
-            
-            data = json.loads(result.stdout)
-            state = data.get("state", "unknown")
-            return state in ("success", "pending"), state
-        except (subprocess.SubprocessError, json.JSONDecodeError):
-            return True, "unknown"
-    
+        from .main_ci import check_ci
+        return check_ci(repo)
+
     def _create_revert_pr(self, repo: str, merge_sha: str, pr_number: int) -> Optional[str]:
         """Create a revert PR for a failed merge.
         
         Returns the revert PR URL if created, None if failed.
         NEVER force-pushes - only creates a revert commit as a new PR.
         """
+        from .main_ci import merged_pr, open_revert
         try:
-            result = subprocess.run(
-                ["gh", "api", f"/repos/{repo}/git/commits/{merge_sha}"],
-                capture_output=True, text=True, timeout=30,
-            )
-            if result.returncode != 0:
-                self._write_log({"action": "revert_failed", "reason": "could not fetch merge commit"})
-                return None
-            
-            commit_data = json.loads(result.stdout)
-            commit_message = commit_data.get("message", "")
-            
-            revert_branch = f"revert-{merge_sha[:8]}"
-            revert_title = f"Revert: {commit_message.split(chr(10))[0][:60]}"
-            revert_body = f"""## Auto-generated revert PR
-
-This PR reverts commit {merge_sha[:12]} which broke main CI.
-
-**Original PR:** #{pr_number}
-**Original commit message:**
-```
-{commit_message[:500]}
-```
-
-**Reason:** Main CI failed after merge - auto-pause triggered.
-
----
-*This revert PR requires Karen gate review before merge.*
-"""
-            
-            create_result = subprocess.run(
-                ["gh", "pr", "create", "--repo", repo,
-                 "--title", revert_title,
-                 "--body", revert_body,
-                 "--head", revert_branch,
-                 "--base", "main",
-                 "--label", "needs-karen"],
-                capture_output=True, text=True, timeout=60,
-                input=f"git revert {merge_sha} --no-edit && git push origin HEAD:{revert_branch}\n",
-            )
-            
-            subprocess.run(
-                ["gh", "api", "--method", "POST",
-                 f"/repos/{repo}/git/refs",
-                 "-f", f"ref=refs/heads/{revert_branch}",
-                 "-f", f"sha={merge_sha}~1"],
-                capture_output=True, text=True, timeout=30,
-            )
-            
-            self._write_log({
-                "action": "revert_pr_created",
-                "repo": repo,
-                "merge_sha": merge_sha[:12],
-                "revert_branch": revert_branch,
-            })
-            
-            return create_result.stdout.strip() if create_result.returncode == 0 else None
-        except (subprocess.SubprocessError, json.JSONDecodeError) as e:
-            self._write_log({"action": "revert_failed", "reason": str(e)[:100]})
+            details = merged_pr(repo, pr_number)
+            actual_sha = (details.get("mergeCommit") or {}).get("oid", "")
+            client = ClaimClient.from_env()
+            claim = client.acquire(repo, pr_number, details["headRefOid"],
+                                   os.environ.get("STORYPOOL_MACHINE", "unknown"))
+            with Lease(client, claim) as lease:
+                return open_revert(repo, pr_number, actual_sha, details["baseRefName"], lease)
+        except (CoordinationError, OSError, subprocess.SubprocessError, ValueError, KeyError):
+            self._write_log({"action": "revert_deferred", "repo": repo, "pr": pr_number})
             return None
-    
+
     def _record_ci_result(self, repo: str, passed: bool, merge_sha: str = "", pr_number: int = 0) -> None:
         """Record CI result after merge, auto-pause and create revert PR if failures."""
         state = self._load_merge_state()
@@ -1188,6 +1129,12 @@ This PR reverts commit {merge_sha[:12]} which broke main CI.
                         validated.executed = False
                         validated.execution_result = fresh.validation_reason
                         return validated
+                    # A red/pending/unknown main pauses this repository on both
+                    # hosts, independent of local counters or an LLM proposal.
+                    main_ok, main_status = self._check_main_ci_after_merge(action.repo)
+                    if not main_ok:
+                        validated.execution_result = "deferred: main CI " + main_status
+                        return validated
                     lease.renew()
                     merge_start = time.time()
                 
@@ -1205,16 +1152,16 @@ This PR reverts commit {merge_sha[:12]} which broke main CI.
                     time_to_merge = action.extra.get("time_to_merge_hours", merge_duration_hours)
                     self.metrics.record_merge(time_to_merge, successful=True)
                 
-                    time.sleep(10)
-                    ci_ok, ci_status = self._check_main_ci_after_merge(action.repo)
-                    self._record_ci_result(
-                        action.repo, ci_ok,
-                        merge_sha=action.head_sha,
-                        pr_number=action.pr_number,
-                    )
-                    if not ci_ok:
-                        validated.execution_result = "merged (CI: {})".format(ci_status)
-                
+                    # GitHub retains the durable receipt. Watchdog revisits it
+                    # on its existing cadence if checks have not completed yet.
+                    from .main_ci import merged_pr, observe
+                    try:
+                        details = merged_pr(action.repo, action.pr_number)
+                        status = observe(action.repo, action.pr_number, details, lease)
+                        validated.execution_result = "merged (main CI: {})".format(status)
+                    except (CoordinationError, OSError, subprocess.SubprocessError, ValueError, KeyError):
+                        validated.execution_result = "merged (main CI follow-up pending)"
+
             elif action.action_type == ActionType.LABEL_NEEDS_KAREN.value:
                 subprocess.run(
                     ["gh", "pr", "edit", str(action.pr_number), "--repo", action.repo,

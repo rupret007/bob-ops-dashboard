@@ -205,3 +205,31 @@ contains a real `--live` argument; the self-update installer reloads and kicksta
 the conductor. Shared coordination provisioning is still required on both hosts.
 Durable shared merge receipts/counters and complete delayed main-CI reconciliation
 remain open architecture work; an initial pending CI result is not verified green.
+
+
+### Main CI recovery (GitHub authority)
+
+Conductor now checks main before each live merge and defers on red, pending or
+unknown results. This is a repository-wide pause observed by both hosts rather
+than a machine-local failure counter. CI inspection combines all paginated check
+runs and commit statuses, using the newest rerun per app/check. Missing or failed
+API responses cannot establish green health.
+
+The existing ten-minute watchdog cadence revisits GitHub's merged PR receipts
+from the past 48 hours, including after a restart. No new timer or local receipt
+store is introduced. The initial post-merge observation and watchdog follow-up
+inspect the actual squash merge commit, not the pre-merge PR head. Follow-up uses
+the same shared PR claim and heartbeat as merge admission; contention/outage
+pauses work. A red result creates an actual git revert on a separate deterministic
+branch and opens a needs-karen PR. It never pushes main, force-pushes or merges the
+revert. Existing revert PRs are reused; a crash after branch push is recoverable
+only when the rebuilt and published trees agree. A newer healthy main suppresses
+obsolete reverts. Conflicts and publication failures defer for retry; no success
+is inferred from them. Main remains protected by the live pre-merge check.
+
+Both hosts must receive this version and the restricted shared coordination
+configuration before autonomous merge verification is possible. The existing
+watchdog cadence allows a normal follow-up within ten minutes; broker/GitHub
+outages cannot guarantee the fifteen-minute objective and must remain visible as
+deferred. Global rate counters, quota and remaining authority gaps above are
+still open; this change does not enable Mini Codex.
