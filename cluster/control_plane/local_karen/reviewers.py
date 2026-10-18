@@ -688,9 +688,12 @@ class GeminiReviewer(BaseReviewer):
             payload = json.dumps({
                 "contents": [{"parts": [{"text": prompt}]}],
                 "generationConfig": {
-                    "maxOutputTokens": 500,
+                    # 500 tokens truncated every verdict: gemini-2.5-flash spends
+                    # output budget on thinking, leaving unterminated JSON.
+                    "maxOutputTokens": 4096,
                     "temperature": 0.1,
                     "responseMimeType": "application/json",
+                    "thinkingConfig": {"thinkingBudget": 1024},
                 },
             }).encode("utf-8")
 
