@@ -13,6 +13,16 @@ jetstream {
 authorization {
   users = [
     {
+      user: coord
+      password: "{{COORD_TOKEN}}"
+      permissions: {
+        # Shared work claims and durable exact-head retries only. Bucket
+        # creation remains an operator action; workers cannot administer JS.
+        publish: ["$KV.STORYPOOL_CLAIMS.>", "$KV.STORYPOOL_CLAIMS_RETRIES.>", "$JS.API.STREAM.INFO.KV_STORYPOOL_CLAIMS", "$JS.API.STREAM.INFO.KV_STORYPOOL_CLAIMS_RETRIES", "$JS.API.STREAM.MSG.GET.KV_STORYPOOL_CLAIMS", "$JS.API.STREAM.MSG.GET.KV_STORYPOOL_CLAIMS_RETRIES", "$JS.API.DIRECT.GET.KV_STORYPOOL_CLAIMS", "$JS.API.DIRECT.GET.KV_STORYPOOL_CLAIMS.>", "$JS.API.DIRECT.GET.KV_STORYPOOL_CLAIMS_RETRIES", "$JS.API.DIRECT.GET.KV_STORYPOOL_CLAIMS_RETRIES.>"]
+        subscribe: ["_INBOX_coord.>"]
+      }
+    }
+    {
       user: mini
       password: "{{MINI_TOKEN}}"
       permissions: {

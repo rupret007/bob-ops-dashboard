@@ -389,3 +389,14 @@ The dashboard preserves the last reported machine health separately from peer
 contact. A newer failed sync or a peer snapshot older than 15 minutes makes the
 peer badge yellow even when the last watchdog report was green. Fresh snapshots
 clear superseded sync failures. A real red watchdog result remains red.
+
+The shipped broker template includes a dedicated `coord` service identity with
+claim/retry KV publish, exact stream-info and read subjects, and only its own
+reply inbox. It cannot create/delete/purge streams or publish jobs. The broker
+installer adds a missing COORD_TOKEN without rotating existing credentials and
+renders protected config without passing credentials in process arguments.
+An ephemeral secured-broker regression exercises acquire/renew/retry read-write/
+release and verifies administrative subjects remain denied on both CI runtimes.
+This template is a fresh-install contract: existing broker ACLs still require
+the documented operator migration/reload; monitors never bypass unavailable
+retry storage or silently rewrite an installed broker configuration.

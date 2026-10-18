@@ -76,7 +76,7 @@ class EphemeralNats:
     def __init__(self, secured: bool = False, extra_conf: str = "") -> None:
         self.secured = secured
         self.extra_conf = extra_conf
-        self.passwords = {node: secrets.token_urlsafe(24) for node in ("mini", "macbook", "nucbox", "dashboard")}
+        self.passwords = {node: secrets.token_urlsafe(24) for node in ("mini", "macbook", "nucbox", "dashboard", "coord")}
         self.bin = find_nats_binary()
         self.proc: subprocess.Popen | None = None
         self.tmp: tempfile.TemporaryDirectory | None = None
