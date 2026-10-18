@@ -208,9 +208,11 @@ class TestVerdictFile(unittest.TestCase):
 class TestCodexClient(unittest.TestCase):
     """Tests for CodexClient."""
 
+    @patch("cluster.control_plane.conductor.CodexClient._find_codex")
     @patch("subprocess.run")
-    def test_complete_success(self, mock_run):
+    def test_complete_success(self, mock_run, mock_find):
         """complete returns response on success."""
+        mock_find.return_value = Path("/usr/bin/codex")
         mock_run.return_value = MagicMock(returncode=0, stdout='{"response": "test"}')
         
         client = CodexClient(host="nuc", effort="low")
@@ -219,31 +221,36 @@ class TestCodexClient(unittest.TestCase):
         self.assertEqual(result, '{"response": "test"}')
         mock_run.assert_called_once()
         call_args = mock_run.call_args
-        self.assertIn("codex", call_args[0][0])
-        self.assertIn("--effort", call_args[0][0])
+        self.assertIn("-c", call_args[0][0])
+        self.assertIn("model_reasoning_effort=low", call_args[0][0])
         self.assertEqual(call_args[1]["env"]["CODEX_HOST"], "nuc")
 
+    @patch("cluster.control_plane.conductor.CodexClient._find_codex")
     @patch("subprocess.run")
-    def test_complete_failure(self, mock_run):
+    def test_complete_failure(self, mock_run, mock_find):
         """complete returns None on failure."""
-        mock_run.return_value = MagicMock(returncode=1, stdout="")
+        mock_find.return_value = Path("/usr/bin/codex")
+        mock_run.return_value = MagicMock(returncode=1, stdout="", stderr="error")
         
         client = CodexClient()
         result = client.complete("test prompt")
         
         self.assertIsNone(result)
 
+    @patch("cluster.control_plane.conductor.CodexClient._find_codex")
     @patch("subprocess.run")
-    def test_complete_high_effort(self, mock_run):
+    def test_complete_high_effort(self, mock_run, mock_find):
         """complete uses high effort when specified."""
+        mock_find.return_value = Path("/usr/bin/codex")
         mock_run.return_value = MagicMock(returncode=0, stdout="response")
         
         client = CodexClient(effort="low")
         client.complete("test prompt", high_effort=True)
         
         call_args = mock_run.call_args[0][0]
-        effort_idx = call_args.index("--effort")
-        self.assertEqual(call_args[effort_idx + 1], "high")
+        self.assertIn("-c", call_args)
+        c_idx = call_args.index("-c")
+        self.assertIn("model_reasoning_effort=high", call_args[c_idx + 1])
 
 
 class TestConductor(unittest.TestCase):

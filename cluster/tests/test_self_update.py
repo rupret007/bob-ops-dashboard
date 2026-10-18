@@ -152,27 +152,30 @@ class TestSelfUpdate(unittest.TestCase):
         self.assertEqual(result["reason"], "already up-to-date")
 
     @patch("cluster.control_plane.self_update.run_tests")
+    @patch("cluster.control_plane.self_update.rollback_to_sha")
     @patch("cluster.control_plane.self_update.fast_forward")
     @patch("cluster.control_plane.self_update.can_fast_forward")
     @patch("cluster.control_plane.self_update.fetch_branch")
     @patch("cluster.control_plane.self_update.is_working_tree_dirty")
     @patch("cluster.control_plane.self_update.get_current_head")
-    def test_tests_fail_aborts(self, mock_head, mock_dirty, mock_fetch, mock_ff, mock_forward, mock_tests):
-        """Should abort if tests fail after update."""
+    def test_tests_fail_aborts(self, mock_head, mock_dirty, mock_fetch, mock_ff, mock_forward, mock_rollback, mock_tests):
+        """Should abort and rollback if tests fail after update."""
         old_sha = "a" * 40
         new_sha = "b" * 40
         mock_head.side_effect = [old_sha, new_sha]
         mock_dirty.return_value = False
         mock_fetch.return_value = True
         mock_ff.return_value = (True, new_sha)
-        mock_forward.return_value = True
+        mock_forward.return_value = (True, old_sha)
         mock_tests.return_value = False
+        mock_rollback.return_value = True
         
         with tempfile.TemporaryDirectory() as tmpdir:
             result = self_update(install_dir=Path(tmpdir))
         
         self.assertFalse(result["updated"])
-        self.assertEqual(result["reason"], "tests failed after update")
+        self.assertIn("tests failed", result["reason"])
+        self.assertTrue(result.get("rolled_back", False))
 
 
 class TestCanFastForward(unittest.TestCase):
