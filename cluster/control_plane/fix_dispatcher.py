@@ -31,8 +31,17 @@ FIX_STATE_DIR = Path(
 ).expanduser()
 
 MAX_FIX_ATTEMPTS = 2
+MAX_FIX_JOBS_PER_HOUR = 3
 HIGH_EFFORT_TIERS = frozenset(["high", "security", "critical"])
 CODEX_HOST_NUCBOX = os.environ.get("CODEX_HOST", "nuc")
+
+# Codex binary search paths (same as conductor.py)
+CODEX_SEARCH_PATHS = [
+    Path.home() / "bin" / "codex",
+    Path.home() / ".local" / "bin" / "codex",
+    Path("/usr/local/bin/codex"),
+    Path("/usr/bin/codex"),
+]
 
 
 @dataclass
@@ -203,6 +212,55 @@ def should_attempt_fix(repo: str, pr_number: int, verdict: dict) -> tuple:
     return True, f"can attempt fix ({state.attempt_count + 1}/{MAX_FIX_ATTEMPTS})"
 
 
+def _find_codex() -> Optional[Path]:
+    """Find codex binary in PATH or common locations."""
+    # Check PATH first
+    try:
+        result = subprocess.run(
+            ["which", "codex"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        if result.returncode == 0:
+            path = Path(result.stdout.strip())
+            if path.is_file():
+                return path
+    except (subprocess.SubprocessError, FileNotFoundError):
+        pass
+    
+    # Check common locations
+    for path in CODEX_SEARCH_PATHS:
+        if path.is_file() and os.access(path, os.X_OK):
+            return path
+    
+    return None
+
+
+def _get_hourly_fix_count() -> int:
+    """Count fix attempts in the last hour across all PRs."""
+    if not FIX_STATE_DIR.is_dir():
+        return 0
+    
+    now = datetime.now(timezone.utc)
+    count = 0
+    
+    for path in FIX_STATE_DIR.glob("*.json"):
+        try:
+            state = FixState.from_dict(json.loads(path.read_text()))
+            for attempt in state.attempts:
+                try:
+                    ts = datetime.fromisoformat(attempt.timestamp.replace("Z", "+00:00"))
+                    if (now - ts).total_seconds() < 3600:
+                        count += 1
+                except (ValueError, TypeError):
+                    pass
+        except (json.JSONDecodeError, KeyError):
+            pass
+    
+    return count
+
+
 def _run_codex_fix(
     repo: str,
     pr_number: int,
@@ -217,6 +275,11 @@ def _run_codex_fix(
     if dry_run:
         return True, "[DRY-RUN] would run codex fix", None
     
+    codex_path = _find_codex()
+    if codex_path is None:
+        searched = ", ".join(str(p) for p in CODEX_SEARCH_PATHS)
+        return False, f"codex CLI not found in PATH or {searched}", None
+    
     prompt = f"""Fix the following Karen gate findings for PR #{pr_number}:
 
 {chr(10).join('- ' + f for f in findings)}
@@ -225,13 +288,18 @@ Make minimal changes to address each finding. Commit the fix with a clear messag
 Do not change unrelated code. Push to the PR branch when done.
 """
     
+    env = os.environ.copy()
+    env["CODEX_HOST"] = CODEX_HOST_NUCBOX
+    
     try:
+        # Use -c to set model_reasoning_effort, prompt via stdin
         result = subprocess.run(
-            ["codex", "exec", "-a", prompt],
+            [str(codex_path), "exec", "-c", "model_reasoning_effort=low"],
+            input=prompt,
             capture_output=True,
             text=True,
             timeout=300,
-            env={**os.environ, "CODEX_HOST": CODEX_HOST_NUCBOX},
+            env=env,
         )
         
         if result.returncode == 0:
@@ -243,7 +311,7 @@ Do not change unrelated code. Push to the PR branch when done.
     except subprocess.TimeoutExpired:
         return False, "codex timed out after 300s", None
     except FileNotFoundError:
-        return False, "codex CLI not found", None
+        return False, f"codex CLI not found at {codex_path}", None
     except subprocess.SubprocessError as e:
         return False, f"codex error: {e}", None
 
@@ -305,6 +373,13 @@ def dispatch_fix(
         "reason": "",
         "attempt_number": 0,
     }  # type: Dict[str, Any]
+    
+    # Check hourly rate limit
+    hourly_count = _get_hourly_fix_count()
+    if hourly_count >= MAX_FIX_JOBS_PER_HOUR:
+        result["reason"] = f"hourly fix limit reached ({hourly_count}/{MAX_FIX_JOBS_PER_HOUR})"
+        logger.info("Skip fix for %s#%d: %s", repo, pr_number, result["reason"])
+        return result
     
     should_fix, reason = should_attempt_fix(repo, pr_number, verdict)
     if not should_fix:
