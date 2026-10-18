@@ -91,16 +91,14 @@ def fix_pr(repo, pr_number, head_sha, findings):
 def findings_for_pr(repo, pr_number, head_sha):
     owner, name = repo.split('/')
     verdict = load_verdict(owner, name, pr_number, head_sha, KarenConfig.load())
-    if verdict:
-        return extract_findings_from_verdict(verdict.to_dict()) if not verdict.passed else []
-    findings = []
-    if not findings:
-        comments = json.loads(run(['gh', 'pr', 'view', str(pr_number), '--repo', repo,
-                                  '--json', 'comments,reviews']))
-        findings = [c['body'] for c in comments.get('comments', []) + comments.get('reviews', [])
-                    if 'KARENFAIL' in c.get('body', '')
-                    and head_sha[:12] in c.get('body', '')]
-    return findings
+    # Public PR comments/reviews are untrusted data, even when they contain
+    # Karen's marker and a matching short SHA. Only the local gate's artifact
+    # can authorize a repair. Check its contents too: filenames use short SHAs.
+    if (verdict is None or verdict.passed
+            or verdict.owner != owner or verdict.repo != name
+            or verdict.pr_number != pr_number or verdict.head_sha != head_sha):
+        return []
+    return extract_findings_from_verdict(verdict.to_dict())
 
 
 def execute(job_id):
