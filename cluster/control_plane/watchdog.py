@@ -138,8 +138,54 @@ def _escalate_to_jeff(issue: str, details: str) -> None:
     logger.warning("Escalated to NEEDS_JEFF.md: %s", issue)
 
 
+PEER_URLS = {
+    "mini": os.environ.get("STORYPOOL_MINI_URL", "http://100.67.108.113:8790"),
+    "nucbox": os.environ.get("STORYPOOL_NUCBOX_URL", "http://100.93.165.1:8790"),
+}
+
+
+def _dashboard_alive(timeout: float = 3.0) -> bool:
+    """An idle dashboard writes no logs; a live /health answer means it is not stuck."""
+    import urllib.request
+    port = os.environ.get("STORYPOOL_DASHBOARD_PORT", "8790")
+    try:
+        with urllib.request.urlopen(f"http://127.0.0.1:{port}/health", timeout=timeout) as resp:
+            return resp.status == 200
+    except Exception:
+        return False
+
+
+def sync_peer_health(machine: str) -> bool:
+    """Copy the peer's self-reported health (over Tailscale) into machines/<peer>/watchdog.log.
+
+    The row keeps the peer's own watchdog timestamp, so stale peers still show stale.
+    """
+    import urllib.request
+    peer = "nucbox" if machine == "mini" else "mini"
+    try:
+        with urllib.request.urlopen(PEER_URLS[peer] + "/api/engine", timeout=5) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+        info = data.get("machines", {}).get(peer, {})
+        if not info.get("timestamp"):
+            return False
+        row = {"timestamp": info["timestamp"], "machine": peer, "source": "peer-sync",
+               "checks": [{"name": "peer_reported_health", "passed": info.get("state") != "red",
+                           "message": str(info.get("detail", ""))[:200]}]}
+        out = LOG_DIR / "machines" / peer / "watchdog.log"
+        out.parent.mkdir(parents=True, exist_ok=True)
+        with out.open("a") as f:
+            f.write(json.dumps(row) + "\n")
+        return True
+    except Exception as exc:
+        logger.info("peer health sync for %s skipped: %s", peer, exc)
+        return False
+
+
 def check_service_stuck(service: str, log_path: Path) -> HealthCheck:
     """Check if a service has logged recently."""
+    if service == "dashboard" and _dashboard_alive():
+        return HealthCheck(name="dashboard_stuck", passed=True,
+                           message="dashboard answering /health")
     if not log_path.exists():
         return HealthCheck(
             name=f"{service}_stuck", passed=True,
@@ -605,6 +651,7 @@ def main() -> int:
     args = parser.parse_args()
     
     result = run_watchdog(machine=args.machine)
+    sync_peer_health(result.machine)
     
     if args.json:
         print(json.dumps(result.to_dict(), indent=2))

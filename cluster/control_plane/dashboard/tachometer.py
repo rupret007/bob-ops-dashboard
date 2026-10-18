@@ -116,7 +116,7 @@ class EngineCollector:
             age = now.timestamp() - stamp(last.get('timestamp'))
             checks = last.get('checks', [])
             fresh = bool(checks) and 0 <= age < 1800
-            failed = [c for c in checks if not c.get('passed')]
+            failed = [c for c in checks if not c.get('passed') and not c.get('repaired')]
             state = ('red' if failed else 'green') if fresh else 'yellow'
             health[machine] = {'state': state, 'timestamp': last.get('timestamp'),
                                'detail': 'stale or unavailable' if not fresh else '{} failed checks'.format(len(failed))}
