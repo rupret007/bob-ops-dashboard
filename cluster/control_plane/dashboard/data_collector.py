@@ -374,24 +374,9 @@ class DataCollector:
             pass
         
         if self.machine == "mini":
-            try:
-                with open("/proc/meminfo", "r") as f:
-                    vals = {}
-                    for line in f:
-                        parts = line.split()
-                        if len(parts) >= 2 and parts[0].endswith(":"):
-                            key = parts[0][:-1]
-                            try:
-                                vals[key] = int(parts[1])
-                            except ValueError:
-                                pass
-                    total = vals.get("SwapTotal", 0)
-                    free = vals.get("SwapFree", 0)
-                    if total > 0:
-                        guards.swap_pct = ((total - free) / total) * 100
-            except OSError:
-                pass
-            
+            from ..guards import get_swap_pct
+            guards.swap_pct = get_swap_pct()
+
             try:
                 import shutil
                 usage = shutil.disk_usage("/")
@@ -404,7 +389,6 @@ class DataCollector:
             guard_vals = dispatch_status.get("summary", {}).get("decisions", [{}])[0].get("guard_values", {})
             if guard_vals:
                 guards.load = guard_vals.get("load", guards.load)
-                guards.swap_pct = guard_vals.get("swap", guards.swap_pct)
                 guards.disk_gb = guard_vals.get("disk", guards.disk_gb)
                 guards.lanes_active = int(guard_vals.get("lanes", 0))
         

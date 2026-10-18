@@ -586,7 +586,7 @@ class CodexReviewer(BaseReviewer):
             return ReviewResult(
                 reviewer=self.name,
                 verdict=ReviewVerdict.ERROR,
-                reason="Codex CLI error: {}".format(e),
+                reason="Codex CLI error: {}".format(type(e).__name__),
                 tier=tier,
                 duration_sec=time.time() - start_time,
             )
@@ -740,7 +740,7 @@ class GeminiReviewer(BaseReviewer):
             return ReviewResult(
                 reviewer=self.name,
                 verdict=ReviewVerdict.ERROR,
-                reason="Gemini error: {}".format(e),
+                reason="Gemini request failed: {}".format(type(e).__name__),
                 tier=tier,
                 duration_sec=time.time() - start_time,
                 key_source=key_source,

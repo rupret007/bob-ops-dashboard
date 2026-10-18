@@ -663,6 +663,9 @@ class DashboardHandler(BaseHTTPRequestHandler):
         if self.path != PUSH_PATH:
             self._serve_404()
             return
+        if not self.headers.get("X-Karen-Signature"):
+            self.send_error(403, "Karen signature required")
+            return
         try:
             length = int(self.headers.get("Content-Length", "0"))
             if not 0 < length <= MAX_BYTES:

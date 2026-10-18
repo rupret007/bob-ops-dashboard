@@ -32,7 +32,8 @@ logger = logging.getLogger(__name__)
 BRANCH = "cursor/storypool-all-in-one-47c7"
 INSTALL_DIR = Path(os.environ.get("STORYPOOL_INSTALL_DIR", "~/storypool-install")).expanduser()
 KAREN_MODULE_DIR = Path("~/.local/share/karen/module").expanduser()
-UPDATE_LOG_FILE = Path("~/.local/share/storypool/self-update.log").expanduser()
+UPDATE_LOG_FILE = Path(os.environ.get(
+    "STORYPOOL_UPDATE_LOG", "~/.local/share/storypool/self-update.log")).expanduser()
 
 
 def _log_update_outcome(outcome: str, details: dict) -> None:
