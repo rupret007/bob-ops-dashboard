@@ -15,6 +15,8 @@ import time
 import uuid
 from pathlib import Path
 
+from cluster.coordination_buckets import BUCKETS, bucket_name
+
 
 class CoordinationError(RuntimeError):
     pass
@@ -43,8 +45,10 @@ async def _provision_bucket(js, bucket, ttl):
 
 
 class ClaimClient:
-    def __init__(self, url, bucket='STORYPOOL_CLAIMS', ttl=300, **connection):
-        self.url, self.bucket, self.ttl = url, bucket, ttl
+    def __init__(self, url, bucket=None, ttl=None, **connection):
+        self.url = url
+        self.bucket = bucket if bucket is not None else bucket_name('claims')
+        self.ttl = ttl if ttl is not None else BUCKETS['claims'][1]
         self.connection = connection
 
     @classmethod
@@ -167,9 +171,9 @@ class ClaimClient:
                 max_reconnect_attempts=1, allow_reconnect=False, error_cb=quiet_error,
                 **self.connection), timeout=3)
             js = nc.jetstream(timeout=2)
-            bucket = self.bucket + '_RETRIES'
+            bucket = bucket_name('retries', self.bucket)
             if operation == 'bootstrap':
-                await _provision_bucket(js, bucket, 0)
+                await _provision_bucket(js, bucket, BUCKETS['retries'][1])
                 return None
             kv = await js.key_value(bucket)
             if (await kv.status()).ttl:

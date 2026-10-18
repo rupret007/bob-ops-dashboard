@@ -76,6 +76,10 @@ fi
 if ! grep -q '^COORD_TOKEN=' "${TOKENS_FILE}"; then
   printf '\nCOORD_TOKEN=%s\n' "$(openssl rand -hex 24)" >> "${TOKENS_FILE}"
 fi
+# A separate operator identity can provision only the registered buckets.
+if ! grep -q '^COORDOP_TOKEN=' "${TOKENS_FILE}"; then
+  printf '\nCOORDOP_TOKEN=%s\n' "$(openssl rand -hex 24)" >> "${TOKENS_FILE}"
+fi
 chmod 600 "${TOKENS_FILE}"
 
 CONF_OUT="${CONFIG_DIR}/nats.conf"
@@ -85,14 +89,17 @@ import sys
 from pathlib import Path
 
 tokens_path, template_path, state_dir, output_path = map(Path, sys.argv[1:])
+sys.path.insert(0, str(template_path.parent.parent))
+from cluster.nats_acl import render_coord_acl, verify_coord_acl
 values = {}
 for line in tokens_path.read_text().splitlines():
     key, separator, value = line.partition('=')
     if separator and not key.strip().startswith('#'):
         values[key.strip()] = value.strip().strip('"')
 values['JS_STORE_DIR'] = str(state_dir)
-text = template_path.read_text()
-for key in ('MINI_TOKEN', 'NUCBOX_TOKEN', 'MACBOOK_TOKEN', 'DASHBOARD_TOKEN', 'COORD_TOKEN', 'JS_STORE_DIR'):
+text = render_coord_acl(template_path.read_text())
+verify_coord_acl(text)
+for key in ('MINI_TOKEN', 'NUCBOX_TOKEN', 'MACBOOK_TOKEN', 'DASHBOARD_TOKEN', 'COORD_TOKEN', 'COORDOP_TOKEN', 'JS_STORE_DIR'):
     if not values.get(key):
         raise SystemExit('Broker configuration requires all protected credentials')
     text = text.replace('{{' + key + '}}', json.dumps(values[key])[1:-1])

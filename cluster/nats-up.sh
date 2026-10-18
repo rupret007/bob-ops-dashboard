@@ -7,6 +7,12 @@ CONF="${CONFIG_DIR}/nats.conf"
 PID_FILE="${CONFIG_DIR}/nats-server.pid"
 LOG_FILE="${CONFIG_DIR}/nats-server.log"
 NATSBIN="${HOME}/.local/bin/nats-server"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Refuse stale or overbroad ACLs before starting/restarting this broker.
+check_coord_acl() {
+  PYTHONPATH="${SCRIPT_DIR}/..${PYTHONPATH:+:${PYTHONPATH}}" python3 -m cluster.nats_acl --check "${CONF}"
+}
 
 running_pid() {
   if [[ -f "${PID_FILE}" ]]; then
@@ -63,6 +69,7 @@ EOF
 
 case "${1:-start}" in
   start)
+    check_coord_acl
     if command -v systemctl >/dev/null 2>&1 && systemctl --user show-environment >/dev/null 2>&1; then
       install_systemd_user
     else

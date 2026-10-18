@@ -420,3 +420,26 @@ the restricted ACL migration; production rollout is not inferred from tests.
 Dashboard blocker projections survive log rotation and are validated before
 rendering; full-head observations supersede stale blockers. Verified successful
 exact-head ledger history prevents redispatch even if final KV persistence fails.
+
+
+### Coordination bucket and permission registry
+
+`cluster/coordination_buckets.py` is the source for runtime bucket names and TTLs.
+`cluster/nats_acl.py` generates the `coord` service and separate `coordop` operator
+ACLs from that registry. Service access is limited to KV writes and exact-stream
+INFO/MSG.GET/DIRECT.GET with private inboxes; only the operator can CREATE/UPDATE
+the registered streams. Neither identity can delete/purge streams or use unrelated
+subjects. The installer renders these ACLs before protected credential expansion;
+account-based registry rendering uses the same permissions when those service
+identities are configured. Existing credentials are preserved and a new operator
+credential is generated only when absent. No live credential is stored in code.
+
+CI and `nats-up.sh start` run `python3 -m cluster.nats_acl --check <config>`;
+a missing bucket subject or overbroad coordination permission stops startup.
+After changing the bucket registry, regenerate the checked-in template with
+`python3 -m cluster.nats_acl --write cluster/nats.conf.template`, and have the
+operator install/reload the configuration and bootstrap registered buckets.
+Runtime workers never provision or broaden permissions. Regression coverage adds
+a future bucket to prove stale ACLs fail and regeneration includes it, plus a
+real broker check of claim/retry access, restricted operator bootstrap, and
+service denial of stream administration and rollup.

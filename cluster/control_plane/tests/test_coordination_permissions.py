@@ -11,8 +11,8 @@ def test_installed_service_identity_can_fence_retries_but_cannot_administer():
     server = EphemeralNats(secured=True)
     server.start()
     try:
-        operator = ClaimClient(server.url, user='nucbox', password=server.passwords['nucbox'],
-                               inbox_prefix=b'_INBOX_nucbox')
+        operator = ClaimClient(server.url, user='coordop', password=server.passwords['coordop'],
+                               inbox_prefix=b'_INBOX_coordop')
         operator.call('bootstrap', bootstrap=True)
         operator.call('bootstrap', bootstrap=True)
         service = ClaimClient(server.url, user='coord', password=server.passwords.get('coord', 'fixture-only'),
@@ -70,3 +70,73 @@ async def assert_admin_denied(server):
             assert 'permissions violation' in str(error).lower()
     finally:
         await nc.close()
+
+
+from pathlib import Path
+
+from cluster import coordination_buckets
+from cluster.nats_acl import coord_permissions, render_coord_acl, verify_coord_acl
+
+TEMPLATE = Path(__file__).resolve().parents[2] / 'nats.conf.template'
+
+
+def test_shipped_acl_matches_runtime_bucket_registry():
+    text = TEMPLATE.read_text()
+    verify_coord_acl(text)
+    assert render_coord_acl(text) == text
+    assert ClaimClient('nats://fixture.invalid').bucket == coordination_buckets.bucket_name('claims')
+    for name, _ttl in coordination_buckets.BUCKETS.values():
+        assert '$KV.' + name + '.>' in coord_permissions()['publish']
+    for subject in coord_permissions()['publish']:
+        assert '.CREATE.' not in subject and '.UPDATE.' not in subject
+        assert '.DELETE.' not in subject and '.PURGE.' not in subject
+
+
+def test_future_bucket_requires_acl_regeneration_and_is_generated(monkeypatch):
+    text = TEMPLATE.read_text()
+    monkeypatch.setitem(coordination_buckets.BUCKETS, 'future', ('STORYPOOL_FUTURE', 60))
+    with pytest.raises(ValueError, match='STORYPOOL_FUTURE'):
+        verify_coord_acl(text)
+    generated = render_coord_acl(text)
+    verify_coord_acl(generated)
+    for operator in (False, True):
+        assert '$JS.API.STREAM.MSG.GET.KV_STORYPOOL_FUTURE' in coord_permissions(operator)['publish']
+    assert coordination_buckets.bucket_name('future') == 'STORYPOOL_FUTURE'
+
+
+def test_missing_retry_subject_blocks_preflight_without_disclosing_config():
+    text = TEMPLATE.read_text().replace('"$JS.API.STREAM.MSG.GET.KV_STORYPOOL_CLAIMS_RETRIES", ', '', 1)
+    with pytest.raises(ValueError, match='coord publish') as error:
+        verify_coord_acl(text)
+    assert '$JS.API.STREAM.MSG.GET.KV_STORYPOOL_CLAIMS_RETRIES' in str(error.value)
+    assert 'TOKEN' not in str(error.value)
+
+
+def test_overbroad_acl_is_rejected():
+    text = TEMPLATE.read_text().replace('publish: [', 'publish: ["$JS.API.>", ', 1)
+    with pytest.raises(ValueError, match='ACL drift'):
+        verify_coord_acl(text)
+
+
+
+def test_account_registry_uses_same_permissions_and_reserves_service_names():
+    from cluster.registry import render_conf, RESERVED_NAMES
+    assert {'coord', 'coordop'} <= RESERVED_NAMES
+    # Renderer accepts hashes only; this synthetic string is never a credential.
+    fixture_hash = '$2b$04$' + 'a' * 53
+    reg = {'legacy': {}, 'nodes': {}, 'pending': {},
+           'service': {'coord': fixture_hash, 'coordop': fixture_hash}}
+    verify_coord_acl(render_conf(reg, '/tmp/fixture-store'))
+
+
+def test_command_preflight_returns_failure_for_stale_acl(tmp_path):
+    import subprocess
+    import sys
+    path = tmp_path / 'stale.conf'
+    path.write_text(TEMPLATE.read_text().replace(
+        '"$KV.STORYPOOL_CLAIMS_RETRIES.>", ', '', 1))
+    result = subprocess.run([sys.executable, '-m', 'cluster.nats_acl', '--check', str(path)],
+                            text=True, capture_output=True)
+    assert result.returncode != 0
+    assert 'STORYPOOL_CLAIMS_RETRIES' in result.stderr
+    assert 'TOKEN' not in result.stderr
