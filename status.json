@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-10-18T17:05:12.411500-05:00",
-  "generated_at_display": "Sun Oct 18, 2026 \u00b7 5:05 PM CDT",
+  "generated_at": "2026-10-18T17:20:13.376026-05:00",
+  "generated_at_display": "Sun Oct 18, 2026 \u00b7 5:20 PM CDT",
   "timezone": "America/Chicago",
   "owner": "rupret007",
   "dashboard": "bob-ops-dashboard",
@@ -495,11 +495,11 @@
           "status": "yellow",
           "chip": "Yellow",
           "default_branch": "main",
-          "tip_sha": "fad94b7",
-          "tip_date": "2026-10-18T21:50:22Z",
-          "open_prs": 4,
-          "open_pr_url": "https://github.com/rupret007/bob-ops-dashboard/pull/87",
-          "open_pr_number": 87,
+          "tip_sha": "507c8bc",
+          "tip_date": "2026-10-18T22:05:24Z",
+          "open_prs": 5,
+          "open_pr_url": "https://github.com/rupret007/bob-ops-dashboard/pull/88",
+          "open_pr_number": 88,
           "open_pr_draft": false,
           "open_pr_stack": [],
           "pr_listing_complete": true,
@@ -900,7 +900,7 @@
     "barker"
   ],
   "publish_notes": "Public board -- no secrets or customer paths. Private repositories stay high-level; AI Music Vault stays private-content-boundary only.",
-  "refresh_started_ms": 1792361080215,
+  "refresh_started_ms": 1792361981196,
   "agents_source": "file:stale->unknown",
   "agents": [
     {
@@ -949,11 +949,11 @@
   "cloud_agents": [
     {
       "id": "bc-8010dd7e-0b0b-5074-a351-0faafe9a47c7",
-      "name": "PR #87",
+      "name": "PR #88",
       "state": "unknown",
-      "detail": "Add storypool-dispatch and LLM-in-the-loop conductor services",
+      "detail": "All-in-one install: merge PRs #84, #85, #86, #87 with unified installers",
       "url": "https://cursor.com/agents/bc-8010dd7e-0b0b-5074-a351-0faafe9a47c7",
-      "pr_url": "https://github.com/rupret007/bob-ops-dashboard/pull/87",
+      "pr_url": "https://github.com/rupret007/bob-ops-dashboard/pull/88",
       "checked_at": null
     },
     {
@@ -1099,7 +1099,7 @@
     }
   ],
   "llm_work_now_freshness": {
-    "generated_at": "2026-10-18 17:05 CT",
+    "generated_at": "2026-10-18 17:20 CT",
     "warn_ttl_sec": 1200,
     "warnings": [],
     "ok": true
@@ -1130,7 +1130,7 @@
     ],
     "scorecards": {
       "v": "scorecards/v1",
-      "generated_at": "2026-10-18T22:05:13.901996+00:00",
+      "generated_at": "2026-10-18T22:20:14.501284+00:00",
       "windows": {
         "24h": {
           "providers": {
