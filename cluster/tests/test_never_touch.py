@@ -12,7 +12,7 @@ import textwrap
 import time
 import unittest
 from pathlib import Path
-from unittest.mock import Mock, patch
+from unittest.mock import patch
 
 from cluster.never_touch import (
     GatePassReceipt,
@@ -297,7 +297,7 @@ class NeverTouchViolationTests(unittest.TestCase):
 
 
 ROOT = Path(__file__).resolve().parents[2]
-GUARD = ROOT / "cluster" / "never_touch.py"
+GUARD = ROOT / "cluster" / "never_touch" / "__init__.py"
 PROTECTED_REPO = "rupret007/rad-dad-show-night"
 
 
@@ -372,20 +372,24 @@ class RemotePushGuardTests(unittest.TestCase):
 class ProductionWritePathTests(unittest.TestCase):
     def test_decision_issue_guard_runs_before_github_write(self):
         from cluster import never_touch
+        from cluster.never_touch._dashboard import close_decision_issue
 
         refresh = (ROOT / "refresh.sh").read_text()
         start = refresh.index("    if apply_decisions:\n")
         end = refresh.index("\nstanding =", start)
-        code = compile(textwrap.dedent(refresh[start:end]), "refresh.sh", "exec")
-        process = Mock(DEVNULL=subprocess.DEVNULL)
-        context = {"apply_decisions": True, "subprocess": process,
-                   "iss": {"number": 1}, "decision": "hold"}
-        with patch.object(never_touch, "NEVER_TOUCH_REPOS", frozenset({"rupret007/bob-ops-dashboard"})):
-            with self.assertRaises(NeverTouchViolation):
-                exec(code, context)
-        process.check_call.assert_not_called()
-        exec(code, context)
-        process.check_call.assert_called_once()
+        self.assertIn("from cluster.never_touch._dashboard import close_decision_issue", refresh[start:end])
+        self.assertIn('close_decision_issue(iss["number"], decision)', refresh[start:end])
+        with patch("cluster.never_touch._dashboard.subprocess.check_call") as close:
+            with patch.object(never_touch, "NEVER_TOUCH_REPOS", frozenset({"rupret007/bob-ops-dashboard"})):
+                with self.assertRaises(NeverTouchViolation):
+                    close_decision_issue(1, "hold")
+            close.assert_not_called()
+            close_decision_issue(1, "hold")
+            close.assert_called_once_with(
+                ["gh", "issue", "close", "1", "-R", "rupret007/bob-ops-dashboard",
+                 "--comment", "Recorded as hold for Bob."],
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            )
 
     def test_mesh_jobs_are_blocked_before_checkout_or_runner_launch(self):
         from cluster.mesh_worker import Executor
@@ -475,16 +479,16 @@ class ProductionWritePathTests(unittest.TestCase):
                         self.assertIn("BLOCKED", result.stderr)
                         self.assertFalse(any(line.startswith("push ") for line in calls.read_text().splitlines()))
 
-    def test_refresh_push_carries_guard_and_pages_config_together(self):
+    def test_refresh_push_carries_guard_in_pages_excluded_files(self):
         body = (ROOT / "refresh.sh").read_text().split('if [[ $PUSH -eq 1 ]]; then\n', 1)[1]
         with tempfile.TemporaryDirectory() as tmp:
             scratch = Path(tmp)
             source = scratch / "source"
-            (source / "cluster").mkdir(parents=True)
+            (source / "cluster/never_touch").mkdir(parents=True)
             for name in ("index.html", "status.json", "README.md", "refresh.sh"):
                 (source / name).write_text("synthetic fixture\n")
-            (source / "cluster/never_touch.py").write_text(GUARD.read_text())
-            (source / "_config.yml").write_text((ROOT / "_config.yml").read_text())
+            for name in ("__init__.py", "__main__.py", "_dashboard.py"):
+                (source / "cluster/never_touch" / name).write_text((GUARD.parent / name).read_text())
             scripts = {
                 "gh": 'mkdir -p "$4"\n',
                 "python3": 'if [ "$1" = "-c" ]; then exit 0; fi\nexec "$PYTHON" "$@"\n',
@@ -494,8 +498,10 @@ class ProductionWritePathTests(unittest.TestCase):
                     '  "diff --cached") exit 1;;\n'
                     '  "remote get-url") printf "https://github.com/owner/allowed.git\\n";;\n'
                     '  "push origin")\n'
-                    '    cmp cluster/never_touch.py "$ROOT/cluster/never_touch.py" || exit 90\n'
-                    '    cmp _config.yml "$ROOT/_config.yml" || exit 91\n'
+                    '    for name in __init__.py __main__.py _dashboard.py; do\n'
+                    '      cmp "cluster/never_touch/$name" "$ROOT/cluster/never_touch/$name" || exit 90\n'
+                    '    done\n'
+                    '    test ! -e _config.yml || exit 91\n'
                     '    : > "$RECEIPT";;\n'
                     'esac\n'
                 ),
@@ -511,8 +517,8 @@ class ProductionWritePathTests(unittest.TestCase):
             result = subprocess.run(["bash", "-c", 'set -euo pipefail\nif true; then\n' + body],
                                     cwd=scratch, env=env, capture_output=True, text=True)
             self.assertEqual(result.returncode, 0, result.stderr)
-            self.assertTrue(receipt.exists(), "guard and Pages policy must reach the publisher together")
-            self.assertIn("add cluster/never_touch.py _config.yml", calls.read_text())
+            self.assertTrue(receipt.exists(), "the complete Pages-excluded guard package must reach the publisher")
+            self.assertIn("add cluster/never_touch/__init__.py cluster/never_touch/__main__.py cluster/never_touch/_dashboard.py", calls.read_text())
 
 
 if __name__ == "__main__":

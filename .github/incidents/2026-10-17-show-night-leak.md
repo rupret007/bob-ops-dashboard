@@ -1,5 +1,8 @@
 # Incident: rad-dad-show-night unauthorized merges (2026-10-17)
 
+Internal operational record. Keep under `.github/`, which Jekyll excludes
+from the dashboard's root Pages build by default.
+
 ## Summary
 
 Four pull requests on `rupret007/rad-dad-show-night` were merged overnight

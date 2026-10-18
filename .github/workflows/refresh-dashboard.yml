@@ -99,7 +99,7 @@ jobs:
           # concurrency group cancels sibling workflow runs, not local pushes.
           # Unstaged leftovers must never block rebase (stash → rebase → pop → re-add).
           for attempt in 1 2 3 4 5; do
-            python3 cluster/never_touch.py push --remote origin
+            python3 -m cluster.never_touch push --remote origin
             if git push origin HEAD:main; then
               echo "Pushed on attempt ${attempt}."
               # K2 post-push: re-assert working-tree pair (same commit content).

@@ -4,7 +4,10 @@ Never-touch repos require explicit human (Jeff) approval for any write operation
 This module provides a central authoritative list and guards that MUST be called
 before any merge, push, or PR-create operation.
 
-Incident reference: docs/incidents/2026-10-17-show-night-leak.md
+Incident reference: .github/incidents/2026-10-17-show-night-leak.md
+
+Keep this module in __init__.py: Jekyll excludes underscore-prefixed files
+from the root Pages build without a site-wide configuration override.
 """
 
 from __future__ import annotations

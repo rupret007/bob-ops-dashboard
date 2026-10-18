@@ -1,4 +1,0 @@
-# GitHub Pages publishes the dashboard from the repository root.
-# Worker source and repository write policies are not site assets.
-exclude:
-  - cluster
