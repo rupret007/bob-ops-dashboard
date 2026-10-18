@@ -23,8 +23,18 @@ from pathlib import Path
 from typing import Optional, List, Dict, Any
 
 from ..never_touch import is_never_touch, NEVER_TOUCH_REPOS
+from .metrics import MetricsTracker
 
 logger = logging.getLogger(__name__)
+
+_metrics = None  # type: Optional[MetricsTracker]
+
+def _get_metrics() -> MetricsTracker:
+    """Get or create global metrics tracker."""
+    global _metrics
+    if _metrics is None:
+        _metrics = MetricsTracker()
+    return _metrics
 
 FIX_STATE_DIR = Path(
     os.environ.get("STORYPOOL_FIX_STATE_DIR", "~/.local/share/storypool/fix_state")
@@ -421,6 +431,9 @@ def dispatch_fix(
     result["reason"] = message
     result["sha_before"] = sha_before
     result["sha_after"] = sha_after
+    
+    if not dry_run:
+        _get_metrics().record_fix_attempt(successful=success)
     
     if success and not dry_run:
         if _add_needs_karen_label(repo, pr_number):

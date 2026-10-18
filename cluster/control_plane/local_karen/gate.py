@@ -21,6 +21,12 @@ from .reviewers import (
 from .verdict import Verdict, create_verdict, save_verdict
 from .github_client import fetch_pr_info, verify_sha_current, GitHubError
 
+try:
+    from ..metrics import MetricsTracker
+    _metrics = MetricsTracker()
+except ImportError:
+    _metrics = None  # type: ignore
+
 
 @dataclass
 class GateRunResult:
@@ -92,6 +98,12 @@ class GateRunner:
                 final_reason=f"Deterministic checks failed: {reason}",
                 final_reviewer="checks",
             )
+            if _metrics:
+                _metrics.record_karen_review(
+                    passed=False,
+                    first_try=True,
+                    caught_by_pre_llm=True,
+                )
             return self._finalize(verdict, pr, post_comment, start_time)
 
         try:
@@ -127,6 +139,14 @@ class GateRunner:
             final_reason=review_result.reason,
             final_reviewer=review_result.reviewer,
         )
+
+        if _metrics:
+            _metrics.record_karen_review(
+                passed=final_passed,
+                first_try=True,
+                caught_by_pre_llm=False,
+                caught_by_llm=not final_passed,
+            )
 
         return self._finalize(verdict, pr, post_comment, start_time)
 
