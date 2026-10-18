@@ -16,7 +16,7 @@ import sys
 from dataclasses import dataclass
 from datetime import date, datetime
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any, Callable, Optional
 from zoneinfo import ZoneInfo
 
 USAGE_V = "usage-machines/v1"
@@ -315,7 +315,7 @@ def collect_machine_snapshot() -> dict[str, float | None]:
     }
 
 
-GhSearchFn = Callable[[str, str], int | None]
+GhSearchFn = Callable[[str, str], Optional[int]]
 
 
 def _default_gh_merged_count(owner: str, day: str) -> int:

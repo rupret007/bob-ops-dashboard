@@ -92,3 +92,19 @@ class TestNeverTouchRespected(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+class TestCLIResultOutput(unittest.TestCase):
+    def test_once_prints_pass_and_fail_with_reason(self):
+        from contextlib import redirect_stdout
+        from io import StringIO
+        from cluster.control_plane.local_karen import poller
+        results = [dict(repo='owner/repo', pr=1, sha='abc', passed=passed,
+                        reason='review reason') for passed in (True, False)]
+        output = StringIO()
+        with patch('sys.argv', ['karen-poller', '--once']), \
+             patch.object(poller.KarenConfig, 'load'), \
+             patch.object(poller, 'run_poll_once', return_value=results), \
+             redirect_stdout(output):
+            self.assertEqual(poller.main(), 0)
+        self.assertIn('PASS owner/repo#1@abc: review reason', output.getvalue())
+        self.assertIn('FAIL owner/repo#1@abc: review reason', output.getvalue())

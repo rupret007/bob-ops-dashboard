@@ -315,15 +315,26 @@ def run_tests(repo_dir: Path) -> bool:
             ["python3", "-m", "pytest", 
              "cluster/tests/test_never_touch.py",
              "cluster/tests/test_install_scripts.py",
-             "-q", "--tb=no"],
+             "cluster/tests/test_python39.py",
+             "-q", "--tb=short", "-r", "fE"],
             cwd=repo_dir,
             capture_output=True,
             text=True,
             timeout=120,
             env={**os.environ, "PYTHONPATH": str(repo_dir)},
         )
+        if result.returncode != 0:
+            # Persist test identifiers only; assertion output may contain credentials.
+            failures = [line for line in (result.stdout or "").splitlines()
+                        if line.startswith(("FAILED ", "ERROR "))]
+            names = [line.split(" - ", 1)[0] for line in failures]
+            _log_update_outcome("FAILED: update validation", {
+                "failing_tests": names or ["pytest collection/startup failed"],
+                "test_exit_code": result.returncode,
+            })
         return result.returncode == 0
-    except (subprocess.SubprocessError, FileNotFoundError):
+    except (subprocess.SubprocessError, FileNotFoundError) as exc:
+        _log_update_outcome("FAILED: update validation", {"test_error": type(exc).__name__})
         return False
 
 

@@ -521,10 +521,10 @@ def main() -> int:
                 print("X {repo}#{pr}: {error}".format(**r))
             elif r.get("passed"):
                 print("PASS {repo}#{pr}@{sha}: {reason}".format(
-                    reason=r.get("reason", "")[:50], **r))
+                    **{**r, "reason": str(r.get("reason", ""))[:50]}))
             else:
                 print("FAIL {repo}#{pr}@{sha}: {reason}".format(
-                    reason=r.get("reason", "")[:50], **r))
+                    **{**r, "reason": str(r.get("reason", ""))[:50]}))
         return 0
     else:
         run_poll_loop(config)

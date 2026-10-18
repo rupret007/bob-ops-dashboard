@@ -341,3 +341,15 @@ class TestMigrateConfig(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def test_failed_validation_logs_test_identifiers(tmp_path):
+    from unittest.mock import patch
+    from subprocess import CompletedProcess
+    from cluster.control_plane import self_update as updater
+    failed = CompletedProcess([], 1, 'FAILED cluster/tests/test_example.py::test_case - secret assertion\n', '')
+    with patch.object(updater.subprocess, 'run', return_value=failed), \
+         patch.object(updater, '_log_update_outcome') as log:
+        assert updater.run_tests(tmp_path) is False
+    assert log.call_args.args[1]['failing_tests'] == ['FAILED cluster/tests/test_example.py::test_case']
+    assert 'secret' not in str(log.call_args)
