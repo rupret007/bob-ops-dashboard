@@ -70,8 +70,15 @@ update_worktree() {
 reinstall() {
     log_header "Reinstalling Components"
     
-    if ! bash "$SCRIPT_DIR/install-all-nucbox.sh" 2>&1; then
-        log_fail "install-all-nucbox.sh failed"
+    # Run install script in subshell to prevent set -e from propagating
+    # The script has its own set -euo pipefail but we handle its exit ourselves
+    local install_output
+    local install_exit=0
+    install_output=$(bash "$SCRIPT_DIR/install-all-nucbox.sh" 2>&1) || install_exit=$?
+    
+    if [[ $install_exit -ne 0 ]]; then
+        log_fail "install-all-nucbox.sh failed (exit $install_exit)"
+        echo "$install_output" | tail -20
         FAILURES+=("install")
         ALL_PASS=false
         return 1
@@ -124,9 +131,8 @@ run_self_check() {
     log_info "Testing shadow tick..."
     local shadow_tmp
     shadow_tmp=$(mktemp)
-    local shadow_exit
-    (cd "$REPO_ROOT" && PYTHONPATH="$REPO_ROOT" python3 -m cluster.control_plane.shadow_runner --machine nucbox --json > "$shadow_tmp" 2>&1)
-    shadow_exit=$?
+    local shadow_exit=0
+    (cd "$REPO_ROOT" && PYTHONPATH="$REPO_ROOT" python3 -m cluster.control_plane.shadow_runner --machine nucbox --json > "$shadow_tmp" 2>&1) || shadow_exit=$?
     if [[ $shadow_exit -eq 0 ]] && python3 -c "import json,sys; json.load(open(sys.argv[1]))" "$shadow_tmp" 2>/dev/null; then
         log_pass "shadow tick ran successfully"
     else
@@ -140,9 +146,8 @@ run_self_check() {
     log_info "Testing conductor tick..."
     local conductor_tmp
     conductor_tmp=$(mktemp)
-    local conductor_exit
-    (cd "$REPO_ROOT" && PYTHONPATH="$REPO_ROOT" python3 -m cluster.control_plane.conductor --json > "$conductor_tmp" 2>&1)
-    conductor_exit=$?
+    local conductor_exit=0
+    (cd "$REPO_ROOT" && PYTHONPATH="$REPO_ROOT" python3 -m cluster.control_plane.conductor --json > "$conductor_tmp" 2>&1) || conductor_exit=$?
     if [[ $conductor_exit -eq 0 ]] && python3 -c "import json,sys; json.load(open(sys.argv[1]))" "$conductor_tmp" 2>/dev/null; then
         log_pass "conductor tick ran successfully"
     else

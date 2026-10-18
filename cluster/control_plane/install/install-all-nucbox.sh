@@ -362,9 +362,8 @@ run_self_check() {
     log_info "Testing shadow tick..."
     local shadow_tmp
     shadow_tmp=$(mktemp)
-    local shadow_exit
-    (cd "$REPO_ROOT" && PYTHONPATH="$REPO_ROOT" python3 -m cluster.control_plane.shadow_runner --machine nucbox --json > "$shadow_tmp" 2>&1)
-    shadow_exit=$?
+    local shadow_exit=0
+    (cd "$REPO_ROOT" && PYTHONPATH="$REPO_ROOT" python3 -m cluster.control_plane.shadow_runner --machine nucbox --json > "$shadow_tmp" 2>&1) || shadow_exit=$?
     if [[ $shadow_exit -eq 0 ]] && python3 -c "import json,sys; json.load(open(sys.argv[1]))" "$shadow_tmp" 2>/dev/null; then
         log_pass "shadow tick: ran successfully"
         RESULTS+=("shadow-tick: PASS")
