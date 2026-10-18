@@ -27,6 +27,12 @@ DOCS_BACKLOG_PATH = Path("docs/storypool-backlog.md")
 
 MAX_UNDRAFTS_PER_TICK = 5
 
+# Web Bob remains draft-only until Jeff explicitly handles readiness/go-live.
+# CI green and a needs-karen label are never substitutes for that decision.
+MANUAL_READINESS_REPOS = frozenset({
+    "rupret007/bob-brain", "rupret007/web-bob",
+})
+
 
 def _run_gh(args, default=None):
     # type: (List[str], Any) -> Any
@@ -391,6 +397,10 @@ def undraft_green_prs(repos=None, dry_run=True, max_undrafts=None):
             logger.debug("Skipping never-touch repo: %s", repo)
             continue
         
+        if repo.lower() in MANUAL_READINESS_REPOS:
+            logger.info("Keeping Web Bob draft-only pending Jeff: %s", repo)
+            continue
+
         prs = get_open_prs(repo)
         
         for pr in prs:
