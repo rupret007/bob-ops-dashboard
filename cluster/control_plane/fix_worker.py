@@ -24,6 +24,7 @@ from .local_karen.verdict import load_verdict
 
 CODEX_EFFORT = 'xhigh'
 _lease = ContextVar('cluster_lease', default=None)
+_execution_guard = ContextVar('owner_execution_guard', default=None)
 
 
 def codex_model():
@@ -62,12 +63,38 @@ TEST_OUTPUT_TAIL = 6000
 def _run_claimed(args, cwd, lease, **kwargs):
     """Stop the entire command process group if ownership is lost mid-command."""
     prompt = kwargs.pop('input', None)
-    process = subprocess.Popen(args, cwd=cwd, text=True, stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE, stdin=subprocess.PIPE if prompt is not None else None,
-        start_new_session=True, **kwargs)
+    guard = _execution_guard.get()
+    if guard is not None:
+        guard()  # Final fence after run() renewal/logging, immediately before spawn.
+    containment = None
+    if guard is not None:
+        from .owner_process_containment import OwnerProcessContainment
+        containment = OwnerProcessContainment()
+        if 'preexec_fn' in kwargs:
+            containment.close()
+            raise ValueError('Owner commands may not replace containment preexec')
+        kwargs['preexec_fn'] = containment.attach_before_exec
+    try:
+        # Setup may block long enough for pause, quota or claim state to change.
+        # Recheck only after setup, and use this try block to clean up refusal.
+        if guard is not None:
+            guard()
+        if lease.lost:
+            from .coordination import ClaimLost
+            raise ClaimLost('Cluster claim lost before command; command refused')
+        process = subprocess.Popen(args, cwd=cwd, text=True, stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE, stdin=subprocess.PIPE if prompt is not None else None,
+            start_new_session=True, **kwargs)
+    except BaseException:
+        if containment is not None:
+            containment.close()
+        raise
     deadline = time.monotonic() + 1800
     try:
         while True:
+            guard = _execution_guard.get()
+            if guard is not None:
+                guard()
             if lease.lost:
                 from .coordination import ClaimLost
                 raise ClaimLost('Cluster claim lost during command; command stopped')
@@ -82,7 +109,22 @@ def _run_claimed(args, cwd, lease, **kwargs):
             raise subprocess.CalledProcessError(process.returncode, args, stdout, stderr)
         return subprocess.CompletedProcess(args, process.returncode, stdout, stderr)
     finally:
-        if process.poll() is None:
+        if containment is not None:
+            # Always tear down, including after the leader exited successfully.
+            # Cleanup errors replace success and prevent tests/diff/push followups.
+            try:
+                containment.close()
+            except BaseException:
+                # Reap the leader even when descendant teardown is unconfirmed.
+                # This cannot certify descendants; preserve the containment error.
+                try:
+                    process.kill()
+                    process.wait(timeout=2)
+                except (OSError, subprocess.SubprocessError):
+                    pass
+                raise
+            process.communicate()
+        elif process.poll() is None:
             try:
                 os.killpg(process.pid, signal.SIGTERM)
                 process.communicate(timeout=2)
@@ -94,7 +136,13 @@ def _run_claimed(args, cwd, lease, **kwargs):
 
 
 def run(args, cwd=None, **kwargs):
+    guard = _execution_guard.get()
+    if guard is not None:
+        guard()
     lease = _lease.get()
+    if guard is not None and lease is None:
+        from .coordination import CoordinationError
+        raise CoordinationError('Owner command requires a cluster lease and containment')
     if lease is not None:
         lease.renew()
     started = time.monotonic()
@@ -105,6 +153,8 @@ def run(args, cwd=None, **kwargs):
     event('fix-worker', 'command_started', executable=executable, operation=operation)
     try:
         if lease is None:
+            if guard is not None:
+                guard()
             result = subprocess.run(args, cwd=cwd, check=True, text=True,
                                     capture_output=True, timeout=1800, **kwargs)
         else:

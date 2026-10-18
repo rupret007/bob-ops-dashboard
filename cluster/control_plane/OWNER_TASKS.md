@@ -34,3 +34,90 @@ wire this consumer to the PR-only worker or local legacy queue. Until the
 runtime supplies those real gates and durable receipts, owner tasks remain
 pending and no Codex lane is started. This change requires review and deployment
 before Web Bob can see the module; it does not install or enable services.
+
+A generic execution boundary is now implemented in `owner_task_runtime.py`.
+It creates a new bounded draft branch at the request's full pinned SHA; it never
+maps owner descriptions to existing repair PRs. The runtime uses shared task and
+branch leases, an atomic lane reservation, fresh controls/quota, machine guards,
+and a durable running fence. A crash or uncertain push/PR response remains
+`running`/`uncertain` and requires operator reconciliation rather than replay.
+Every supervised command and every running process poll repeats the guards;
+lease loss, pause, stale quota, or a guard breach stops the process group.
+Tests and deterministic secret/dangerous-command/test-weakening checks precede
+commit and verified branch push. New PRs are always drafts. This provides no
+permission to merge, publish, send messages, or deploy.
+
+This is an opt-in implementation, not a live runtime. No scheduler is enabled.
+`OwnerTaskRuntime` deliberately has no production authority defaults. Before
+activation, an operator-owned adapter must implement fresh cluster
+`read_controls`, `read_codex_quota`, `check_lane`, atomic `reserve_lane`,
+`isolated_codex_command`, and `run_isolated_tests`. Authority records are read
+from that private adapter, never from the owner request. Controls and quota
+records require `scope=cluster` and `observed_at` within 30 seconds. Codex usage
+must be strictly below 75%. Lane reservations must enforce the shared guards,
+NucBox's seven-lane ceiling and two Codex reservations, and fail closed on an
+unreachable shared authority.
+
+The isolated command/tests adapters must enforce OS isolation, network denial,
+no host credentials or secret environment, and read-only Git metadata. They must
+preserve the default newest Codex model and xhigh effort. CLI prompt wording or
+workspace-write flags alone do not satisfy this contract. No fallback command
+exists. The test adapter demonstrates progression and race boundaries; it is
+not proof of production sandbox/authority availability. Live ACL provisioning,
+real authority integration, sandbox verification, scheduling and Karen review
+remain blockers. Keep Web Bob task receipts pending until those are reviewed.
+
+Git metadata is created outside the sandbox worktree with `--separate-git-dir`.
+Both isolated adapters receive `trusted_git_dir` and `denied_paths`; they must
+hide the metadata directory, make the worktree `.git` pointer read-only, and
+terminate all sandbox descendants before returning. Trusted follow-up Git
+commands pin `--git-dir`/`--work-tree`, disable hooks/fsmonitor, and use the
+immutable original repository HTTPS URL for push/remote verification. Metadata,
+the pointer and Git attribute files are hashed before isolation and checked
+after both model and tests; any mutation aborts before privileged Git resumes.
+Symlinks fail closed, and diffs disable external drivers/text conversion.
+
+**REVIEW BLOCKER — EXECUTION AND ADMISSION DISABLED.** Independent review found
+that the candidate isolated-adapter contract cannot prove all descendants have
+terminated (a child can call `setsid` and survive process-group cleanup), or that
+a reported successful suite actually executed the new regression test. The
+hard `EXECUTION_REVIEW_BLOCKED` latch rejects both admission and execution.
+There is no environment or constructor override. Unit tests explicitly lift
+this latch to exercise candidate boundaries; those results do not close these
+review blockers. Do not wire this runtime into a deployed scheduler or lift the
+latch until a reviewed OS containment/teardown barrier, immutable workspace
+snapshot, and actual executed-regression evidence are implemented and tested.
+
+Known collection/runner control files and added collection suppression are now
+rejected, and an actual added test-function declaration is required. These
+static checks are additional safety checks; they cannot replace execution
+coverage evidence. Commands now repeat the owner guard immediately before
+`Popen`, after lease renewal and logging, to prevent a pause during renewal from
+starting a push. Normal process-group cleanup remains insufficient sandbox
+quiescence evidence, so execution stays disabled.
+
+Candidate snapshot/evidence protection (still disabled): after deterministic
+checks, the trusted runtime captures immutable `(path, executable, bytes)` tuples
+outside the sandbox. Tests receive a separate tree plus that immutable snapshot;
+the future trusted runner must mount those exact bytes read-only and keep test
+caches/output outside it. The runtime rejects changed test trees and rebuilds a
+fresh publication tree from retained bytes, so it never publishes the mutable
+model/test workspace. Symlinks and special files are rejected.
+
+`run_isolated_tests` must now return a trusted observer receipt with the exact
+`snapshot_sha256`, `observer=trusted-outside-sandbox-v1`, and `baseline`/`candidate`
+per-test call outcomes. Every newly added top-level Python regression node ID
+must be observed failing on the pinned baseline with the candidate regression
+installed, then passing on the candidate snapshot. Skips, collection/import
+errors, missing tests, suite exit codes and repository-written report files do
+not satisfy this requirement. Unsupported test identifiers fail closed. The
+receipt's marker alone is not provenance: the OS-isolated external observer,
+read-only mount, full teardown barrier, and authority integration still require
+implementation and review. Production admission/execution stays hard-disabled.
+
+The snapshot is now restricted to the exact staged Git tree (`write-tree` plus
+NUL-delimited `ls-tree`). Every retained file's raw Git blob hash and executable
+mode must equal that tree. Ignored/untracked helpers are excluded from tests and
+publication; filters/normalization that change bytes fail closed. Before push,
+the resulting commit's tree must equal the tested staged tree. Dependencies and
+runner caches must remain outside the code tree under the future trusted adapter.
