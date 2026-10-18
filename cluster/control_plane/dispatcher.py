@@ -63,8 +63,11 @@ IMPLEMENTED_PROVIDERS = frozenset({"codex"})
 
 PROVIDER_RULES = {
     "codex": {
-        "machines": ["nucbox"],
+        "machines": ["nucbox", "mini"],
         "max_concurrent": 2,
+        # The Mini also runs Karen; give it one fix lane, still behind its
+        # load/swap/disk guards.
+        "max_concurrent_by_machine": {"mini": 1},
         "weekly_cap_pct": 75.0,
         "reserved_when_queued": 2,
     },
@@ -307,7 +310,8 @@ class Dispatcher:
         if self.machine not in rules["machines"]:
             return False, f"{provider} not allowed on {self.machine}"
         
-        max_concurrent = rules.get("max_concurrent")
+        max_concurrent = rules.get("max_concurrent_by_machine", {}).get(
+            self.machine, rules.get("max_concurrent"))
         if max_concurrent is not None:
             current = active_lanes.get(provider, 0)
             if current >= max_concurrent:
