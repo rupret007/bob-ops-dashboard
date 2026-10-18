@@ -1,0 +1,11 @@
+[Unit]
+Description=StoryPool hourly ops doctor
+[Service]
+Type=oneshot
+WorkingDirectory=__REPO_PATH__
+Environment=PYTHONPATH=__REPO_PATH__
+Environment=STORYPOOL_MACHINE=nucbox
+Environment="PATH=%h/bin:%h/.local/bin:/usr/local/bin:/usr/bin:/bin"
+ExecStart=/usr/bin/python3 -m cluster.control_plane.ops_doctor
+TimeoutStartSec=3600
+UMask=0077

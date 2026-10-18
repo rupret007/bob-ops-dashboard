@@ -260,6 +260,14 @@ install_watchdog() {
     log_info "Watchdog installed (10 min interval, self-healing)"
 }
 
+install_ops_doctor() {
+    mkdir -p "$SYSTEMD_DIR" "$HOME/.local/share/storypool/doctor"
+    sed "s|__REPO_PATH__|$REPO_ROOT|g" "$SCRIPT_DIR/storypool-ops-doctor.service" > "$SYSTEMD_DIR/storypool-ops-doctor.service"
+    cp "$SCRIPT_DIR/storypool-ops-doctor.timer" "$SYSTEMD_DIR/storypool-ops-doctor.timer"
+    systemctl --user daemon-reload
+    systemctl --user enable --now storypool-ops-doctor.timer
+}
+
 install_karen_cli() {
     log_header "Installing Karen Gate CLI"
 
@@ -448,7 +456,7 @@ run_self_check() {
 uninstall_all() {
     log_header "Uninstalling All Components"
 
-    for unit in storypool-shadow storypool-dispatch storypool-conductor storypool-selfupdate storypool-karen-poller; do
+    for unit in storypool-ops-doctor storypool-shadow storypool-dispatch storypool-conductor storypool-selfupdate storypool-karen-poller; do
         if systemctl --user is-active "$unit.timer" &>/dev/null; then
             log_info "Stopping $unit.timer..."
             systemctl --user stop "$unit.timer" 2>/dev/null || true
@@ -500,6 +508,7 @@ main() {
     install_conductor
     install_selfupdate
     install_watchdog
+    install_ops_doctor
     install_dashboard
     install_karen_cli
     run_self_check
