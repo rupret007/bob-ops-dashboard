@@ -39,7 +39,7 @@ import re
 import subprocess
 import time
 from dataclasses import asdict, dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from enum import Enum
 from pathlib import Path
 from typing import Any, Optional
@@ -63,6 +63,22 @@ GEMINI_DAILY_BUDGET_USD = 5.0
 MAX_MERGES_PER_HOUR = 3
 MAX_MERGES_PER_DAY = 15
 CONSECUTIVE_CI_FAILURES_TO_PAUSE = 2
+
+PRIORITY_REPOS = [
+    "rupret007/web-bob",
+    "rupret007/webjam",
+    "rupret007/adoptiq",
+    "rupret007/storyboard",
+]
+
+BAND_PROJECT_PATTERNS = [
+    "rad-dad",
+    "show-night",
+    "music",
+    "band",
+]
+
+DIGEST_HOURS_CT = [8, 20]
 
 
 class ActionType(Enum):
@@ -152,7 +168,8 @@ class StateSnapshot:
                            and v.get("pr_number") == pr.get("number")
                            and v.get("sha") == pr.get("headRefOid")), None)
             verdict_str = verdict.get("verdict", "none") if verdict else "none"
-            lines.append(f"- {pr.get('repo')} #{pr.get('number')}: {status}, CI {ci_summary}, verdict={verdict_str}")
+            priority_marker = "⭐ " if pr.get("is_priority") else ""
+            lines.append(f"- {priority_marker}{pr.get('repo')} #{pr.get('number')}: {status}, CI {ci_summary}, verdict={verdict_str}")
         
         if len(self.open_prs) > 20:
             lines.append(f"  ... and {len(self.open_prs) - 20} more")
@@ -190,6 +207,47 @@ class StateSnapshot:
 
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+def _get_ct_hour() -> int:
+    """Get current hour in Central Time (CT)."""
+    import zoneinfo
+    try:
+        ct = zoneinfo.ZoneInfo("America/Chicago")
+    except Exception:
+        ct = timezone(timedelta(hours=-6))
+    now_ct = datetime.now(ct)
+    return now_ct.hour
+
+
+def _is_digest_time() -> bool:
+    """Check if it's time for a digest (8 AM or 8 PM CT)."""
+    ct_hour = _get_ct_hour()
+    return ct_hour in DIGEST_HOURS_CT
+
+
+def _is_priority_repo(repo: str) -> bool:
+    """Check if repo is in the priority list."""
+    repo_lower = repo.lower()
+    if repo_lower in [r.lower() for r in PRIORITY_REPOS]:
+        return True
+    for pattern in BAND_PROJECT_PATTERNS:
+        if pattern in repo_lower:
+            return True
+    return False
+
+
+def _sort_prs_by_priority(prs: list) -> list:
+    """Sort PRs with priority repos first."""
+    priority_prs = []
+    other_prs = []
+    for pr in prs:
+        repo = pr.get("repo", "")
+        if _is_priority_repo(repo):
+            priority_prs.append(pr)
+        else:
+            other_prs.append(pr)
+    return priority_prs + other_prs
 
 
 def _get_pr_details(repo: str, pr_number: int) -> Optional[dict]:
@@ -445,6 +503,16 @@ CONDUCTOR_SYSTEM_PROMPT = """You are the StoryPool conductor, an intelligent orc
 
 Your job is to analyze the current system state and propose actions to keep work flowing smoothly.
 
+## Priority Projects (process first)
+
+1. **Web Bob** (rupret007/web-bob) - highest priority
+2. **WebJam** (rupret007/webjam)
+3. **AdoptIQ** (rupret007/adoptiq)
+4. **StoryBoard** (rupret007/storyboard)
+5. **Band projects** (any repo with rad-dad, show-night, music, band in name)
+
+PRs from priority repos should be processed before other repos. PRs marked with ⭐ in the state are priority.
+
 ## Actions You Can Propose
 
 1. **label_needs_karen** - Label a PR as ready for Karen gate review
@@ -540,13 +608,67 @@ class Conductor:
     def _status_file(self) -> Path:
         return self.log_dir / "conductor-status.json"
     
+    def _needs_jeff_file(self) -> Path:
+        """File for escalating issues to Jeff."""
+        return self.log_dir / "NEEDS_JEFF.md"
+    
+    def _escalate_to_jeff(self, reason: str, details: dict) -> None:
+        """Write NEEDS_JEFF.md when human intervention is required.
+        
+        This is the ONLY escalation path to Jeff. The conductor does not
+        send messages, notifications, or alerts elsewhere.
+        """
+        now = datetime.now(timezone.utc)
+        needs_jeff = self._needs_jeff_file()
+        
+        existing = ""
+        if needs_jeff.is_file():
+            existing = needs_jeff.read_text()
+        
+        entry = [
+            f"## {now.strftime('%Y-%m-%d %H:%M UTC')}",
+            "",
+            f"**Reason:** {reason}",
+            "",
+        ]
+        
+        if details.get("repo"):
+            entry.append(f"**Repo:** {details['repo']}")
+        if details.get("pr_number"):
+            entry.append(f"**PR:** #{details['pr_number']}")
+        if details.get("action_needed"):
+            entry.append(f"**Action needed:** {details['action_needed']}")
+        if details.get("context"):
+            entry.append(f"**Context:** {details['context']}")
+        
+        entry.extend(["", "---", ""])
+        
+        new_content = "\n".join(entry) + existing
+        
+        header = "# NEEDS_JEFF\n\nIssues requiring human intervention.\n\n---\n\n"
+        if not existing.startswith("# NEEDS_JEFF"):
+            new_content = header + new_content
+        
+        needs_jeff.write_text(new_content)
+        self._write_log({"action": "escalate_to_jeff", "reason": reason, "details": details})
+    
+    def _clear_needs_jeff(self) -> None:
+        """Clear the NEEDS_JEFF.md file (after Jeff reviews it)."""
+        needs_jeff = self._needs_jeff_file()
+        if needs_jeff.is_file():
+            needs_jeff.unlink()
+            self._write_log({"action": "clear_needs_jeff"})
+    
     def _write_log(self, entry: dict) -> None:
         entry["timestamp"] = _now_iso()
         with open(self._log_file(), "a", encoding="utf-8") as f:
             f.write(json.dumps(entry, sort_keys=True) + "\n")
     
-    def _write_alert(self, message: str, details: dict) -> None:
-        """Write an alert file when fail-safe triggers."""
+    def _write_alert(self, message: str, details: dict, escalate: bool = False) -> None:
+        """Write an alert file when fail-safe triggers.
+        
+        If escalate=True, also writes to NEEDS_JEFF.md for human review.
+        """
         alert = {
             "timestamp": _now_iso(),
             "message": message,
@@ -555,6 +677,12 @@ class Conductor:
         }
         self._alert_file().write_text(json.dumps(alert, indent=2))
         self._write_log({"action": "alert", "message": message, **details})
+        
+        if escalate:
+            self._escalate_to_jeff(message, {
+                "action_needed": "Review and resolve",
+                "context": str(details)[:500],
+            })
     
     def _write_status(self, summary: dict) -> None:
         status = {"timestamp": _now_iso(), "summary": summary}
@@ -671,7 +799,7 @@ class Conductor:
                 self._write_alert(state["pause_reason"], {
                     "repo": repo,
                     "consecutive_failures": state["consecutive_ci_failures"],
-                })
+                }, escalate=True)
         
         self._save_merge_state(state)
     
@@ -700,12 +828,15 @@ class Conductor:
             prs = _get_open_prs(repo)
             for pr in prs:
                 pr["repo"] = repo
+                pr["is_priority"] = _is_priority_repo(repo)
                 open_prs.append(pr)
                 
                 details = _get_pr_details(repo, pr.get("number"))
                 if details:
                     ci = _ci_status_from_pr(details)
                     ci_statuses[f"{repo}/{pr.get('number')}"] = ci
+        
+        open_prs = _sort_prs_by_priority(open_prs)
         
         mini_guards = MachineGuards("mini")
         nucbox_guards = MachineGuards("nucbox")
@@ -895,12 +1026,13 @@ class Conductor:
     
     def write_digest(self, snapshot: StateSnapshot, proposals: Optional[dict], 
                      validated_actions: list[ValidatedAction]) -> None:
-        """Write twice-daily human-readable digest."""
+        """Write twice-daily human-readable digest (8 AM / 8 PM CT)."""
         now = datetime.now(timezone.utc)
+        ct_hour = _get_ct_hour()
         
         lines = [
             f"# StoryPool Conductor Digest",
-            f"Generated: {now.strftime('%Y-%m-%d %H:%M UTC')}",
+            f"Generated: {now.strftime('%Y-%m-%d %H:%M UTC')} ({ct_hour}:00 CT)",
             "",
             "## Summary",
         ]
@@ -910,6 +1042,18 @@ class Conductor:
             lines.append(f"**Summary:** {proposals.get('summary', 'N/A')}")
         else:
             lines.append("**Status:** LLM unavailable - running in fail-safe mode")
+        
+        priority_prs = [pr for pr in snapshot.open_prs if pr.get("is_priority")]
+        if priority_prs:
+            lines.extend([
+                "",
+                "## Priority PRs ⭐",
+            ])
+            for pr in priority_prs[:10]:
+                status = "draft" if pr.get("isDraft") else "ready"
+                ci = snapshot.ci_statuses.get(f"{pr.get('repo')}/{pr.get('number')}", {})
+                ci_summary = "✅" if all(s == "success" for s in ci.values()) else "❌"
+                lines.append(f"- {pr.get('repo')} #{pr.get('number')}: {status} {ci_summary}")
         
         lines.extend([
             "",
@@ -932,10 +1076,18 @@ class Conductor:
                 *[f"- ⚠️ {a}" for a in proposals["anomalies"]],
             ])
         
+        needs_jeff = self._needs_jeff_file()
+        if needs_jeff.is_file():
+            lines.extend([
+                "",
+                "## ⚠️ NEEDS_JEFF.md exists - human review required",
+                f"See: {needs_jeff}",
+            ])
+        
         lines.extend([
             "",
             "## System State",
-            f"- Open PRs: {len(snapshot.open_prs)}",
+            f"- Open PRs: {len(snapshot.open_prs)} ({len(priority_prs)} priority)",
             f"- Mini: load={snapshot.machine_guards.get('mini', {}).get('load', '?')}, "
             f"passed={snapshot.machine_guards.get('mini', {}).get('passed', '?')}",
             f"- NucBox: load={snapshot.machine_guards.get('nucbox', {}).get('load', '?')}, "
