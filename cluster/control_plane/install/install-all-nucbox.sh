@@ -136,6 +136,7 @@ install_dispatcher() {
     log_header "Installing Lane Dispatcher"
 
     local log_dir="$HOME/.local/share/storypool/dispatch"
+    local live_marker="$HOME/.config/storypool/live"
     mkdir -p "$log_dir"
     mkdir -p "$SYSTEMD_DIR"
 
@@ -151,6 +152,12 @@ install_dispatcher() {
         "$service_src" > "$SYSTEMD_DIR/storypool-dispatch.service"
     cp "$timer_src" "$SYSTEMD_DIR/storypool-dispatch.timer"
 
+    # Preserve --live if go-live was previously run
+    if [[ -f "$live_marker" ]]; then
+        sed -i '/^ExecStart=/{/--live/!s/$/ --live/}' "$SYSTEMD_DIR/storypool-dispatch.service"
+        log_info "Preserved --live mode (marker exists)"
+    fi
+
     clear_pycache "$REPO_ROOT/cluster"
 
     systemctl --user daemon-reload
@@ -164,6 +171,7 @@ install_conductor() {
     log_header "Installing LLM Conductor"
 
     local log_dir="$HOME/.local/share/storypool/conductor"
+    local live_marker="$HOME/.config/storypool/live"
     mkdir -p "$log_dir"
     mkdir -p "$HOME/.local/share/storypool/verdicts"
     mkdir -p "$SYSTEMD_DIR"
@@ -179,6 +187,12 @@ install_conductor() {
     sed -e "s|__REPO_PATH__|$REPO_ROOT|g" \
         "$service_src" > "$SYSTEMD_DIR/storypool-conductor.service"
     cp "$timer_src" "$SYSTEMD_DIR/storypool-conductor.timer"
+
+    # Preserve --live if go-live was previously run
+    if [[ -f "$live_marker" ]]; then
+        sed -i '/^ExecStart=/{/--live/!s/$/ --live/}' "$SYSTEMD_DIR/storypool-conductor.service"
+        log_info "Preserved --live mode (marker exists)"
+    fi
 
     clear_pycache "$REPO_ROOT/cluster"
 

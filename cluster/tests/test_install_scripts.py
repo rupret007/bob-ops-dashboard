@@ -112,5 +112,66 @@ class TestShadowRunnerOutput(unittest.TestCase):
         self.assertIn("dispatch_decisions", data)
 
 
+class TestLiveMarkerPreservation(unittest.TestCase):
+    """Test that --live mode is preserved across reinstalls."""
+
+    def test_sed_pattern_adds_live_to_execstart(self):
+        """The sed pattern should add --live to ExecStart lines."""
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.service', delete=False) as f:
+            f.write("""[Service]
+Type=oneshot
+ExecStart=/usr/bin/env python3 -m cluster.control_plane.dispatcher --machine nucbox
+WorkingDirectory=/home/user/repo
+""")
+            f.flush()
+            
+            # Run the exact sed command from go-live-nucbox.sh
+            result = subprocess.run(
+                ["sed", "-i", r"/^ExecStart=/{/--live/!s/$/ --live/}", f.name],
+                capture_output=True,
+            )
+            self.assertEqual(result.returncode, 0)
+            
+            content = Path(f.name).read_text()
+            self.assertIn("--live", content)
+            self.assertIn("ExecStart=/usr/bin/env python3 -m cluster.control_plane.dispatcher --machine nucbox --live", content)
+            
+            Path(f.name).unlink()
+
+    def test_sed_pattern_is_idempotent(self):
+        """Running sed twice should not add --live twice."""
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.service', delete=False) as f:
+            f.write("""[Service]
+ExecStart=/usr/bin/env python3 -m cluster.control_plane.conductor
+""")
+            f.flush()
+            
+            # Run sed twice
+            subprocess.run(["sed", "-i", r"/^ExecStart=/{/--live/!s/$/ --live/}", f.name])
+            subprocess.run(["sed", "-i", r"/^ExecStart=/{/--live/!s/$/ --live/}", f.name])
+            
+            content = Path(f.name).read_text()
+            # Should have exactly one --live
+            self.assertEqual(content.count("--live"), 1)
+            
+            Path(f.name).unlink()
+
+    def test_sed_pattern_preserves_existing_live(self):
+        """Files already with --live should not be modified."""
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.service', delete=False) as f:
+            original = """[Service]
+ExecStart=/usr/bin/env python3 -m cluster.control_plane.dispatcher --machine nucbox --live
+"""
+            f.write(original)
+            f.flush()
+            
+            subprocess.run(["sed", "-i", r"/^ExecStart=/{/--live/!s/$/ --live/}", f.name])
+            
+            content = Path(f.name).read_text()
+            self.assertEqual(content, original)
+            
+            Path(f.name).unlink()
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -164,22 +164,17 @@ enable_live_mode() {
     
     local dispatch_service="$SYSTEMD_DIR/storypool-dispatch.service"
     local conductor_service="$SYSTEMD_DIR/storypool-conductor.service"
+    local live_marker="$HOME/.config/storypool/live"
     
     systemctl --user stop storypool-dispatch.timer 2>/dev/null || true
     systemctl --user stop storypool-conductor.timer 2>/dev/null || true
     systemctl --user stop storypool-dispatch.service 2>/dev/null || true
     systemctl --user stop storypool-conductor.service 2>/dev/null || true
     
+    # Add --live to ExecStart lines using exact sed that works
     if [[ -f "$dispatch_service" ]]; then
-        if ! grep -q -- '--live' "$dispatch_service"; then
-            # Match: ExecStart=... dispatcher ... (with or without --machine nucbox)
-            # The line ends with "dispatcher" or "dispatcher --machine nucbox"
-            # Append --live at the end of the ExecStart line
-            sed -i '/^ExecStart=.*dispatcher/ { /--live/! s/$/ --live/ }' "$dispatch_service"
-            log_info "Added --live to dispatcher service"
-        else
-            log_info "Dispatcher already has --live flag"
-        fi
+        sed -i '/^ExecStart=/{/--live/!s/$/ --live/}' "$dispatch_service"
+        log_info "Ran sed on dispatcher service"
     else
         log_fail "Dispatcher service not found: $dispatch_service"
         ALL_PASS=false
@@ -187,19 +182,39 @@ enable_live_mode() {
     fi
     
     if [[ -f "$conductor_service" ]]; then
-        if ! grep -q -- '--live' "$conductor_service"; then
-            # Match: ExecStart=... conductor (the line ends with "conductor")
-            # Append --live at the end of the ExecStart line
-            sed -i '/^ExecStart=.*conductor/ { /--live/! s/$/ --live/ }' "$conductor_service"
-            log_info "Added --live to conductor service"
-        else
-            log_info "Conductor already has --live flag"
-        fi
+        sed -i '/^ExecStart=/{/--live/!s/$/ --live/}' "$conductor_service"
+        log_info "Ran sed on conductor service"
     else
         log_fail "Conductor service not found: $conductor_service"
         ALL_PASS=false
         FAILURES+=("conductor-service-missing")
     fi
+    
+    # VERIFY --live is actually in the files, FAIL if not
+    log_info "Verifying --live flag in service files..."
+    
+    if ! grep -q '^ExecStart=.*--live' "$dispatch_service" 2>/dev/null; then
+        log_fail "VERIFICATION FAILED: --live NOT in dispatcher ExecStart"
+        log_fail "Content: $(grep '^ExecStart=' "$dispatch_service" 2>/dev/null || echo 'not found')"
+        ALL_PASS=false
+        FAILURES+=("dispatch-live-verification")
+        exit 1
+    fi
+    log_pass "Dispatcher has --live in ExecStart"
+    
+    if ! grep -q '^ExecStart=.*--live' "$conductor_service" 2>/dev/null; then
+        log_fail "VERIFICATION FAILED: --live NOT in conductor ExecStart"
+        log_fail "Content: $(grep '^ExecStart=' "$conductor_service" 2>/dev/null || echo 'not found')"
+        ALL_PASS=false
+        FAILURES+=("conductor-live-verification")
+        exit 1
+    fi
+    log_pass "Conductor has --live in ExecStart"
+    
+    # Persist live marker so install/self-update won't strip --live
+    mkdir -p "$(dirname "$live_marker")"
+    echo "$(date -Iseconds)" > "$live_marker"
+    log_info "Created live marker: $live_marker"
     
     log_info "Reloading systemd daemon..."
     systemctl --user daemon-reload
@@ -224,33 +239,7 @@ enable_live_mode() {
         FAILURES+=("conductor-timer-restart")
     fi
     
-    # VERIFY the --live flag actually landed
-    local dispatch_live=""
-    local conductor_live=""
-    
-    if grep -q -- '--live' "$dispatch_service" 2>/dev/null; then
-        dispatch_live="yes"
-    fi
-    if grep -q -- '--live' "$conductor_service" 2>/dev/null; then
-        conductor_live="yes"
-    fi
-    
-    if [[ -n "$dispatch_live" ]] && [[ -n "$conductor_live" ]]; then
-        log_pass "Dispatcher and Conductor now in LIVE mode"
-    else
-        log_fail "LIVE flag NOT applied correctly!"
-        if [[ -z "$dispatch_live" ]]; then
-            log_fail "Dispatcher missing --live:"
-            grep ExecStart "$dispatch_service" 2>/dev/null || echo "  (file not found)"
-        fi
-        if [[ -z "$conductor_live" ]]; then
-            log_fail "Conductor missing --live:"
-            grep ExecStart "$conductor_service" 2>/dev/null || echo "  (file not found)"
-        fi
-        ALL_PASS=false
-        FAILURES+=("live-flag-verification")
-        exit 1
-    fi
+    log_pass "Dispatcher and Conductor now in LIVE mode"
 }
 
 skip_karen_poller() {
