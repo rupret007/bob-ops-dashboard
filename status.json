@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-10-18T14:34:58.602374-05:00",
-  "generated_at_display": "Sun Oct 18, 2026 \u00b7 2:34 PM CDT",
+  "generated_at": "2026-10-18T14:49:55.383207-05:00",
+  "generated_at_display": "Sun Oct 18, 2026 \u00b7 2:49 PM CDT",
   "timezone": "America/Chicago",
   "owner": "rupret007",
   "dashboard": "bob-ops-dashboard",
@@ -454,25 +454,25 @@
           "url": "https://github.com/rupret007/Cursor-OpenClaw-Integration",
           "repo_url": "https://github.com/rupret007/Cursor-OpenClaw-Integration",
           "private": false,
-          "status": "yellow",
-          "chip": "Yellow",
+          "status": "green",
+          "chip": "Green",
           "default_branch": "main",
-          "tip_sha": "2348c92",
-          "tip_date": "2026-09-11T03:22:23Z",
-          "open_prs": 1,
-          "open_pr_url": "https://github.com/rupret007/Cursor-OpenClaw-Integration/pull/32",
-          "open_pr_number": 32,
+          "tip_sha": "ead5b3a",
+          "tip_date": "2026-10-18T19:48:39Z",
+          "open_prs": 0,
+          "open_pr_url": null,
+          "open_pr_number": null,
           "open_pr_draft": false,
           "open_pr_stack": [],
           "pr_listing_complete": true,
-          "agent_url": "https://cursor.com/agents/bc-b417dc93-e3d8-5802-adac-f895f47858a9",
+          "agent_url": null,
           "ci": {
             "name": "Pull request integration",
             "conclusion": "success",
             "branch": "main",
-            "sha": "2348c92",
-            "created": "2026-09-11T03:22:26Z",
-            "html_url": "https://github.com/rupret007/Cursor-OpenClaw-Integration/actions/runs/34558183689"
+            "sha": "ead5b3a",
+            "created": "2026-10-18T19:48:42Z",
+            "html_url": "https://github.com/rupret007/Cursor-OpenClaw-Integration/actions/runs/39160456211"
           },
           "release": null,
           "release_sha": null,
@@ -495,15 +495,15 @@
           "status": "yellow",
           "chip": "Yellow",
           "default_branch": "main",
-          "tip_sha": "ac8dd07",
-          "tip_date": "2026-10-18T19:29:08Z",
+          "tip_sha": "840e8b9",
+          "tip_date": "2026-10-18T19:35:12Z",
           "open_prs": 4,
-          "open_pr_url": "https://github.com/rupret007/bob-ops-dashboard/pull/85",
-          "open_pr_number": 85,
+          "open_pr_url": "https://github.com/rupret007/bob-ops-dashboard/pull/87",
+          "open_pr_number": 87,
           "open_pr_draft": false,
           "open_pr_stack": [],
           "pr_listing_complete": true,
-          "agent_url": "https://cursor.com/agents/bc-2c8313e4-b404-5cf6-8df2-e2ed5f1b3b10",
+          "agent_url": "https://cursor.com/agents/bc-8010dd7e-0b0b-5074-a351-0faafe9a47c7",
           "ci": null,
           "release": null,
           "release_sha": null,
@@ -900,7 +900,7 @@
     "barker"
   ],
   "publish_notes": "Public board -- no secrets or customer paths. Private repositories stay high-level; AI Music Vault stays private-content-boundary only.",
-  "refresh_started_ms": 1792352061530,
+  "refresh_started_ms": 1792352962346,
   "agents_source": "file:stale->unknown",
   "agents": [
     {
@@ -948,6 +948,15 @@
   ],
   "cloud_agents": [
     {
+      "id": "bc-8010dd7e-0b0b-5074-a351-0faafe9a47c7",
+      "name": "PR #87",
+      "state": "unknown",
+      "detail": "Add storypool-dispatch and LLM-in-the-loop conductor services",
+      "url": "https://cursor.com/agents/bc-8010dd7e-0b0b-5074-a351-0faafe9a47c7",
+      "pr_url": "https://github.com/rupret007/bob-ops-dashboard/pull/87",
+      "checked_at": null
+    },
+    {
       "id": "bc-2c8313e4-b404-5cf6-8df2-e2ed5f1b3b10",
       "name": "PR #85",
       "state": "unknown",
@@ -963,15 +972,6 @@
       "detail": "feat: Local Karen ship gate for Mac mini/NucBox",
       "url": "https://cursor.com/agents/bc-3de82b4d-aab0-5122-a574-81ce16a2c612",
       "pr_url": "https://github.com/rupret007/bob-ops-dashboard/pull/86",
-      "checked_at": null
-    },
-    {
-      "id": "bc-8010dd7e-0b0b-5074-a351-0faafe9a47c7",
-      "name": "PR #87",
-      "state": "unknown",
-      "detail": "Add storypool-dispatch and LLM-in-the-loop conductor services",
-      "url": "https://cursor.com/agents/bc-8010dd7e-0b0b-5074-a351-0faafe9a47c7",
-      "pr_url": "https://github.com/rupret007/bob-ops-dashboard/pull/87",
       "checked_at": null
     }
   ],
@@ -1099,7 +1099,7 @@
     }
   ],
   "llm_work_now_freshness": {
-    "generated_at": "2026-10-18 14:34 CT",
+    "generated_at": "2026-10-18 14:49 CT",
     "warn_ttl_sec": 1200,
     "warnings": [],
     "ok": true
@@ -1130,7 +1130,7 @@
     ],
     "scorecards": {
       "v": "scorecards/v1",
-      "generated_at": "2026-10-18T19:35:00.184855+00:00",
+      "generated_at": "2026-10-18T19:49:56.498555+00:00",
       "windows": {
         "24h": {
           "providers": {
