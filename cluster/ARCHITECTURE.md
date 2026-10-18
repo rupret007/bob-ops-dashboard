@@ -34,7 +34,18 @@ These failures retain high-risk handling in the fix dispatcher. Stale heads,
 provider failures, and persistence failures remain retryable ERROR with no
 published verdict. Known scanner fixtures use exact whole-line patterns in two
 specific Karen test files, including the bogus private-key body and terminator;
-other test files and adjacent credentials still fail the scanner.
+other test files and adjacent credentials still fail the scanner. A reviewed, finite
+set of complete synthetic credential literals is also accepted in test sources
+(including .test.mjs and release/test_*.py); prefix matches and altered values
+are never exempt. Both secret and static scans call the same rules. Documentation
+and comment text are excluded from command/security scans, while secrets remain
+scanned there. Only literal RegExp .exec calls and inert static test DOM markup
+are excluded; dynamic DOM, child_process.exec and window.eval remain findings.
+Test description renames preserve bodies; changed/deleted assertions and new
+skips/xfails remain FAIL with file:line evidence. Findings never include source
+or credential values, and all evidence is passed to the fix-loop verdict reason.
+Missing result-label removal is an idempotent DEBUG no-op; other GitHub failures
+still propagate.
 
 Node maintenance lives in `~/.local/share/storypool/node-control.json`, survives
 reboots, and fails closed on malformed state. A locked atomic write records each

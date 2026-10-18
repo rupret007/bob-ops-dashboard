@@ -109,7 +109,7 @@ TEST_FILE_PATTERNS = [
     r"tests?/.*\.py$",
     r"spec[_\-].*\.(js|ts)$",
     r".*\.spec\.(js|ts)$",
-    r".*\.test\.(js|ts)$",
+    r".*\.test\.(js|ts|mjs|cjs)$",
     r"__tests__/.*\.(js|ts)$",
 ]
 
@@ -202,24 +202,56 @@ def _is_test_file(filepath: str) -> bool:
     return False
 
 
-def _extract_diff_deletions(diff: str) -> list[tuple[str, str]]:
-    """Extract deleted lines from a unified diff.
-
-    Returns list of (filename, deleted_line) tuples.
-    """
-    deletions = []
-    current_file = None
-
-    for line in diff.split("\n"):
+def _removed_lines(diff):
+    filepath, number = "diff", 1
+    for line in diff.splitlines():
         if line.startswith("diff --git"):
-            match = re.search(r"b/(.+)$", line)
-            if match:
-                current_file = match.group(1)
+            filepath = line.split(" b/", 1)[-1]
+            number = 1
+        elif line.startswith("@@"):
+            hunk = re.search(r"@@ -(\d+)", line)
+            if hunk:
+                number = int(hunk.group(1))
         elif line.startswith("-") and not line.startswith("---"):
-            if current_file:
-                deletions.append((current_file, line[1:]))
+            yield filepath, number, line[1:]
+            number += 1
+        elif line.startswith(" "):
+            number += 1
 
-    return deletions
+
+def _extract_diff_deletions(diff):
+    return [(path, line) for path, _, line in _removed_lines(diff)]
+
+
+def _renamed_js_test_headers(diff):
+    """Description-only edits preserve the test body; changed asserts still fail."""
+    safe = set()
+    filepath, number = "diff", 1
+    header = re.compile(r"^(\s*(?:it|test|describe)\(\s*)(['\"])[^'\"]*\2(\s*,\s*(?:async\s+)?\(\)\s*=>\s*\{\s*)$")
+    for block in diff.split("diff --git ")[1:]:
+        filepath = block.splitlines()[0].split(" b/", 1)[-1]
+        for hunk in re.split(r"(?m)^@@ ", block)[1:]:
+            position = re.match(r"-(\d+)", hunk)
+            number = int(position.group(1)) if position else 1
+            removed, added = [], []
+            for line in hunk.splitlines()[1:]:
+                if line.startswith("-"):
+                    removed.append((number, line[1:]))
+                    number += 1
+                elif line.startswith("+"):
+                    added.append(line[1:])
+                elif line.startswith(" "):
+                    number += 1
+            if len(removed) != 1 or not added:
+                continue
+            old = header.fullmatch(removed[0][1])
+            new = header.fullmatch(added[0])
+            # Extra additions must be simple assertion statements. Do not waive
+            # bodies, setup, control flow, decorators or changed expectations.
+            if (old and new and old.group(1, 3) == new.group(1, 3)
+                    and all(re.fullmatch(r"\s*expect\([^;]+\);\s*", line) for line in added[1:])):
+                safe.add((filepath, removed[0][0]))
+    return safe
 
 
 def check_tests_not_weakened(pr: PRInfo, config: KarenConfig) -> CheckResult:
@@ -235,9 +267,10 @@ def check_tests_not_weakened(pr: PRInfo, config: KarenConfig) -> CheckResult:
 
     for filepath in pr.deleted_files:
         if _is_test_file(filepath):
-            issues.append(f"Deleted test file: {filepath}")
+            issues.append(f"Deleted test file: {filepath}:1")
 
-    deletions = _extract_diff_deletions(pr.diff)
+    deletions = _removed_lines(pr.diff)
+    renamed_headers = _renamed_js_test_headers(pr.diff)
 
     test_function_patterns = [
         r"^\s*def\s+test_",
@@ -261,31 +294,36 @@ def check_tests_not_weakened(pr: PRInfo, config: KarenConfig) -> CheckResult:
         r"@unittest",
     ]
 
-    for filepath, line in deletions:
+    for filepath, number, line in deletions:
         if not _is_test_file(filepath):
             continue
 
         for pattern in test_function_patterns:
-            if re.search(pattern, line):
-                issues.append(f"Removed test function in {filepath}: {line.strip()[:60]}")
+            if (filepath, number) not in renamed_headers and re.search(pattern, line):
+                issues.append(f"Removed test function in {filepath}:{number} (removed source; value redacted)")
                 break
 
         for pattern in assertion_patterns:
             if re.search(pattern, line):
-                issues.append(f"Removed assertion in {filepath}: {line.strip()[:60]}")
+                issues.append(f"Removed assertion in {filepath}:{number} (removed source; value redacted)")
                 break
 
         for pattern in decorator_patterns:
             if re.search(pattern, line):
-                issues.append(f"Removed test decorator in {filepath}: {line.strip()[:60]}")
+                issues.append(f"Removed test decorator in {filepath}:{number} (removed source; value redacted)")
                 break
+
+    for filepath, number, line in _added_lines(pr.diff):
+        if _is_test_file(filepath) and re.search(
+                r"^\s*(?:@(?:pytest\.mark\.(?:skip|xfail)|unittest\.skip)|(?:it|test|describe)\.(?:skip|todo)\s*\()", line):
+            issues.append(f"Added test skip/xfail in {filepath}:{number} (source redacted)")
 
     if issues:
         return CheckResult(
             check_name="tests_not_weakened",
             verdict=CheckVerdict.FAIL,
             reason=f"Tests appear weakened: {len(issues)} issue(s) found",
-            details="\n".join(issues[:10]),
+            details="\n".join(issues),
         )
 
     return CheckResult(
@@ -293,6 +331,53 @@ def check_tests_not_weakened(pr: PRInfo, config: KarenConfig) -> CheckResult:
         verdict=CheckVerdict.PASS,
         reason="No test weakening detected",
     )
+
+
+
+# Reviewed inert literals from the reported PRs. Restrict exemptions to test
+# sources and these complete values; a fixture marker never hides arbitrary data.
+_TEST_SECRET_LITERALS = frozenset({
+    "synthetic-approle-secret-value", "synthetic-media-secret", "client-secret",
+    "synthetic-secret-do-not-return", "synthetic-unit-test-session-value-with-32-characters",
+    "synthetic-private-test-key", "sk-synthetic-caption-test", "synthetic-secret",
+    "social-upload-http-test-secret", "synthetic-session-secret", "meta-secret",
+    "yt-secret", "tt-secret", "synthetic-provider-secret", "private-fixture-secret",
+    "SYNTHETIC_SECRET_1006", "synthetic-owner-password-123", "synthetic-review-password",
+    "synthetic-review-secret", "SYNTHETIC-ONLY", "synthetic-armored-key-data",
+    "synthetic-client-secret", "fixture-oauth-secret", "synthetic-owner-secret-123",
+    "synthetic-pgp-key-data", "synthetic-routine-refresh-secret",
+})
+
+
+def _placeholder_secret(match, secret_type, filepath):
+    if secret_type not in ("API key", "Secret/password") or not _is_test_file(filepath or ""):
+        return False
+    value = re.search(r"[\"']([^\"']*)[\"']$", match.group(0))
+    return value is not None and value.group(1) in _TEST_SECRET_LITERALS
+
+
+def _added_lines(diff):
+    """Yield added source with its new-file position, never context/deletions."""
+    filepath, number = "diff", 1
+    for line in diff.splitlines():
+        if line.startswith("diff --git"):
+            filepath = line.split(" b/", 1)[-1]
+            number = 1
+        elif line.startswith("@@"):
+            hunk = re.search(r"\+(\d+)(?:,\d+)? @@", line)
+            if hunk:
+                number = int(hunk.group(1))
+        elif line.startswith("+") and not line.startswith("+++"):
+            yield filepath, number, line[1:]
+            number += 1
+        elif line.startswith(" "):
+            number += 1
+
+
+def _prose_or_comment(filepath, line):
+    # Only non-executable documentation/comments; secrets are still scanned.
+    return (filepath.lower().endswith((".md", ".rst", ".txt"))
+            or line.lstrip().startswith(("#", "//")))
 
 
 def check_no_secrets_in_diff(pr: PRInfo, config: KarenConfig) -> CheckResult:
@@ -351,9 +436,9 @@ def check_no_secrets_in_diff(pr: PRInfo, config: KarenConfig) -> CheckResult:
                     continue
 
         for pattern, secret_type in SECRET_PATTERNS:
-            if re.search(pattern, added_line):
-                issues.append(f"{location}: {secret_type} (value redacted)")
-                break
+            for match in re.finditer(pattern, added_line):
+                if not _placeholder_secret(match, secret_type, current_file):
+                    issues.append(f"{location}: {secret_type} (value redacted)")
 
     if issues:
         return CheckResult(
@@ -388,29 +473,21 @@ def check_no_dangerous_commands(pr: PRInfo, config: KarenConfig) -> CheckResult:
         (r"gh\s+release\s+create", "GitHub release creation"),
         (r"git\s+push\s+.*--tags", "pushing tags"),
         (r"chmod\s+777", "chmod 777"),
-        (r"eval\s*\(", "eval usage"),
+        (r"\beval\s*\(", "eval usage"),
         (r"\bexec\s*\(", "exec usage"),
     ]
 
     issues = []
-    current_file = None
-
-    for line in pr.diff.split("\n"):
-        if line.startswith("diff --git"):
-            match = re.search(r"b/(.+)$", line)
-            if match:
-                current_file = match.group(1)
+    for current_file, number, added_line in _added_lines(pr.diff):
+        if _prose_or_comment(current_file, added_line):
             continue
-
-        if not line.startswith("+") or line.startswith("+++"):
-            continue
-
-        added_line = line[1:]
-
+        # Only literal RegExp.exec is non-executing. Member calls such as
+        # child_process.exec and window.eval must still fail.
+        command_source = re.sub(r"/(?:\\.|[^/\\\n])+/[gimsuy]*\.exec\s*\(",
+                                "REGEXP_MATCH(", added_line)
         for pattern, danger_type in dangerous_patterns:
-            if re.search(pattern, added_line, re.IGNORECASE):
-                snippet = added_line.strip()[:50]
-                issues.append(f"{danger_type} in {current_file}: {snippet}")
+            if re.search(pattern, command_source, re.IGNORECASE):
+                issues.append(f"{current_file}:{number}: {danger_type} (source redacted)")
                 break
 
     if issues:
@@ -418,7 +495,7 @@ def check_no_dangerous_commands(pr: PRInfo, config: KarenConfig) -> CheckResult:
             check_name="no_dangerous_commands",
             verdict=CheckVerdict.FAIL,
             reason=f"Dangerous commands detected: {len(issues)} issue(s)",
-            details="\n".join(issues[:5]),
+            details="\n".join(issues),
         )
 
     return CheckResult(
@@ -426,6 +503,25 @@ def check_no_dangerous_commands(pr: PRInfo, config: KarenConfig) -> CheckResult:
         verdict=CheckVerdict.PASS,
         reason="No dangerous commands detected",
     )
+
+
+def _static_test_dom(pr, filepath, number, line):
+    if not _is_test_file(filepath or "") or not re.match(r"^\s*document\.body\.innerHTML\s*=", line):
+        return False
+    # Read only the contiguous added literal; interpolation, scripts, handlers,
+    # dynamic values and production HTML assignments retain their FAIL.
+    text = line
+    additions = {(path, n): content for path, n, content in _added_lines(pr.diff)}
+    if line.rstrip().endswith("`"):
+        for next_number in range(number + 1, number + 201):
+            content = additions.get((filepath, next_number))
+            if content is None:
+                return False
+            text += "\n" + content
+            if "`" in content:
+                break
+    literal = re.fullmatch(r"\s*document\.body\.innerHTML\s*=\s*(?:''|\"\"|`([^`]*)`)\s*;?\s*", text, re.S)
+    return bool(literal and not re.search(r"\$\{|<script|\bon\w+\s*=|javascript:", literal.group(1) or "", re.I))
 
 
 def check_security_patterns(pr: PRInfo, config: KarenConfig) -> CheckResult:
@@ -464,6 +560,9 @@ def check_security_patterns(pr: PRInfo, config: KarenConfig) -> CheckResult:
             if line.startswith("+") and not line.startswith("+++"):
                 line_num += 1
                 added_line = line[1:]
+                if (_prose_or_comment(current_file or "", added_line)
+                        or _static_test_dom(pr, current_file, line_num, added_line)):
+                    continue
 
                 for pattern, desc, category in SECURITY_PATTERNS:
                     if re.search(pattern, added_line):
@@ -472,7 +571,7 @@ def check_security_patterns(pr: PRInfo, config: KarenConfig) -> CheckResult:
                             "line": line_num,
                             "category": category,
                             "description": desc,
-                            "evidence": added_line.strip()[:60],
+                            "evidence": "source redacted",
                         })
                         break
             elif line.startswith("-"):
@@ -485,7 +584,7 @@ def check_security_patterns(pr: PRInfo, config: KarenConfig) -> CheckResult:
         auth_findings = [f for f in findings if f["category"] == "auth"]
 
         details_lines = []
-        for f in findings[:10]:
+        for f in findings:
             details_lines.append(f"- {f['file']}:{f['line']} [{f['category']}] {f['description']}")
             details_lines.append(f"  Evidence: {f['evidence']}")
 
@@ -728,55 +827,32 @@ def run_static_security_scan(pr: PRInfo, config: KarenConfig) -> CheckResult:
     line_num = 0
     in_diff_hunk = False
     
-    all_patterns = [
-        *[(p, desc, "secret") for p, desc in SECRET_PATTERNS],
-        *[(p, desc, cat) for p, desc, cat in SECURITY_PATTERNS],
-        (r"\bsudo\s+", "sudo usage", "dangerous"),
-        (r"rm\s+-rf\s+[/~]", "rm -rf on root/home", "dangerous"),
-        (r"git\s+push\s+.*--force", "git force push", "dangerous"),
-        (r"git\s+push\s+.*-f\b", "git force push", "dangerous"),
-        (r"chmod\s+777", "chmod 777", "dangerous"),
+    shared_results = [check_no_secrets_in_diff(pr, config),
+                      check_no_dangerous_commands(pr, config),
+                      check_security_patterns(pr, config)]
+    extra_patterns = [
         (r"os\.popen\s*\(", "os.popen (shell)", "dangerous"),
         (r"commands\.getoutput", "commands.getoutput", "dangerous"),
         (r"pickle\.load", "pickle deserialization", "security"),
         (r"yaml\.load\s*\([^)]*\)", "unsafe yaml.load", "security"),
         (r"marshal\.load", "marshal deserialization", "security"),
     ]
-    
-    for line in pr.diff.split("\n"):
-        if line.startswith("diff --git"):
-            match = re.search(r"b/(.+)$", line)
-            if match:
-                current_file = match.group(1)
-            line_num = 0
-            in_diff_hunk = False
+    for filepath, number, line in _added_lines(pr.diff):
+        if _prose_or_comment(filepath, line):
             continue
-        
-        if line.startswith("@@"):
-            match = re.search(r"@@ -\d+(?:,\d+)? \+(\d+)", line)
-            if match:
-                line_num = int(match.group(1)) - 1
-            in_diff_hunk = True
-            continue
-        
-        if in_diff_hunk:
-            if line.startswith("+") and not line.startswith("+++"):
-                line_num += 1
-                added_line = line[1:]
-                
-                for pattern, desc, category in all_patterns:
-                    if re.search(pattern, added_line, re.IGNORECASE):
-                        all_findings.append({
-                            "file": current_file,
-                            "line": line_num,
-                            "category": category,
-                            "description": desc,
-                            "evidence": added_line.strip()[:50],
-                        })
-                        break
-            elif not line.startswith("-"):
-                line_num += 1
-    
+        for pattern, desc, category in extra_patterns:
+            if re.search(pattern, line):
+                all_findings.append({"file": filepath, "line": number,
+                                     "category": category, "description": desc})
+    for result, category in zip(shared_results, ("secret", "dangerous", "security")):
+        if result.failed:
+            for evidence in (result.details or result.reason).splitlines():
+                if evidence.lstrip().startswith("Evidence:"):
+                    continue
+                finding_category = "auth" if "[auth]" in evidence else category
+                all_findings.append({"category": finding_category, "description": evidence,
+                                     "file": "", "line": 0})
+
     if all_findings:
         by_category = {}
         for f in all_findings:
@@ -786,8 +862,9 @@ def run_static_security_scan(pr: PRInfo, config: KarenConfig) -> CheckResult:
         summary = ", ".join(f"{v} {k}" for k, v in sorted(by_category.items()))
         
         details = []
-        for f in all_findings[:15]:
-            details.append(f"- {f['file']}:{f['line']} [{f['category']}] {f['description']}")
+        for f in all_findings:
+            details.append((f"- {f['file']}:{f['line']} " if f["file"] else "")
+                           + f"[{f['category']}] {f['description']}")
         
         return CheckResult(
             check_name="static_security_scan",

@@ -7,6 +7,7 @@ NEVER merges, pushes, force-pushes, tags, releases, or uses sudo.
 from __future__ import annotations
 
 import json
+import logging
 import subprocess
 import tempfile
 import re
@@ -219,11 +220,20 @@ def list_prs_with_label(owner: str, repo: str, label: str) -> list[dict]:
 
 def remove_label(owner: str, repo: str, pr_number: int, label: str) -> None:
     """Remove a label from a PR."""
-    _run_gh([
-        "pr", "edit", str(pr_number),
-        "--repo", f"{owner}/{repo}",
-        "--remove-label", label,
-    ])
+    try:
+        _run_gh([
+            "pr", "edit", str(pr_number),
+            "--repo", f"{owner}/{repo}",
+            "--remove-label", label,
+        ])
+    except GitHubError as exc:
+        missing = (r"(?:label[: ]*['\"]?" + re.escape(label)
+                   + r"['\"]?.*?(?:not found|does not exist)|['\"]"
+                   + re.escape(label) + r"['\"] (?:not found|does not exist))")
+        if not re.search(missing, str(exc), re.IGNORECASE):
+            raise
+        logging.getLogger("karen-poller").debug("Absent label %s; removal is a no-op", label)
+
 
 
 def add_label(owner: str, repo: str, pr_number: int, label: str) -> None:

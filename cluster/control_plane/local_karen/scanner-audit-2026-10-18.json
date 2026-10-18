@@ -1,0 +1,190 @@
+{
+  "scope": "Offline deterministic diff audit only; not a Karen verdict or merge approval. Existing and new two-model exact-head gates remain required.",
+  "prs": [
+    {
+      "repo": "rupret007/Turdanoid",
+      "pr": 88,
+      "head_sha": "9c185cf3717aa6694750d6ccf4d0f1e9991e3726",
+      "checks": [
+        {
+          "check": "no_secrets",
+          "status": "PASS",
+          "reason": "No secrets detected in diff",
+          "details": null
+        },
+        {
+          "check": "no_dangerous_commands",
+          "status": "PASS",
+          "reason": "No dangerous commands detected",
+          "details": null
+        },
+        {
+          "check": "tests_not_weakened",
+          "status": "PASS",
+          "reason": "No test weakening detected",
+          "details": null
+        },
+        {
+          "check": "security_patterns",
+          "status": "FAIL",
+          "reason": "Security issues: 1 security, 0 auth",
+          "details": "- tests/turdjack-confirm-modal.test.js:69 [security] XSS: innerHTML assignment\n  Evidence: source redacted"
+        },
+        {
+          "check": "static_security_scan",
+          "status": "FAIL",
+          "reason": "Static scan found issues: 1 security",
+          "details": "[security] - tests/turdjack-confirm-modal.test.js:69 [security] XSS: innerHTML assignment"
+        }
+      ]
+    },
+    {
+      "repo": "rupret007/StoryLiner",
+      "pr": 27,
+      "head_sha": "5184ef1e5c918adbb4f6d935e26e3d42ac637b41",
+      "checks": [
+        {
+          "check": "no_secrets",
+          "status": "PASS",
+          "reason": "No secrets detected in diff",
+          "details": null
+        },
+        {
+          "check": "no_dangerous_commands",
+          "status": "PASS",
+          "reason": "No dangerous commands detected",
+          "details": null
+        },
+        {
+          "check": "tests_not_weakened",
+          "status": "FAIL",
+          "reason": "Tests appear weakened: 5 issue(s) found",
+          "details": "Removed test function in tests/services/generate-guard-review.test.ts:153 (removed source; value redacted)\nRemoved assertion in tests/services/generate-guard-review.test.ts:155 (removed source; value redacted)\nRemoved assertion in tests/services/generate-guard-review.test.ts:156 (removed source; value redacted)\nRemoved assertion in tests/services/generate-guard-review.test.ts:157 (removed source; value redacted)\nRemoved test function in tests/voice/demo-facts.test.ts:25 (removed source; value redacted)"
+        },
+        {
+          "check": "security_patterns",
+          "status": "PASS",
+          "reason": "No security vulnerabilities detected",
+          "details": null
+        },
+        {
+          "check": "static_security_scan",
+          "status": "PASS",
+          "reason": "Static security scan clean (0 files)",
+          "details": null
+        }
+      ]
+    },
+    {
+      "repo": "rupret007/bob-brain",
+      "pr": 5,
+      "head_sha": "b16b62f3f55b095b8293c35d052bbc204868492c",
+      "checks": [
+        {
+          "check": "no_secrets",
+          "status": "FAIL",
+          "reason": "Potential secrets detected: 4 issue(s)",
+          "details": "release/test_voice_probe.py:17: Secret/password (value redacted)\nwebchat/test_cap_ledger.py:1166: Secret/password (value redacted)\nwebchat/test_local_tasks.py:228: Private key (value redacted)\nwebchat/test_resource_inventory.py:33: Secret/password (value redacted)"
+        },
+        {
+          "check": "no_dangerous_commands",
+          "status": "FAIL",
+          "reason": "Dangerous commands detected: 5 issue(s)",
+          "details": ".github/workflows/tests.yml:44: sudo usage (source redacted)\n.github/workflows/tests.yml:45: sudo usage (source redacted)\n.github/workflows/tests.yml:46: sudo usage (source redacted)\n.github/workflows/tests.yml:47: sudo usage (source redacted)\n.github/workflows/tests.yml:48: sudo usage (source redacted)"
+        },
+        {
+          "check": "tests_not_weakened",
+          "status": "FAIL",
+          "reason": "Tests appear weakened: 33 issue(s) found",
+          "details": "Removed assertion in services/test_dispatch.py:345 (removed source; value redacted)\nRemoved test function in services/test_dispatch.py:353 (removed source; value redacted)\nRemoved assertion in services/test_dispatch.py:361 (removed source; value redacted)\nRemoved assertion in services/test_services.py:271 (removed source; value redacted)\nRemoved assertion in webchat/test_dispatch.py:42 (removed source; value redacted)\nRemoved test function in webchat/test_dispatch.py:51 (removed source; value redacted)\nRemoved assertion in webchat/test_dispatch.py:93 (removed source; value redacted)\nRemoved test function in webchat/test_dispatch.py:102 (removed source; value redacted)\nRemoved assertion in webchat/test_dispatch.py:104 (removed source; value redacted)\nRemoved assertion in webchat/test_dispatch.py:105 (removed source; value redacted)\nRemoved assertion in webchat/test_dispatch.py:175 (removed source; value redacted)\nRemoved assertion in webchat/test_failover.py:273 (removed source; value redacted)\nRemoved assertion in webchat/test_reply_authority.py:15 (removed source; value redacted)\nRemoved assertion in webchat/test_reply_authority.py:23 (removed source; value redacted)\nRemoved assertion in webchat/test_reply_authority.py:24 (removed source; value redacted)\nRemoved assertion in webchat/test_webchat.py:284 (removed source; value redacted)\nRemoved assertion in webchat/test_webchat.py:285 (removed source; value redacted)\nRemoved assertion in webchat/test_webchat.py:394 (removed source; value redacted)\nRemoved assertion in webchat/test_webchat.py:664 (removed source; value redacted)\nRemoved assertion in webchat/test_webchat.py:666 (removed source; value redacted)\nRemoved assertion in webchat/test_webchat.py:689 (removed source; value redacted)\nRemoved test function in webchat/test_webchat.py:695 (removed source; value redacted)\nRemoved assertion in webchat/test_webchat.py:699 (removed source; value redacted)\nRemoved assertion in webchat/test_webchat.py:700 (removed source; value redacted)\nRemoved assertion in webchat/test_webchat.py:702 (removed source; value redacted)\nRemoved assertion in webchat/test_webchat.py:815 (removed source; value redacted)\nRemoved assertion in webchat/test_webchat.py:1001 (removed source; value redacted)\nRemoved assertion in webchat/test_webchat.py:1181 (removed source; value redacted)\nRemoved assertion in webchat/test_webchat.py:1196 (removed source; value redacted)\nAdded test skip/xfail in services/test_linux_sandbox_exec.py:41 (source redacted)\nAdded test skip/xfail in webchat/test_chat_media.py:289 (source redacted)\nAdded test skip/xfail in webchat/test_chat_media.py:303 (source redacted)\nAdded test skip/xfail in webchat/test_chat_media.py:315 (source redacted)"
+        },
+        {
+          "check": "security_patterns",
+          "status": "FAIL",
+          "reason": "Security issues: 2 security, 3 auth",
+          "details": "- reviews/WEBBOB-CLEAN-0927.status-evidence.json:64 [auth] Auth bypass mention\n  Evidence: source redacted\n- reviews/run_texting_reviews_2055.py:56 [auth] Auth bypass mention\n  Evidence: source redacted\n- webchat/instinct.py:22 [auth] Auth disable mention\n  Evidence: source redacted\n- webchat/static/app.js:454 [security] XSS: innerHTML assignment\n  Evidence: source redacted\n- webchat/static/app.js:462 [security] XSS: innerHTML assignment\n  Evidence: source redacted"
+        },
+        {
+          "check": "static_security_scan",
+          "status": "FAIL",
+          "reason": "Static scan found issues: 3 auth, 5 dangerous, 4 secret, 2 security",
+          "details": "[secret] release/test_voice_probe.py:17: Secret/password (value redacted)\n[secret] webchat/test_cap_ledger.py:1166: Secret/password (value redacted)\n[secret] webchat/test_local_tasks.py:228: Private key (value redacted)\n[secret] webchat/test_resource_inventory.py:33: Secret/password (value redacted)\n[dangerous] .github/workflows/tests.yml:44: sudo usage (source redacted)\n[dangerous] .github/workflows/tests.yml:45: sudo usage (source redacted)\n[dangerous] .github/workflows/tests.yml:46: sudo usage (source redacted)\n[dangerous] .github/workflows/tests.yml:47: sudo usage (source redacted)\n[dangerous] .github/workflows/tests.yml:48: sudo usage (source redacted)\n[auth] - reviews/WEBBOB-CLEAN-0927.status-evidence.json:64 [auth] Auth bypass mention\n[auth] - reviews/run_texting_reviews_2055.py:56 [auth] Auth bypass mention\n[auth] - webchat/instinct.py:22 [auth] Auth disable mention\n[security] - webchat/static/app.js:454 [security] XSS: innerHTML assignment\n[security] - webchat/static/app.js:462 [security] XSS: innerHTML assignment"
+        }
+      ]
+    },
+    {
+      "repo": "rupret007/AdoptIQ",
+      "pr": 21,
+      "head_sha": "8a5d23dabffd7a866f841d2a059207652c91b136",
+      "checks": [
+        {
+          "check": "no_secrets",
+          "status": "PASS",
+          "reason": "No secrets detected in diff",
+          "details": null
+        },
+        {
+          "check": "no_dangerous_commands",
+          "status": "PASS",
+          "reason": "No dangerous commands detected",
+          "details": null
+        },
+        {
+          "check": "tests_not_weakened",
+          "status": "FAIL",
+          "reason": "Tests appear weakened: 58 issue(s) found",
+          "details": "Removed assertion in tests/test_canonical_report_adapter.py:940 (removed source; value redacted)\nRemoved assertion in tests/test_canonical_report_adapter.py:996 (removed source; value redacted)\nRemoved assertion in tests/test_round142_offline_acceptance_artifacts.py:368 (removed source; value redacted)\nRemoved assertion in tests/test_round164_mac_release_preflight.py:858 (removed source; value redacted)\nRemoved assertion in tests/test_round164_mac_release_preflight.py:861 (removed source; value redacted)\nRemoved assertion in tests/test_round165_word_citation_resolution.py:49 (removed source; value redacted)\nRemoved assertion in tests/test_round165_word_citation_resolution.py:51 (removed source; value redacted)\nRemoved assertion in tests/test_round165_word_citation_resolution.py:52 (removed source; value redacted)\nRemoved assertion in tests/test_round165_word_citation_resolution.py:53 (removed source; value redacted)\nRemoved assertion in tests/test_round165_word_citation_resolution.py:55 (removed source; value redacted)\nRemoved test function in tests/test_round168_build116_source_release_state.py:24 (removed source; value redacted)\nRemoved assertion in tests/test_round168_build116_source_release_state.py:36 (removed source; value redacted)\nRemoved test function in tests/test_round168_build116_source_release_state.py:88 (removed source; value redacted)\nRemoved assertion in tests/test_round168_build116_source_release_state.py:99 (removed source; value redacted)\nRemoved assertion in tests/test_round168_build116_source_release_state.py:106 (removed source; value redacted)\nRemoved test function in tests/test_round168_build116_source_release_state.py:122 (removed source; value redacted)\nRemoved test function in tests/test_round168_build116_source_release_state.py:141 (removed source; value redacted)\nRemoved test function in tests/test_round168_build116_source_release_state.py:165 (removed source; value redacted)\nRemoved test function in tests/test_round168_build116_source_release_state.py:173 (removed source; value redacted)\nRemoved assertion in tests/test_round168_build116_source_release_state.py:185 (removed source; value redacted)\nRemoved assertion in tests/test_round168_build116_source_release_state.py:187 (removed source; value redacted)\nRemoved assertion in tests/test_round168_build116_source_release_state.py:192 (removed source; value redacted)\nRemoved assertion in tests/test_round71_env_keys_lint.py:259 (removed source; value redacted)\nRemoved test function in tests/test_round8_embed_credentials_behaviour.py:23 (removed source; value redacted)\nRemoved assertion in tests/test_round8_embed_credentials_behaviour.py:26 (removed source; value redacted)\nRemoved assertion in tests/test_round8_embed_credentials_behaviour.py:27 (removed source; value redacted)\nRemoved test function in tests/test_round8_embed_credentials_behaviour.py:30 (removed source; value redacted)\nRemoved assertion in tests/test_round8_embed_credentials_behaviour.py:34 (removed source; value redacted)\nRemoved test function in tests/test_round8_embed_credentials_behaviour.py:37 (removed source; value redacted)\nRemoved assertion in tests/test_round8_embed_credentials_behaviour.py:44 (removed source; value redacted)\nRemoved test function in tests/test_round8_embed_credentials_behaviour.py:47 (removed source; value redacted)\nRemoved assertion in tests/test_round8_embed_credentials_behaviour.py:58 (removed source; value redacted)\nRemoved assertion in tests/test_round8_embed_credentials_behaviour.py:60 (removed source; value redacted)\nRemoved assertion in tests/test_round8_embed_credentials_behaviour.py:62 (removed source; value redacted)\nRemoved test function in tests/test_round8_embed_credentials_behaviour.py:65 (removed source; value redacted)\nRemoved assertion in tests/test_round8_embed_credentials_behaviour.py:71 (removed source; value redacted)\nRemoved test function in tests/test_round8_embed_credentials_behaviour.py:78 (removed source; value redacted)\nRemoved assertion in tests/test_round8_embed_credentials_behaviour.py:82 (removed source; value redacted)\nRemoved test function in tests/test_round8_embed_credentials_behaviour.py:85 (removed source; value redacted)\nRemoved assertion in tests/test_round8_embed_credentials_behaviour.py:93 (removed source; value redacted)\nRemoved assertion in tests/test_round8_embed_credentials_behaviour.py:95 (removed source; value redacted)\nRemoved test function in tests/test_round8_embed_credentials_behaviour.py:101 (removed source; value redacted)\nRemoved assertion in tests/test_round8_embed_credentials_behaviour.py:109 (removed source; value redacted)\nRemoved assertion in tests/test_round8_embed_credentials_behaviour.py:111 (removed source; value redacted)\nRemoved test function in tests/test_round8_embed_credentials_behaviour.py:114 (removed source; value redacted)\nRemoved assertion in tests/test_round8_embed_credentials_behaviour.py:122 (removed source; value redacted)\nRemoved assertion in tests/test_round8_embed_credentials_behaviour.py:124 (removed source; value redacted)\nRemoved test function in tests/test_round8_embed_credentials_behaviour.py:127 (removed source; value redacted)\nRemoved assertion in tests/test_round8_embed_credentials_behaviour.py:143 (removed source; value redacted)\nRemoved test function in tests/test_round8_embed_credentials_behaviour.py:146 (removed source; value redacted)\nRemoved assertion in tests/test_round8_embed_credentials_behaviour.py:160 (removed source; value redacted)\nRemoved test function in tests/test_round8_embed_credentials_behaviour.py:163 (removed source; value redacted)\nRemoved assertion in tests/test_round8_embed_credentials_behaviour.py:175 (removed source; value redacted)\nRemoved assertion in tests/test_round8_embed_credentials_behaviour.py:177 (removed source; value redacted)\nRemoved test function in tests/test_round8_embed_credentials_behaviour.py:180 (removed source; value redacted)\nRemoved assertion in tests/test_round8_embed_credentials_behaviour.py:189 (removed source; value redacted)\nAdded test skip/xfail in tests/test_round169_acceptance_output_determinism.py:45 (source redacted)\nAdded test skip/xfail in tests/test_round169_filtered_scope_chart_embedding.py:70 (source redacted)"
+        },
+        {
+          "check": "security_patterns",
+          "status": "PASS",
+          "reason": "No security vulnerabilities detected",
+          "details": null
+        },
+        {
+          "check": "static_security_scan",
+          "status": "PASS",
+          "reason": "Static security scan clean (0 files)",
+          "details": null
+        }
+      ]
+    },
+    {
+      "repo": "rupret007/StoryBoard",
+      "pr": 101,
+      "head_sha": "94e8360dc9ebdca349d236c7e40fd301386f5a86",
+      "checks": [
+        {
+          "check": "no_secrets",
+          "status": "PASS",
+          "reason": "No secrets detected in diff",
+          "details": null
+        },
+        {
+          "check": "no_dangerous_commands",
+          "status": "PASS",
+          "reason": "No dangerous commands detected",
+          "details": null
+        },
+        {
+          "check": "tests_not_weakened",
+          "status": "PASS",
+          "reason": "No test weakening detected",
+          "details": null
+        },
+        {
+          "check": "security_patterns",
+          "status": "PASS",
+          "reason": "No security vulnerabilities detected",
+          "details": null
+        },
+        {
+          "check": "static_security_scan",
+          "status": "PASS",
+          "reason": "Static security scan clean (0 files)",
+          "details": null
+        }
+      ]
+    }
+  ]
+}

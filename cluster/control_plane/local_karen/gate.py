@@ -168,7 +168,7 @@ class GateRunner:
             check_results=check_results,
             review_results=all_reviews,
             final_passed=final_passed,
-            final_reason=("Deterministic checks failed: " + "; ".join(r.reason for r in failed)
+            final_reason=("Deterministic checks failed: " + "; ".join(r.reason + (": " + r.details if r.details else "") for r in failed)
                           + "; Review: " + review_result.reason) if failed else review_result.reason,
             final_reviewer=review_result.reviewer,
         )
