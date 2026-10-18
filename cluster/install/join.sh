@@ -116,9 +116,9 @@ need_cmd() {
 
 python_hint() {
   case "$OS_KIND" in
-    darwin) echo "Install Python 3.10+: brew install python@3.12" ;;
-    wsl)    echo "Install Python 3.10+: sudo apt update && sudo apt install -y python3 python3-venv python3-pip" ;;
-    *)      echo "Install Python 3.10+: sudo apt install -y python3 python3-venv || sudo dnf install -y python3" ;;
+    darwin) echo "Install Python 3.9+: brew install python@3.12" ;;
+    wsl)    echo "Install Python 3.9+: sudo apt update && sudo apt install -y python3 python3-venv python3-pip" ;;
+    *)      echo "Install Python 3.9+: sudo apt install -y python3 python3-venv || sudo dnf install -y python3" ;;
   esac
 }
 
@@ -145,8 +145,8 @@ tar_hint() {
 
 check_prereqs() {
   need_cmd python3 "$(python_hint)"
-  if ! python3 -c 'import sys; raise SystemExit(0 if sys.version_info >= (3, 10) else 1)'; then
-    echo "join.sh: python3 >= 3.10 is required" >&2
+  if ! python3 -c 'import sys; raise SystemExit(0 if sys.version_info >= (3, 9) else 1)'; then
+    echo "join.sh: python3 >= 3.9 is required" >&2
     python_hint >&2
     exit 1
   fi
@@ -201,7 +201,7 @@ export BOB_JOIN_CODE_DECODE="$CODE"
 
 if [[ "$DRY_RUN" -eq 1 ]]; then
   check_prereqs
-  dry "would verify python3 >= 3.10, git, curl, tar"
+  dry "would verify python3 >= 3.9, git, curl, tar"
   dry "would download ${TARBALL_URL} to a temporary directory"
   dry "would verify archive SHA256 ${SHA256} before extraction"
   dry "would extract cluster/ into ${APP}/cluster (atomic replace via ${APP}.new)"

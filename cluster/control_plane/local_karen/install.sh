@@ -35,8 +35,8 @@ check_dependencies() {
     fi
 
     PYTHON_VERSION=$(python3 -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')
-    if [[ $(echo "$PYTHON_VERSION < 3.10" | bc -l 2>/dev/null || echo "1") == "1" ]]; then
-        log_warn "Python 3.10+ recommended, found $PYTHON_VERSION"
+    if [[ $(echo "$PYTHON_VERSION < 3.9" | bc -l 2>/dev/null || echo "1") == "1" ]]; then
+        log_warn "Python 3.9+ recommended, found $PYTHON_VERSION"
     fi
 
     if ! command -v gh &> /dev/null; then
