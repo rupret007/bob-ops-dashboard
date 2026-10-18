@@ -461,3 +461,17 @@ errors, crashes, nonzero execution statuses and timeouts still fail the doctor.
 The smoke verifier distinguishes missing success evidence from execution errors;
 its exact-SHA and PASS requirements are unchanged. Explicit repair mode retains
 the shared claim, daily limit, draft PR and nonzero repair-failure behavior.
+# Karen scanner data boundaries
+
+The deterministic command/security checks distinguish literal scanner rule
+tables from executable source. Only complete literal lists with the registered
+rule-table names in `local_karen/checks.py` qualify. The new side of each diff
+supplies both added and context lines; gaps, computed entries, mixed executable
+expressions and incomplete tables keep the normal fail-closed behavior. Secret
+scanning always includes rule tables. The NATS ACL renderer's complete
+`{{%s_TOKEN}}` format token has an exact path/value exception; adjacent real
+credentials and token prefixes/suffixes remain findings.
+
+Dashboard verdict evidence freshness describes locally observed artifacts,
+independently of machine health and merge authorization. A stale display directs
+the operator to the poller and verdict sync without asserting a service outage.

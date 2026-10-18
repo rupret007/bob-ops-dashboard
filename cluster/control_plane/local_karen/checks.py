@@ -393,6 +393,11 @@ def _placeholder_secret(match, secret_type, filepath):
     if str(filepath or '').endswith('.template') and re.fullmatch(
             r'\{\{[A-Z][A-Z0-9_]*_(?:TOKEN|KEY|PASSWORD|SECRET)\}\}', value.group(1)):
         return True
+    # The ACL renderer emits this complete format token, never a credential.
+    # Keep literal prefixes/suffixes and all independent key rules actionable.
+    if (filepath == 'cluster/nats_acl.py'
+            and value.group(1) == '{{%s_TOKEN}}'):
+        return True
     return _is_test_file(filepath or "") and value.group(1) in _TEST_SECRET_LITERALS
 
 
@@ -418,6 +423,58 @@ def _prose_or_comment(filepath, line):
     # Only non-executable documentation/comments; secrets are still scanned.
     return (filepath.lower().endswith((".md", ".rst", ".txt"))
             or line.lstrip().startswith(("#", "//")))
+
+
+def _inert_scanner_rules(diff):
+    """Identify complete literal rule tables, never executable expressions.
+
+    Reconstruct only new-side context/additions. Missing context, computed
+    entries or mixed executable expressions fail closed. Secrets still scan
+    every line, including these tables.
+    """
+    import ast
+
+    path = 'cluster/control_plane/local_karen/checks.py'
+    source, number, current = {}, 1, None
+    for line in diff.splitlines():
+        if line.startswith('diff --git '):
+            current = line.split(' b/', 1)[-1]
+        elif line.startswith('@@'):
+            hunk = re.search(r'\+(\d+)(?:,\d+)? @@', line)
+            number = int(hunk.group(1)) if hunk else 1
+        elif current == path and line.startswith((' ', '+')) and not line.startswith('+++'):
+            source[number] = line[1:]
+            number += 1
+    if not source:
+        return set()
+    # Reject gaps within a table instead of inventing missing source.
+    safe = set()
+    start = re.compile(r'^(?P<indent>[ \t]*)(?:SECRET_PATTERNS|SECURITY_PATTERNS|dangerous_patterns|extra_patterns)\s*=\s*\[\s*$')
+    for first, text in source.items():
+        match = start.fullmatch(text)
+        if not match:
+            continue
+        last, body = first + 1, ['[']
+        while last in source and last - first <= 100:
+            body.append(source[last])
+            if source[last] == match.group('indent') + ']':
+                break
+            last += 1
+        else:
+            continue
+        try:
+            values = ast.literal_eval('\n'.join(body))
+            if not isinstance(values, list) or not values:
+                continue
+            if not all(isinstance(v, tuple) and len(v) in (2, 3)
+                       and all(isinstance(s, str) for s in v) for v in values):
+                continue
+            for entry in values:
+                re.compile(entry[0])
+        except (SyntaxError, ValueError, TypeError, re.error):
+            continue
+        safe.update((path, n) for n in range(first, last + 1))
+    return safe
 
 
 def check_no_secrets_in_diff(pr: PRInfo, config: KarenConfig) -> CheckResult:
@@ -518,8 +575,9 @@ def check_no_dangerous_commands(pr: PRInfo, config: KarenConfig) -> CheckResult:
     ]
 
     issues = []
+    inert_rules = _inert_scanner_rules(pr.diff)
     for current_file, number, added_line in _added_lines(pr.diff):
-        if _prose_or_comment(current_file, added_line):
+        if _prose_or_comment(current_file, added_line) or (current_file, number) in inert_rules:
             continue
         # Only literal RegExp.exec is non-executing. Member calls such as
         # child_process.exec and window.eval must still fail.
@@ -576,6 +634,7 @@ def check_security_patterns(pr: PRInfo, config: KarenConfig) -> CheckResult:
     - Permissive CORS
     """
     findings = []  # type: list
+    inert_rules = _inert_scanner_rules(pr.diff)
     current_file = None
     line_num = 0
     in_diff_hunk = False
@@ -601,6 +660,7 @@ def check_security_patterns(pr: PRInfo, config: KarenConfig) -> CheckResult:
                 line_num += 1
                 added_line = line[1:]
                 if (_prose_or_comment(current_file or "", added_line)
+                        or (current_file, line_num) in inert_rules
                         or _static_test_dom(pr, current_file, line_num, added_line)):
                     continue
 
@@ -877,8 +937,9 @@ def run_static_security_scan(pr: PRInfo, config: KarenConfig) -> CheckResult:
         (r"yaml\.load\s*\([^)]*\)", "unsafe yaml.load", "security"),
         (r"marshal\.load", "marshal deserialization", "security"),
     ]
+    inert_rules = _inert_scanner_rules(pr.diff)
     for filepath, number, line in _added_lines(pr.diff):
-        if _prose_or_comment(filepath, line):
+        if _prose_or_comment(filepath, line) or (filepath, number) in inert_rules:
             continue
         for pattern, desc, category in extra_patterns:
             if re.search(pattern, line):

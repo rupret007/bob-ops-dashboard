@@ -252,6 +252,13 @@ class EngineCollector:
         if not verdict_dir.is_dir():
             verdict_dir = self.data_dir / 'verdicts'
         verdicts = observed_reviews(verdict_dir)
+        last_review = max((stamp(v.get('timestamp')) for v in verdicts), default=0)
+        review_age = int(now.timestamp() - last_review) if 0 < last_review <= now.timestamp() else None
+        review_evidence = {'age_seconds': review_age,
+                           'state': 'recent' if review_age is not None and review_age < 900 else 'stale',
+                           'reason': 'Recent Karen verdict evidence is available on this dashboard.'
+                           if review_age is not None and review_age < 900 else
+                           'No recent Karen verdict evidence here. Check the poller and verdict sync; this does not prove either machine is down.'}
         for value in verdicts:
             events.append({'timestamp': value.get('timestamp', ''), 'text': 'Karen {} #{}: {}'.format(
                 value.get('repo', ''), value.get('pr', value.get('pr_number', '')), review_state(value))})
@@ -344,6 +351,7 @@ class EngineCollector:
         def gauge(label, value, maximum=None, unit=''):
             return {'label': label, 'value': value, 'max': maximum, 'unit': unit}
         return {'timestamp': now.isoformat(), 'engine': overall, 'machines': health, 'admission': admission,
+                'review_evidence': review_evidence,
                 'gauges': [gauge('Active lanes', running, capacity), gauge('Verified jobs / hour', jobs_hour),
                            gauge('Karen reviews / hour', len(recent)),
                            gauge('PASS rate · last hour', round(100 * sum(review_state(v) == 'PASS' for v in recent) / len(recent), 1) if recent else None, 100, '%'),

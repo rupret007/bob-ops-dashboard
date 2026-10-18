@@ -33,6 +33,7 @@ jobs:
         env:
           BOB_REQUIRE_NATS: '1'
         run: |
+          python -m pytest -q cluster/control_plane/local_karen/tests/test_rule_literals.py cluster/control_plane/local_karen/tests/test_scanner_precision.py cluster/control_plane/local_karen/tests/test_secret_verdicts.py
           python -m pytest -q cluster/control_plane/tests/test_health_deadlines.py cluster/control_plane/tests/test_ops_doctor.py cluster/control_plane/tests/test_doctor_coordination.py cluster/control_plane/tests/test_smoke.py
           python -m cluster.nats_acl --check cluster/nats.conf.template
           python -m compileall -q cluster
