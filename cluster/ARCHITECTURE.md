@@ -233,3 +233,5 @@ watchdog cadence allows a normal follow-up within ten minutes; broker/GitHub
 outages cannot guarantee the fifteen-minute objective and must remain visible as
 deferred. Global rate counters, quota and remaining authority gaps above are
 still open; this change does not enable Mini Codex.
+Follow-up diagnostics use `~/.local/share/storypool/main-ci.jsonl`, separate from
+the watchdog health snapshots so an action record cannot imply healthy checks.

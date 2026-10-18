@@ -101,10 +101,11 @@ def _get_machine() -> str:
     return os.environ.get("STORYPOOL_MACHINE", "mini" if os.uname().sysname == "Darwin" else "nucbox")
 
 
-def _write_watchdog_log(entry: dict) -> None:
+def _write_watchdog_log(entry: dict, followup: bool = False) -> None:
     """Append entry to watchdog log."""
     LOG_DIR.mkdir(parents=True, exist_ok=True)
-    with open(WATCHDOG_LOG, "a") as f:
+    log_path = LOG_DIR / "main-ci.jsonl" if followup else WATCHDOG_LOG
+    with open(log_path, "a") as f:
         f.write(json.dumps(entry) + "\n")
 
 
@@ -687,10 +688,10 @@ def main() -> int:
             from .coordination import CoordinationError
             try:
                 _write_watchdog_log({"timestamp": _now_iso(), "action": "main_ci_followup",
-                                     "results": reconcile_recent()})
+                                     "results": reconcile_recent()}, followup=True)
             except (CoordinationError, OSError, subprocess.SubprocessError, ValueError):
                 _write_watchdog_log({"timestamp": _now_iso(), "action": "main_ci_followup",
-                                     "status": "deferred"})
+                                     "status": "deferred"}, followup=True)
     
     if args.json:
         print(json.dumps(result.to_dict(), indent=2))

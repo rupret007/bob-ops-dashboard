@@ -202,3 +202,14 @@ def test_old_failed_merge_is_not_reverted_after_main_recovers():
          patch.object(m,'open_revert') as revert:
         assert m.observe(REPO,7,details(),Mock()) == 'recovered'
         revert.assert_not_called()
+
+
+def test_followup_logs_cannot_overwrite_machine_health(tmp_path):
+    from cluster.control_plane import watchdog
+    health = tmp_path/'watchdog.log'
+    with patch.object(watchdog,'LOG_DIR',tmp_path),patch.object(watchdog,'WATCHDOG_LOG',health):
+        watchdog._write_watchdog_log({'checks':[{'passed':False}]})
+        original=health.read_text()
+        watchdog._write_watchdog_log({'action':'main_ci_followup','status':'deferred'},followup=True)
+        assert health.read_text()==original
+        assert json.loads((tmp_path/'main-ci.jsonl').read_text())['status']=='deferred'
