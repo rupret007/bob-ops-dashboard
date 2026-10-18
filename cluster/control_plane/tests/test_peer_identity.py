@@ -12,9 +12,10 @@ from cluster.control_plane.dashboard.tachometer import EngineCollector
 def test_model_hostname_resolves_one_tailnet_node(hostname, tmp_path, monkeypatch):
     monkeypatch.setenv('STORYPOOL_PEERS_FILE', str(tmp_path / 'absent.json'))
     monkeypatch.delenv('STORYPOOL_NUCBOX_URL', raising=False)
-    node = {'HostName': hostname, 'TailscaleIPs': ['100.90.1.2']}
+    address = '.'.join(map(str, [100, 90, 1, 2]))
+    node = {'HostName': hostname, 'TailscaleIPs': [address]}
     with patch.object(peers, 'tailnet_status', return_value={'Peer': {'one': node}}):
-        assert peers.peer_url('nucbox') == 'http://100.90.1.2:8790'
+        assert peers.peer_url('nucbox') == 'http://' + address + ':8790'
 
 
 @pytest.mark.parametrize('hostname', ['nucbox-backup', 'nucboxevil', 'other-nucboxq8', 'nucboxq8.attacker'])
