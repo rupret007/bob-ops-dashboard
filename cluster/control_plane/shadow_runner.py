@@ -16,9 +16,10 @@ match the existing Grok-based system before cutover.
 from __future__ import annotations
 
 import json
+import math
 import os
 import subprocess
-import time
+import uuid
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -29,29 +30,18 @@ from .gate_runner import (
     ApprovalChecker,
     CIStatusChecker,
     DraftChecker,
-    GateResult,
-    GateVerdict,
     PRContext,
 )
-from .guards import MachineGuards, mini_guards_pass, nucbox_guards_pass
+from .guards import MachineGuards, MINI_MAX_LANES, NUCBOX_MAX_LANES
+from .state_paths import private_state_dir
 
 
 SHADOW_LOG_DIR = Path(
     os.environ.get("STORYPOOL_SHADOW_LOG_DIR", "~/.local/share/storypool/shadow")
 ).expanduser()
 
-REPOS = [
-    "rupret007/webjam",
-    "rupret007/StoryLiner",
-    "rupret007/StoryBoard",
-    "rupret007/Rad-Dad-Merch",
-    "rupret007/RadDadSite",
-    "rupret007/Turdanoid",
-    "rupret007/rad-dad-show-night",
-    "rupret007/Andrea_NanoBot",
-    "rupret007/bob-ops-dashboard",
-    "rupret007/Cursor-OpenClaw-Integration",
-]
+# Expand scope only after a repository is authorized for this shadow deployment.
+REPOS = ["rupret007/bob-ops-dashboard"]
 
 
 @dataclass
@@ -59,7 +49,7 @@ class ShadowDecision:
     """A logged shadow decision."""
 
     timestamp: str
-    decision_type: str  # "dispatch" or "gate"
+    decision_type: str  # "dispatch", "gate", or "run"
     action: str  # "would_dispatch", "would_skip", "would_pass", "would_fail"
     reason: str
     machine: str
@@ -70,6 +60,7 @@ class ShadowDecision:
     lane_provider: Optional[str] = None
     priority_score: Optional[float] = None
     guard_values: Optional[dict] = None
+    run_id: Optional[str] = None
     extra: dict = field(default_factory=dict)
 
     def to_dict(self) -> dict:
@@ -109,7 +100,7 @@ def _get_open_prs(repo: str) -> list[dict]:
 def _get_pr_details(repo: str, pr_number: int) -> Optional[dict]:
     """Get detailed PR information."""
     pr = _run_gh(["pr", "view", str(pr_number), "--repo", repo, "--json",
-                  "number,title,author,headRefOid,isDraft,url,body,files,additions,deletions,"
+                  "number,title,author,headRefOid,isDraft,url,files,additions,deletions,"
                   "reviewDecision,statusCheckRollup,reviews"],
                  default=None)
     return pr if isinstance(pr, dict) else None
@@ -123,15 +114,18 @@ def _ci_status_from_pr(pr: dict) -> dict[str, str]:
         if not isinstance(check, dict):
             continue
         name = check.get("name") or check.get("context") or "unknown"
-        state = check.get("conclusion") or check.get("state") or "pending"
+        state = check.get("conclusion") or check.get("state") or check.get("status") or "pending"
+        if check.get("status") and check["status"].lower() != "completed":
+            state = "pending"
         state = state.lower() if isinstance(state, str) else "pending"
         if state in ("success", "neutral", "skipped"):
-            result[name] = "success"
+            state = "success"
         elif state in ("failure", "error", "timed_out", "cancelled", "action_required"):
-            result[name] = "failure"
+            state = "failure"
         elif state in ("pending", "queued", "in_progress", "waiting"):
-            result[name] = "pending"
-        else:
+            state = "pending"
+        # Duplicate check names must never let a successful run hide a blocker.
+        if name not in result or result[name] == "success" or state == "failure":
             result[name] = state
     return result
 
@@ -139,7 +133,7 @@ def _ci_status_from_pr(pr: dict) -> dict[str, str]:
 def _reviews_from_pr(pr: dict) -> list[dict]:
     """Extract reviews from PR."""
     reviews = pr.get("reviews") or []
-    return [{"state": r.get("state", "").upper(), "user": r.get("author", {})}
+    return [{**r, "state": (r.get("state") or "").upper(), "user": r.get("author") or {}}
             for r in reviews if isinstance(r, dict)]
 
 
@@ -158,10 +152,11 @@ class ShadowRunner:
         budget_tracker: Optional[BudgetTracker] = None,
     ):
         self.machine = machine.lower()
-        self.log_dir = log_dir or SHADOW_LOG_DIR
-        self.log_dir.mkdir(parents=True, exist_ok=True)
-        self.budget = budget_tracker or BudgetTracker()
+        self.log_dir = private_state_dir(log_dir or SHADOW_LOG_DIR)
+        self.log_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
+        self.budget = budget_tracker or BudgetTracker(read_only=True)
         self.decisions: list[ShadowDecision] = []
+        self.run_id = uuid.uuid4().hex
 
     def _log_file(self) -> Path:
         """Get the log file for today."""
@@ -170,21 +165,26 @@ class ShadowRunner:
 
     def _write_decision(self, decision: ShadowDecision) -> None:
         """Append a decision to the log file."""
+        decision.run_id = self.run_id
         self.decisions.append(decision)
-        with open(self._log_file(), "a", encoding="utf-8") as f:
+        log_file = self._log_file()
+        private_state_dir(log_file)
+        fd = os.open(log_file, os.O_WRONLY | os.O_CREAT | os.O_APPEND | os.O_NOFOLLOW, 0o600)
+        with os.fdopen(fd, "a", encoding="utf-8") as f:
+            os.fchmod(f.fileno(), 0o600)
             f.write(json.dumps(decision.to_dict(), sort_keys=True) + "\n")
 
     def check_machine_guards(self) -> tuple[bool, str, dict]:
         """Check if this machine can accept work."""
-        guards = MachineGuards(self.machine)
-        result = guards.check_all()
-        guard_values = {
-            "load": guards.check_load().value,
-            "swap": guards.check_swap().value if self.machine == "mini" else None,
-            "disk": guards.check_disk().value if self.machine == "mini" else None,
-            "lanes": guards.check_lanes().value if self.machine == "nucbox" else None,
-        }
-        return result.passed, result.reason, guard_values
+        try:
+            guards = MachineGuards(self.machine)
+            result = guards.check_all()
+            if result.passed and self.machine == "mini":
+                result = guards.check_lanes()
+                guards.values["lanes"] = result.value
+            return result.passed, result.reason, guards.values
+        except (OSError, ValueError, TypeError, OverflowError, KeyError, subprocess.SubprocessError):
+            return False, "Machine telemetry unavailable", {}
 
     def _priority_score(self, pr: dict) -> float:
         """Calculate priority score for a PR (higher = more urgent).
@@ -270,7 +270,12 @@ class ShadowRunner:
         candidates.sort(key=lambda p: -p.get("_score", 0))
 
         dispatched = 0
-        max_dispatch = 3
+        occupied = guard_values.get("lanes")
+        if (type(occupied) not in (int, float) or not math.isfinite(occupied)
+                or occupied < 0 or int(occupied) != occupied):
+            occupied = NUCBOX_MAX_LANES if self.machine == "nucbox" else MINI_MAX_LANES
+        capacity = NUCBOX_MAX_LANES if self.machine == "nucbox" else MINI_MAX_LANES
+        max_dispatch = min(3, max(0, capacity - int(occupied)))
 
         for pr in candidates[:10]:
             if dispatched >= max_dispatch:
@@ -343,7 +348,7 @@ class ShadowRunner:
             repo=repo.split("/")[1],
             number=pr_number,
             title=pr.get("title", ""),
-            author=(pr.get("author") or {}).get("login", "unknown"),
+            author=(pr.get("author") or {}).get("login", ""),
             head_sha=head_sha,
             base_branch="main",
             is_draft=is_draft,
@@ -453,7 +458,10 @@ class ShadowRunner:
 
         Returns a summary of all decisions made.
         """
+        self.run_id = uuid.uuid4().hex
+        self.decisions = []
         summary = {
+            "run_id": self.run_id,
             "timestamp": _now_iso(),
             "machine": self.machine,
             "dispatch_decisions": [],
@@ -472,7 +480,14 @@ class ShadowRunner:
             "gate_pass": sum(1 for d in gate_decisions if d.action == "would_pass"),
             "gate_fail": sum(1 for d in gate_decisions if d.action == "would_fail"),
             "gate_needs_llm": sum(1 for d in gate_decisions if d.action == "would_need_llm"),
+            "gate_skipped": sum(1 for d in gate_decisions if d.action == "would_skip"),
         }
+
+        self._write_decision(ShadowDecision(
+            timestamp=summary["timestamp"], decision_type="run", action="evaluated",
+            reason="Shadow evaluation completed", machine=self.machine,
+            extra={"totals": summary["totals"]},
+        ))
 
         return summary
 
@@ -487,6 +502,7 @@ def main() -> int:
     parser.add_argument(
         "--machine",
         default=os.environ.get("STORYPOOL_MACHINE", "unknown"),
+        choices=("mini", "nucbox"),
         help="Machine name (mini or nucbox)",
     )
     parser.add_argument(
@@ -517,7 +533,8 @@ def main() -> int:
               f"{summary['totals']['dispatch_skipped']} skipped")
         print(f"  Gate: {summary['totals']['gate_pass']} pass, "
               f"{summary['totals']['gate_fail']} fail, "
-              f"{summary['totals']['gate_needs_llm']} need LLM")
+              f"{summary['totals']['gate_needs_llm']} need LLM, "
+              f"{summary['totals']['gate_skipped']} skipped")
         print(f"  Log: {runner._log_file()}")
 
     return 0

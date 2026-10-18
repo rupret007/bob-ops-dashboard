@@ -94,9 +94,17 @@ print(json.dumps(value))
 def require_temporary_child(root: Path) -> Path:
     resolved = root.resolve()
     temp_roots = {Path(tempfile.gettempdir()).resolve(), Path("/tmp").resolve()}
-    if not any(resolved != base and resolved.is_relative_to(base) for base in temp_roots):
+    if resolved in temp_roots or not any(resolved.is_relative_to(base) for base in temp_roots):
         raise ValueError("Fixture files must stay in a child of a temporary directory")
-    if any((parent / ".git").exists() for parent in (resolved, *resolved.parents)):
+    for parent in (resolved, *resolved.parents):
+        marker = parent / ".git"
+        if not marker.exists():
+            continue
+        # A shared temporary root may contain an empty metadata placeholder.
+        # It is not a Git repository. Keep rejecting every marker below that
+        # boundary, and nonempty metadata or worktree files at the boundary.
+        if parent in temp_roots and marker.is_dir() and not any(marker.iterdir()):
+            continue
         raise ValueError("Fixture files must not overwrite a repository")
     return resolved
 

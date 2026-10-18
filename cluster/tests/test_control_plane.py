@@ -193,7 +193,8 @@ class TestGateCheckers(unittest.TestCase):
             "diff": "diff --git a/file.py b/file.py\n+print('hello')",
             "test_files": ["tests/test_file.py"],
             "ci_status": {"build": "success", "test": "success"},
-            "reviews": [{"state": "APPROVED", "user": {"login": "reviewer"}}],
+            "reviews": [{"state": "APPROVED", "user": {"login": "reviewer"},
+                         "commit": {"oid": "abc123def456"}}],
         }
         defaults.update(overrides)
         return PRContext(**defaults)
@@ -239,7 +240,8 @@ class TestGateCheckers(unittest.TestCase):
     def test_approval_checker_passes_approved(self):
         """ApprovalChecker passes when PR has approval."""
         context = self._make_context(
-            reviews=[{"state": "APPROVED", "user": {"login": "reviewer"}}]
+            reviews=[{"state": "APPROVED", "user": {"login": "reviewer"},
+                      "commit": {"oid": "abc123def456"}}]
         )
         result = ApprovalChecker().check(context)
         self.assertIsNone(result)
@@ -346,7 +348,8 @@ class TestGateRunner(unittest.TestCase):
             "diff": "diff content",
             "test_files": [],
             "ci_status": {"build": "success"},
-            "reviews": [{"state": "APPROVED"}],
+            "reviews": [{"state": "APPROVED", "user": {"login": "reviewer"},
+                         "commit": {"oid": "abc123def456"}}],
         }
         defaults.update(overrides)
         return PRContext(**defaults)
@@ -397,7 +400,11 @@ class TestValidateMergeGate(unittest.TestCase):
             current_sha="abc123",
             is_draft=False,
             ci_status={"build": "success"},
-            reviews=[{"state": "APPROVED"}],
+            reviews=[{"state": "APPROVED", "user": {"login": "reviewer"},
+                      "commit": {"oid": "abc123"}}],
+            gate_result=GateResult(GateVerdict.PASS, "Reviewed complete diff",
+                                   "abc123", 123, "claude"),
+            author="testuser",
         )
         self.assertTrue(ok)
         self.assertEqual(reason, "ok")

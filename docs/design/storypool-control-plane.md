@@ -301,39 +301,15 @@ Respond with: AGREE or DISAGREE with one sentence reason.
 """
 ```
 
-**Server-validated merge gate:**
-```python
-async def validate_merge_gate(pr_url: str, gate_sha: str) -> tuple[bool, str]:
-    """Server-side validation before allowing merge."""
-    
-    # 1. Parse PR URL
-    owner, repo, number = parse_pr_url(pr_url)
-    
-    # 2. Check PR is not draft
-    pr = await gh.get_pr(owner, repo, number)
-    if pr['draft']:
-        return False, "PR is still a draft"
-    
-    # 3. Check head SHA matches
-    if pr['head']['sha'] != gate_sha:
-        return False, f"Head SHA changed: gate was for {gate_sha[:8]}, now {pr['head']['sha'][:8]}"
-    
-    # 4. Check CI status
-    checks = await gh.get_check_runs(owner, repo, gate_sha)
-    for check in checks:
-        if check['status'] != 'completed':
-            return False, f"CI incomplete: {check['name']}"
-        if check['conclusion'] not in ('success', 'skipped', 'neutral'):
-            return False, f"CI failed: {check['name']}"
-    
-    # 5. Check for required approval
-    reviews = await gh.get_reviews(owner, repo, number)
-    approved = any(r['state'] == 'APPROVED' for r in reviews)
-    if not approved:
-        return False, "No approved review"
-    
-    return True, "ok"
-```
+**Merge validation:** `cluster/control_plane/gate_runner.py` requires an explicit
+PASS result for the same PR and exact head SHA, a non-draft PR, nonempty passing
+CI results, and an independent approval at that SHA. Each reviewer's latest
+decision applies; outstanding changes requested block validation. Callers must
+fetch fresh GitHub state and supply the PR author before invoking validation.
+
+The primary review must see the complete diff. Missing or oversized diffs and
+ambiguous model responses require human review. Ken is advisory and cannot turn
+an incomplete or uncertain primary review into PASS.
 
 ### 3.5 Budget Tracker
 
@@ -422,46 +398,11 @@ def nucbox_guards_pass() -> tuple[bool, str]:
 
 ### Phase 0: Preparation (Jeff-only)
 
-**Scripts for Jeff:**
-
-```bash
-#!/bin/bash
-# setup-gemini-api.sh — Jeff runs this once on NucBox
-
-# 1. Store Gemini API key
-read -sp "Gemini API key: " GEMINI_KEY
-echo "$GEMINI_KEY" > ~/.config/storypool/gemini.key
-chmod 600 ~/.config/storypool/gemini.key
-
-# 2. Verify key works
-curl -s "https://generativelanguage.googleapis.com/v1/models?key=$(cat ~/.config/storypool/gemini.key)" | head -c 100
-```
-
-```bash
-#!/bin/bash
-# setup-claude-api.sh — Jeff runs this once on Mini
-
-# 1. Store Claude API key
-read -sp "Claude API key: " CLAUDE_KEY
-echo "$CLAUDE_KEY" > ~/.config/storypool/claude.key
-chmod 600 ~/.config/storypool/claude.key
-
-# 2. Verify key works
-curl -s https://api.anthropic.com/v1/messages \
-  -H "x-api-key: $(cat ~/.config/storypool/claude.key)" \
-  -H "anthropic-version: 2023-06-01" \
-  -H "content-type: application/json" \
-  -d '{"model":"claude-3-haiku-20240307","max_tokens":10,"messages":[{"role":"user","content":"Hi"}]}' | head -c 100
-```
-
-```bash
-#!/bin/bash
-# setup-minimax-api.sh — Jeff runs this once
-
-read -sp "MiniMax API key: " MINIMAX_KEY
-echo "$MINIMAX_KEY" > ~/.config/storypool/minimax.key
-chmod 600 ~/.config/storypool/minimax.key
-```
+The operator provisions provider access outside the published checkout through
+the approved private configuration workflow. Shadow mode uses existing read-only
+GitHub access and does not need provider credentials. Installers check access
+without changing authentication. Credential values must stay out of command
+arguments, URLs, reports, and tracked files.
 
 ### Phase 1: Shadow Mode (1-2 days)
 
@@ -469,7 +410,7 @@ chmod 600 ~/.config/storypool/minimax.key
 - New scheduler runs alongside Grok bots
 - Shadow runner logs what it *would* dispatch/gate to JSONL
 - Gate runner logs verdicts without blocking merges
-- Budget tracker starts collecting data
+- Shadow reads usage observations; missing observations are logged as skips
 
 **Grok usage:** Unchanged (still authoritative)
 
@@ -477,6 +418,14 @@ chmod 600 ~/.config/storypool/minimax.key
 - Compare deterministic decisions with Grok decisions via daily compare script
 - Tune priority weights based on shadow logs
 - Identify edge cases before cutover
+
+Shadow mode is limited to the authorized dashboard repository. Runtime state
+and JSONL reports must be outside the checkout; Pages excludes operational code
+and the design/research documents. Shadow reads budget state without creating or
+updating it. Weekly budgets reset on Monday UTC; Gemini prepaid spend persists
+across weeks. Missing usage observations block shadow dispatch and LLM review
+instead of implying zero spend. Capacity uses live lane counts and limits each evaluation to the
+remaining free slots. Skipped gates appear in comparison reports.
 
 **Installation:**
 ```bash
@@ -577,15 +526,12 @@ storypool-status
 ### 5.3 Manual Override
 
 ```bash
-# Force a gate PASS (Jeff only)
-storypool-gate override --pr 123 --sha abc123 --reason "manual review complete"
-
-# Force a lane dispatch
-storypool-dispatch --pr 123 --lane cursor --priority high
-
 # Pause all lanes
 storypool-pause --all --reason "investigating issue"
 ```
+
+Manual review must produce fresh evidence for the current head SHA and satisfy
+the same validation checks. Budget and capacity checks still apply to dispatch.
 
 ## 6. File Layout
 

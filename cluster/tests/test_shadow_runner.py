@@ -8,6 +8,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+from cluster.control_plane.budget_tracker import BudgetTracker
 from cluster.control_plane.shadow_runner import (
     ShadowDecision,
     ShadowRunner,
@@ -106,9 +107,13 @@ class TestShadowRunner(unittest.TestCase):
 
     def setUp(self):
         self.tmpdir = tempfile.mkdtemp()
+        budget = BudgetTracker(Path(self.tmpdir) / "budget")
+        for provider in ("codex", "cursor", "claude"):
+            budget.record(provider)  # Explicit known zero usage in the synthetic fixture.
         self.runner = ShadowRunner(
             machine="mini",
             log_dir=Path(self.tmpdir),
+            budget_tracker=budget,
         )
 
     def test_writes_decisions_to_jsonl(self):
@@ -138,7 +143,8 @@ class TestShadowRunner(unittest.TestCase):
             mock_instance.check_load.return_value = MagicMock(value=5.0)
             mock_instance.check_swap.return_value = MagicMock(value=30.0)
             mock_instance.check_disk.return_value = MagicMock(value=100.0)
-            mock_instance.check_lanes.return_value = MagicMock(value=None)
+            mock_instance.values = {"load": 5.0, "swap": 30.0, "disk": 100.0}
+            mock_instance.check_lanes.return_value = MagicMock(value=0, passed=True, reason="ok")
             MockGuards.return_value = mock_instance
 
             passed, reason, values = self.runner.check_machine_guards()
@@ -188,6 +194,7 @@ class TestShadowRunner(unittest.TestCase):
         mock_instance.check_swap.return_value = MagicMock(value=0.0)
         mock_instance.check_disk.return_value = MagicMock(value=100.0)
         mock_instance.check_lanes.return_value = MagicMock(value=None)
+        mock_instance.values = {"load": 15.0}
         MockGuards.return_value = mock_instance
 
         decisions = self.runner.evaluate_dispatch()
@@ -245,7 +252,8 @@ class TestShadowRunner(unittest.TestCase):
             "isDraft": False,
             "url": "https://github.com/test/repo/pull/123",
             "statusCheckRollup": [{"name": "build", "conclusion": "SUCCESS"}],
-            "reviews": [{"state": "APPROVED", "author": {"login": "reviewer"}}],
+            "reviews": [{"state": "APPROVED", "author": {"login": "reviewer"},
+                         "commit": {"oid": "abc123"}}],
         }
 
         decision = self.runner.evaluate_gate("test/repo", 123)

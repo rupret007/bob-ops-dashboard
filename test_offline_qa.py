@@ -149,6 +149,32 @@ class OfflineQaTests(unittest.TestCase):
                 with patch("offline_qa_fixtures.tempfile.gettempdir", return_value=env["TMPDIR"]):
                     self.assertEqual(require_temporary_child(Path(system_tmp)), Path(system_tmp).resolve())
 
+    def test_empty_marker_at_shared_temp_root_does_not_claim_its_children(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            (base / ".git").mkdir()
+            output = base / "output"
+            with patch("offline_qa_fixtures.tempfile.gettempdir", return_value=tmp):
+                self.assertEqual(require_temporary_child(output), output)
+                self.assertEqual(qa.validate_output_directory(str(output)), output)
+                with self.assertRaises(ValueError):
+                    require_temporary_child(base)
+
+    def test_repository_metadata_at_temp_root_still_rejects_children(self):
+        for worktree in (False, True):
+            with self.subTest(worktree=worktree), tempfile.TemporaryDirectory() as tmp:
+                base = Path(tmp)
+                marker = base / ".git"
+                if worktree:
+                    marker.write_text("gitdir: /synthetic/worktree\n", encoding="utf-8")
+                else:
+                    marker.mkdir()
+                    (marker / "HEAD").write_text("ref: refs/heads/main\n", encoding="utf-8")
+                with patch("offline_qa_fixtures.tempfile.gettempdir", return_value=tmp):
+                    for validate in (require_temporary_child, lambda path: qa.validate_output_directory(str(path))):
+                        with self.assertRaisesRegex(ValueError, "repository"):
+                            validate(base / "output")
+
     def test_preserved_fixture_is_explicitly_labeled_synthetic_and_not_publishable(self):
         with tempfile.TemporaryDirectory() as tmp:
             generator = Path(tmp)

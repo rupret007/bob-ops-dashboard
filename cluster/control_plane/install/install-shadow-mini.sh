@@ -13,6 +13,7 @@
 #        bash install-shadow-mini.sh --uninstall
 
 set -euo pipefail
+umask 077
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
@@ -35,7 +36,6 @@ uninstall() {
     fi
     
     echo "Done. Log directory preserved at $LOG_DIR"
-    echo "To remove logs: rm -rf $LOG_DIR"
 }
 
 install() {
@@ -55,7 +55,7 @@ install() {
     
     # Check gh auth
     if ! gh auth status &>/dev/null; then
-        echo "ERROR: gh not authenticated. Run: gh auth login"
+        echo "ERROR: existing gh credentials are unavailable; ask the operator to configure read-only access."
         exit 1
     fi
     

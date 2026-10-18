@@ -13,6 +13,7 @@
 #        bash install-shadow-nucbox.sh --uninstall
 
 set -euo pipefail
+umask 077
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
@@ -38,7 +39,6 @@ uninstall() {
     systemctl --user daemon-reload
     
     echo "Done. Log directory preserved at $LOG_DIR"
-    echo "To remove logs: rm -rf $LOG_DIR"
 }
 
 install() {
@@ -52,13 +52,13 @@ install() {
     
     # Check for gh CLI
     if ! command -v gh &>/dev/null; then
-        echo "ERROR: gh CLI not found. Install with: sudo apt install gh"
+        echo "ERROR: gh CLI not found. Ask the operator to provision it before installation."
         exit 1
     fi
     
     # Check gh auth
     if ! gh auth status &>/dev/null; then
-        echo "ERROR: gh not authenticated. Run: gh auth login"
+        echo "ERROR: existing gh credentials are unavailable; ask the operator to configure read-only access."
         exit 1
     fi
     

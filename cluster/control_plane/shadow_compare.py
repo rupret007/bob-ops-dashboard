@@ -19,6 +19,11 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Optional
 
+if __package__:
+    from .state_paths import private_state_dir
+else:
+    from state_paths import private_state_dir
+
 SHADOW_LOG_DIR = Path(
     os.environ.get("STORYPOOL_SHADOW_LOG_DIR", "~/.local/share/storypool/shadow")
 ).expanduser()
@@ -35,6 +40,7 @@ class DailySummary:
     gate_pass: int
     gate_fail: int
     gate_needs_llm: int
+    gate_skip: int
     skip_reasons: Counter
     fail_reasons: Counter
     repos_touched: set
@@ -52,7 +58,9 @@ def parse_log_file(path: Path) -> list[dict]:
             if not line:
                 continue
             try:
-                decisions.append(json.loads(line))
+                value = json.loads(line)
+                if isinstance(value, dict):
+                    decisions.append(value)
             except json.JSONDecodeError:
                 continue
     return decisions
@@ -65,6 +73,7 @@ def summarize_day(decisions: list[dict]) -> DailySummary:
     gate_pass = 0
     gate_fail = 0
     gate_needs_llm = 0
+    gate_skip = 0
     skip_reasons: Counter = Counter()
     fail_reasons: Counter = Counter()
     repos: set = set()
@@ -73,9 +82,9 @@ def summarize_day(decisions: list[dict]) -> DailySummary:
 
     for d in decisions:
         ts = d.get("timestamp", "")
-        if ts:
-            runs.add(ts[:16])
         machine = d.get("machine", "unknown")
+        if ts:
+            runs.add((machine, d.get("run_id") or ts[:16]))
         machines.add(machine)
 
         dtype = d.get("decision_type")
@@ -101,6 +110,9 @@ def summarize_day(decisions: list[dict]) -> DailySummary:
                 fail_reasons[reason[:60]] += 1
             elif action == "would_need_llm":
                 gate_needs_llm += 1
+            elif action == "would_skip":
+                gate_skip += 1
+                skip_reasons[reason[:60]] += 1
 
     return DailySummary(
         date="",
@@ -110,6 +122,7 @@ def summarize_day(decisions: list[dict]) -> DailySummary:
         gate_pass=gate_pass,
         gate_fail=gate_fail,
         gate_needs_llm=gate_needs_llm,
+        gate_skip=gate_skip,
         skip_reasons=skip_reasons,
         fail_reasons=fail_reasons,
         repos_touched=repos,
@@ -158,15 +171,15 @@ def compare_report(log_dir: Optional[Path] = None, days: int = 7) -> str:
         "",
         "## Daily Summary",
         "",
-        "| Date | Runs | Dispatch | Skip | Gate Pass | Gate Fail | Need LLM |",
-        "|------|------|----------|------|-----------|-----------|----------|",
+        "| Date | Runs | Dispatch | Skip | Gate Pass | Gate Fail | Need LLM | Gate Skip |",
+        "|------|------|----------|------|-----------|-----------|----------|-----------|",
     ]
 
     for date_str in sorted(summaries.keys(), reverse=True):
         s = summaries[date_str]
         lines.append(
             f"| {s.date} | {s.total_runs} | {s.dispatch_would} | "
-            f"{s.dispatch_skip} | {s.gate_pass} | {s.gate_fail} | {s.gate_needs_llm} |"
+            f"{s.dispatch_skip} | {s.gate_pass} | {s.gate_fail} | {s.gate_needs_llm} | {s.gate_skip} |"
         )
 
     totals = DailySummary(
@@ -177,6 +190,7 @@ def compare_report(log_dir: Optional[Path] = None, days: int = 7) -> str:
         gate_pass=sum(s.gate_pass for s in summaries.values()),
         gate_fail=sum(s.gate_fail for s in summaries.values()),
         gate_needs_llm=sum(s.gate_needs_llm for s in summaries.values()),
+        gate_skip=sum(s.gate_skip for s in summaries.values()),
         skip_reasons=Counter(),
         fail_reasons=Counter(),
         repos_touched=set(),
@@ -199,6 +213,7 @@ def compare_report(log_dir: Optional[Path] = None, days: int = 7) -> str:
         f"- **Gate pass:** {totals.gate_pass}",
         f"- **Gate fail:** {totals.gate_fail}",
         f"- **Gate needs LLM:** {totals.gate_needs_llm}",
+        f"- **Gate skipped:** {totals.gate_skip}",
         "",
         "## Top Skip Reasons",
         "",
@@ -284,7 +299,13 @@ def main() -> int:
     report = compare_report(args.log_dir, args.days)
 
     if args.output:
-        args.output.write_text(report)
+        output = private_state_dir(args.output)
+        if args.output.is_symlink():
+            raise ValueError("report output must not be a symlink")
+        fd = os.open(output, os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_NOFOLLOW, 0o600)
+        with os.fdopen(fd, "w") as stream:
+            os.fchmod(stream.fileno(), 0o600)
+            stream.write(report)
         print(f"Report written to {args.output}")
     else:
         print(report)

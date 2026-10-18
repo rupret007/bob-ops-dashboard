@@ -6,13 +6,20 @@ Designed to keep Grok usage near zero while routing to prepaid/cheaper services.
 
 from __future__ import annotations
 
+import fcntl
 import json
+import math
 import os
+import tempfile
+import threading
 import time
+from contextlib import contextmanager
 from dataclasses import dataclass, field, asdict
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Optional
+
+from .state_paths import private_state_dir
 
 PROVIDERS = ("codex", "cursor", "claude", "minimax", "gemini", "grok")
 
@@ -76,7 +83,8 @@ class BudgetCaps:
 class BudgetTracker:
     """Track LLM provider usage and enforce budget caps.
 
-    Usage is stored in a JSON file and reset weekly. The tracker is designed
+    Usage is stored in a JSON file and reset weekly, except prepaid Gemini spend.
+    The tracker is designed
     to be used from the dispatcher and gate runner to check before LLM calls.
     """
 
@@ -84,12 +92,16 @@ class BudgetTracker:
         self,
         data_dir: Optional[Path] = None,
         caps: Optional[BudgetCaps] = None,
+        read_only: bool = False,
     ):
-        self.data_dir = data_dir or Path(
+        self.data_dir = private_state_dir(data_dir or Path(
             os.environ.get("STORYPOOL_DATA_DIR", "~/.config/storypool")
-        ).expanduser()
-        self.data_dir.mkdir(parents=True, exist_ok=True)
+        ))
+        self.read_only = read_only
+        if not read_only:
+            self.data_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
         self.caps = caps or BudgetCaps()
+        self._thread_lock = threading.RLock()
         self._usage: dict[str, ProviderUsage] = {}
         self._load()
 
@@ -101,32 +113,53 @@ class BudgetTracker:
 
     def _load(self) -> None:
         """Load usage from disk."""
+        self._usage = {}
         path = self._usage_file()
         if path.is_file():
-            try:
-                data = json.loads(path.read_text())
-                for provider, u in data.get("usage", {}).items():
-                    self._usage[provider] = ProviderUsage.from_dict(u)
-            except (json.JSONDecodeError, TypeError, KeyError):
-                pass
+            data = json.loads(path.read_text())
+            for provider, u in data["usage"].items():
+                usage = ProviderUsage.from_dict(u)
+                if provider not in PROVIDERS or usage.provider != provider:
+                    raise ValueError("Invalid provider usage state")
+                self._validate_usage(usage.tokens_in, usage.tokens_out, usage.cost_usd)
+                self._validate_usage(usage.calls, 0, usage.window_start_ts)
+                self._usage[provider] = usage
         caps_path = self._caps_file()
         if caps_path.is_file():
+            self.caps = BudgetCaps.from_dict(json.loads(caps_path.read_text()))
+        for cap in self.caps.to_dict().values():
+            if isinstance(cap, bool) or not isinstance(cap, (int, float)) or not math.isfinite(cap) or cap < 0:
+                raise ValueError("Budget caps must be finite nonnegative numbers")
+
+    @contextmanager
+    def _locked(self):
+        fd = os.open(self.data_dir / "budget_usage.lock", os.O_CREAT | os.O_RDWR, 0o600)
+        with os.fdopen(fd, "w") as lock:
+            fcntl.flock(lock, fcntl.LOCK_EX)
             try:
-                self.caps = BudgetCaps.from_dict(json.loads(caps_path.read_text()))
-            except (json.JSONDecodeError, TypeError, KeyError):
-                pass
+                yield
+            finally:
+                fcntl.flock(lock, fcntl.LOCK_UN)
 
     def _save(self) -> None:
         """Persist usage to disk."""
         data = {"usage": {p: u.to_dict() for p, u in self._usage.items()}}
-        self._usage_file().write_text(json.dumps(data, indent=2))
+        fd, name = tempfile.mkstemp(dir=self.data_dir, prefix=".budget-")
+        try:
+            with os.fdopen(fd, "w") as stream:
+                json.dump(data, stream, indent=2, allow_nan=False)
+                stream.flush()
+                os.fsync(stream.fileno())
+            os.replace(name, self._usage_file())
+        finally:
+            Path(name).unlink(missing_ok=True)
 
     def _week_start(self) -> float:
         """Start of the current week (Monday 00:00 UTC)."""
         now = datetime.now(timezone.utc)
         days_since_monday = now.weekday()
         start = now.replace(hour=0, minute=0, second=0, microsecond=0)
-        start = start.replace(day=start.day - days_since_monday)
+        start -= timedelta(days=days_since_monday)
         return start.timestamp()
 
     def _get_or_create_usage(self, provider: str) -> ProviderUsage:
@@ -135,10 +168,18 @@ class BudgetTracker:
             raise ValueError(f"Unknown provider: {provider}")
         week_start = self._week_start()
         usage = self._usage.get(provider)
-        if usage is None or usage.window_start_ts < week_start:
+        if usage is None or (provider != "gemini" and usage.window_start_ts < week_start):
             usage = ProviderUsage(provider=provider, window_start_ts=week_start)
             self._usage[provider] = usage
         return usage
+
+    @staticmethod
+    def _validate_usage(tokens_in: int, tokens_out: int, cost_usd: float) -> None:
+        if any(type(value) is not int or value < 0 for value in (tokens_in, tokens_out)):
+            raise ValueError("Token and call counts must be nonnegative integers")
+        if (isinstance(cost_usd, bool) or not isinstance(cost_usd, (int, float))
+                or not math.isfinite(cost_usd) or cost_usd < 0):
+            raise ValueError("Cost and timestamps must be finite nonnegative numbers")
 
     def record(
         self,
@@ -148,16 +189,23 @@ class BudgetTracker:
         cost_usd: float = 0.0,
     ) -> None:
         """Record a usage event for a provider."""
-        usage = self._get_or_create_usage(provider)
-        usage.tokens_in += tokens_in
-        usage.tokens_out += tokens_out
-        usage.cost_usd += cost_usd
-        usage.calls += 1
-        self._save()
+        if self.read_only:
+            raise ValueError("Cannot record usage in a read-only budget tracker")
+        self._validate_usage(tokens_in, tokens_out, cost_usd)
+        with self._thread_lock, self._locked():
+            self._load()
+            usage = self._get_or_create_usage(provider)
+            usage.tokens_in += tokens_in
+            usage.tokens_out += tokens_out
+            usage.cost_usd += cost_usd
+            usage.calls += 1
+            self._save()
 
     def get_usage(self, provider: str) -> ProviderUsage:
-        """Get current weekly usage for a provider."""
-        return self._get_or_create_usage(provider)
+        """Get weekly usage, or cumulative usage for prepaid Gemini."""
+        with self._thread_lock:
+            self._load()
+            return self._get_or_create_usage(provider)
 
     def weekly_pct(self, provider: str) -> float:
         """Get weekly usage as a percentage of the weekly budget."""
@@ -172,6 +220,13 @@ class BudgetTracker:
 
         Returns (allowed, reason). If not allowed, reason explains why.
         """
+        if provider not in PROVIDERS:
+            raise ValueError(f"Unknown provider: {provider}")
+        if self.read_only:
+            with self._thread_lock:
+                self._load()
+                if provider not in self._usage:
+                    return False, f"Usage data unavailable for {provider}"
         usage = self.get_usage(provider)
 
         if provider == "codex":

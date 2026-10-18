@@ -9,3 +9,10 @@ live/token
 .config/bob-cluster/tokens.env
 **/.config/bob-cluster/tokens.env
 cluster/**/tokens.env
+# Operational control plane state is never a Pages artifact.
+.config/storypool/
+.local/share/storypool/
+**/budget_usage.json
+**/budget_caps.json
+**/shadow-*.jsonl
+*.key
