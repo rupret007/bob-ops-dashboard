@@ -12,6 +12,7 @@ import fcntl
 import hashlib
 import json
 import os
+import re
 import subprocess
 import tempfile
 import time
@@ -47,6 +48,36 @@ def reviewed(verdict):
     return bool(valid)
 
 
+def deterministic_security_failure(verdict):
+    """A completed redacted scanner finding, never model/merge authority.
+
+    The gate deliberately stops before sending suspected credentials to models.
+    Transport must preserve that failure without pretending two models reviewed it.
+    """
+    if (verdict is None or verdict.status != 'COMPLETE' or verdict.passed is not False
+            or verdict.reviewer != 'deterministic_security' or verdict.review_results != []
+            or not isinstance(verdict.check_results, list) or len(verdict.check_results) != 1):
+        return False
+    check = verdict.check_results[0]
+    if not isinstance(check, dict) or check.get('check') != 'no_secrets' or check.get('verdict') != 'FAIL':
+        return False
+    details = check.get('details')
+    if not isinstance(details, str) or not details:
+        return False
+    from .checks import SECRET_PATTERNS
+    rules = '|'.join(re.escape(label) for _, label in SECRET_PATTERNS)
+    finding = r'[A-Za-z0-9_. /-]+:[1-9][0-9]*: (?:' + rules + r') \(value redacted\)'
+    lines = details.split('\n')
+    reason = 'Potential secrets detected: {} issue(s)'.format(len(lines))
+    return (all(re.fullmatch(finding, line) for line in lines)
+            and check.get('reason') == reason and verdict.reason == reason + ': ' + details)
+
+
+def completed_for_delivery(verdict):
+    """Signed observations include scanner-only FAILs; repair gates use reviewed."""
+    return deterministic_security_failure(verdict) or reviewed(verdict)
+
+
 def receive(body, signature, verdict_dir=None, public_key=PUBLIC_KEY, now=None):
     """Authenticate before parsing, validate whole batch before writing."""
     if len(body) > MAX_BYTES:
@@ -74,7 +105,7 @@ def receive(body, signature, verdict_dir=None, public_key=PUBLIC_KEY, now=None):
     validated = []
     for name, content in entries.items():
         verdict = validate_entry(name, content)
-        if not reviewed(verdict):
+        if not completed_for_delivery(verdict):
             raise ValueError('incomplete review in batch')
         from datetime import datetime
         stamp = datetime.fromisoformat(verdict.timestamp)
@@ -124,7 +155,7 @@ def receive(body, signature, verdict_dir=None, public_key=PUBLIC_KEY, now=None):
 def push(config=None, target=None, private_key=PRIVATE_KEY):
     config = config or KarenConfig.load()
     entries = {name: content for name, content in collect_verdicts(config.get_verdict_dir()).items()
-               if reviewed(validate_entry(name, content))}
+               if completed_for_delivery(validate_entry(name, content))}
     if not entries:
         return {'accepted': []}
     if not private_key.is_file():

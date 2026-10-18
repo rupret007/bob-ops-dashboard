@@ -120,6 +120,14 @@ Mini Codex remains disabled until every work entry point and quota is covered.
 | Ops doctor | Shared task claim; local supervisor | Cluster repository/repair branch | Implemented: stable task key excludes machine and head, exact base SHA pinned, heartbeat and command fences through draft PR publication. Contention/outage does not consume a paid attempt. Local daily counters and shared provider quota still need migration. |
 | Web Bob/website | Scheduler | Cluster task/branch | GAP: independent entry points must use claims before launching Codex. Web Bob remains draft-only. |
 
+Signed verdict delivery carries completed model reviews and the gate's scanner-only
+security FAILs. Scanner-only failures must contain the canonical redacted rule,
+file/line and count; no credential contents are transported. They suppress repeat
+review scheduling at the same exact head and appear separately on the dashboard.
+They never satisfy the model-review requirement for automatic repair or a merge.
+Changed heads still require a new review. Signature, freshness, replay protection
+and full-SHA identity validation apply to both kinds of observations.
+
 ### Claims deployment and failure handling
 
 `ClaimClient` never creates a bucket during admission and never falls back to a

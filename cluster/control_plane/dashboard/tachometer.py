@@ -259,6 +259,24 @@ class EngineCollector:
                            'reason': 'Recent Karen verdict evidence is available on this dashboard.'
                            if review_age is not None and review_age < 900 else
                            'No recent Karen verdict evidence here. Check the poller and verdict sync; this does not prove either machine is down.'}
+        # Report scanner stops separately from model votes. Only the latest
+        # observed head per PR counts, so old findings do not inflate the banner.
+        from ..local_karen.verdict import Verdict
+        from ..local_karen.verdict_push import deterministic_security_failure
+        latest_observed = {}
+        for value in verdicts:
+            key = (value.get('owner'), value.get('repo'), value.get('pr_number'))
+            if stamp(value.get('timestamp')) > stamp(latest_observed.get(key, {}).get('timestamp')):
+                latest_observed[key] = value
+        security_stops = 0
+        for value in latest_observed.values():
+            try:
+                security_stops += bool(deterministic_security_failure(Verdict.from_dict(value)))
+            except (TypeError, ValueError):
+                continue
+        security_evidence = {'count': security_stops,
+                             'reason': '{} latest observed PR findings stopped at the security scan before model review. Check redacted file/line evidence; merge and automatic repair remain blocked.'.format(security_stops)
+                             if security_stops else 'No scanner-only security blocks in the latest observed PR findings.'}
         for value in verdicts:
             events.append({'timestamp': value.get('timestamp', ''), 'text': 'Karen {} #{}: {}'.format(
                 value.get('repo', ''), value.get('pr', value.get('pr_number', '')), review_state(value))})
@@ -352,6 +370,7 @@ class EngineCollector:
             return {'label': label, 'value': value, 'max': maximum, 'unit': unit}
         return {'timestamp': now.isoformat(), 'engine': overall, 'machines': health, 'admission': admission,
                 'review_evidence': review_evidence,
+                'security_evidence': security_evidence,
                 'gauges': [gauge('Active lanes', running, capacity), gauge('Verified jobs / hour', jobs_hour),
                            gauge('Karen reviews / hour', len(recent)),
                            gauge('PASS rate · last hour', round(100 * sum(review_state(v) == 'PASS' for v in recent) / len(recent), 1) if recent else None, 100, '%'),

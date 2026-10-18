@@ -56,6 +56,38 @@ def test_unknown_values_and_failed_health(tmp_path):
     assert engine.collect()['engine'] == 'red'
 
 
+def test_security_scan_stop_banner_deduplicates_and_follows_new_heads(tmp_path):
+    from cluster.control_plane.local_karen.tests.test_verdict_push import security_verdict
+    value = security_verdict().to_dict()
+    now = datetime.now(timezone.utc)
+    value['timestamp'] = (now - timedelta(minutes=1)).isoformat()
+    folder = tmp_path / 'verdicts'
+    write(folder / 'result.json', value)
+    write(folder / 'latest.json', value)
+    result = EngineCollector(tmp_path, tmp_path, 'nucbox').collect()
+    assert result['security_evidence']['count'] == 1
+    assert 'before model review' in result['security_evidence']['reason']
+    assert 'merge and automatic repair remain blocked' in result['security_evidence']['reason']
+    assert 'config.py' not in result['security_evidence']['reason']
+    changed = dict(value, head_sha='b' * 40, timestamp=now.isoformat(), passed=True)
+    write(folder / 'new-head.json', changed)
+    result = EngineCollector(tmp_path, tmp_path, 'nucbox').collect()
+    assert result['security_evidence']['count'] == 0
+    assert 'No scanner-only' in result['security_evidence']['reason']
+
+
+def test_security_scan_stop_banner_is_safe_text_and_handles_legacy_artifacts(tmp_path):
+    write(tmp_path / 'verdicts' / 'legacy.json', {
+        'timestamp': datetime.now(timezone.utc).isoformat(), 'passed': False,
+        'reviewer': 'deterministic_security', 'reason': '<script>untrusted</script>'})
+    result = EngineCollector(tmp_path, tmp_path, 'nucbox').collect()
+    assert result['security_evidence']['count'] == 0
+    page = render_dashboard(DashboardData(timestamp='', machine='mini', live_mode=True))
+    assert 'id="engine-security-evidence" role="status"' in page
+    assert "getElementById('engine-security-evidence').textContent" in page
+    assert '<script>untrusted</script>' not in page
+
+
 def test_engine_endpoint_is_read_only_and_lightweight(tmp_path):
     class Handler(DashboardHandler):
         collector = DataCollector(data_dir=tmp_path, karen_dir=tmp_path)

@@ -491,10 +491,10 @@ def _has_verdict_for_head(verdict_dir, repo, pr):
     owner, name = repo.split("/", 1)
     from .local_karen.verdict import load_verdict
     from .local_karen.config import KarenConfig
-    from .local_karen.verdict_push import reviewed
+    from .local_karen.verdict_push import completed_for_delivery
     verdict = load_verdict(owner, name, pr.get("number"), sha,
                            KarenConfig(verdict_dir=str(verdict_dir)))
-    return reviewed(verdict)
+    return completed_for_delivery(verdict)
 
 
 def label_queued_prs(repos=None, dry_run=True):

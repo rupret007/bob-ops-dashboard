@@ -103,3 +103,77 @@ def test_authenticated_delivery_preserves_latest_for_conductor(tmp_path, keys):
     with pytest.raises(ValueError, match='older'):
         delivery.receive(old_body, old_sig, folder, keys[1], now=1100)
     assert latest.read_text() == v.to_json()
+
+
+def security_verdict():
+    from cluster.control_plane.local_karen.checks import PRInfo, check_no_secrets_in_diff
+    from cluster.control_plane.local_karen.verdict import create_verdict
+    diff = ('diff --git a/config.py b/config.py\n@@ -0,0 +1 @@\n+'
+            + 'TOKEN=' + 'ghp_' + 'B7c9' * 9 + '\n')
+    pr = PRInfo('owner', 'repo', 1, 'a' * 40, '', '', False, diff, {}, ['config.py'], [])
+    check = check_no_secrets_in_diff(pr, KarenConfig())
+    value = create_verdict(pr, [check], [], False,
+                           check.reason + ': ' + check.details, 'deterministic_security')
+    value.tier = 'high'
+    value.timestamp = datetime.fromtimestamp(1000, timezone.utc).isoformat()
+    return value
+
+
+def test_signed_security_failure_syncs_but_cannot_authorize_merge_or_worker(tmp_path, keys):
+    from unittest.mock import patch
+    from cluster.control_plane.conductor import _read_flat_verdict, _is_approved
+    from cluster.control_plane.fix_worker import findings_for_pr
+    from cluster.control_plane.backlog import _has_verdict_for_head
+    value = security_verdict()
+    body, signature = signed(keys, value)
+    folder = tmp_path / 'verdicts'
+    delivery.receive(body, signature, folder, keys[1], now=1000)
+    config = KarenConfig(verdict_dir=str(folder))
+    loaded = load_verdict('owner', 'repo', 1, value.head_sha, config)
+    assert loaded and loaded.to_dict() == value.to_dict()
+    assert not delivery.reviewed(loaded)
+    normalized = _read_flat_verdict(folder, 'owner/repo', 1, value.head_sha)
+    assert normalized['verdict'] == 'KARENFAIL'
+    assert not _is_approved({'headRefOid': value.head_sha, 'reviews': []}, normalized)
+    with patch('cluster.control_plane.fix_worker.KarenConfig.load', return_value=config):
+        assert findings_for_pr('owner/repo', 1, value.head_sha) == []
+    assert _has_verdict_for_head(folder, 'owner/repo', {'number': 1, 'headRefOid': value.head_sha})
+    assert not _has_verdict_for_head(folder, 'owner/repo', {'number': 1, 'headRefOid': 'b' * 40})
+    assert 'B7c9' not in body.decode()
+
+
+@pytest.mark.parametrize('change', ['pass', 'error', 'empty', 'wrong_check', 'wrong_rule',
+                                   'raw_value', 'wrong_reason', 'wrong_reviewer'])
+def test_signed_security_exception_rejects_other_unreviewed_artifacts(tmp_path, keys, change):
+    value = security_verdict()
+    if change == 'pass': value.passed = True
+    if change == 'error': value.status = 'ERROR'
+    if change == 'empty': value.check_results = []
+    if change == 'wrong_check': value.check_results[0]['check'] = 'ci_green'
+    if change == 'wrong_rule': value.check_results[0]['details'] = 'config.py:1: unknown (value redacted)'
+    if change == 'raw_value': value.check_results[0]['details'] += '\nraw finding contents'
+    if change == 'wrong_reason': value.reason = 'Potential issue without exact evidence'
+    if change == 'wrong_reviewer': value.reviewer = 'codex'
+    body, signature = signed(keys, value)
+    with pytest.raises(ValueError):
+        delivery.receive(body, signature, tmp_path / 'verdicts', keys[1], now=1000)
+    assert not (tmp_path / 'verdicts').exists()
+
+
+def test_push_includes_redacted_security_failure(tmp_path, keys):
+    from unittest.mock import patch
+    from cluster.control_plane.local_karen.verdict import save_verdict
+    config = KarenConfig(verdict_dir=str(tmp_path / 'verdicts'), state_dir=str(tmp_path))
+    value = security_verdict()
+    save_verdict(value, config)
+    captured = []
+    def send(request, **kwargs):
+        import io
+        captured.append(request)
+        receipt = delivery.receive(request.data, request.get_header('X-karen-signature'),
+                                   tmp_path / 'receiver', keys[1])
+        return io.BytesIO(json.dumps(receipt).encode())
+    with patch.object(delivery.urllib.request, 'urlopen', side_effect=send):
+        receipt = delivery.push(config, 'http://localhost/test', keys[0])
+    assert receipt['accepted'] == [{'repo': 'owner/repo', 'pr': 1, 'sha': value.head_sha, 'passed': False}]
+    assert len(captured) == 1
