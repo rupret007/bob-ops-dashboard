@@ -95,3 +95,59 @@ def test_old_failures_keep_their_actual_time_after_ledger_rewrite(tmp_path):
     assert snapshot['activity'][0]['text'].endswith('queued')
     assert snapshot['activity'][1]['timestamp'] == old
     assert snapshot['gauges'][5]['value'] is None
+
+
+def test_running_jobs_per_machine_and_llm_speedometers(tmp_path):
+    now = datetime.now(timezone.utc)
+    iso = lambda d: (now + d).isoformat()
+    data, karen = tmp_path / 'data', tmp_path / 'karen'
+    ledger = data / 'jobs' / 'ledger.jsonl'
+    ledger.parent.mkdir(parents=True)
+    jobs = [dict(job_id='a', repo='o/web', pr_number=7, provider='codex', model='gpt-5 low', machine='nucbox', state='running',
+                 start_time=iso(timedelta(minutes=-3)), lease_expires=iso(timedelta(minutes=30)), pid=0),
+            dict(job_id='b', repo='o/web', pr_number=8, provider='claude', machine='nucbox', state='done', outcome_verified=True,
+                 start_time=iso(timedelta(minutes=-20)), end_time=iso(timedelta(minutes=-10))),
+            dict(job_id='c', repo='o/x', pr_number=9, provider='codex', machine='mini', state='running',
+                 start_time=iso(timedelta(minutes=-1)), lease_expires=iso(timedelta(minutes=30)))]
+    ledger.write_text('\n'.join(json.dumps(j) for j in jobs))
+    write(karen / 'verdicts' / 'v.json', dict(repo='o/web', pr_number=7, timestamp=iso(timedelta(minutes=-5)), passed=True,
+                                              review_results=[{'reviewer': 'codex'}, {'reviewer': 'gemini-2.5'}]))
+    write(karen / 'verdicts' / 'old.json', dict(repo='o/web', pr_number=6, timestamp=iso(timedelta(hours=-3)), passed=True,
+                                                review_results=[{'reviewer': 'codex'}]))
+    write(karen / 'codex_weekly_usage.json', {'week_start': now.timestamp() - 86400, 'usage_pct': 12.0})
+    write(tmp_path / 'budget.json', {'usage': {'codex': {'calls': 19}, 'grok': {'calls': 0}}})
+    peer = [{'service': 'codex', 'active': 1, 'calls_hour': 4, 'jobs_hour': 1, 'reviews_hour': 3, 'weekly_pct': 20.0}]
+    write(data / 'machines' / 'mini' / 'engine.json', {'synced_at': now.isoformat(), 'llm_local': peer, 'jobs': {
+        'source': 'local', 'count': 1, 'running': [dict(job_id='m', repo='o/m', pr_number=1, provider='gemini', model=None,
+                                                        start_time=iso(timedelta(minutes=-2)), elapsed_sec=1)]}})
+    write(data / 'machines' / 'lab' / 'engine.json', {'synced_at': iso(timedelta(hours=-2)), 'jobs': {'source': 'local', 'count': 3}})
+    result = EngineCollector(data, karen, 'nucbox', budget_file=tmp_path / 'budget.json').collect()
+    nuc = result['jobs']['nucbox']
+    assert nuc['source'] == 'local' and nuc['count'] == 1 and nuc['capacity'] == 7 and nuc['reserved_codex'] == 2
+    assert [(r['repo'], r['pr_number'], r['provider'], r['model']) for r in nuc['running']] == [('o/web', 7, 'codex', 'gpt-5 low')]
+    assert 170 <= nuc['running'][0]['elapsed_sec'] <= 200
+    mini = result['jobs']['mini']
+    assert mini['source'] == 'peer-sync' and mini['count'] == 1 and mini['running'][0]['elapsed_sec'] >= 100
+    assert result['jobs']['lab']['source'] == 'unavailable' and result['jobs']['lab']['count'] is None
+    local = {g['service']: g for g in result['llm_local']}
+    assert local['codex']['active'] == 1 and local['codex']['max_concurrent'] == 2
+    assert (local['codex']['jobs_hour'], local['codex']['reviews_hour'], local['codex']['calls_hour']) == (1, 1, 2)
+    assert local['gemini']['calls_hour'] == 1 and local['claude']['jobs_hour'] == 1
+    assert local['codex']['weekly_pct'] == 12.0 and local['codex']['weekly_cap_pct'] == 75.0 and local['codex']['weekly_calls'] == 19
+    assert local['grok']['conserve'] is True and local['codex']['conserve'] is False
+    merged = {g['service']: g for g in result['llm']}
+    assert [g['service'] for g in result['llm']] == ['codex', 'claude', 'gemini', 'minimax', 'cursor', 'grok']
+    assert merged['codex']['active'] == 2 and merged['codex']['calls_hour'] == 6 and merged['codex']['weekly_pct'] == 20.0
+    assert merged['codex']['machines'] == ['nucbox', 'mini']
+
+
+def test_llm_gauges_report_no_data_without_evidence(tmp_path):
+    result = EngineCollector(tmp_path, tmp_path, 'mini', budget_file=tmp_path / 'none.json').collect()
+    assert all(g['calls_hour'] is None and g['active'] is None and g['weekly_pct'] is None for g in result['llm'])
+    assert result['jobs']['mini']['count'] is None and result['jobs']['nucbox']['source'] == 'unavailable'
+
+
+def test_live_panel_has_jobs_and_speedometers():
+    page = render_dashboard(DashboardData(timestamp='', machine='mini', live_mode=True))
+    assert 'engine-machine-jobs' in page and 'engine-llm' in page and 'renderLlm(data.llm)' in page
+    assert 'no data' in page and 'conserve' in page

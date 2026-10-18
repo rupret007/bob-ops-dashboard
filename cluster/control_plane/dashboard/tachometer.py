@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import os
 import time
 from datetime import datetime, timezone
 from pathlib import Path
@@ -47,9 +48,75 @@ def rows(path):
             continue
 
 
+LLM_SERVICES = ('codex', 'claude', 'gemini', 'minimax', 'cursor', 'grok')
+PEER_FRESH_SEC = 900
+
+
+def service_of(name):
+    name = str(name or '').lower()
+    return next((p for p in LLM_SERVICES if p in name), None)
+
+
+def pid_state(pid):
+    """Signal 0 only checks existence; it never touches the process."""
+    try:
+        pid = int(pid)
+    except (TypeError, ValueError):
+        return None
+    if pid <= 0:
+        return None
+    try:
+        os.kill(pid, 0)
+        return True
+    except ProcessLookupError:
+        return False
+    except OSError:
+        return None
+
+
+def provider_rules():
+    try:
+        from ..dispatcher import PROVIDER_RULES
+        return PROVIDER_RULES
+    except Exception:
+        return {}
+
+
+def running_row(job, now):
+    start = stamp(job.get('start_time'))
+    return {'job_id': job.get('job_id', ''), 'repo': job.get('repo', ''), 'pr_number': job.get('pr_number'),
+            'provider': job.get('provider') or None, 'model': job.get('model') or None,
+            'start_time': job.get('start_time') or None,
+            'elapsed_sec': int(now - start) if start else None, 'process': None}
+
+
+def merge_llm(local, peers):
+    merged = []
+    for gauge in local:
+        out = dict(gauge, machines=[m for m in [gauge.get('machine')] if m])
+        for peer in peers:
+            other = next((g for g in peer if g.get('service') == gauge['service']), None)
+            if not other:
+                continue
+            out['machines'].append(other.get('machine'))
+            for key in ('active', 'calls_hour', 'jobs_hour', 'reviews_hour'):
+                if other.get(key) is not None:
+                    out[key] = (out.get(key) or 0) + other[key]
+            if other.get('weekly_pct') is not None and (out.get('weekly_pct') is None or other['weekly_pct'] > out['weekly_pct']):
+                out['weekly_pct'] = other['weekly_pct']
+            if out.get('max_concurrent') is None and other.get('max_concurrent') is not None:
+                out['max_concurrent'] = other['max_concurrent']
+        out.pop('machine', None)
+        merged.append(out)
+    return merged
+
+
 class EngineCollector:
-    def __init__(self, data_dir, karen_dir, machine):
+    def __init__(self, data_dir, karen_dir, machine, budget_file=None):
         self.data_dir = Path(data_dir)
+        self.budget_file = Path(budget_file) if budget_file else Path(
+            os.environ.get('STORYPOOL_DATA_DIR', '~/.config/storypool')).expanduser() / 'budget_usage.json'
+
         self.karen_dir = Path(karen_dir)
         self.machine = machine
         self._cached = None
@@ -57,7 +124,8 @@ class EngineCollector:
 
     def collect(self):
         # Browsers can poll independently without rescanning files per client.
-        if self._cached is not None and time.monotonic() - self._at < 2:
+        # _at == 0 means invalidated (macOS monotonic starts near 0 per process).
+        if self._cached is not None and self._at and time.monotonic() - self._at < 2:
             return self._cached
         self._cached = self._collect()
         self._at = time.monotonic()
@@ -133,6 +201,7 @@ class EngineCollector:
             from ..guards import NUCBOX_MAX_LANES
             capacity = NUCBOX_MAX_LANES
         overall = 'red' if any(v['state'] == 'red' for v in health.values()) else ('green' if all(v['state'] == 'green' for v in health.values()) else 'yellow')
+        job_view, llm_local, llm = self._jobs_and_llm(latest, verdicts, verdict_dir.is_dir(), now.timestamp(), capacity)
         monitor = [line for line in tail(self.data_dir / 'MONITOR.md', 32768) if line.strip()]
         def gauge(label, value, maximum=None, unit=''):
             return {'label': label, 'value': value, 'max': maximum, 'unit': unit}
@@ -143,7 +212,78 @@ class EngineCollector:
                            gauge('Merges today · UTC', merges if merge_state is not None else None, 30),
                            gauge('Fix success · last hour', round(100 * sum(j.get('state') == 'done' and bool(j.get('outcome_verified')) for j in attempts) / len(attempts), 1) if attempts else None, 100, '%'),
                            gauge('Backlog remaining', backlog_count)],
+                'jobs': job_view, 'llm_local': llm_local, 'llm': llm,
                 'activity': sorted(events, key=lambda e: stamp(e['timestamp']), reverse=True)[:15],
                 'monitor': monitor[-1] if monitor else 'No monitor status yet',
                 'parity': next(iter(tail(self.data_dir / 'PARITY.md', 32768)), 'Parity audit unavailable'),
                 'notes': 'Local ledger tail (2 MiB); up to 2000 verdict files. Backlog is the last conductor snapshot. Unknown values display —. Rates use a rolling hour; merge day uses UTC (the gate enforces its cap over a rolling 24h).'}
+
+    def _jobs_and_llm(self, latest, verdicts, have_verdicts, now, capacity):
+        """Running jobs per machine plus per-LLM usage, from ledgers and verdicts only."""
+        have_ledger = (self.data_dir / 'jobs').is_dir()
+        hour = now - 3600
+        live = [j for j in latest if j.get('state') == 'running' and stamp(j.get('lease_expires')) > now]
+        rows_now = []
+        for job in sorted(live, key=lambda j: stamp(j.get('start_time'))):
+            row = running_row(job, now)
+            row['process'] = pid_state(job.get('pid'))
+            rows_now.append(row)
+        counted = [r for r in rows_now if r['process'] is not False]
+        from ..guards import NUCBOX_MAX_LANES
+        local = {'source': 'local' if have_ledger else 'unavailable', 'synced_at': None,
+                 'count': len(counted) if have_ledger else None, 'running': rows_now,
+                 'capacity': capacity if capacity is not None else (NUCBOX_MAX_LANES if self.machine == 'nucbox' else None),
+                 'reserved_codex': 2 if self.machine == 'nucbox' else None}
+        names = {'mini', 'nucbox', self.machine}
+        machines_dir = self.data_dir / 'machines'
+        if machines_dir.is_dir():
+            names.update(p.name for p in machines_dir.iterdir() if p.is_dir())
+        view, peers = {}, []
+        for name in sorted(names):
+            if name == self.machine:
+                view[name] = local
+                continue
+            snap = read_json(machines_dir / name / 'engine.json')
+            jobs = snap.get('jobs') if isinstance(snap, dict) else None
+            age = now - stamp(snap.get('synced_at')) if isinstance(snap, dict) else None
+            if not isinstance(jobs, dict) or age is None or not 0 <= age < PEER_FRESH_SEC:
+                view[name] = {'source': 'unavailable', 'synced_at': snap.get('synced_at') if isinstance(snap, dict) else None,
+                              'count': None, 'running': [], 'capacity': None, 'reserved_codex': None}
+                continue
+            running = [dict(r, elapsed_sec=int(now - stamp(r.get('start_time'))) if stamp(r.get('start_time')) else None)
+                       for r in jobs.get('running') or [] if isinstance(r, dict)]
+            view[name] = dict(jobs, source='peer-sync', synced_at=snap.get('synced_at'), running=running)
+            peers.append([dict(g, machine=name) for g in snap.get('llm_local') or [] if isinstance(g, dict)])
+        rules = provider_rules()
+        budget = read_json(self.budget_file)
+        usage = budget.get('usage', {}) if isinstance(budget, dict) else {}
+        weekly = read_json(self.karen_dir / 'codex_weekly_usage.json')
+        llm_local = []
+        for service in LLM_SERVICES:
+            rule = rules.get(service, {})
+            jobs_hour = sum(service_of(j.get('provider')) == service and
+                            stamp(j.get('start_time') or j.get('created_at')) >= hour for j in latest) if have_ledger else None
+            reviews_hour = None
+            if have_verdicts:
+                reviews_hour = 0
+                for verdict in verdicts:
+                    if stamp(verdict.get('timestamp')) < hour:
+                        continue
+                    results = verdict.get('review_results')
+                    for result in results if isinstance(results, list) else []:
+                        if isinstance(result, dict) and service_of(result.get('reviewer')) == service:
+                            reviews_hour += 1
+            calls = None if jobs_hour is None and reviews_hour is None else (jobs_hour or 0) + (reviews_hour or 0)
+            week = usage.get(service) if isinstance(usage, dict) else None
+            pct = None
+            if service == 'codex' and isinstance(weekly, dict) and isinstance(weekly.get('usage_pct'), (int, float)) \
+                    and now - float(weekly.get('week_start') or 0) < 7 * 86400:
+                pct = round(float(weekly['usage_pct']), 1)
+            llm_local.append({'service': service, 'machine': self.machine,
+                              'active': sum(r['provider'] == service for r in counted) if have_ledger else None,
+                              'max_concurrent': rule.get('max_concurrent'),
+                              'calls_hour': calls, 'jobs_hour': jobs_hour, 'reviews_hour': reviews_hour,
+                              'weekly_calls': week.get('calls') if isinstance(week, dict) else None,
+                              'weekly_pct': pct, 'weekly_cap_pct': rule.get('weekly_cap_pct'),
+                              'conserve': service == 'grok'})
+        return view, llm_local, merge_llm(llm_local, peers)

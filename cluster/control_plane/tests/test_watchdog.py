@@ -320,3 +320,15 @@ def test_hourly_conductor_grace_period(tmp_path):
     os.utime(log, (old, old))
     assert watchdog.check_service_stuck('conductor', log).passed
     assert not watchdog.check_service_stuck('dispatch', log).passed
+
+
+def test_store_peer_engine_keeps_only_peer_local_section(tmp_path, monkeypatch):
+    monkeypatch.setattr(watchdog, "LOG_DIR", tmp_path)
+    data = {"timestamp": "t", "jobs": {"nucbox": {"source": "local", "count": 1, "running": [{"job_id": "a"}]},
+                                       "mini": {"source": "peer-sync", "count": 9}},
+            "llm_local": [{"service": "codex", "active": 1}, "junk"]}
+    assert watchdog.store_peer_engine("nucbox", data) is True
+    snap = json.loads((tmp_path / "machines" / "nucbox" / "engine.json").read_text())
+    assert snap["jobs"]["count"] == 1 and snap["llm_local"] == [{"service": "codex", "active": 1}] and snap["synced_at"]
+    assert watchdog.store_peer_engine("mini", data) is False
+    assert not (tmp_path / "machines" / "mini").exists()

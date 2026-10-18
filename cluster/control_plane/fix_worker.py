@@ -16,6 +16,38 @@ from .local_karen.config import KarenConfig
 from .local_karen.verdict import load_verdict
 
 
+CODEX_EFFORT = 'low'
+
+
+def codex_model():
+    """Model the Codex CLI will actually use: explicit override, else its config default."""
+    explicit = os.environ.get('STORYPOOL_CODEX_MODEL', '').strip()
+    if explicit:
+        return explicit
+    try:
+        # Only the top-level `model = "..."` key is read; nothing else is parsed or logged.
+        for line in (Path.home() / '.codex' / 'config.toml').read_text().splitlines():
+            if line.startswith('['):
+                break
+            match = re.match(r'\s*model\s*=\s*["\']([^"\']+)["\']', line)
+            if match:
+                return match.group(1)
+    except OSError:
+        pass
+    return ''
+
+
+def codex_args():
+    model = os.environ.get('STORYPOOL_CODEX_MODEL', '').strip()
+    return (['exec'] + (['-m', model] if model else []) +
+            ['-s', 'workspace-write', '-c', 'model_reasoning_effort=' + CODEX_EFFORT,
+             '-c', 'sandbox_workspace_write.network_access=true', '-'])
+
+
+def model_label():
+    return '{} {}'.format(codex_model() or 'default', CODEX_EFFORT)
+
+
 def run(args, cwd=None, **kwargs):
     return subprocess.run(args, cwd=cwd, check=True, text=True,
                           capture_output=True, timeout=1800, **kwargs).stdout.strip()
@@ -65,8 +97,7 @@ def fix_pr(repo, pr_number, head_sha, findings):
                   'Do not weaken tests. Do not commit or push; the supervisor does that. '
                   'No sudo, force-push, main pushes, tags, releases, merges, secrets, or rad-dad-show-night.\n'
                   f'Test command: {" ".join(tests)}')
-        run([str(codex), 'exec', '-s', 'workspace-write', '-c', 'model_reasoning_effort=low', '-c', 'sandbox_workspace_write.network_access=true', '-'],
-            tree, input=prompt)
+        run([str(codex)] + codex_args(), tree, input=prompt)
         run(tests, tree, env={**os.environ,
             'STORYPOOL_JOBS_DIR': str(Path(temp) / 'test-jobs'),
             'STORYPOOL_METRICS_DIR': str(Path(temp) / 'test-metrics'),
@@ -107,7 +138,7 @@ def execute(job_id):
     if not jobs:
         raise RuntimeError('Job missing from ledger')
     job = jobs[0]
-    ledger.start_job(job_id, os.getpid())
+    ledger.start_job(job_id, os.getpid(), model=model_label())
     try:
         findings = findings_for_pr(job.repo, job.pr_number, job.head_sha)
         if not findings:

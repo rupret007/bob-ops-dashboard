@@ -71,3 +71,11 @@ def test_dispatch_skips_missing_findings_before_creating_job(tmp_path):
         decisions = dispatcher.evaluate(live=True)
     assert any(d.reason == 'No Karen findings available' for d in decisions)
     ledger.create_job.assert_not_called()
+
+
+def test_codex_model_label_matches_argv(monkeypatch):
+    from cluster.control_plane import fix_worker
+    monkeypatch.setenv('STORYPOOL_CODEX_MODEL', 'gpt-5-codex')
+    args = fix_worker.codex_args()
+    assert args[:3] == ['exec', '-m', 'gpt-5-codex'] and 'model_reasoning_effort=low' in args
+    assert fix_worker.model_label() == 'gpt-5-codex low'

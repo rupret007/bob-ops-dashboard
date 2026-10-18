@@ -155,6 +155,26 @@ def _dashboard_alive(timeout: float = 3.0) -> bool:
         return False
 
 
+def store_peer_engine(peer: str, data: dict) -> bool:
+    """Keep the peer's self-reported running jobs and LLM usage for the local dashboard.
+
+    Only the peer's own (source=local) section is kept, so data never echoes back.
+    """
+    jobs = (data.get("jobs") or {}).get(peer) if isinstance(data, dict) else None
+    if not isinstance(jobs, dict) or jobs.get("source") != "local":
+        return False
+    snapshot = {"synced_at": datetime.now(timezone.utc).isoformat(), "machine": peer,
+                "peer_timestamp": data.get("timestamp"),
+                "jobs": dict(jobs, running=list(jobs.get("running") or [])[:50]),
+                "llm_local": [g for g in (data.get("llm_local") or []) if isinstance(g, dict)][:20]}
+    out = LOG_DIR / "machines" / peer / "engine.json"
+    out.parent.mkdir(parents=True, exist_ok=True)
+    tmp = out.with_suffix(".json.tmp")
+    tmp.write_text(json.dumps(snapshot))
+    tmp.replace(out)
+    return True
+
+
 def sync_peer_health(machine: str) -> bool:
     """Copy the peer's self-reported health (over Tailscale) into machines/<peer>/watchdog.log.
 
@@ -165,6 +185,7 @@ def sync_peer_health(machine: str) -> bool:
     try:
         with urllib.request.urlopen(PEER_URLS[peer] + "/api/engine", timeout=5) as resp:
             data = json.loads(resp.read().decode("utf-8"))
+        store_peer_engine(peer, data)
         info = data.get("machines", {}).get(peer, {})
         if not info.get("timestamp"):
             return False

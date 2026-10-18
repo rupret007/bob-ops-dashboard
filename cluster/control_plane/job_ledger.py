@@ -47,6 +47,7 @@ class Job:
     head_sha: str
     provider: str  # codex, cursor, gemini, etc.
     machine: str  # mini, nucbox
+    model: str = ""  # provider model/effort label recorded by the worker from its real argv
     
     state: str = JobState.QUEUED.value
     
@@ -248,14 +249,16 @@ class JobLedger:
         
         return self._with_lock(_create)
     
-    def start_job(self, job_id: str, pid: int) -> Optional[Job]:
-        """Mark job as running with PID."""
+    def start_job(self, job_id: str, pid: int, model: str = "") -> Optional[Job]:
+        """Mark job as running with PID (and the model label the worker will run)."""
         def _start():
             jobs = self._load_jobs()
             for job in jobs:
                 if job.job_id == job_id:
                     job.state = JobState.RUNNING.value
                     job.pid = pid
+                    if model:
+                        job.model = model
                     job.start_time = _now_iso()
                     self._save_jobs(jobs)
                     return job
