@@ -48,6 +48,10 @@ def model_label():
     return '{} {}'.format(codex_model() or 'default', CODEX_EFFORT)
 
 
+MAX_FIX_ATTEMPTS = 3
+TEST_OUTPUT_TAIL = 6000
+
+
 def run(args, cwd=None, **kwargs):
     return subprocess.run(args, cwd=cwd, check=True, text=True,
                           capture_output=True, timeout=1800, **kwargs).stdout.strip()
@@ -104,12 +108,25 @@ def fix_pr(repo, pr_number, head_sha, findings):
                   'Do not weaken tests. Do not commit or push; the supervisor does that. '
                   'No sudo, force-push, main pushes, tags, releases, merges, secrets, or rad-dad-show-night.\n'
                   f'Test command: {" ".join(tests)}')
-        run([str(codex)] + codex_args(), tree, input=prompt)
-        run(tests, tree, env={**os.environ,
+        test_env = {**os.environ,
             'STORYPOOL_JOBS_DIR': str(Path(temp) / 'test-jobs'),
             'STORYPOOL_METRICS_DIR': str(Path(temp) / 'test-metrics'),
             'STORYPOOL_DATA_DIR': str(Path(temp) / 'test-data'),
-            'STORYPOOL_FIX_STATE_DIR': str(Path(temp) / 'test-fixes')})
+            'STORYPOOL_FIX_STATE_DIR': str(Path(temp) / 'test-fixes')}
+        attempt_prompt = prompt
+        for attempt in range(1, MAX_FIX_ATTEMPTS + 1):
+            run([str(codex)] + codex_args(), tree, input=attempt_prompt)
+            try:
+                run(tests, tree, env=test_env)
+                break
+            except subprocess.CalledProcessError as exc:
+                if attempt >= MAX_FIX_ATTEMPTS:
+                    raise
+                output = ((exc.stdout or '') + '\n' + (exc.stderr or ''))[-TEST_OUTPUT_TAIL:]
+                print(f'attempt {attempt} tests failed; retrying with test output', flush=True)
+                attempt_prompt = (prompt + f'\n\nAttempt {attempt} still fails the test command. '
+                                  'Fix the code (never weaken or delete tests). Test output tail:\n'
+                                  + output)
         if run(['git', 'rev-parse', 'HEAD'], tree) != head_sha:
             raise RuntimeError('Worker changed HEAD unexpectedly')
         run(['git', 'add', '-A'], tree)

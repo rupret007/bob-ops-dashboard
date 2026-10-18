@@ -121,3 +121,58 @@ def test_node_worker_installs_locked_dependencies_and_generates_prisma(tmp_path)
     assert ['npm', 'ci', '--ignore-scripts', '--no-audit', '--no-fund'] in calls
     assert ['npm', 'exec', '--no', '--', 'prisma', 'generate'] in calls
     assert not any('-m' in c and 'pytest' in c for c in calls)
+
+
+def test_failed_tests_feed_output_back_to_codex_then_succeed(tmp_path):
+    import subprocess
+    calls = []
+    codex_inputs = []
+    test_runs = []
+    def command(args, cwd=None, **kwargs):
+        calls.append(args)
+        if args[0] == str(tmp_path / 'codex'):
+            codex_inputs.append(kwargs.get('input'))
+        if '-m' in args and 'pytest' in args:
+            test_runs.append(1)
+            if len(test_runs) == 1:
+                raise subprocess.CalledProcessError(1, args, output='E ImportError: missing_name', stderr='')
+        if args[:3] == ['gh', 'pr', 'view']:
+            return json.dumps(dict(headRefName='fix/one', headRefOid='before', isCrossRepository=False, state='OPEN'))
+        if args[:3] == ['git', 'worktree', 'add']:
+            tree = __import__('pathlib').Path(args[-2])
+            tree.mkdir(parents=True)
+            (tree / 'tests').mkdir()
+            (tree / 'tests' / 'test_real.py').write_text('def test_real(): assert True\n')
+        if args[:3] == ['git', 'rev-parse', 'HEAD']:
+            return 'after' if any(c[:2] == ['git', 'commit'] for c in calls) else 'before'
+        if args[:3] == ['git', 'diff', '--cached']:
+            return 'fix.py'
+        if args[:2] == ['git', 'ls-remote']:
+            return 'after refs/heads/fix/one'
+        return ''
+    with patch('cluster.control_plane.fix_worker._find_codex', return_value=tmp_path/'codex'), patch('cluster.control_plane.fix_worker.run', side_effect=command):
+        assert fix_pr('owner/repo', 1, 'before', ['repair finding']) == 'after'
+    assert len(codex_inputs) == 2
+    assert 'missing_name' in codex_inputs[1] and 'never weaken' in codex_inputs[1]
+
+
+def test_tests_failing_every_attempt_never_commit(tmp_path):
+    import subprocess
+    calls = []
+    def command(args, cwd=None, **kwargs):
+        calls.append(args)
+        if '-m' in args and 'pytest' in args:
+            raise subprocess.CalledProcessError(1, args, output='still broken', stderr='')
+        if args[:3] == ['gh', 'pr', 'view']:
+            return json.dumps(dict(headRefName='fix/one', headRefOid='before', isCrossRepository=False, state='OPEN'))
+        if args[:3] == ['git', 'worktree', 'add']:
+            tree = __import__('pathlib').Path(args[-2])
+            tree.mkdir(parents=True)
+            (tree / 'tests').mkdir()
+            (tree / 'tests' / 'test_real.py').write_text('def test_real(): assert True\n')
+        return ''
+    with patch('cluster.control_plane.fix_worker._find_codex', return_value=tmp_path/'codex'), patch('cluster.control_plane.fix_worker.run', side_effect=command):
+        with pytest.raises(subprocess.CalledProcessError):
+            fix_pr('owner/repo', 1, 'before', ['repair finding'])
+    assert not any(c[:2] in (['git', 'commit'], ['git', 'push']) for c in calls)
+    assert sum(1 for c in calls if c[0] == str(tmp_path / 'codex')) == 3
