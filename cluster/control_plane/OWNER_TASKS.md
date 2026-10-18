@@ -66,3 +66,13 @@ exists. The test adapter demonstrates progression and race boundaries; it is
 not proof of production sandbox/authority availability. Live ACL provisioning,
 real authority integration, sandbox verification, scheduling and Karen review
 remain blockers. Keep Web Bob task receipts pending until those are reviewed.
+
+Git metadata is created outside the sandbox worktree with `--separate-git-dir`.
+Both isolated adapters receive `trusted_git_dir` and `denied_paths`; they must
+hide the metadata directory, make the worktree `.git` pointer read-only, and
+terminate all sandbox descendants before returning. Trusted follow-up Git
+commands pin `--git-dir`/`--work-tree`, disable hooks/fsmonitor, and use the
+immutable original repository HTTPS URL for push/remote verification. Metadata,
+the pointer and Git attribute files are hashed before isolation and checked
+after both model and tests; any mutation aborts before privileged Git resumes.
+Symlinks fail closed, and diffs disable external drivers/text conversion.

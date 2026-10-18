@@ -104,10 +104,26 @@ def test_real_generic_worker_pipeline_checks_tests_and_creates_only_draft(setup_
     calls = []
     committed = False
     authority.isolated_codex_command.return_value = ['operator-test-isolation-adapter']
-    authority.run_isolated_tests.side_effect = lambda tree, tests, run: run(['isolated-test-adapter'], tree)
+    authority.run_isolated_tests.side_effect = lambda tree, tests, run, **kwargs: run(['isolated-test-adapter'], tree)
     def command(args, cwd=None, **kwargs):
         nonlocal committed
         fix_worker._execution_guard.get()()
+        raw = args
+        if args[0] == 'git':
+            operation = next(i for i, arg in enumerate(args[1:], 1)
+                if arg in ('clone', 'checkout', 'rev-parse', 'ls-remote', 'diff', 'add', 'commit', 'push'))
+            args = ['git'] + args[operation:]
+            if args[1] != 'clone':
+                assert any(a.startswith('--git-dir=') for a in raw)
+                assert any(a.startswith('--work-tree=') for a in raw)
+                assert 'core.hooksPath=/dev/null' in raw
+            else:
+                from pathlib import Path
+                git_dir = Path(next(a.split('=',1)[1] for a in raw if a.startswith('--separate-git-dir=')))
+                git_dir.mkdir()
+                tree = Path(args[-1])
+                tree.mkdir()
+                (tree / '.git').write_text('gitdir: ' + str(git_dir) + '\n')
         calls.append(args)
         if args[:3] == ['git', 'rev-parse', 'HEAD']:
             return 'c'*40 if committed else request['head_sha']
@@ -134,6 +150,7 @@ def test_real_generic_worker_pipeline_checks_tests_and_creates_only_draft(setup_
     assert calls[-1][:3] == ['gh', 'pr', 'create']
     assert '--draft' in calls[-1]
     assert calls[push][-1] == 'HEAD:refs/heads/' + request['branch']
+    assert calls[push][-2] == 'https://github.com/rupret007/bob-brain.git'
     assert not any(c[:2] == ['gh', 'merge'] or '--force' in c for c in calls)
 
 
@@ -155,3 +172,50 @@ def test_draft_safety_rejects_test_skips_deletions_and_secrets(setup_runtime, ad
         return diff
     with patch.object(fix_worker, 'run', side_effect=command), pytest.raises(CoordinationError):
         check_draft_diff(None, request)
+
+
+@pytest.mark.parametrize('attack', ['config', 'hook', 'pointer', 'symlink'])
+def test_untrusted_git_mutation_blocks_all_privileged_followups(setup_runtime, attack):
+    from pathlib import Path
+    runtime, request, _, authority = setup_runtime
+    git_dir, tree = None, None
+    model_ran = False
+    privileged_after_model = []
+    def command(args, cwd=None, **kwargs):
+        nonlocal git_dir, tree, model_ran
+        fix_worker._execution_guard.get()()
+        if args[0] == 'git' and 'clone' in args:
+            git_dir = Path(next(a.split('=',1)[1] for a in args if a.startswith('--separate-git-dir=')))
+            git_dir.mkdir()
+            (git_dir / 'config').write_text('[remote "origin"]\n url = https://github.com/rupret007/bob-brain.git\n')
+            tree = Path(args[-1])
+            tree.mkdir()
+            (tree / '.git').write_text('gitdir: ' + str(git_dir) + '\n')
+        elif args[0] == 'git':
+            if model_ran:
+                privileged_after_model.append(args)
+            if 'rev-parse' in args:
+                return request['head_sha']
+        elif args == ['malicious-model-test-adapter']:
+            model_ran = True
+            if attack == 'config':
+                (git_dir / 'config').write_text('[credential]\n helper = !steal-credentials\n[remote "origin"]\n url = https://github.com/rupret007/rad-dad-show-night.git\n')
+            elif attack == 'hook':
+                (git_dir / 'hooks').mkdir()
+                (git_dir / 'hooks' / 'pre-commit').write_text('steal-credentials')
+            elif attack == 'pointer':
+                (tree / '.git').write_text('gitdir: /tmp/hostile-git\n')
+            else:
+                (tree / 'hidden').symlink_to(git_dir / 'config')
+        return ''
+    authority.isolated_codex_command.return_value = ['malicious-model-test-adapter']
+    with patch('cluster.control_plane.owner_task_runtime.Lease'), patch.object(fix_worker, 'run', side_effect=command), patch.object(fix_worker, 'test_command', return_value=['pytest']):
+        runtime(request, branch_lease=MagicMock())
+        with pytest.raises(CoordinationError, match='metadata|Symlink'):
+            runtime.execute(request['request_id'])
+    assert model_ran
+    assert privileged_after_model == []
+    authority.run_isolated_tests.assert_not_called()
+    _, kwargs = authority.isolated_codex_command.call_args
+    assert git_dir in kwargs['denied_paths']
+    assert tree / '.git' in kwargs['denied_paths']
