@@ -34,6 +34,7 @@ from .gate_runner import (
     PRContext,
 )
 from .guards import MachineGuards, mini_guards_pass, nucbox_guards_pass
+from .pr_ci import ci_status_from_pr as _ci_status_from_pr
 
 
 SHADOW_LOG_DIR = Path(
@@ -116,28 +117,6 @@ def _get_pr_details(repo, pr_number):
                   "reviewDecision,statusCheckRollup,reviews"],
                  default=None)
     return pr if isinstance(pr, dict) else None
-
-
-def _ci_status_from_pr(pr):
-    # type: (dict) -> Dict[str, str]
-    """Extract CI status from PR statusCheckRollup."""
-    checks = pr.get("statusCheckRollup") or []
-    result = {}  # type: Dict[str, str]
-    for check in checks:
-        if not isinstance(check, dict):
-            continue
-        name = check.get("name") or check.get("context") or "unknown"
-        state = check.get("conclusion") or check.get("state") or "pending"
-        state = state.lower() if isinstance(state, str) else "pending"
-        if state in ("success", "neutral", "skipped"):
-            result[name] = "success"
-        elif state in ("failure", "error", "timed_out", "cancelled", "action_required"):
-            result[name] = "failure"
-        elif state in ("pending", "queued", "in_progress", "waiting"):
-            result[name] = "pending"
-        else:
-            result[name] = state
-    return result
 
 
 def _reviews_from_pr(pr):

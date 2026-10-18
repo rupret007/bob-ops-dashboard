@@ -209,6 +209,13 @@ remain open architecture work; an initial pending CI result is not verified gree
 
 ### Main CI recovery (GitHub authority)
 
+PR CI rollups use one shared parser in the conductor and shadow runner. Check
+names are display labels, not unique identities: a green result cannot overwrite
+a same-named failed or unfinished result. Malformed entries and explicit
+unfinished check runs fail closed, including during revalidation under the
+shared merge claim. The rollup does not establish rerun identity from list order;
+the separate main-CI API reader uses app/check IDs for that purpose.
+
 Conductor now checks main before each live merge and defers on red, pending or
 unknown results. This is a repository-wide pause observed by both hosts rather
 than a machine-local failure counter. CI inspection combines all paginated check

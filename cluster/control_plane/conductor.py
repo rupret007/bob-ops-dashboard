@@ -50,6 +50,7 @@ from .budget_tracker import BudgetTracker
 from .dispatcher import _get_open_prs, _run_gh, REPOS
 from .guards import MachineGuards, mini_guards_pass, nucbox_guards_pass
 from .metrics import MetricsTracker
+from .pr_ci import ci_status_from_pr as _ci_status_from_pr
 
 CONDUCTOR_LOG_DIR = Path(
     os.environ.get("STORYPOOL_CONDUCTOR_LOG_DIR", "~/.local/share/storypool/conductor")
@@ -261,27 +262,6 @@ def _get_pr_details(repo: str, pr_number: int) -> Optional[dict]:
         default=None
     )
     return pr if isinstance(pr, dict) else None
-
-
-def _ci_status_from_pr(pr: dict) -> dict[str, str]:
-    """Extract CI status from PR statusCheckRollup."""
-    checks = pr.get("statusCheckRollup") or []
-    result = {}
-    for check in checks:
-        if not isinstance(check, dict):
-            continue
-        name = check.get("name") or check.get("context") or "unknown"
-        state = check.get("conclusion") or check.get("state") or "pending"
-        state = state.lower() if isinstance(state, str) else "pending"
-        if state in ("success", "neutral", "skipped"):
-            result[name] = "success"
-        elif state in ("failure", "error", "timed_out", "cancelled", "action_required"):
-            result[name] = "failure"
-        elif state in ("pending", "queued", "in_progress", "waiting"):
-            result[name] = "pending"
-        else:
-            result[name] = state
-    return result
 
 
 def _has_label(pr: dict, label_name: str) -> bool:
