@@ -10,7 +10,7 @@
 </style>
 <section id="engine-panel" aria-label="Live StoryPool tachometer">
 <header><h2><span id="engine-light" class="engine-light"></span> StoryPool engine</h2><span id="engine-state">Connecting…</span><span id="engine-machines"></span></header>
-<div id="node-controls" aria-label="Node maintenance controls"></div><p id="control-result" role="status"></p><details><summary>Operator audit · America/Chicago</summary><pre id="control-audit"></pre></details><h3>Jobs running now</h3><div id="engine-machine-jobs"></div><h3>LLM usage · live</h3><div id="engine-llm"></div><div id="engine-gauges"></div><p id="engine-monitor" aria-live="polite">Loading monitor status…</p>
+<div id="node-controls" aria-label="Node maintenance controls"></div><p id="control-result" role="status"></p><details><summary>Operator audit · America/Chicago</summary><pre id="control-audit"></pre></details><h3>Jobs running now</h3><div id="engine-machine-jobs"></div><h3>Fixes needing attention</h3><ul id="engine-blocked" aria-live="polite"></ul><h3>LLM usage · live</h3><div id="engine-llm"></div><div id="engine-gauges"></div><p id="engine-monitor" aria-live="polite">Loading monitor status…</p>
 <p id="engine-parity">Parity audit unavailable</p><h3>Live activity</h3><ol id="engine-activity" aria-live="polite"></ol><p id="engine-notes"></p>
 </section>
 <script>
@@ -84,6 +84,9 @@
    controls.querySelectorAll('button').forEach(button=>{const name=button.dataset.machine;const draining=data.machines[name]?.state==='maintenance';button.dataset.maintenance=String(!draining);button.textContent=name+': '+(draining?'Return to service':'Take out of service');});
    document.getElementById('control-audit').textContent=(data.audit||[]).join('\n');
    renderJobs(data.jobs);renderLlm(data.llm);
+   const blocked=document.getElementById('engine-blocked');blocked.replaceChildren();
+   (data.blocked_fixes||[]).forEach(b=>blocked.append(el('li',null,b.repo+' #'+b.pr_number+' @'+(b.head_sha||'').slice(0,12)+' · '+b.reason)));
+   if(!(data.blocked_fixes||[]).length)blocked.append(el('li',null,'No blocked fixes reported.'));
    data.gauges.forEach((g,i)=>{
     let dial=root.children[i];
     if(!dial){dial=document.createElement('div');dial.className='dial';dial.innerHTML='<svg viewBox="0 0 180 108" role="img"><path d="M20 90 A70 70 0 0 1 160 90" fill="none" stroke="#303d4d" stroke-width="12"/><path d="M20 90 A70 70 0 0 1 160 90" fill="none" stroke="#58a6ff" stroke-width="3"/><line x1="90" y1="90" x2="24" y2="90" stroke="#f6c45a" stroke-width="3"/><circle cx="90" cy="90" r="5" fill="#c9d1d9"/></svg><strong></strong><span></span><br><small></small>';root.append(dial);}

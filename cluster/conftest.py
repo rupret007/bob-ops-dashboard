@@ -10,5 +10,6 @@ for _name, _relative in {
     'STORYPOOL_METRICS_DIR': 'metrics',
     'STORYPOOL_FIX_STATE_DIR': 'fixes',
     'STORYPOOL_UPDATE_LOG': 'self-update.log',
+    'STORYPOOL_COORD_CONFIG': 'coordination.json',
 }.items():
     os.environ[_name] = str(Path(_test_state.name) / _relative)

@@ -110,7 +110,7 @@ Mini Codex remains disabled until every work entry point and quota is covered.
 | Karen poller/review | Shared PR claim; Karen owns its lease | Cluster repo/PR, pinned full SHA | Implemented: gate and CLI acquire the same create-only key as fix workers; heartbeat and provider/publication fences; contention/outage returns retryable ERROR with no verdict or label failure. Local poll history is only an observation. Sequential duplicate review/cache deduplication remains open. |
 | Verdict storage/sync | Signing reviewer | Cluster immutable repo/PR/full SHA | GAP: signed sync exists; local caches are not one canonical artifact index. |
 | Merge attempt | Conductor under shared PR claim | Cluster repo/PR, pinned full SHA | Implemented: claim before live merge; revalidate Karen and GitHub under ownership; pinned GitHub merge; heartbeat through CI observation. Contention/outage defers without counting a failed merge. Global durable outcome/event deduplication remains open. |
-| Priority queue/fix attempts | Dispatcher/conductor | Cluster | GAP: local snapshots/counters; shared claims prevent duplicate fix admission, not starvation or attempt double counting. |
+| Priority queue/fix attempts | Dispatcher/conductor | Cluster | Fix admission now reserves a durable exact-head retry record under the shared PR lease; CAS prevents stale record writes. Local queue snapshots and starvation prevention remain gaps. |
 | Codex weekly accounting | Provider account | Cluster, one weekly plan | GAP: machine-local usage cannot authorize increased lanes. Shared stop and fresh provider quota needed. |
 | Lanes and guards | Node supervisor | Cluster allocation + node limits | GAP: local caps only. Keep Mini off and NucBox at existing limits. |
 | Drain/maintenance | Operator | Cluster desired state, node enforcement | GAP: node JSON/control proxy can diverge during outages; central revisioned desired state needed. |
@@ -314,3 +314,36 @@ A failed reinstall now returns FAILED and retains `.storypool-reinstall-pending`
 in the installation checkout. At the next tick, even when local and remote SHA
 match, the updater reruns the gate and retries installation. Only a verified
 installation removes the marker; updating Git alone cannot hide a failed deploy.
+
+
+### Exact-head retry admission
+
+`STORYPOOL_CLAIMS_RETRIES` is a second KV bucket in the same NATS account,
+with **no TTL** and history=1. Work claims still expire after 300 seconds;
+retry records must survive reboot, node changes and claim expiry. The existing
+`coordination --bootstrap` operator command provisions both buckets. Admission
+never creates storage, and absent storage or permission denial pauses new fixes.
+The service identity additionally needs publish to `$KV.STORYPOOL_CLAIMS_RETRIES.>`,
+stream info for `KV_STORYPOOL_CLAIMS_RETRIES`, and read access via
+`$JS.API.STREAM.MSG.GET.KV_STORYPOOL_CLAIMS_RETRIES` (or the corresponding
+`$JS.API.DIRECT.GET.KV_STORYPOOL_CLAIMS_RETRIES.>` subjects when direct reads
+are enabled), plus its own inbox. Bucket creation remains operator-only.
+
+Dispatcher owns the shared PR lease while reading and reserving a retry record
+keyed by normalized repo, PR number and **full** head SHA. Every read/write renews
+the claim, and writes use the record revision (create-only for new keys). A stale
+writer cannot overwrite a successor's reservation. Reservation consumes one
+attempt before worker launch, so crashes and submission errors cannot evade the
+three-attempt cap. Transient attempts wait 5, 10, then 20 minutes; the third attempt
+exhausts the exact-head budget. Existing local history is imported conservatively
+when reserving. A new full SHA has a fresh budget.
+
+Workers use controlled exception codes for missing package-lock.json, protected/
+closed/fork PRs, changed heads and unsupported test commands. Ledger and durable
+state preserve the code and a fixed, useful reason without arbitrary exception
+text, provider output or credential values. These failures never launch Codex and
+remain blocked until the head changes. A verified push closes the old head's
+budget. Existing lockfile, test, secret, protected-repo and exact-head Karen merge
+gates remain required. Dashboard shows blocked PR, head, reason and next action
+in a safe-text, read-only list. Real deployment requires provisioning/permissions;
+unit-test success does not establish that the live bucket is ready.

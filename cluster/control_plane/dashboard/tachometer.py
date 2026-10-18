@@ -181,6 +181,22 @@ class EngineCollector:
             events.append({'timestamp': event_time or job.get('updated_at') or job.get('created_at', ''),
                            'text': '{} #{}: {}'.format(job.get('repo', ''), job.get('pr_number', ''), job.get('state', 'unknown'))})
         latest = [j for j in jobs.values() if j.get('machine', self.machine) == self.machine]
+        heads = {}
+        for job in latest:
+            key = (job.get('repo'), job.get('pr_number'))
+            if stamp(job.get('created_at')) >= stamp(heads.get(key, {}).get('created_at')):
+                heads[key] = job
+        blocked = [dict(repo=j.get('repo'), pr_number=j.get('pr_number'), head_sha=j.get('head_sha'),
+                        reason=j.get('error'), timestamp=j.get('end_time'))
+                   for j in heads.values() if j.get('state') == 'failed' and j.get('retryable') is False]
+        dispatch_rows = list(rows(self.data_dir / 'dispatch' / ('dispatch-' + now.strftime('%Y-%m-%d') + '.jsonl')))
+        for d in dispatch_rows[-100:]:
+            if d.get('action') == 'skip_blocked' and stamp(d.get('timestamp')) >= hour:
+                key = (d.get('repo'), d.get('pr_number'))
+                if heads.get(key, {}).get('head_sha', d.get('head_sha')) == d.get('head_sha'):
+                    blocked = [b for b in blocked if (b['repo'], b['pr_number']) != key]
+                    blocked.append(dict(repo=d.get('repo'), pr_number=d.get('pr_number'),
+                        head_sha=d.get('head_sha'), reason=d.get('reason'), timestamp=d.get('timestamp')))
         completed = [j for j in latest if j.get('state') == 'done' and j.get('outcome_verified')]
         jobs_hour = sum(stamp(j.get('end_time')) >= hour for j in completed)
         running = sum(j.get('state') == 'running' and stamp(j.get('lease_expires')) > now.timestamp() for j in latest)
@@ -258,6 +274,7 @@ class EngineCollector:
                            gauge('Merges today · UTC', merges if merge_state is not None else None, 30),
                            gauge('Fix success · last hour', round(100 * sum(j.get('state') == 'done' and bool(j.get('outcome_verified')) for j in attempts) / len(attempts), 1) if attempts else None, 100, '%'),
                            gauge('Backlog remaining', backlog_count)],
+                'blocked_fixes': blocked,
                 'jobs': job_view, 'llm_local': llm_local, 'llm': llm, 'control': control, 'local_machine': self.machine,
                 'audit': tail(self.data_dir / 'HANDOFF.md', 16384)[-20:],
                 'activity': sorted(events, key=lambda e: stamp(e['timestamp']), reverse=True)[:15],

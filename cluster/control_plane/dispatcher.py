@@ -515,6 +515,24 @@ class Dispatcher:
                     from .coordination import ClaimClient
                     coordinator = ClaimClient.from_env()
                     claim = coordinator.acquire(repo, pr_number, head_sha, self.machine)
+                    from .retry_policy import reserve, REASONS
+                    history = [j for j in self.ledger._load_jobs()
+                               if (j.repo, j.pr_number, j.head_sha) == (repo, pr_number, head_sha)]
+                    local_block = next((j for j in history if not j.retryable), None)
+                    previous = coordinator.retry_state(claim)
+                    state, blocked = reserve(previous, len(history))
+                    if local_block is not None:
+                        blocked = REASONS.get(local_block.failure_code, 'blocked: needs Jeff')
+                    if blocked:
+                        decision = DispatchDecision(timestamp=_now_iso(), action='skip_blocked',
+                            reason=blocked, machine=self.machine, live=True, repo=repo,
+                            pr_number=pr_number, head_sha=head_sha, provider=provider)
+                        self._write_decision(decision)
+                        decisions.append(decision)
+                        coordinator.call('release', claim)
+                        claim = None
+                        continue
+                    coordinator.retry_state(claim, state)
                     job = self.ledger.create_job(
                         repo=repo,
                         pr_number=pr_number,

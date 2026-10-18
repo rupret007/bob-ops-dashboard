@@ -16,6 +16,7 @@ from pathlib import Path
 from ..never_touch import is_never_touch
 from .service_logging import event, bind_context, reset_context, failing_tests, failure_reason
 from .job_ledger import get_ledger
+from .retry_policy import PreflightFailure, REASONS
 from .fix_dispatcher import _find_codex, extract_findings_from_verdict
 from .local_karen.config import KarenConfig
 from .local_karen.verdict import load_verdict
@@ -132,7 +133,7 @@ def test_command(tree):
     if ((tree / 'pytest.ini').exists() or list(tree.glob('test_*.py'))
             or list((tree / 'tests').glob('**/test_*.py'))):
         return [sys.executable, '-m', 'pytest', '-q']
-    raise RuntimeError('No supported test command; leave for Jeff')
+    raise PreflightFailure('unsupported-tests')
 
 
 def ensure_no_staged_secrets(tree):
@@ -154,9 +155,9 @@ def fix_pr(repo, pr_number, head_sha, findings):
                          '--json', 'headRefName,headRefOid,isCrossRepository,state']))
     branch = pr['headRefName']
     if pr['state'] != 'OPEN' or pr['isCrossRepository'] or branch in ('main', 'master'):
-        raise RuntimeError('Refusing closed, fork, or protected-branch PR')
+        raise PreflightFailure('protected-pr')
     if pr['headRefOid'] != head_sha:
-        raise RuntimeError('PR head changed before fix')
+        raise PreflightFailure('head-changed')
     with tempfile.TemporaryDirectory(prefix='storypool-fix-') as temp:
         checkout = Path(temp) / 'repo'
         tree = Path(temp) / 'worktree'
@@ -166,7 +167,7 @@ def fix_pr(repo, pr_number, head_sha, findings):
         tests = test_command(tree)
         if tests[0] == 'npm':
             if not (tree / 'package-lock.json').is_file():
-                raise RuntimeError('Node repair requires package-lock.json for reproducible tests')
+                raise PreflightFailure('missing-lockfile')
             run(['npm', 'ci', '--ignore-scripts', '--no-audit', '--no-fund'], tree)
             if (tree / 'prisma' / 'schema.prisma').is_file():
                 run(['npm', 'exec', '--no', '--', 'prisma', 'generate'], tree)
@@ -254,13 +255,29 @@ def execute(job_id):
             raise RuntimeError('No Karen findings available for this PR')
         sha = fix_pr(job.repo, job.pr_number, job.head_sha, findings)
         ledger.complete_job(job_id, 'commit_pushed', sha, verified=True)
+        try:
+            with lease.lock:
+                state = lease.client.retry_state(lease.claim)
+                if state:
+                    lease.client.retry_state(lease.claim, dict(state, code='already-fixed'))
+        except Exception:
+            event('fix-worker', 'retry_state_unavailable', level=logging.ERROR, exc_info=True)
         event('fix-worker', 'job_pushed', sha=sha, verified=True,
               duration_ms=round((time.monotonic() - started) * 1000))
         return 0
     except Exception as exc:
         # Exception strings can contain secrets or provider argv; keep ledger errors bounded.
-        message = failure_reason(exc)
-        ledger.fail_job(job_id, message)
+        code = exc.code if isinstance(exc, PreflightFailure) else 'transient'
+        message = REASONS[code] if code in REASONS else failure_reason(exc)
+        ledger.fail_job(job_id, message, failure_code=code, retryable=code not in REASONS)
+        if lease is not None and lease_token is not None:
+            try:
+                with lease.lock:
+                    state = lease.client.retry_state(lease.claim)
+                    if state:
+                        lease.client.retry_state(lease.claim, dict(state, code=code))
+            except Exception:
+                event('fix-worker', 'retry_state_unavailable', level=logging.ERROR, exc_info=True)
         event('fix-worker', 'job_failed', level=logging.ERROR, exc_info=True,
               error_type=type(exc).__name__, reason=message, duration_ms=round((time.monotonic() - started) * 1000))
         return 1

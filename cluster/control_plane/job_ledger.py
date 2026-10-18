@@ -64,6 +64,8 @@ class Job:
     outcome_sha: str = ""
     
     error: str = ""
+    failure_code: str = ""
+    retryable: bool = True
     
     created_at: str = ""
     updated_at: str = ""
@@ -333,7 +335,7 @@ class JobLedger:
         
         return self._with_lock(_complete)
     
-    def fail_job(self, job_id: str, error: str) -> Optional[Job]:
+    def fail_job(self, job_id: str, error: str, failure_code: str = "", retryable: bool = True) -> Optional[Job]:
         """Mark job as failed with error."""
         def _fail():
             jobs = self._load_jobs()
@@ -342,6 +344,8 @@ class JobLedger:
                     job.state = JobState.FAILED.value
                     job.end_time = _now_iso()
                     job.error = error
+                    job.failure_code = failure_code
+                    job.retryable = retryable
                     self._save_jobs(jobs)
                     return job
             return None

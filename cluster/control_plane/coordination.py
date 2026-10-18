@@ -38,7 +38,9 @@ class ClaimClient:
         # Both hosts MUST point to the same server/account; never infer a
         # machine-local broker on Mini or silently create another authority.
         try:
-            config = json.loads((Path.home() / '.config/storypool/coordination.json').read_text())
+            path = Path(os.environ.get('STORYPOOL_COORD_CONFIG',
+                str(Path.home() / '.config/storypool/coordination.json'))).expanduser()
+            config = json.loads(path.read_text())
         except FileNotFoundError:
             config = {}
         except (OSError, ValueError):
@@ -123,7 +125,78 @@ class ClaimClient:
                     pass
 
     def call(self, operation, claim=None, bootstrap=False):
-        return asyncio.run(self._operation(operation, claim, bootstrap))
+        result = asyncio.run(self._operation(operation, claim, bootstrap))
+        if bootstrap:
+            asyncio.run(self._retry_operation('bootstrap', None))
+        return result
+
+    async def _retry_operation(self, operation, claim, state=None):
+        """Durable retry state is separate from expiring work claims.
+
+        Caller owns the PR lease; all mutations are serialized by that lease.
+        Missing/unavailable storage fails closed, with no local fallback.
+        """
+        import nats
+        from nats.js.api import KeyValueConfig
+        from nats.js.errors import KeyNotFoundError, KeyDeletedError
+        from .retry_policy import REASONS
+        nc = None
+        async def quiet_error(_):
+            pass
+        try:
+            nc = await asyncio.wait_for(nats.connect(self.url, connect_timeout=2,
+                max_reconnect_attempts=1, allow_reconnect=False, error_cb=quiet_error,
+                **self.connection), timeout=3)
+            js = nc.jetstream(timeout=2)
+            bucket = self.bucket + '_RETRIES'
+            if operation == 'bootstrap':
+                await js.create_key_value(config=KeyValueConfig(bucket=bucket, ttl=0, history=1))
+                return None
+            kv = await js.key_value(bucket)
+            if (await kv.status()).ttl:
+                raise CoordinationError('Retry bucket must be durable; new fixes paused')
+            key = 'fix.' + hashlib.sha256(
+                '{}#{}@{}'.format(claim['repo'].lower(), claim['pr'], claim['sha']).encode()).hexdigest()
+            if operation == 'get':
+                try:
+                    entry = await kv.get(key)
+                    value = json.loads(entry.value)
+                    claim['_retry_revision'] = entry.revision
+                except (KeyNotFoundError, KeyDeletedError):
+                    claim['_retry_revision'] = 0
+                    return None
+                if (not isinstance(value, dict) or type(value.get('attempts')) is not int
+                        or value['attempts'] < 1 or type(value.get('retry_after')) not in (int, float)
+                        or value.get('code') not in ('transient', *REASONS)):
+                    raise CoordinationError('Invalid retry state; new fixes paused')
+                return value
+            if operation == 'put':
+                if '_retry_revision' not in claim:
+                    raise CoordinationError('Retry state must be read before write; new fixes paused')
+                if claim['_retry_revision']:
+                    revision = await kv.update(key, json.dumps(state).encode(), last=claim['_retry_revision'])
+                else:
+                    revision = await kv.create(key, json.dumps(state).encode())
+                claim['_retry_revision'] = revision
+                return None
+            raise CoordinationError('Unknown retry operation')
+        except CoordinationError:
+            raise
+        except Exception:
+            raise CoordinationError('Durable retry coordination unavailable; new fixes paused') from None
+        finally:
+            if nc is not None:
+                try:
+                    await nc.close()
+                except Exception:
+                    pass
+
+    def retry_state(self, claim, state=None):
+        # Fence both reads and writes with a successful CAS renewal. A stale
+        # worker cannot change the next owner's retry decision.
+        renewed = self.call('renew', claim)
+        claim.update(renewed)
+        return asyncio.run(self._retry_operation('get' if state is None else 'put', claim, state))
 
     def acquire(self, repo, pr, sha, machine):
         from cluster.never_touch import is_never_touch
@@ -203,7 +276,8 @@ if __name__ == '__main__':
     parser.add_argument('--bootstrap', action='store_true', required=True)
     parser.parse_args()
     try:
-        ClaimClient.from_env().call('bootstrap', bootstrap=True)
+        client = ClaimClient.from_env()
+        client.call('bootstrap', bootstrap=True)
         print('Shared claim bucket ready')
     except CoordinationError as exc:
         raise SystemExit(str(exc))
