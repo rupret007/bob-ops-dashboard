@@ -95,3 +95,29 @@ def test_empty_test_directory_does_not_claim_python_coverage(tmp_path):
     (tmp_path / 'tests').mkdir()
     with pytest.raises(RuntimeError, match='No supported test'):
         test_command(tmp_path)
+
+
+def test_node_worker_installs_locked_dependencies_and_generates_prisma(tmp_path):
+    calls = []
+    def command(args, cwd=None, **kwargs):
+        calls.append(args)
+        if args[:3] == ['gh', 'pr', 'view']:
+            return json.dumps(dict(headRefName='fix/one', headRefOid='before', isCrossRepository=False, state='OPEN'))
+        if args[:3] == ['git', 'worktree', 'add']:
+            tree = __import__('pathlib').Path(args[-2])
+            tree.mkdir(parents=True)
+            (tree / 'tests').mkdir()
+            (tree / 'package.json').write_text(json.dumps({'scripts': {'test': 'jest'}}))
+            (tree / 'package-lock.json').write_text('{}')
+            (tree / 'prisma').mkdir()
+            (tree / 'prisma' / 'schema.prisma').write_text('generator client {}')
+        if args[0] == str(tmp_path / 'codex'):
+            raise RuntimeError('model boundary')
+        return ''
+    with patch('cluster.control_plane.fix_worker._find_codex', return_value=tmp_path/'codex'), \
+            patch('cluster.control_plane.fix_worker.run', side_effect=command):
+        with pytest.raises(RuntimeError, match='model boundary'):
+            fix_pr('owner/repo', 1, 'before', ['repair'])
+    assert ['npm', 'ci', '--ignore-scripts', '--no-audit', '--no-fund'] in calls
+    assert ['npm', 'exec', '--no', '--', 'prisma', 'generate'] in calls
+    assert not any('-m' in c and 'pytest' in c for c in calls)

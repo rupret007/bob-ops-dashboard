@@ -97,6 +97,8 @@ def fix_pr(repo, pr_number, head_sha, findings):
             if not (tree / 'package-lock.json').is_file():
                 raise RuntimeError('Node repair requires package-lock.json for reproducible tests')
             run(['npm', 'ci', '--ignore-scripts', '--no-audit', '--no-fund'], tree)
+            if (tree / 'prisma' / 'schema.prisma').is_file():
+                run(['npm', 'exec', '--no', '--', 'prisma', 'generate'], tree)
         prompt = (f'Apply these Karen findings for {repo} PR #{pr_number}:\n' +
                   '\n'.join(findings) + '\nMake focused code fixes and run the tests. '
                   'Do not weaken tests. Do not commit or push; the supervisor does that. '
