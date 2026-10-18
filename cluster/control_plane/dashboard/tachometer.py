@@ -237,6 +237,7 @@ class EngineCollector:
             if machine != self.machine and not fresh and peer.get('synced_at'):
                 detail = 'peer sync stale' if sync_age >= PEER_FRESH_SEC else 'peer reachable; health report stale'
             health[machine] = {'state': state, 'timestamp': last.get('timestamp'),
+                               'peer_sync': (read_json(self.data_dir / 'machines' / machine / 'sync-status.json') or {}) if machine != self.machine else {},
                                'detail': detail, 'sync_age_seconds': sync_age if machine != self.machine else None,
                                'guardian': (read_json(self.data_dir / 'guardian-status.json') or {})
                                if machine == self.machine else peer.get('guardian', {})}

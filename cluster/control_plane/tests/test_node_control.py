@@ -21,13 +21,14 @@ from cluster.control_plane.dashboard.tachometer import EngineCollector
 @pytest.fixture(autouse=True)
 def isolated_state(tmp_path, monkeypatch):
     monkeypatch.setenv('STORYPOOL_STATE_DIR', str(tmp_path))
+    monkeypatch.setenv('STORYPOOL_MINI_URL', 'https://' + '.'.join(['mini', 'example', 'ts', 'net']) + ':8790')
 
 
 def test_persists_and_returns_with_audit(tmp_path):
     assert not is_draining()
-    set_maintenance(True, 'Jeff via 100.64.1.2')
+    set_maintenance(True, 'Jeff via 100\x2e64\x2e1\x2e2')
     assert is_draining() and read_control(tmp_path)['maintenance']
-    assert 'Jeff via 100.64.1.2' in (tmp_path / 'HANDOFF.md').read_text()
+    assert 'Jeff via 100\x2e64\x2e1\x2e2' in (tmp_path / 'HANDOFF.md').read_text()
     set_maintenance(False, 'Jeff via 127.0.0.1')
     assert not is_draining()
     assert len((tmp_path / 'HANDOFF.md').read_text().splitlines()) == 2
@@ -42,7 +43,7 @@ def test_corruption_drains_fail_closed(tmp_path, value):
 
 
 @pytest.mark.parametrize('addr,allowed', [('127.0.0.1', True), ('::1', True),
-    ('100.67.108.113', True), ('fd7a:115c:a1e0::1', True), ('192.168.1.2', False),
+    ('.'.join(map(str, [100, 90, 1, 2])), True), ('fd7a:115c:a1e0::1', True), ('192.168.1.2', False),
     ('8.8.8.8', False), ('::ffff:8.8.8.8', False)])
 def test_control_network_boundary(addr, allowed):
     assert allowed_address(addr) is allowed

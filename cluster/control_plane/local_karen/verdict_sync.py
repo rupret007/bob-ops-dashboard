@@ -28,10 +28,8 @@ from .verdict import Verdict, _verdict_filename
 
 logger = logging.getLogger(__name__)
 
-MINI_TAILSCALE_IP = "100.67.108.113"
 DEFAULT_PORT = 8791
 SHARE_PATH = "/karen/verdicts.json"
-DEFAULT_SOURCE = "http://{}:{}{}".format(MINI_TAILSCALE_IP, DEFAULT_PORT, SHARE_PATH)
 NAME_RE = re.compile(r"^[A-Za-z0-9._-]+_[0-9]+_[0-9a-f]{12}_(KARENPASS|KARENFAIL)\.json$")
 SHA_RE = re.compile(r"^[0-9a-f]{40}$")
 MAX_BYTES = 8 * 1024 * 1024
@@ -100,11 +98,16 @@ def start_share_thread(verdict_dir=None, bind=None, port=None):
     """Serve verdicts read-only on the Tailscale address, if this host owns it."""
     if os.environ.get("STORYPOOL_VERDICT_SHARE", "1") == "0":
         return None
-    bind = bind or os.environ.get("STORYPOOL_VERDICT_SHARE_BIND", MINI_TAILSCALE_IP)
-    if bind in ("", "0.0.0.0", "::"):
+    from ..peer_endpoints import share_address, PeerUnavailable
+    try:
+        bind = bind or os.environ.get("STORYPOOL_VERDICT_SHARE_BIND") or share_address()
+    except PeerUnavailable:
+        logger.warning("Verdict share discovery unavailable; configure private bind address")
+        return None
+    if not bind or bind in ("0.0.0.0", "::"):
         logger.warning("Refusing to share verdicts on wildcard address %r", bind)
         return None
-    port = int(port or os.environ.get("STORYPOOL_VERDICT_SHARE_PORT", DEFAULT_PORT))
+    port = int(port if port is not None else os.environ.get("STORYPOOL_VERDICT_SHARE_PORT", DEFAULT_PORT))
     if verdict_dir is None:
         from .config import KarenConfig
         verdict_dir = KarenConfig.load().get_verdict_dir()
@@ -122,7 +125,15 @@ def start_share_thread(verdict_dir=None, bind=None, port=None):
 def pull(source=None, verdict_dir=None, timeout=10):
     # type: (Optional[str], Optional[Path], int) -> int
     """Fetch the Mini's verdicts and store valid ones locally. Returns files written."""
-    source = source or os.environ.get("STORYPOOL_VERDICT_SOURCE", DEFAULT_SOURCE)
+    source = source or os.environ.get("STORYPOOL_VERDICT_SOURCE")
+    if not source:
+        from ..peer_endpoints import peer_node
+        from ..node_control import allowed_address
+        addresses = peer_node('mini').get('TailscaleIPs', [])
+        address = next((ip for ip in addresses if allowed_address(ip) and ':' not in ip), None)
+        if not address:
+            raise ValueError('Mini verdict source unavailable; configure STORYPOOL_VERDICT_SOURCE')
+        source = 'http://{}:{}{}'.format(address, DEFAULT_PORT, SHARE_PATH)
     if verdict_dir is None:
         from .config import KarenConfig
         verdict_dir = KarenConfig.load().get_verdict_dir()

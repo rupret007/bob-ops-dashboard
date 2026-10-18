@@ -43,7 +43,7 @@ def allowed_address(value):
         addr = ipaddress.ip_address(value)
         if getattr(addr, 'ipv4_mapped', None):
             addr = addr.ipv4_mapped
-        return addr.is_loopback or addr in ipaddress.ip_network('100.64.0.0/10') or addr in ipaddress.ip_network('fd7a:115c:a1e0::/48')
+        return addr.is_loopback or (addr.version == 4 and addr.packed[0] == 100 and 64 <= addr.packed[1] <= 127) or addr in ipaddress.ip_network('fd7a:115c:a1e0::/48')
     except ValueError:
         return False
 

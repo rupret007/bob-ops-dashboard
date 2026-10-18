@@ -359,3 +359,20 @@ coordination failures turn the overall engine yellow while machine health badges
 retain their actual health. Reports older than fifteen minutes are unknown.
 The Python 3.9 CI job installs the pinned test broker, and shared requirements
 include pytest so unittest discovery can import every safety test module.
+
+Peer endpoint discovery (2026-10-18): private addresses belong in runtime
+configuration, never the published checkout. Health sync, remote controls and
+signed verdict push share `peer_endpoints.py`: explicit `STORYPOOL_MINI_URL` /
+`STORYPOOL_NUCBOX_URL`, then `~/.config/storypool/peers.json` (override path with
+`STORYPOOL_PEERS_FILE`), then bounded `tailscale status --json` discovery by unique
+machine hostname. Mini dashboard discovery always uses its HTTPS MagicDNS origin;
+missing or ambiguous identity fails closed. Explicit origins accept only
+localhost, loopback, tailnet IPs or HTTPS MagicDNS, without credentials or queries.
+The verdict share discovers this host's tailnet interface, refuses wildcard bind,
+and retains the explicit `STORYPOOL_VERDICT_SOURCE` / `STORYPOOL_VERDICT_SHARE_BIND`
+overrides. Raw verdict pulls retain the existing tailnet-only share on 8791;
+signed verdict push remains the authoritative delivery path. Discovery failure
+never changes claim, verdict authentication, exact-head approval or merge guards.
+Watchdog records redacted `machines/<peer>/sync-status.json` on each successful
+or failed sync, retaining the last health snapshot. Dashboard badges show sync
+failure and its next action separately from the peer's last health evidence.

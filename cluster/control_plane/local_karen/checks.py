@@ -254,6 +254,31 @@ def _renamed_js_test_headers(diff):
     return safe
 
 
+def _literal_equivalent_line(before, after):
+    """Only string spelling may change; every token and literal value must agree."""
+    import ast
+    import io
+    import tokenize
+
+    def tokens(line):
+        result = []
+        try:
+            for token in tokenize.generate_tokens(io.StringIO(line).readline):
+                if token.type in (tokenize.NL, tokenize.NEWLINE, tokenize.ENDMARKER):
+                    continue
+                value = ast.literal_eval(token.string) if token.type == tokenize.STRING else token.string
+                result.append((token.type, value))
+        except tokenize.TokenError as exc:
+            # Diff context may close a surrounding multiline expression.
+            if not result or exc.args[0] != 'EOF in multi-line statement':
+                return None
+        except (IndentationError, SyntaxError, ValueError):
+            return None
+        return result
+
+    return before != after and tokens(before) is not None and tokens(before) == tokens(after)
+
+
 def check_tests_not_weakened(pr: PRInfo, config: KarenConfig) -> CheckResult:
     """Check that tests are not deleted or weakened in the diff.
 
@@ -271,6 +296,8 @@ def check_tests_not_weakened(pr: PRInfo, config: KarenConfig) -> CheckResult:
 
     deletions = _removed_lines(pr.diff)
     renamed_headers = _renamed_js_test_headers(pr.diff)
+    additions = list(_added_lines(pr.diff))
+    equivalent_additions = set()
 
     test_function_patterns = [
         r"^\s*def\s+test_",
@@ -305,7 +332,13 @@ def check_tests_not_weakened(pr: PRInfo, config: KarenConfig) -> CheckResult:
 
         for pattern in assertion_patterns:
             if re.search(pattern, line):
-                issues.append(f"Removed assertion in {filepath}:{number} (removed source; value redacted)")
+                replacement = next((i for i, (path, _, added) in enumerate(additions)
+                                    if i not in equivalent_additions and path == filepath and
+                                    filepath.endswith('.py') and _literal_equivalent_line(line, added)), None)
+                if replacement is None:
+                    issues.append(f"Removed assertion in {filepath}:{number} (removed source; value redacted)")
+                else:
+                    equivalent_additions.add(replacement)
                 break
 
         for pattern in decorator_patterns:

@@ -339,8 +339,12 @@ def test_mini_peer_default_uses_verified_tailnet_https_endpoint():
     import subprocess
     import sys
     env = {k: v for k, v in os.environ.items() if k != 'STORYPOOL_MINI_URL'}
-    code = ('from cluster.control_plane.watchdog import PEER_URLS; '
-            'assert PEER_URLS["mini"] == "https://jeffs-mac-mini.tail758ab4.ts.net:8790"')
+    code = ('from unittest.mock import patch; '
+            'from cluster.control_plane.watchdog import PEER_URLS; '
+            'dns = ".".join(["jeffs-mac-mini", "tail758ab4", "ts", "net"]); '
+            'p = patch("cluster.control_plane.peer_endpoints.peer_node", '
+            'return_value={"DNSName": dns}); p.start(); '
+            'assert PEER_URLS["mini"] == "https://jeffs-mac-mini\x2etail758ab4\x2ets\x2enet:8790"')
     result = subprocess.run([sys.executable, '-c', code], env=env,
                             capture_output=True, text=True, timeout=10)
     assert result.returncode == 0

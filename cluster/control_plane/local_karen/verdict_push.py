@@ -141,8 +141,8 @@ def push(config=None, target=None, private_key=PRIVATE_KEY):
                       sort_keys=True).encode()
     signature = subprocess.run(['openssl', 'dgst', '-sha256', '-sign', str(private_key)],
                                input=body, capture_output=True, timeout=10, check=True).stdout
-    target = target or os.environ.get('STORYPOOL_VERDICT_PUSH_URL',
-                                     'http://100.93.165.1:8790' + PUSH_PATH)
+    from ..peer_endpoints import peer_url
+    target = target or os.environ.get('STORYPOOL_VERDICT_PUSH_URL') or peer_url('nucbox') + PUSH_PATH
     request = urllib.request.Request(target, data=body, method='POST', headers={
         'Content-Type': 'application/json',
         'X-Karen-Signature': base64.b64encode(signature).decode('ascii')})

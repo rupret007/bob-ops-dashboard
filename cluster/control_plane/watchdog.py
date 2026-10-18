@@ -139,10 +139,9 @@ def _escalate_to_jeff(issue: str, details: str) -> None:
     logger.warning("Escalated to NEEDS_JEFF.md: %s", issue)
 
 
-PEER_URLS = {
-    "mini": os.environ.get("STORYPOOL_MINI_URL", "https://jeffs-mac-mini.tail758ab4.ts.net:8790"),
-    "nucbox": os.environ.get("STORYPOOL_NUCBOX_URL", "http://100.93.165.1:8790"),
-}
+from .peer_endpoints import PeerURLs
+
+PEER_URLS = PeerURLs()
 
 
 def _dashboard_alive(timeout: float = 3.0) -> bool:
@@ -177,6 +176,17 @@ def store_peer_engine(peer: str, data: dict) -> bool:
     return True
 
 
+def _peer_sync_status(peer, ok):
+    path = LOG_DIR / 'machines' / peer / 'sync-status.json'
+    path.parent.mkdir(parents=True, exist_ok=True)
+    value = {'timestamp': _now_iso(), 'ok': ok,
+             'detail': 'Peer sync verified' if ok else
+                       'Peer sync failed; check private endpoint configuration and connectivity'}
+    temporary = path.with_suffix('.tmp')
+    temporary.write_text(json.dumps(value))
+    temporary.replace(path)
+
+
 def sync_peer_health(machine: str) -> bool:
     """Copy the peer's self-reported health (over Tailscale) into machines/<peer>/watchdog.log.
 
@@ -190,6 +200,7 @@ def sync_peer_health(machine: str) -> bool:
         store_peer_engine(peer, data)
         info = data.get("machines", {}).get(peer, {})
         if not info.get("timestamp"):
+            _peer_sync_status(peer, False)
             return False
         row = {"timestamp": info["timestamp"], "machine": peer, "source": "peer-sync",
                "checks": [{"name": "peer_reported_health", "passed": info.get("state") != "red",
@@ -198,9 +209,11 @@ def sync_peer_health(machine: str) -> bool:
         out.parent.mkdir(parents=True, exist_ok=True)
         with out.open("a") as f:
             f.write(json.dumps(row) + "\n")
+        _peer_sync_status(peer, True)
         return True
-    except Exception as exc:
-        logger.info("peer health sync for %s skipped: %s", peer, exc)
+    except Exception:
+        _peer_sync_status(peer, False)
+        logger.warning("peer health sync for %s failed; check private endpoint configuration and connectivity", peer)
         return False
 
 
