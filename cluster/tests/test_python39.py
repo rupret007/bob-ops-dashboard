@@ -22,8 +22,3 @@ def test_cluster_python39_compatible():
                 assert not any(isinstance(n, ast.BinOp) and isinstance(n.op, ast.BitOr)
                                for n in ast.walk(annotation)), str(path)
 
-
-def test_cluster_usage_dependency_imports():
-    # Runtime type aliases are evaluated even with postponed annotations.
-    from cluster import live_metrics
-    assert callable(live_metrics.aggregate)

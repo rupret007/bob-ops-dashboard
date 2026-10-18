@@ -125,9 +125,17 @@ class MeshWorker:
         self._providers_at = 0.0
         self.active = 0
         self.done = 0
-        self.sem = asyncio.Semaphore(cfg.max_lanes)
+        self._sem = None
         self.nc = None
         self.js = None
+
+    @property
+    def sem(self):
+        # Python 3.9 binds primitives to a loop during construction. The CLI
+        # creates its worker before asyncio.run(), so bind only inside handle().
+        if self._sem is None:
+            self._sem = asyncio.Semaphore(self.cfg.max_lanes)
+        return self._sem
 
     # ---- capabilities
     def refresh_caps(self, force: bool = False) -> list[str]:

@@ -56,9 +56,11 @@ class Publisher:
         if any(p not in PROVIDERS for p in providers):
             raise ValueError("unsupported provider")
         self.lanes = {p: 0 if p in providers else None for p in PROVIDERS}
-        self.lock = asyncio.Lock()
+        self.lock = None
 
     async def emit(self):
+        if self.lock is None:
+            self.lock = asyncio.Lock()
         async with self.lock:
             machine, usage = await asyncio.gather(asyncio.to_thread(self.machine),
                                                    asyncio.to_thread(self.usage))

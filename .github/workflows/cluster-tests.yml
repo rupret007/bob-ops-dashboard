@@ -46,4 +46,4 @@ jobs:
           python-version: '3.9'
       - run: python -m pip install -r cluster/requirements.txt pytest
       - run: python -m compileall -q cluster
-      - run: python -m pytest cluster/tests/test_python39.py cluster/tests/test_live_metrics.py cluster/tests/test_self_update.py cluster/tests/test_never_touch.py cluster/tests/test_install_scripts.py cluster/control_plane/local_karen/tests cluster/control_plane/dashboard/tests -q
+      - run: python -m pytest cluster/tests/test_python39.py cluster/tests/test_python39_runtime.py cluster/tests/test_live_metrics.py cluster/tests/test_self_update.py cluster/tests/test_never_touch.py cluster/tests/test_install_scripts.py cluster/control_plane/local_karen/tests cluster/control_plane/dashboard/tests -q
