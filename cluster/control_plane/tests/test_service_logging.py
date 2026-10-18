@@ -67,8 +67,10 @@ def test_worker_failure_has_job_correlation_without_exception_arguments(tmp_path
     ledger = MagicMock()
     ledger.get_recent_jobs.return_value = [SimpleNamespace(
         job_id='job-7', repo='owner/repo', pr_number=7, head_sha='a' * 40,
-        machine='nucbox', provider='codex')]
+        machine='nucbox', provider='codex', cluster_claim={'test': True})]
     with patch.object(fix_worker, 'get_ledger', return_value=ledger), \
+         patch('cluster.control_plane.coordination.ClaimClient.from_env'), \
+         patch('cluster.control_plane.coordination.Lease'), \
          patch('cluster.control_plane.node_control.is_draining', return_value=False), \
          patch.object(fix_worker, 'findings_for_pr', return_value=['repair']), \
          patch.object(fix_worker, 'fix_pr', side_effect=subprocess.CalledProcessError(

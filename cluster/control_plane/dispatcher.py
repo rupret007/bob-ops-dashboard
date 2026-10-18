@@ -215,6 +215,9 @@ def _spawn_worker(
              f"--setenv=STORYPOOL_JOBS_DIR={jobs_dir}",
              f"--setenv=PYTHONPATH={repo_dir}",
              f"--setenv=PATH={os.environ.get('PATH', '/usr/bin:/bin')}",
+             *[f"--setenv={key}={os.environ[key]}" for key in
+               ('STORYPOOL_COORD_URL', 'STORYPOOL_COORD_USER', 'STORYPOOL_COORD_TOKEN_FILE')
+               if key in os.environ],
              sys.executable, "-m", "cluster.control_plane.fix_worker", job_id],
             check=True, capture_output=True, text=True, timeout=30,
         )
@@ -501,12 +504,17 @@ class Dispatcher:
             job = None
             pid = 0
             spawn_error = ""
+            claim = None
+            coordinator = None
             
             if live:
                 from .node_control import is_draining
                 if is_draining(self.machine):
                     break
                 try:
+                    from .coordination import ClaimClient
+                    coordinator = ClaimClient.from_env()
+                    claim = coordinator.acquire(repo, pr_number, head_sha, self.machine)
                     job = self.ledger.create_job(
                         repo=repo,
                         pr_number=pr_number,
@@ -514,6 +522,7 @@ class Dispatcher:
                         provider=provider,
                         machine=self.machine,
                     )
+                    self.ledger.attach_cluster_claim(job.job_id, claim)
                     
                     pid = _spawn_worker(
                         repo=repo,
@@ -541,6 +550,15 @@ class Dispatcher:
                     spawn_error = f"spawn failed: {e}"
                     if job:
                         self.ledger.fail_job(job.job_id, spawn_error)
+                finally:
+                    if spawn_error and job is not None:
+                        self.ledger.fail_job(job.job_id, spawn_error)
+                    if spawn_error and claim is not None:
+                        from .coordination import CoordinationError
+                        try:
+                            coordinator.call('release', claim)
+                        except CoordinationError:
+                            pass  # Claim TTL handles broker outage.
             
             decision = DispatchDecision(
                 timestamp=_now_iso(),

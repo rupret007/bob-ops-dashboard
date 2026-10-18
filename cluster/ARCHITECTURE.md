@@ -83,3 +83,56 @@ races; files rotate at 5 MiB with seven backups and expire after seven days.
 overrides the default `STORYPOOL_DATA_DIR/logs`. The worker's existing job log also
 receives the JSON events on stderr. Other services and the dashboard Logs view
 still need migration to this shared contract; this does not claim that coverage.
+
+## Cluster authority audit (2026-10-18)
+
+The target authority is **one NucBox JetStream account and bucket**, reached by
+both hosts over the tailnet. Never use a Mini-local broker as a fallback. NATS KV
+[create and compare-and-set](https://docs.nats.io/nats-concepts/jetstream/key-value-store)
+provide atomic admission and revision fencing. This migration is incomplete;
+Mini Codex remains disabled until every work entry point and quota is covered.
+
+| Component/state | Owner | Required scope | Race prevention / current gap |
+| --- | --- | --- | --- |
+| Fix admission | Shared `STORYPOOL_CLAIMS` KV | Cluster, repo/PR | Implemented: create-only PR key; full SHA in value; separate heads cannot race on one branch. |
+| Fix lifecycle/ledger | Worker; local JSONL is an observation | Cluster claim, machine-local process | Implemented: persisted claim handoff, CAS heartbeat, CAS release; worker commands fenced on loss; command process group stopped. Expired claims recover after broker TTL cleanup. |
+| Karen poller/review | Karen | Cluster repo/PR/SHA | GAP: local seen/retry state can duplicate reviews. Must adopt shared lease before providers. |
+| Verdict storage/sync | Signing reviewer | Cluster immutable repo/PR/full SHA | GAP: signed sync exists; local caches are not one canonical artifact index. |
+| Merge attempt | Karen exact-SHA gate | Cluster repo/PR/SHA | GAP: exact-SHA gate exists; add shared admission and idempotent merge outcome. |
+| Priority queue/fix attempts | Dispatcher/conductor | Cluster | GAP: local snapshots/counters; shared claims prevent duplicate fix admission, not starvation or attempt double counting. |
+| Codex weekly accounting | Provider account | Cluster, one weekly plan | GAP: machine-local usage cannot authorize increased lanes. Shared stop and fresh provider quota needed. |
+| Lanes and guards | Node supervisor | Cluster allocation + node limits | GAP: local caps only. Keep Mini off and NucBox at existing limits. |
+| Drain/maintenance | Operator | Cluster desired state, node enforcement | GAP: node JSON/control proxy can diverge during outages; central revisioned desired state needed. |
+| Pause/cancel/requeue/actions | Operator | Cluster idempotency key + target | GAP: controls need shared claims and durable action IDs, not only local audit. |
+| Metrics/scorecard | Event reducer | Cluster unique event/job/verdict IDs | GAP: aggregate observations can double count; canonical deduplicated events needed. |
+| Digests/NEEDS_JEFF | Conductor/monitor | Cluster date/alert fingerprint | GAP: local append can duplicate alerts; daily leader claim + deduplication needed. |
+| Ops doctor/Web Bob/website | Scheduler | Cluster task/branch | GAP: independent entry points must use claims before launching Codex. Web Bob remains draft-only. |
+
+### Claims deployment and failure handling
+
+`ClaimClient` never creates a bucket during admission and never falls back to a
+local lease on missing config, authorization denial, broker outage or TTL
+mismatch. New fix dispatch pauses. Existing pre-deployment workers finish under
+their original supervisor. A new worker without its handed-off claim fails and
+must be redispatched. A dead owner's lease expires in 300 seconds plus broker
+cleanup latency. Every command renews before and after execution; a heartbeat
+renews during long commands. Ownership loss kills that command's process group
+and prevents subsequent commits/pushes. Like any lease around external GitHub
+operations, it cannot retract a request already accepted by GitHub; pinned heads
+and verified remote outcomes remain required.
+
+Outside the monitor sandbox, provision a dedicated coordination identity in the
+**same account on both hosts**, with only publish to
+`$KV.STORYPOOL_CLAIMS.>`, `$JS.API.STREAM.INFO.KV_STORYPOOL_CLAIMS` and subscribe
+to its own inbox. A separate operator identity needs bucket-create permission
+for the one-time bootstrap. The current installed legacy identities lack KV
+publish permission; do not broaden general worker permissions or share admin
+credentials. Set `~/.config/storypool/coordination.json` on each host with `url`,
+`user`, `token_file` (a protected KEY=VALUE token file; no credential in URL), or
+use `STORYPOOL_COORD_URL`, `STORYPOOL_COORD_USER`, `STORYPOOL_COORD_TOKEN_FILE`.
+The Linux transient unit forwards those three non-secret settings; macOS
+inherits them. Run `python3 -m cluster.control_plane.coordination --bootstrap`
+with the operator identity before enabling the restricted service identity.
+Missing setup intentionally pauses new fixes after deployment. Do not enable the
+Mini lane or raise throughput until live claims, remaining entry-point migrations,
+shared quota, distinct-PR work and the 24-hour duplicate audit are verified.

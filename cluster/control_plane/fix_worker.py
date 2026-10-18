@@ -9,6 +9,8 @@ import sys
 import tempfile
 import time
 import logging
+import signal
+from contextvars import ContextVar
 from pathlib import Path
 
 from ..never_touch import is_never_touch
@@ -20,6 +22,7 @@ from .local_karen.verdict import load_verdict
 
 
 CODEX_EFFORT = 'xhigh'
+_lease = ContextVar('cluster_lease', default=None)
 
 
 def codex_model():
@@ -55,7 +58,44 @@ MAX_FIX_ATTEMPTS = 3
 TEST_OUTPUT_TAIL = 6000
 
 
+def _run_claimed(args, cwd, lease, **kwargs):
+    """Stop the entire command process group if ownership is lost mid-command."""
+    prompt = kwargs.pop('input', None)
+    process = subprocess.Popen(args, cwd=cwd, text=True, stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE, stdin=subprocess.PIPE if prompt is not None else None,
+        start_new_session=True, **kwargs)
+    deadline = time.monotonic() + 1800
+    try:
+        while True:
+            if lease.lost:
+                from .coordination import ClaimLost
+                raise ClaimLost('Cluster claim lost during command; command stopped')
+            if time.monotonic() >= deadline:
+                raise subprocess.TimeoutExpired(args, 1800)
+            try:
+                stdout, stderr = process.communicate(input=prompt, timeout=1)
+                break
+            except subprocess.TimeoutExpired:
+                prompt = None
+        if process.returncode:
+            raise subprocess.CalledProcessError(process.returncode, args, stdout, stderr)
+        return subprocess.CompletedProcess(args, process.returncode, stdout, stderr)
+    finally:
+        if process.poll() is None:
+            try:
+                os.killpg(process.pid, signal.SIGTERM)
+                process.communicate(timeout=2)
+            except subprocess.TimeoutExpired:
+                os.killpg(process.pid, signal.SIGKILL)
+                process.communicate()
+            except ProcessLookupError:
+                process.communicate()
+
+
 def run(args, cwd=None, **kwargs):
+    lease = _lease.get()
+    if lease is not None:
+        lease.renew()
     started = time.monotonic()
     # Only executable/operation are logged. Arguments may contain credentials,
     # PR content, URLs, or prompts; stdout/stderr are never persisted wholesale.
@@ -63,8 +103,13 @@ def run(args, cwd=None, **kwargs):
     operation = args[1] if len(args) > 1 and re.fullmatch(r'[a-z-]+', args[1]) else ''
     event('fix-worker', 'command_started', executable=executable, operation=operation)
     try:
-        result = subprocess.run(args, cwd=cwd, check=True, text=True,
-                                capture_output=True, timeout=1800, **kwargs)
+        if lease is None:
+            result = subprocess.run(args, cwd=cwd, check=True, text=True,
+                                    capture_output=True, timeout=1800, **kwargs)
+        else:
+            result = _run_claimed(args, cwd, lease, **kwargs)
+        if lease is not None:
+            lease.renew()
     except (subprocess.SubprocessError, OSError) as exc:
         is_pytest = '-m' in args and 'pytest' in args
         names = failing_tests(getattr(exc, 'stdout', '') or '') if is_pytest else []
@@ -195,9 +240,15 @@ def execute(job_id):
     context = bind_context(job_id=job_id, correlation_id=job_id, repo=job.repo,
                            pr_number=job.pr_number, sha=job.head_sha)
     started = time.monotonic()
-    ledger.start_job(job_id, os.getpid(), model=model_label())
-    event('fix-worker', 'job_started', machine=job.machine, provider=job.provider)
+    lease_token = None
+    lease = None
     try:
+        from .coordination import ClaimClient, Lease
+        lease = Lease(ClaimClient.from_env(), job.cluster_claim)
+        lease.__enter__()
+        lease_token = _lease.set(lease)
+        ledger.start_job(job_id, os.getpid(), model=model_label())
+        event('fix-worker', 'job_started', machine=job.machine, provider=job.provider)
         findings = findings_for_pr(job.repo, job.pr_number, job.head_sha)
         if not findings:
             raise RuntimeError('No Karen findings available for this PR')
@@ -214,6 +265,9 @@ def execute(job_id):
               error_type=type(exc).__name__, reason=message, duration_ms=round((time.monotonic() - started) * 1000))
         return 1
     finally:
+        if lease_token is not None:
+            _lease.reset(lease_token)
+            lease.__exit__(None, None, None)
         reset_context(context)
 
 

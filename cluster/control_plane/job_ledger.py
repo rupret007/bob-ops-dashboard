@@ -67,6 +67,7 @@ class Job:
     
     created_at: str = ""
     updated_at: str = ""
+    cluster_claim: dict = field(default_factory=dict)
     
     def to_dict(self) -> dict:
         return asdict(self)
@@ -294,6 +295,17 @@ class JobLedger:
             return None
         
         return self._with_lock(_start)
+
+    def attach_cluster_claim(self, job_id: str, claim: dict) -> None:
+        def attach():
+            jobs = self._load_jobs()
+            for job in jobs:
+                if job.job_id == job_id:
+                    job.cluster_claim = claim
+                    self._save_jobs(jobs)
+                    return
+            raise ValueError('Job missing while attaching cluster claim')
+        self._with_lock(attach)
     
     def complete_job(
         self,
