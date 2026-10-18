@@ -140,6 +140,14 @@ shared quota, distinct-PR work and the 24-hour duplicate audit are verified.
 
 ### Karen and merge admission
 
+Karen publishes each complete artifact with a same-directory atomic rename,
+then atomically replaces `LATEST` with a prepared relative symlink. Readers see
+the old or new complete marker without an unlink gap; failed writes/replacements
+clean temporary files and preserve the prior marker. Newer FAIL siblings still
+block an older PASS marker, and a retained FAIL cannot authorize a newer PASS.
+This protects publication during process interruption; it does not claim power-loss
+durability or replace the shared PR claim or trusted verdict sync.
+
 The production Karen gate acquires the PR claim after fetching the full head,
 before any deterministic verdict publication or provider call. CLI and poller
 use this same entry point. A ContextVar carries the lease through chunked review;

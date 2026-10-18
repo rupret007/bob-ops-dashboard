@@ -9,6 +9,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import uuid
 from dataclasses import dataclass, asdict
 from datetime import datetime, timezone
 from pathlib import Path
@@ -96,15 +97,23 @@ def save_verdict(verdict: Verdict, config: KarenConfig) -> Path:
 
     import tempfile
     fd, temp = tempfile.mkstemp(dir=str(verdict_dir), prefix=".verdict-")
-    with os.fdopen(fd, "w") as stream:
-        stream.write(verdict.to_json())
-    os.replace(temp, str(path))
+    try:
+        with os.fdopen(fd, "w") as stream:
+            stream.write(verdict.to_json())
+        os.replace(temp, str(path))
+    finally:
+        Path(temp).unlink(missing_ok=True)
 
     symlink_name = f"{base_name}_LATEST.json"
     symlink_path = verdict_dir / symlink_name
-    if symlink_path.is_symlink() or symlink_path.exists():
-        symlink_path.unlink()
-    symlink_path.symlink_to(filename)
+    # Readers must always see either the previous complete marker or the new
+    # one. Never unlink LATEST: a crash in that gap strands a completed review.
+    temporary_link = verdict_dir / (".verdict-latest-" + uuid.uuid4().hex)
+    try:
+        temporary_link.symlink_to(filename)
+        os.replace(str(temporary_link), str(symlink_path))
+    finally:
+        temporary_link.unlink(missing_ok=True)
 
     return path
 
