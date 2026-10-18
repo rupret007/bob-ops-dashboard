@@ -141,4 +141,5 @@ class EngineCollector:
                            gauge('Backlog remaining', backlog_count)],
                 'activity': sorted(events, key=lambda e: stamp(e['timestamp']), reverse=True)[:15],
                 'monitor': monitor[-1] if monitor else 'No monitor status yet',
+                'parity': next(iter(tail(self.data_dir / 'PARITY.md', 32768)), 'Parity audit unavailable'),
                 'notes': 'Local ledger tail (2 MiB); up to 2000 verdict files. Backlog is the last conductor snapshot. Unknown values display —. Rates use a rolling hour; merge day uses UTC (the gate enforces its cap over a rolling 24h).'}

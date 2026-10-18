@@ -8,7 +8,7 @@
 <section id="engine-panel" aria-label="Live StoryPool tachometer">
 <header><h2><span id="engine-light" class="engine-light"></span> StoryPool engine</h2><span id="engine-state">Connecting…</span><span id="engine-machines"></span></header>
 <div id="engine-gauges"></div><p id="engine-monitor" aria-live="polite">Loading monitor status…</p>
-<h3>Live activity</h3><ol id="engine-activity" aria-live="polite"></ol><p id="engine-notes"></p>
+<p id="engine-parity">Parity audit unavailable</p><h3>Live activity</h3><ol id="engine-activity" aria-live="polite"></ol><p id="engine-notes"></p>
 </section>
 <script>
 (()=>{
@@ -35,6 +35,7 @@
     dial.querySelector('svg').setAttribute('aria-label',g.label+': '+value);
    });
    document.getElementById('engine-monitor').textContent=data.monitor;
+   document.getElementById('engine-parity').textContent=data.parity||'Parity audit unavailable';
    const activity=JSON.stringify(data.activity);
    if(activity!==lastActivity){const list=document.getElementById('engine-activity');list.replaceChildren();data.activity.forEach(event=>{const item=document.createElement('li');item.textContent=event.timestamp+' · '+event.text;list.append(item);});lastActivity=activity;}
    document.getElementById('engine-notes').textContent=data.notes;

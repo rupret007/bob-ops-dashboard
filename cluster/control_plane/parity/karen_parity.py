@@ -209,6 +209,12 @@ def compare_verdicts(grok_verdict: GrokVerdict, local_result: dict) -> ParityRes
     else:
         agreed = grok_v == local_v
     
+    # Agreement is meaningful only when both reviewers saw the same full tip.
+    # Missing or abbreviated historical SHAs cannot prove this.
+    local_sha = local_result.get("sha", "")
+    same_tip = bool(re.fullmatch(r"[a-f0-9]{40}", grok_verdict.sha or "")) and local_sha == grok_verdict.sha
+    agreed = agreed and same_tip
+
     return ParityResult(
         pr_number=grok_verdict.pr_number,
         repo=grok_verdict.repo,
@@ -297,7 +303,7 @@ def run_parity_test(repos: list[str], count: int = 10) -> dict:
         "agreed": agreed_count,
         "agreement_rate": agreement_rate,
         "disagreements": disagreements,
-        "target_met": agreement_rate >= 90.0,
+        "target_met": len(results) >= 10 and agreement_rate >= 90.0,
     }
 
 
