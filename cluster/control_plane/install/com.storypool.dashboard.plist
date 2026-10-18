@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<!--
+StoryPool Dashboard - Mac mini launchd plist
+
+Serves local dashboard on 127.0.0.1:8790.
+Read-only view of cluster status, auto-refreshes every 30s.
+Accessible over Tailscale.
+-->
+<dict>
+    <key>Label</key>
+    <string>com.storypool.dashboard</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/usr/bin/python3</string>
+        <string>-m</string>
+        <string>cluster.control_plane.dashboard</string>
+        <string>--host</string>
+        <string>127.0.0.1</string>
+        <string>--port</string>
+        <string>8790</string>
+    </array>
+
+    <key>WorkingDirectory</key>
+    <string>__REPO_PATH__</string>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PYTHONPATH</key>
+        <string>__REPO_PATH__</string>
+        <key>HOME</key>
+        <string>__HOME__</string>
+        <key>PATH</key>
+        <string>__PATH__</string>
+        <key>STORYPOOL_MACHINE</key>
+        <string>mini</string>
+    </dict>
+
+    <key>StandardOutPath</key>
+    <string>__HOME__/.local/share/storypool/dashboard.log</string>
+
+    <key>StandardErrorPath</key>
+    <string>__HOME__/.local/share/storypool/dashboard.log</string>
+
+    <key>RunAtLoad</key>
+    <true/>
+
+    <key>KeepAlive</key>
+    <true/>
+</dict>
+</plist>
