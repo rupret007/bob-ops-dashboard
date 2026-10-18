@@ -236,6 +236,30 @@ install_selfupdate() {
     log_info "Self-update timer installed (30 min interval)"
 }
 
+install_watchdog() {
+    log_header "Installing Watchdog (self-healing)"
+
+    mkdir -p "$SYSTEMD_DIR"
+
+    local service_src="$SCRIPT_DIR/storypool-watchdog.service"
+    local timer_src="$SCRIPT_DIR/storypool-watchdog.timer"
+
+    if [[ ! -f "$service_src" ]] || [[ ! -f "$timer_src" ]]; then
+        log_warn "Watchdog service/timer not found — skipping"
+        return
+    fi
+
+    sed -e "s|__REPO_PATH__|$REPO_ROOT|g" \
+        "$service_src" > "$SYSTEMD_DIR/storypool-watchdog.service"
+    cp "$timer_src" "$SYSTEMD_DIR/storypool-watchdog.timer"
+
+    systemctl --user daemon-reload
+    systemctl --user enable storypool-watchdog.timer 2>/dev/null || true
+    systemctl --user restart storypool-watchdog.timer 2>/dev/null || systemctl --user start storypool-watchdog.timer
+
+    log_info "Watchdog installed (10 min interval, self-healing)"
+}
+
 install_karen_cli() {
     log_header "Installing Karen Gate CLI"
 
@@ -452,6 +476,7 @@ main() {
     install_dispatcher
     install_conductor
     install_selfupdate
+    install_watchdog
     install_karen_cli
     run_self_check
 

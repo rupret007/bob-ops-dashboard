@@ -230,6 +230,38 @@ install_conductor() {
     log_info "PATH: $LAUNCHD_PATH"
 }
 
+install_watchdog() {
+    log_header "Installing Watchdog (self-healing)"
+
+    local log_dir="$HOME/.local/share/storypool"
+    mkdir -p "$log_dir"
+
+    local plist_src="$SCRIPT_DIR/com.storypool.watchdog.plist"
+    local plist_dst="$HOME/Library/LaunchAgents/com.storypool.watchdog.plist"
+
+    if [[ ! -f "$plist_src" ]]; then
+        log_warn "Watchdog plist not found at $plist_src — skipping"
+        return
+    fi
+
+    mkdir -p "$HOME/Library/LaunchAgents"
+
+    sed -e "s|__REPO_PATH__|$REPO_ROOT|g" \
+        -e "s|__HOME__|$HOME|g" \
+        -e "s|__PATH__|$LAUNCHD_PATH|g" \
+        "$plist_src" > "$plist_dst"
+
+    clear_pycache "$REPO_ROOT/cluster"
+
+    if launchctl list com.storypool.watchdog &>/dev/null; then
+        launchctl unload "$plist_dst" 2>/dev/null || true
+    fi
+    launchctl load "$plist_dst"
+
+    log_info "Watchdog installed (10 min interval, self-healing)"
+    log_info "Logs: ~/.local/share/storypool/watchdog.log"
+}
+
 install_karen_cli() {
     log_header "Installing Karen Gate CLI"
 
@@ -393,7 +425,7 @@ run_self_check() {
 uninstall_all() {
     log_header "Uninstalling All Components"
 
-    for label in com.storypool.shadow com.storypool.dispatch com.storypool.conductor com.storypool.karen-poller; do
+    for label in com.storypool.shadow com.storypool.dispatch com.storypool.conductor com.storypool.watchdog com.storypool.karen-poller; do
         local plist="$HOME/Library/LaunchAgents/$label.plist"
         if launchctl list "$label" &>/dev/null; then
             log_info "Unloading $label..."
@@ -439,6 +471,7 @@ main() {
     install_shadow
     install_dispatcher
     install_conductor
+    install_watchdog
     install_karen_cli
     run_self_check
 
