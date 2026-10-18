@@ -126,8 +126,8 @@ install_shadow() {
     clear_pycache "$REPO_ROOT/cluster"
 
     systemctl --user daemon-reload
-    systemctl --user enable storypool-shadow.timer
-    systemctl --user start storypool-shadow.timer
+    systemctl --user enable storypool-shadow.timer 2>/dev/null || true
+    systemctl --user restart storypool-shadow.timer 2>/dev/null || systemctl --user start storypool-shadow.timer
 
     log_info "Shadow runner installed (15 min interval)"
 }
@@ -161,8 +161,8 @@ install_dispatcher() {
     clear_pycache "$REPO_ROOT/cluster"
 
     systemctl --user daemon-reload
-    systemctl --user enable storypool-dispatch.timer
-    systemctl --user start storypool-dispatch.timer
+    systemctl --user enable storypool-dispatch.timer 2>/dev/null || true
+    systemctl --user restart storypool-dispatch.timer 2>/dev/null || systemctl --user start storypool-dispatch.timer
 
     log_info "Dispatcher installed (15 min interval, shadow mode)"
 }
@@ -206,8 +206,8 @@ EOF
     clear_pycache "$REPO_ROOT/cluster"
 
     systemctl --user daemon-reload
-    systemctl --user enable storypool-conductor.timer
-    systemctl --user start storypool-conductor.timer
+    systemctl --user enable storypool-conductor.timer 2>/dev/null || true
+    systemctl --user restart storypool-conductor.timer 2>/dev/null || systemctl --user start storypool-conductor.timer
 
     log_info "Conductor installed (hourly, shadow mode)"
 }
@@ -230,8 +230,8 @@ install_selfupdate() {
     cp "$timer_src" "$SYSTEMD_DIR/storypool-selfupdate.timer"
 
     systemctl --user daemon-reload
-    systemctl --user enable storypool-selfupdate.timer
-    systemctl --user start storypool-selfupdate.timer
+    systemctl --user enable storypool-selfupdate.timer 2>/dev/null || true
+    systemctl --user restart storypool-selfupdate.timer 2>/dev/null || systemctl --user start storypool-selfupdate.timer
 
     log_info "Self-update timer installed (30 min interval)"
 }
