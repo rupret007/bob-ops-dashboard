@@ -26,7 +26,14 @@ from typing import Optional, List, Any
 
 from .config import KarenConfig
 from .gate import run_gate
-from .github_client import list_prs_with_label, remove_label, add_label, GitHubError
+from .github_client import (
+    list_prs_with_label,
+    remove_label,
+    add_label,
+    check_pr_mergeable,
+    update_pr_branch,
+    GitHubError,
+)
 
 try:
     from ..backlog import (
@@ -198,6 +205,28 @@ def poll_and_run(
         for pr_data in prs:
             pr_number = pr_data.get("number")
             if not pr_number:
+                continue
+
+            # Check if PR branch is stale and needs update before review
+            is_mergeable, merge_status = check_pr_mergeable(owner, repo, pr_number)
+            if merge_status == "BEHIND":
+                logger.info(f"PR {owner}/{repo}#{pr_number} is behind base - updating branch")
+                update_success, update_msg = update_pr_branch(owner, repo, pr_number)
+                if update_success:
+                    logger.info(f"Updated {owner}/{repo}#{pr_number}: {update_msg}")
+                    # Give GitHub a moment to update status
+                    import time
+                    time.sleep(3)
+                else:
+                    logger.warning(f"Failed to update {owner}/{repo}#{pr_number}: {update_msg}")
+            elif merge_status == "DIRTY":
+                logger.warning(f"PR {owner}/{repo}#{pr_number} has conflicts - needs manual resolution")
+                results.append({
+                    "repo": f"{owner}/{repo}",
+                    "pr": pr_number,
+                    "skipped": True,
+                    "reason": "conflicts with base branch",
+                })
                 continue
 
             logger.info(f"Running gate on {owner}/{repo}#{pr_number}")

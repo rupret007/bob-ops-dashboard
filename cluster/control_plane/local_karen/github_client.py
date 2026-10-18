@@ -215,6 +215,57 @@ def add_label(owner: str, repo: str, pr_number: int, label: str) -> None:
     ])
 
 
+def check_pr_mergeable(owner: str, repo: str, pr_number: int) -> tuple:
+    """Check if a PR is mergeable (not conflicted with base).
+    
+    Returns (is_mergeable, merge_state_status) where:
+    - is_mergeable: True if cleanly mergeable, False if conflicts or unknown
+    - merge_state_status: The mergeStateStatus from GitHub (e.g. 'CLEAN', 'DIRTY', 'BLOCKED')
+    """
+    try:
+        result = _run_gh([
+            "pr", "view", str(pr_number),
+            "--repo", f"{owner}/{repo}",
+            "--json", "mergeStateStatus,mergeable",
+        ])
+        data = json.loads(result)
+        status = data.get("mergeStateStatus", "UNKNOWN")
+        mergeable = data.get("mergeable", "UNKNOWN")
+        
+        is_mergeable = status in ("CLEAN", "BEHIND", "HAS_HOOKS") and mergeable != "CONFLICTING"
+        return is_mergeable, status
+    except (GitHubError, json.JSONDecodeError):
+        return False, "UNKNOWN"
+
+
+def update_pr_branch(owner: str, repo: str, pr_number: int) -> tuple:
+    """Update PR branch with latest changes from base (rebase or merge).
+    
+    Uses `gh pr update-branch` which is the safest way to update.
+    Falls back to merge if rebase fails.
+    
+    Returns (success, message).
+    """
+    try:
+        _run_gh([
+            "pr", "update-branch", str(pr_number),
+            "--repo", f"{owner}/{repo}",
+            "--rebase",
+        ], timeout=120)
+        return True, "rebased"
+    except GitHubError as e:
+        if "rebase" in str(e).lower() or "conflict" in str(e).lower():
+            try:
+                _run_gh([
+                    "pr", "update-branch", str(pr_number),
+                    "--repo", f"{owner}/{repo}",
+                ], timeout=120)
+                return True, "merged"
+            except GitHubError as e2:
+                return False, f"update failed: {e2}"
+        return False, f"rebase failed: {e}"
+
+
 def ensure_label_exists(owner: str, repo: str, label: str, color: str = "d4c5f9", description: str = "") -> bool:
     """Ensure a label exists in the repo, creating it if missing.
     
