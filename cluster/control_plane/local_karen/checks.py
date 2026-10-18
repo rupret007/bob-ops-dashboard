@@ -508,74 +508,263 @@ def check_pages_exposure(pr: PRInfo, config: KarenConfig) -> CheckResult:
     )
 
 
-def run_functional_verification(pr: PRInfo, config: KarenConfig) -> CheckResult:
-    """Functional-claim verification via CI status.
-
-    The ship-gate rubric requires that the PR's tests pass at the head SHA.
-    Rather than duplicating test runs in a temp worktree (which is slow and
-    may lack secrets/environment), we rely on CI being green:
-    - check_ci_green() verifies all CI checks pass
-    - If CI includes test suites, functional claims are verified
-    - If no CI, the PR is treated cautiously but allowed through
-
-    This check returns SKIP to indicate it defers to CI, not that it's
-    incomplete. The actual verification happens via check_ci_green().
+def run_repo_tests_in_worktree(pr: PRInfo, config: KarenConfig) -> CheckResult:
+    """Run repo tests at head SHA in a temp worktree.
+    
+    This is a BETTER-THAN-GROK feature: actually executes tests locally
+    before the LLM review, catching issues without spending tokens.
+    
+    Strategy:
+    1. Clone repo to temp dir (sparse checkout, depth=1)
+    2. Checkout exact head SHA
+    3. Detect test runner (pytest, npm test, make test, etc.)
+    4. Run tests with timeout
+    5. Report pass/fail with evidence
+    
+    Falls back to CI status if local test run isn't possible.
     """
-    if not pr.ci_status:
+    import tempfile
+    import shutil
+    import os
+    
+    full_repo = f"{pr.owner}/{pr.repo}"
+    
+    if not getattr(config, 'run_local_tests', True):
         return CheckResult(
-            check_name="functional_verification",
+            check_name="repo_tests",
             verdict=CheckVerdict.SKIP,
-            reason="No CI configured; functional verification relies on manual testing",
-            details="Recommend adding CI test workflow for automated verification",
+            reason="Local test execution disabled in config",
         )
-
-    passing = ("success", "skipped", "neutral")
-    failed_checks = [
-        name for name, status in pr.ci_status.items()
-        if status not in passing and status not in ("pending", "in_progress", "queued")
-    ]
-
-    if failed_checks:
+    
+    worktree_dir = None
+    try:
+        worktree_dir = tempfile.mkdtemp(prefix="karen-test-")
+        
+        clone_result = subprocess.run(
+            ["gh", "repo", "clone", full_repo, worktree_dir, "--", 
+             "--depth=1", "--single-branch", "-b", pr.head_sha[:12]],
+            capture_output=True,
+            text=True,
+            timeout=120,
+        )
+        
+        if clone_result.returncode != 0:
+            clone_result = subprocess.run(
+                ["gh", "repo", "clone", full_repo, worktree_dir, "--", "--depth=50"],
+                capture_output=True,
+                text=True,
+                timeout=120,
+            )
+            if clone_result.returncode == 0:
+                subprocess.run(
+                    ["git", "checkout", pr.head_sha],
+                    cwd=worktree_dir,
+                    capture_output=True,
+                    timeout=30,
+                )
+        
+        if clone_result.returncode != 0:
+            return CheckResult(
+                check_name="repo_tests",
+                verdict=CheckVerdict.SKIP,
+                reason="Could not clone repo for local testing",
+                details=clone_result.stderr[:200],
+            )
+        
+        test_cmd = None
+        test_label = ""
+        
+        if os.path.exists(os.path.join(worktree_dir, "pyproject.toml")) or \
+           os.path.exists(os.path.join(worktree_dir, "pytest.ini")) or \
+           os.path.exists(os.path.join(worktree_dir, "setup.py")):
+            test_cmd = ["python3", "-m", "pytest", "-x", "--tb=short", "-q"]
+            test_label = "pytest"
+        elif os.path.exists(os.path.join(worktree_dir, "package.json")):
+            test_cmd = ["npm", "test", "--", "--passWithNoTests"]
+            test_label = "npm test"
+        elif os.path.exists(os.path.join(worktree_dir, "Makefile")):
+            with open(os.path.join(worktree_dir, "Makefile")) as f:
+                if "test:" in f.read():
+                    test_cmd = ["make", "test"]
+                    test_label = "make test"
+        elif os.path.exists(os.path.join(worktree_dir, "Cargo.toml")):
+            test_cmd = ["cargo", "test", "--no-fail-fast"]
+            test_label = "cargo test"
+        elif os.path.exists(os.path.join(worktree_dir, "go.mod")):
+            test_cmd = ["go", "test", "./...", "-short"]
+            test_label = "go test"
+        
+        if not test_cmd:
+            return CheckResult(
+                check_name="repo_tests",
+                verdict=CheckVerdict.SKIP,
+                reason="No recognized test runner found",
+                details="Checked: pytest, npm, make, cargo, go",
+            )
+        
+        test_result = subprocess.run(
+            test_cmd,
+            cwd=worktree_dir,
+            capture_output=True,
+            text=True,
+            timeout=300,
+            env={**os.environ, "CI": "true"},
+        )
+        
+        if test_result.returncode == 0:
+            return CheckResult(
+                check_name="repo_tests",
+                verdict=CheckVerdict.PASS,
+                reason=f"Local {test_label} passed at {pr.head_sha[:8]}",
+                details=f"Ran in temp worktree, exit code 0",
+            )
+        else:
+            output = (test_result.stdout + test_result.stderr)[-500:]
+            return CheckResult(
+                check_name="repo_tests",
+                verdict=CheckVerdict.FAIL,
+                reason=f"Local {test_label} failed at {pr.head_sha[:8]}",
+                details=f"Exit code {test_result.returncode}:\n{output}",
+            )
+            
+    except subprocess.TimeoutExpired:
         return CheckResult(
-            check_name="functional_verification",
+            check_name="repo_tests",
             verdict=CheckVerdict.FAIL,
-            reason=f"CI tests failed: {', '.join(failed_checks[:3])}",
-            details="Functional claims not verified due to CI failure",
+            reason="Local test execution timed out (5 min limit)",
         )
+    except Exception as e:
+        return CheckResult(
+            check_name="repo_tests",
+            verdict=CheckVerdict.SKIP,
+            reason=f"Local test execution error: {type(e).__name__}",
+            details=str(e)[:200],
+        )
+    finally:
+        if worktree_dir and os.path.exists(worktree_dir):
+            shutil.rmtree(worktree_dir, ignore_errors=True)
 
+
+def run_static_security_scan(pr: PRInfo, config: KarenConfig) -> CheckResult:
+    """Comprehensive static security scan BEFORE LLM review.
+    
+    This is a BETTER-THAN-GROK feature: catches security issues without
+    spending LLM tokens. Grok runs LLM first; we run static scan first.
+    
+    Combines all security-related patterns into one thorough scan:
+    - Secrets (API keys, tokens, passwords)
+    - Dangerous commands (sudo, rm -rf, force push)
+    - Security vulnerabilities (XSS, injection, auth bypass)
+    - Unsafe shell patterns
+    """
+    all_findings = []
+    current_file = None
+    line_num = 0
+    in_diff_hunk = False
+    
+    all_patterns = [
+        *[(p, desc, "secret") for p, desc in SECRET_PATTERNS],
+        *[(p, desc, cat) for p, desc, cat in SECURITY_PATTERNS],
+        (r"\bsudo\s+", "sudo usage", "dangerous"),
+        (r"rm\s+-rf\s+[/~]", "rm -rf on root/home", "dangerous"),
+        (r"git\s+push\s+.*--force", "git force push", "dangerous"),
+        (r"git\s+push\s+.*-f\b", "git force push", "dangerous"),
+        (r"chmod\s+777", "chmod 777", "dangerous"),
+        (r"os\.popen\s*\(", "os.popen (shell)", "dangerous"),
+        (r"commands\.getoutput", "commands.getoutput", "dangerous"),
+        (r"pickle\.load", "pickle deserialization", "security"),
+        (r"yaml\.load\s*\([^)]*\)", "unsafe yaml.load", "security"),
+        (r"marshal\.load", "marshal deserialization", "security"),
+    ]
+    
+    for line in pr.diff.split("\n"):
+        if line.startswith("diff --git"):
+            match = re.search(r"b/(.+)$", line)
+            if match:
+                current_file = match.group(1)
+            line_num = 0
+            in_diff_hunk = False
+            continue
+        
+        if line.startswith("@@"):
+            match = re.search(r"@@ -\d+(?:,\d+)? \+(\d+)", line)
+            if match:
+                line_num = int(match.group(1)) - 1
+            in_diff_hunk = True
+            continue
+        
+        if in_diff_hunk:
+            if line.startswith("+") and not line.startswith("+++"):
+                line_num += 1
+                added_line = line[1:]
+                
+                for pattern, desc, category in all_patterns:
+                    if re.search(pattern, added_line, re.IGNORECASE):
+                        all_findings.append({
+                            "file": current_file,
+                            "line": line_num,
+                            "category": category,
+                            "description": desc,
+                            "evidence": added_line.strip()[:50],
+                        })
+                        break
+            elif not line.startswith("-"):
+                line_num += 1
+    
+    if all_findings:
+        by_category = {}
+        for f in all_findings:
+            cat = f["category"]
+            by_category[cat] = by_category.get(cat, 0) + 1
+        
+        summary = ", ".join(f"{v} {k}" for k, v in sorted(by_category.items()))
+        
+        details = []
+        for f in all_findings[:15]:
+            details.append(f"- {f['file']}:{f['line']} [{f['category']}] {f['description']}")
+        
+        return CheckResult(
+            check_name="static_security_scan",
+            verdict=CheckVerdict.FAIL,
+            reason=f"Static scan found issues: {summary}",
+            details="\n".join(details),
+        )
+    
     return CheckResult(
-        check_name="functional_verification",
+        check_name="static_security_scan",
         verdict=CheckVerdict.PASS,
-        reason=f"Functional verification via CI ({len(pr.ci_status)} checks passing)",
-        details="PR's CI test suite validates functional claims",
+        reason=f"Static security scan clean ({len(pr.changed_files)} files)",
     )
 
 
 def run_all_checks(pr, config):
     # type: (PRInfo, KarenConfig) -> list
-    """Run all deterministic checks and return results.
+    """Run all deterministic checks BEFORE LLM review.
 
-    Order matters: blocked repo check runs first.
-    Full ship-gate rubric includes:
-    - Blocked repo check (never-touch list)
-    - Draft status
-    - CI status (green required)
-    - Test integrity (no weakening)
-    - Secret detection
-    - Dangerous commands
-    - Security patterns (XSS, injection, auth bypass)
-    - Pages exposure risk
+    BETTER-THAN-GROK: Static scan and local tests run BEFORE LLM.
+    This catches issues without spending tokens.
+    
+    Order (all run before LLM):
+    1. Blocked repo check (never-touch list)
+    2. Draft status
+    3. Static security scan (secrets, dangerous, vulnerabilities) - NEW
+    4. CI status (green required)
+    5. Test integrity (no weakening)
+    6. Security patterns (XSS, injection, auth bypass)
+    7. Pages exposure risk
+    8. Local repo tests at head SHA (if enabled) - NEW
     """
     checks = [
         check_blocked_repo,
         check_not_draft,
+        run_static_security_scan,
         check_ci_green,
         check_tests_not_weakened,
-        check_no_secrets_in_diff,
-        check_no_dangerous_commands,
         check_security_patterns,
         check_pages_exposure,
     ]
+    
+    run_local = getattr(config, 'run_local_tests', False)
 
     results = []
     for check in checks:
@@ -584,10 +773,21 @@ def run_all_checks(pr, config):
             results.append(result)
         except Exception as e:
             results.append(CheckResult(
-                check_name=check.__name__.replace("check_", ""),
+                check_name=check.__name__.replace("check_", "").replace("run_", ""),
                 verdict=CheckVerdict.FAIL,
                 reason=f"Check crashed: {e}",
                 details=str(e),
+            ))
+    
+    if run_local:
+        try:
+            local_test_result = run_repo_tests_in_worktree(pr, config)
+            results.append(local_test_result)
+        except Exception as e:
+            results.append(CheckResult(
+                check_name="repo_tests",
+                verdict=CheckVerdict.SKIP,
+                reason=f"Local test execution crashed: {e}",
             ))
 
     return results

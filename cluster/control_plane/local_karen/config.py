@@ -47,6 +47,8 @@ class KarenConfig:
     claude_daily_cap: int = CLAUDE_DAILY_CAP
 
     budget_per_run_usd: float = DEFAULT_BUDGET_PER_RUN_USD
+    
+    run_local_tests: bool = False
 
     never_touch_repos: frozenset = field(  # frozenset[str]
         default_factory=lambda: NEVER_TOUCH_REPOS
