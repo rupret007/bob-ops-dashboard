@@ -190,3 +190,47 @@ def test_unsupported_test_command_is_nonretryable(tmp_path):
     with pytest.raises(PreflightFailure) as error:
         fix_worker.test_command(tmp_path)
     assert error.value.code == 'unsupported-tests'
+
+
+def test_verified_local_fix_blocks_redispatch_when_durable_terminal_write_was_lost(tmp_path):
+    ledger = JobLedger(tmp_path / 'jobs')
+    job = ledger.create_job('owner/repo', 7, 'a' * 40, 'codex', 'nucbox')
+    ledger.complete_job(job.job_id, 'commit_pushed', 'b' * 40, verified=True)
+    worker = dispatcher.Dispatcher('nucbox', tmp_path / 'dispatch', job_ledger=ledger)
+    client = MagicMock()
+    client.retry_state.return_value = dict(attempts=1, retry_after=0, code='transient')
+    with patch.object(worker, 'check_machine_guards', return_value=(True, 'ok', {})), \
+         patch.object(worker, 'select_provider', return_value='codex'), \
+         patch.object(dispatcher, 'REPOS', ['owner/repo']), \
+         patch.object(dispatcher, '_get_open_prs', return_value=[dict(number=7, headRefOid='a' * 40)]), \
+         patch.object(dispatcher, '_get_active_lanes', return_value={}), \
+         patch.object(fix_worker, 'findings_for_pr', return_value=['repair']), \
+         patch.object(ClaimClient, 'from_env', return_value=client), \
+         patch.object(dispatcher, '_spawn_worker') as spawn:
+        decisions = worker.evaluate(live=True)
+    spawn.assert_not_called()
+    assert len(ledger._load_jobs()) == 1
+    assert decisions[0].action == 'skip_blocked'
+    assert 'verified fix' in decisions[0].reason
+
+
+@pytest.mark.parametrize('age_minutes', [10, 2880])
+def test_dashboard_block_persists_after_logs_roll_over_and_new_head_clears_it(tmp_path, age_minutes):
+    from datetime import datetime, timezone, timedelta
+    now = datetime.now(timezone.utc)
+    worker = dispatcher.Dispatcher('nucbox', tmp_path / 'dispatch', job_ledger=JobLedger(tmp_path / 'jobs'))
+    old = now - timedelta(minutes=age_minutes)
+    decision = dispatcher.DispatchDecision(timestamp=old.isoformat(), action='skip_blocked',
+        reason='blocked: needs package-lock.json', machine='nucbox', live=True,
+        repo='owner/repo', pr_number=7, head_sha='a' * 40)
+    worker._write_decision(decision)
+    # Remove all log evidence: the projection must still explain the block.
+    for log in (tmp_path / 'dispatch').glob('*.jsonl'):
+        log.unlink()
+    assert EngineCollector(tmp_path, tmp_path, 'nucbox').collect()['blocked_fixes'][0]['reason'] == decision.reason
+    # Restore the stale row: a later full-head observation must beat it too.
+    worker._write_decision(decision)
+    worker._write_decision(dispatcher.DispatchDecision(timestamp=now.isoformat(), action='skip',
+        reason='No Karen findings available', machine='nucbox', live=True,
+        repo='owner/repo', pr_number=7, head_sha='b' * 40))
+    assert EngineCollector(tmp_path, tmp_path, 'nucbox').collect()['blocked_fixes'] == []

@@ -27,6 +27,7 @@ Safety invariants:
 from __future__ import annotations
 
 import json
+import hashlib
 import os
 import re
 import subprocess
@@ -263,6 +264,28 @@ class Dispatcher:
         self.decisions.append(decision)
         with open(self._log_file(), "a", encoding="utf-8") as f:
             f.write(json.dumps(decision.to_dict(), sort_keys=True) + "\n")
+        # A durable display projection survives daily log rollover and bounded
+        # dashboard tails. Only live observations can change a persisted block.
+        if decision.live and decision.repo and decision.pr_number and decision.head_sha:
+            directory = self.log_dir / 'blocked-fixes'
+            directory.mkdir(exist_ok=True)
+            key = hashlib.sha256('{}#{}'.format(decision.repo, decision.pr_number).encode()).hexdigest()
+            path = directory / (key + '.json')
+            if decision.action == 'skip_blocked':
+                value = dict(repo=decision.repo, pr_number=decision.pr_number,
+                             head_sha=decision.head_sha, reason=decision.reason,
+                             timestamp=decision.timestamp)
+                # Each dispatcher process has its own temporary path.
+                temporary = path.with_suffix('.{}.tmp'.format(os.getpid()))
+                temporary.write_text(json.dumps(value))
+                temporary.replace(path)
+            elif path.exists():
+                try:
+                    previous = json.loads(path.read_text())
+                except (OSError, ValueError):
+                    previous = {}
+                if previous.get('head_sha') != decision.head_sha or decision.action == 'dispatch':
+                    path.unlink(missing_ok=True)
     
     def _status_file(self) -> Path:
         """Get the status file path."""
@@ -519,9 +542,13 @@ class Dispatcher:
                     history = [j for j in self.ledger._load_jobs()
                                if (j.repo, j.pr_number, j.head_sha) == (repo, pr_number, head_sha)]
                     local_block = next((j for j in history if not j.retryable), None)
+                    already_fixed = any(j.state == JobState.DONE.value and j.outcome_verified
+                                        for j in history)
                     previous = coordinator.retry_state(claim)
                     state, blocked = reserve(previous, len(history))
-                    if local_block is not None:
+                    if already_fixed:
+                        blocked = REASONS['already-fixed']
+                    elif local_block is not None:
                         blocked = REASONS.get(local_block.failure_code, 'blocked: needs Jeff')
                     if blocked:
                         decision = DispatchDecision(timestamp=_now_iso(), action='skip_blocked',

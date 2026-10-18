@@ -189,6 +189,21 @@ class EngineCollector:
         blocked = [dict(repo=j.get('repo'), pr_number=j.get('pr_number'), head_sha=j.get('head_sha'),
                         reason=j.get('error'), timestamp=j.get('end_time'))
                    for j in heads.values() if j.get('state') == 'failed' and j.get('retryable') is False]
+        # Dispatch owns durable blocker snapshots. An outage, midnight, or log
+        # rotation cannot silently remove a shared exact-head block from view.
+        for path in (self.data_dir / 'dispatch' / 'blocked-fixes').glob('*.json'):
+            if path.is_symlink():
+                continue
+            value = read_json(path)
+            if not isinstance(value, dict):
+                continue
+            key = (value.get('repo'), value.get('pr_number'))
+            observed = heads.get(key, {})
+            if (observed.get('head_sha') != value.get('head_sha')
+                    and stamp(observed.get('created_at')) > stamp(value.get('timestamp'))):
+                continue
+            blocked = [b for b in blocked if (b['repo'], b['pr_number']) != key]
+            blocked.append(value)
         dispatch_rows = list(rows(self.data_dir / 'dispatch' / ('dispatch-' + now.strftime('%Y-%m-%d') + '.jsonl')))
         for d in dispatch_rows[-100:]:
             if d.get('action') == 'skip_blocked' and stamp(d.get('timestamp')) >= hour:
@@ -197,6 +212,20 @@ class EngineCollector:
                     blocked = [b for b in blocked if (b['repo'], b['pr_number']) != key]
                     blocked.append(dict(repo=d.get('repo'), pr_number=d.get('pr_number'),
                         head_sha=d.get('head_sha'), reason=d.get('reason'), timestamp=d.get('timestamp')))
+        # A newer observed full head supersedes every prior blocker, including
+        # an old same-day dispatch row when no job exists at the new head yet.
+        observed_heads = {key: (stamp(j.get('created_at')), j.get('head_sha'))
+                          for key, j in heads.items()}
+        for d in dispatch_rows:
+            if not d.get('live') or not d.get('head_sha'):
+                continue
+            key = (d.get('repo'), d.get('pr_number'))
+            observed = (stamp(d.get('timestamp')), d.get('head_sha'))
+            if observed[0] >= observed_heads.get(key, (0, ''))[0]:
+                observed_heads[key] = observed
+        blocked = [b for b in blocked if not (
+            observed_heads.get((b['repo'], b['pr_number']), (0, b['head_sha']))[0] > stamp(b.get('timestamp'))
+            and observed_heads[(b['repo'], b['pr_number'])][1] != b['head_sha'])]
         completed = [j for j in latest if j.get('state') == 'done' and j.get('outcome_verified')]
         jobs_hour = sum(stamp(j.get('end_time')) >= hour for j in completed)
         running = sum(j.get('state') == 'running' and stamp(j.get('lease_expires')) > now.timestamp() for j in latest)
