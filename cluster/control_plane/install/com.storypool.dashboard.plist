@@ -18,7 +18,7 @@ Accessible over Tailscale.
         <string>-m</string>
         <string>cluster.control_plane.dashboard</string>
         <string>--host</string>
-        <string>0.0.0.0</string>
+        <string>127.0.0.1</string>
         <string>--port</string>
         <string>8790</string>
     </array>
