@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-10-18T13:04:42.635118-05:00",
-  "generated_at_display": "Sun Oct 18, 2026 \u00b7 1:04 PM CDT",
+  "generated_at": "2026-10-18T13:19:44.200789-05:00",
+  "generated_at_display": "Sun Oct 18, 2026 \u00b7 1:19 PM CDT",
   "timezone": "America/Chicago",
   "owner": "rupret007",
   "dashboard": "bob-ops-dashboard",
@@ -495,15 +495,15 @@
           "status": "yellow",
           "chip": "Yellow",
           "default_branch": "main",
-          "tip_sha": "390cc84",
-          "tip_date": "2026-10-18T17:24:53Z",
+          "tip_sha": "e11e6b4",
+          "tip_date": "2026-10-18T18:04:58Z",
           "open_prs": 4,
-          "open_pr_url": "https://github.com/rupret007/bob-ops-dashboard/pull/85",
-          "open_pr_number": 85,
+          "open_pr_url": "https://github.com/rupret007/bob-ops-dashboard/pull/86",
+          "open_pr_number": 86,
           "open_pr_draft": false,
           "open_pr_stack": [],
           "pr_listing_complete": true,
-          "agent_url": "https://cursor.com/agents/bc-2c8313e4-b404-5cf6-8df2-e2ed5f1b3b10",
+          "agent_url": "https://cursor.com/agents/bc-3de82b4d-aab0-5122-a574-81ce16a2c612",
           "ci": null,
           "release": null,
           "release_sha": null,
@@ -900,7 +900,7 @@
     "barker"
   ],
   "publish_notes": "Public board -- no secrets or customer paths. Private repositories stay high-level; AI Music Vault stays private-content-boundary only.",
-  "refresh_started_ms": 1792346650580,
+  "refresh_started_ms": 1792347552689,
   "agents_source": "file:stale->unknown",
   "agents": [
     {
@@ -948,12 +948,21 @@
   ],
   "cloud_agents": [
     {
-      "id": "bc-2c8313e4-b404-5cf6-8df2-e2ed5f1b3b10",
-      "name": "PR #85",
+      "id": "bc-3de82b4d-aab0-5122-a574-81ce16a2c612",
+      "name": "PR #86",
       "state": "unknown",
-      "detail": "feat(cluster): fail-closed never-touch guard for rad-dad-show-night",
-      "url": "https://cursor.com/agents/bc-2c8313e4-b404-5cf6-8df2-e2ed5f1b3b10",
-      "pr_url": "https://github.com/rupret007/bob-ops-dashboard/pull/85",
+      "detail": "feat: Local Karen ship gate for Mac mini/NucBox",
+      "url": "https://cursor.com/agents/bc-3de82b4d-aab0-5122-a574-81ce16a2c612",
+      "pr_url": "https://github.com/rupret007/bob-ops-dashboard/pull/86",
+      "checked_at": null
+    },
+    {
+      "id": "bc-8010dd7e-0b0b-5074-a351-0faafe9a47c7",
+      "name": "PR #87",
+      "state": "unknown",
+      "detail": "Add storypool-dispatch and LLM-in-the-loop conductor services",
+      "url": "https://cursor.com/agents/bc-8010dd7e-0b0b-5074-a351-0faafe9a47c7",
+      "pr_url": "https://github.com/rupret007/bob-ops-dashboard/pull/87",
       "checked_at": null
     },
     {
@@ -963,15 +972,6 @@
       "detail": "feat: StoryPool control plane migration from Grok to deterministic scheduler",
       "url": "https://cursor.com/agents/bc-4522847c-e01a-58c5-9fc7-ee9317e6b0db",
       "pr_url": "https://github.com/rupret007/bob-ops-dashboard/pull/84",
-      "checked_at": null
-    },
-    {
-      "id": "bc-3de82b4d-aab0-5122-a574-81ce16a2c612",
-      "name": "PR #86",
-      "state": "unknown",
-      "detail": "feat: Local Karen ship gate for Mac mini/NucBox",
-      "url": "https://cursor.com/agents/bc-3de82b4d-aab0-5122-a574-81ce16a2c612",
-      "pr_url": "https://github.com/rupret007/bob-ops-dashboard/pull/86",
       "checked_at": null
     }
   ],
@@ -1099,7 +1099,7 @@
     }
   ],
   "llm_work_now_freshness": {
-    "generated_at": "2026-10-18 13:04 CT",
+    "generated_at": "2026-10-18 13:19 CT",
     "warn_ttl_sec": 1200,
     "warnings": [],
     "ok": true
@@ -1130,7 +1130,7 @@
     ],
     "scorecards": {
       "v": "scorecards/v1",
-      "generated_at": "2026-10-18T18:04:44.115850+00:00",
+      "generated_at": "2026-10-18T18:19:45.377970+00:00",
       "windows": {
         "24h": {
           "providers": {
