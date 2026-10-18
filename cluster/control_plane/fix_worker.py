@@ -75,6 +75,13 @@ def _run_claimed(args, cwd, lease, **kwargs):
             raise ValueError('Owner commands may not replace containment preexec')
         kwargs['preexec_fn'] = containment.attach_before_exec
     try:
+        # Setup may block long enough for pause, quota or claim state to change.
+        # Recheck only after setup, and use this try block to clean up refusal.
+        if guard is not None:
+            guard()
+        if lease.lost:
+            from .coordination import ClaimLost
+            raise ClaimLost('Cluster claim lost before command; command refused')
         process = subprocess.Popen(args, cwd=cwd, text=True, stdout=subprocess.PIPE,
             stderr=subprocess.PIPE, stdin=subprocess.PIPE if prompt is not None else None,
             start_new_session=True, **kwargs)
@@ -105,7 +112,17 @@ def _run_claimed(args, cwd, lease, **kwargs):
         if containment is not None:
             # Always tear down, including after the leader exited successfully.
             # Cleanup errors replace success and prevent tests/diff/push followups.
-            containment.close()
+            try:
+                containment.close()
+            except BaseException:
+                # Reap the leader even when descendant teardown is unconfirmed.
+                # This cannot certify descendants; preserve the containment error.
+                try:
+                    process.kill()
+                    process.wait(timeout=2)
+                except (OSError, subprocess.SubprocessError):
+                    pass
+                raise
             process.communicate()
         elif process.poll() is None:
             try:
