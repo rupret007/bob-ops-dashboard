@@ -234,3 +234,21 @@ def test_dashboard_block_persists_after_logs_roll_over_and_new_head_clears_it(tm
         reason='No Karen findings available', machine='nucbox', live=True,
         repo='owner/repo', pr_number=7, head_sha='b' * 40))
     assert EngineCollector(tmp_path, tmp_path, 'nucbox').collect()['blocked_fixes'] == []
+
+
+@pytest.mark.parametrize('corruption', [
+    {}, {'repo': ['owner/repo']}, {'pr_number': []}, {'pr_number': True},
+    {'pr_number': 0}, {'head_sha': None}, {'head_sha': 'unknown'},
+    {'reason': {'unsafe': 'shape'}}, {'timestamp': 'not-a-time'},
+])
+def test_dashboard_ignores_corrupt_block_projection_without_hiding_valid_blocks(tmp_path, corruption):
+    from datetime import datetime, timezone
+    directory = tmp_path / 'dispatch' / 'blocked-fixes'
+    directory.mkdir(parents=True)
+    valid = dict(repo='owner/repo', pr_number=7, head_sha='a' * 40,
+                 reason='blocked: needs package-lock.json', timestamp=datetime.now(timezone.utc).isoformat())
+    (directory / 'valid.json').write_text(json.dumps(valid))
+    invalid = {} if not corruption else dict(valid, **corruption)
+    (directory / 'corrupt.json').write_text(json.dumps(invalid))
+    (directory / 'invalid-json.json').write_text('{broken')
+    assert EngineCollector(tmp_path, tmp_path, 'nucbox').collect()['blocked_fixes'] == [valid]

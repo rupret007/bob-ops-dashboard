@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import time
 from datetime import datetime, timezone
 from pathlib import Path
@@ -36,6 +37,24 @@ def stamp(value):
         return datetime.fromisoformat(str(value).replace('Z', '+00:00')).timestamp()
     except (ValueError, TypeError):
         return 0
+
+
+def blocked_snapshot(value):
+    """Validate the persisted display projection before using identity fields."""
+    if not isinstance(value, dict):
+        return None
+    repo = value.get('repo')
+    sha = value.get('head_sha')
+    number = value.get('pr_number')
+    reason = value.get('reason')
+    timestamp = value.get('timestamp')
+    if (not isinstance(repo, str) or not re.fullmatch(r'[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+', repo)
+            or type(number) is not int or number < 1
+            or not isinstance(sha, str) or not re.fullmatch(r'[0-9a-fA-F]{40}', sha)
+            or not isinstance(reason, str) or not reason.strip() or len(reason) > 4096
+            or not isinstance(timestamp, str) or stamp(timestamp) <= 0):
+        return None
+    return dict(repo=repo, pr_number=number, head_sha=sha, reason=reason, timestamp=timestamp)
 
 
 def rows(path):
@@ -194,10 +213,10 @@ class EngineCollector:
         for path in (self.data_dir / 'dispatch' / 'blocked-fixes').glob('*.json'):
             if path.is_symlink():
                 continue
-            value = read_json(path)
-            if not isinstance(value, dict):
+            value = blocked_snapshot(read_json(path))
+            if value is None:
                 continue
-            key = (value.get('repo'), value.get('pr_number'))
+            key = (value['repo'], value['pr_number'])
             observed = heads.get(key, {})
             if (observed.get('head_sha') != value.get('head_sha')
                     and stamp(observed.get('created_at')) > stamp(value.get('timestamp'))):
