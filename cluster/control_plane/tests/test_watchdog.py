@@ -299,3 +299,24 @@ class TestWatchdogLog:
         
         lines = (log_dir / "watchdog.log").read_text().strip().split("\n")
         assert len(lines) == 2
+
+
+def test_directory_age_does_not_hide_active_log(tmp_path):
+    import os
+    log = tmp_path / 'conductor.jsonl'
+    log.write_text('active\n')
+    old = (datetime.now(timezone.utc) - timedelta(hours=4)).timestamp()
+    os.utime(tmp_path, (old, old))
+    assert watchdog.check_service_stuck('conductor', tmp_path).passed
+    os.utime(log, (old, old))
+    assert not watchdog.check_service_stuck('conductor', tmp_path).passed
+
+
+def test_hourly_conductor_grace_period(tmp_path):
+    import os
+    log = tmp_path / 'conductor.jsonl'
+    log.write_text('tick\n')
+    old = (datetime.now(timezone.utc) - timedelta(minutes=60)).timestamp()
+    os.utime(log, (old, old))
+    assert watchdog.check_service_stuck('conductor', log).passed
+    assert not watchdog.check_service_stuck('dispatch', log).passed

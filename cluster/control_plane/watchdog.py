@@ -141,27 +141,25 @@ def _escalate_to_jeff(issue: str, details: str) -> None:
 def check_service_stuck(service: str, log_path: Path) -> HealthCheck:
     """Check if a service has logged recently."""
     if not log_path.exists():
-        if log_path.is_dir():
-            log_files = list(log_path.glob("*.jsonl")) + list(log_path.glob("*.log"))
-            if not log_files:
-                return HealthCheck(
-                    name=f"{service}_stuck",
-                    passed=True,
-                    message=f"No log files yet for {service}",
-                )
-            log_path = max(log_files, key=lambda p: p.stat().st_mtime)
-        else:
+        return HealthCheck(
+            name=f"{service}_stuck", passed=True,
+            message=f"Log file not found: {log_path}",
+        )
+    if log_path.is_dir():
+        log_files = list(log_path.glob("*.jsonl")) + list(log_path.glob("*.log"))
+        if not log_files:
             return HealthCheck(
-                name=f"{service}_stuck",
-                passed=True,
-                message=f"Log file not found: {log_path}",
+                name=f"{service}_stuck", passed=True,
+                message=f"No log files yet for {service}",
             )
+        log_path = max(log_files, key=lambda p: p.stat().st_mtime)
     
     try:
         mtime = datetime.fromtimestamp(log_path.stat().st_mtime, tz=timezone.utc)
         age_minutes = (datetime.now(timezone.utc) - mtime).total_seconds() / 60
         
-        if age_minutes > STUCK_THRESHOLD_MINUTES:
+        threshold = 75 if service == "conductor" else STUCK_THRESHOLD_MINUTES
+        if age_minutes > threshold:
             return HealthCheck(
                 name=f"{service}_stuck",
                 passed=False,
