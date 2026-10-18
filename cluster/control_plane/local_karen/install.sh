@@ -138,6 +138,10 @@ WRAPPER
 
     touch "$KAREN_DIR/module/cluster/__init__.py"
     touch "$KAREN_DIR/module/cluster/control_plane/__init__.py"
+    local repo_root
+    repo_root="$(cd "$SCRIPT_DIR/../../.." && pwd)"
+    PYTHONPATH="$repo_root" python3 -c 'from pathlib import Path; import sys; from cluster.control_plane.self_update import copy_karen_module; sys.exit(0 if copy_karen_module(Path(sys.argv[1])) else 1)' "$repo_root"
+
 
     if [[ -f "$CONFIG_DIR/config.json" ]]; then
         log_info "Config already exists at $CONFIG_DIR/config.json"

@@ -258,13 +258,8 @@ def fast_forward(repo_dir: Path) -> Tuple[bool, str]:
             timeout=30,
         )
         if result.returncode != 0:
-            subprocess.run(
-                ["git", "checkout", "-B", BRANCH, "origin/{}".format(BRANCH)],
-                cwd=repo_dir,
-                capture_output=True,
-                timeout=30,
-            )
-        
+            return False, old_head or ""
+
         result = subprocess.run(
             ["git", "merge", "--ff-only", "origin/{}".format(BRANCH)],
             cwd=repo_dir,
@@ -388,6 +383,12 @@ def copy_karen_module(repo_dir: Path, module_dir: Optional[Path] = None) -> bool
     
     try:
         dst_control_plane.mkdir(parents=True, exist_ok=True)
+        # Poller optional imports depend on the complete control plane, not just
+        # local_karen. Keep the installed package self-contained.
+        shutil.copytree(repo_dir / "cluster" / "control_plane", dst_control_plane,
+                        dirs_exist_ok=True,
+                        ignore=shutil.ignore_patterns("__pycache__", "*.pyc", ".pytest_cache"))
+
         
         if dst_karen.exists():
             shutil.rmtree(dst_karen)
@@ -613,3 +614,22 @@ def self_update(machine: str = "mini", install_dir: Optional[Path] = None) -> di
     _log_update_outcome("UPDATED: {} -> {}".format(old_head[:8], new_head[:8]), result)
     
     return result
+
+
+def main():
+    import argparse
+    parser = argparse.ArgumentParser(description="Fast-forward and reinstall StoryPool")
+    parser.add_argument('--machine', choices=['mini', 'nucbox'], default=os.environ.get('STORYPOOL_MACHINE', 'mini'))
+    args = parser.parse_args()
+    logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s')
+    try:
+        result = self_update(machine=args.machine)
+    except Exception as exc:
+        _log_update_outcome('FAILED: ' + type(exc).__name__, {'reason': type(exc).__name__})
+        return 1
+    print(f"{result['outcome']}: {result['reason']}", flush=True)
+    return 1 if result['outcome'] == 'FAILED' else 0
+
+
+if __name__ == '__main__':
+    raise SystemExit(main())

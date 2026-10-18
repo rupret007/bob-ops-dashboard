@@ -91,8 +91,10 @@ class TestShadowRunnerOutput(unittest.TestCase):
         """Shadow runner --json should produce valid JSON."""
         repo_root = Path(__file__).parent.parent.parent
         
+        log_dir = tempfile.TemporaryDirectory()
+        self.addCleanup(log_dir.cleanup)
         result = subprocess.run(
-            ["python3", "-m", "cluster.control_plane.shadow_runner", "--machine", "mini", "--json"],
+            ["python3", "-m", "cluster.control_plane.shadow_runner", "--machine", "mini", "--json", "--log-dir", log_dir.name],
             capture_output=True,
             text=True,
             cwd=repo_root,

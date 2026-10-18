@@ -303,6 +303,17 @@ install_ops_doctor() {
     launchctl load "$dst"
 }
 
+install_selfupdate() {
+    local dst="$HOME/Library/LaunchAgents/com.storypool.selfupdate.plist"
+    mkdir -p "$HOME/Library/LaunchAgents" "$HOME/.local/share/storypool"
+    sed -e "s|__REPO_PATH__|$REPO_ROOT|g" -e "s|__HOME__|$HOME|g" -e "s|__PATH__|$LAUNCHD_PATH|g" \
+        "$SCRIPT_DIR/com.storypool.selfupdate.plist" > "$dst"
+    # Keep a running updater loaded until it exits; avoid killing its own reinstall.
+    if ! launchctl list com.storypool.selfupdate >/dev/null 2>&1; then
+        launchctl load "$dst"
+    fi
+}
+
 install_karen_cli() {
     log_header "Installing Karen Gate CLI"
 
@@ -342,6 +353,8 @@ WRAPPER
 
     touch "$karen_dir/module/cluster/__init__.py"
     touch "$karen_dir/module/cluster/control_plane/__init__.py"
+    PYTHONPATH="$REPO_ROOT" python3 -c 'from pathlib import Path; import sys; from cluster.control_plane.self_update import copy_karen_module; sys.exit(0 if copy_karen_module(Path(sys.argv[1])) else 1)' "$REPO_ROOT"
+
 
     if [[ ! -f "$config_dir/config.json" ]]; then
         cat > "$config_dir/config.json" << 'CONFIG'
@@ -466,7 +479,7 @@ run_self_check() {
 uninstall_all() {
     log_header "Uninstalling All Components"
 
-    for label in com.storypool.ops-doctor com.storypool.shadow com.storypool.dispatch com.storypool.conductor com.storypool.watchdog com.storypool.dashboard com.storypool.karen-poller; do
+    for label in com.storypool.selfupdate com.storypool.ops-doctor com.storypool.shadow com.storypool.dispatch com.storypool.conductor com.storypool.watchdog com.storypool.dashboard com.storypool.karen-poller; do
         local plist="$HOME/Library/LaunchAgents/$label.plist"
         if launchctl list "$label" &>/dev/null; then
             log_info "Unloading $label..."
@@ -514,6 +527,7 @@ main() {
     install_conductor
     install_watchdog
     install_ops_doctor
+    install_selfupdate
     install_dashboard
     install_karen_cli
     run_self_check

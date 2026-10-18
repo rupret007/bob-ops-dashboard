@@ -307,6 +307,8 @@ WRAPPER
 
     touch "$karen_dir/module/cluster/__init__.py"
     touch "$karen_dir/module/cluster/control_plane/__init__.py"
+    PYTHONPATH="$REPO_ROOT" python3 -c 'from pathlib import Path; import sys; from cluster.control_plane.self_update import copy_karen_module; sys.exit(0 if copy_karen_module(Path(sys.argv[1])) else 1)' "$REPO_ROOT"
+
 
     if [[ ! -f "$config_dir/config.json" ]]; then
         cat > "$config_dir/config.json" << 'CONFIG'

@@ -47,18 +47,27 @@ try:
         EXCLUDED_REPOS,
         MAX_UNDRAFTS_PER_TICK,
     )
-    from ..self_update import self_update
-    from ..fix_dispatcher import dispatch_fix, should_attempt_fix
     BACKLOG_AVAILABLE = True
-    FIX_DISPATCH_AVAILABLE = True
 except ImportError:
     BACKLOG_AVAILABLE = False
-    FIX_DISPATCH_AVAILABLE = False
     MAX_UNDRAFTS_PER_TICK = 5
     ensure_label_exists = None  # type: ignore
-    dispatch_fix = None  # type: ignore
-    should_attempt_fix = None  # type: ignore
     write_karen_fails_report = None  # type: ignore
+
+# Self-update must remain available even if optional dispatch/backlog modules fail.
+try:
+    from ..self_update import self_update
+except ImportError as exc:
+    SELF_UPDATE_IMPORT_ERROR = str(exc)
+    self_update = None
+
+try:
+    from ..fix_dispatcher import dispatch_fix, should_attempt_fix
+    FIX_DISPATCH_AVAILABLE = True
+except ImportError:
+    FIX_DISPATCH_AVAILABLE = False
+    dispatch_fix = None
+    should_attempt_fix = None
 
 logging.basicConfig(
     level=logging.INFO,
@@ -301,17 +310,14 @@ def run_poll_once(config=None, auto_discover=True, auto_label=True, auto_update=
     Reads repos from environment or config, or auto-discovers if enabled.
     Auto-discovery wins over single-repo config (repos=[] or 'auto' triggers discovery).
     """
-    KarenConfig.migrate_config()
-    
-    if config is None:
-        config = KarenConfig.load()
-
     machine = os.environ.get("STORYPOOL_MACHINE", "mini")
     install_dir_env = os.environ.get("STORYPOOL_INSTALL_DIR")
     install_dir = Path(install_dir_env).expanduser() if install_dir_env else None
 
-    if auto_update and BACKLOG_AVAILABLE:
+    if auto_update:
         try:
+            if self_update is None:
+                raise RuntimeError(SELF_UPDATE_IMPORT_ERROR)
             update_result = self_update(machine=machine, install_dir=install_dir)
             outcome = update_result.get("outcome", "UNKNOWN")
             reason = update_result.get("reason", "no reason")
@@ -329,7 +335,11 @@ def run_poll_once(config=None, auto_discover=True, auto_label=True, auto_update=
             else:
                 logger.info("Self-update %s: %s", outcome, reason)
         except Exception as e:
-            logger.warning("Self-update exception: %s", e)
+            logger.warning("Self-update FAILED: %s", e)
+
+    KarenConfig.migrate_config()
+    if config is None:
+        config = KarenConfig.load()
 
     repos_env = os.environ.get("KAREN_REPOS", "")
     if repos_env:
