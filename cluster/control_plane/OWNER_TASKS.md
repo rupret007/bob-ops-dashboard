@@ -95,3 +95,22 @@ coverage evidence. Commands now repeat the owner guard immediately before
 `Popen`, after lease renewal and logging, to prevent a pause during renewal from
 starting a push. Normal process-group cleanup remains insufficient sandbox
 quiescence evidence, so execution stays disabled.
+
+Candidate snapshot/evidence protection (still disabled): after deterministic
+checks, the trusted runtime captures immutable `(path, executable, bytes)` tuples
+outside the sandbox. Tests receive a separate tree plus that immutable snapshot;
+the future trusted runner must mount those exact bytes read-only and keep test
+caches/output outside it. The runtime rejects changed test trees and rebuilds a
+fresh publication tree from retained bytes, so it never publishes the mutable
+model/test workspace. Symlinks and special files are rejected.
+
+`run_isolated_tests` must now return a trusted observer receipt with the exact
+`snapshot_sha256`, `observer=trusted-outside-sandbox-v1`, and `baseline`/`candidate`
+per-test call outcomes. Every newly added top-level Python regression node ID
+must be observed failing on the pinned baseline with the candidate regression
+installed, then passing on the candidate snapshot. Skips, collection/import
+errors, missing tests, suite exit codes and repository-written report files do
+not satisfy this requirement. Unsupported test identifiers fail closed. The
+receipt's marker alone is not provenance: the OS-isolated external observer,
+read-only mount, full teardown barrier, and authority integration still require
+implementation and review. Production admission/execution stays hard-disabled.

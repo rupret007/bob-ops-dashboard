@@ -101,12 +101,25 @@ def test_owner_worker_never_runs_outside_runtime(setup_runtime):
         create_owner_draft(request, authority)
 
 
-def test_real_generic_worker_pipeline_checks_tests_and_creates_only_draft(setup_runtime):
+@pytest.mark.parametrize('attack', ['none', 'missing_evidence', 'mutated_tests'])
+def test_real_generic_worker_pipeline_checks_tests_and_creates_only_draft(setup_runtime, attack):
     runtime, request, inbox, authority = setup_runtime
     calls = []
     committed = False
     authority.isolated_codex_command.return_value = ['operator-test-isolation-adapter']
-    authority.run_isolated_tests.side_effect = lambda tree, tests, run, **kwargs: run(['isolated-test-adapter'], tree)
+    def observed_tests(tree, tests, run, **kwargs):
+        run(['isolated-test-adapter'], tree)
+        required = kwargs['required_regressions']
+        assert kwargs['immutable_snapshot'].digest == kwargs['snapshot_sha256']
+        if attack == 'missing_evidence':
+            return None
+        if attack == 'mutated_tests':
+            (tree / 'untested.py').write_text('untested mutation')
+        return dict(snapshot_sha256=kwargs['snapshot_sha256'],
+                    observer='trusted-outside-sandbox-v1', baseline_sha=kwargs['baseline_sha'],
+                    candidate_suite_passed=True, baseline={test: 'failed' for test in required},
+                    candidate={test: 'passed' for test in required})
+    authority.run_isolated_tests.side_effect = observed_tests
     def command(args, cwd=None, **kwargs):
         nonlocal committed
         fix_worker._execution_guard.get()()
@@ -144,6 +157,11 @@ def test_real_generic_worker_pipeline_checks_tests_and_creates_only_draft(setup_
         return ''
     with patch('cluster.control_plane.owner_task_runtime.Lease'), patch.object(fix_worker, 'run', side_effect=command), patch.object(fix_worker, 'test_command', return_value=['pytest']):
         runtime(request, branch_lease=MagicMock())
+        if attack != 'none':
+            with pytest.raises(CoordinationError, match='regression evidence|workspace changed'):
+                runtime.execute(request['request_id'])
+            assert not any(c[:2] == ['git', 'commit'] or c[:2] == ['git', 'push'] for c in calls)
+            return
         assert runtime.execute(request['request_id']) == 'complete'
     assert any(c[0] == 'operator-test-isolation-adapter' for c in calls)
     tests = next(i for i,c in enumerate(calls) if c == ['isolated-test-adapter'])
