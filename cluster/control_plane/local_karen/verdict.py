@@ -231,6 +231,7 @@ def create_verdict(
                 "findings": r.findings.to_dict() if r.findings else {},
                 "model": r.model,
                 "effort": r.effort,
+                **({"scope": r.scope} if r.scope is not None else {}),
             }
             for r in review_results
         ],

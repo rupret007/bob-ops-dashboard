@@ -57,3 +57,14 @@ grey and excludes them from failed health. Self-update remains available so a
 maintenance host can receive repairs; returning to service requires another
 confirmed POST. The independent Web Bob shell driver still needs the planned
 single-scheduler migration; these controls cover repository-managed services.
+
+Oversized Karen reviews use lossless file-boundary chunks capped at 12,000 diff
+characters (long files and single lines are continued with explicit file context).
+Every chunk retains the original full head SHA, whole-PR risk tier and complete
+file manifest. The primary and independent MiniMax reviewer must both PASS every
+chunk. Each stored review includes its chunk number, total, character range, file
+header and SHA, so complete coverage can be audited. Gemini receives the complete
+supplied chunk with no silent tail truncation. A failing chunk blocks approval;
+provider errors stay retryable ERROR. The final gate still rechecks the live head
+before persisting any verdict. Cross-file uncertainty must block with BORDERLINE;
+chunked review does not certify access to unchanged repository files.

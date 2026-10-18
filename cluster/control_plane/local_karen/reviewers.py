@@ -14,11 +14,12 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 import subprocess
 import tempfile
 import time
 from abc import ABC, abstractmethod
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import datetime, timezone, timedelta
 from enum import Enum
 from pathlib import Path
@@ -101,6 +102,7 @@ class ReviewResult:
     key_source: str = ""
     model: str = ""
     effort: str = ""
+    scope: Optional[dict] = None
 
     @property
     def passed(self) -> bool:
@@ -129,6 +131,8 @@ class ReviewResult:
             "raw_response": self.raw_response,
             "key_source": self.key_source,
         }
+        if self.scope is not None:
+            d["scope"] = self.scope
         if self.findings:
             d["findings"] = self.findings.to_dict()
         return d
@@ -675,8 +679,8 @@ class GeminiReviewer(BaseReviewer):
             sha=pr.head_sha,
             pr_description=pr_description,
             changed_files="\n".join("- {}".format(f) for f in pr.changed_files),
-            diff=pr.diff[:12000],
-            diff_len=min(len(pr.diff), 12000),
+            diff=pr.diff,
+            diff_len=len(pr.diff),
         )
 
         try:
@@ -1088,10 +1092,11 @@ def get_available_reviewers(config: KarenConfig) -> List[Tuple[str, BaseReviewer
     return available
 
 
-def run_review_chain(
+def _run_review_chain_single(
     pr,  # type: PRInfo
     config,  # type: KarenConfig
     require_two_pass=True,  # type: bool
+    tier=None,
 ):
     # type: (...) -> Tuple[ReviewResult, List[ReviewResult]]
     """Merge primary reviews and required MiniMax review fail-closed.
@@ -1100,7 +1105,7 @@ def run_review_chain(
     BORDERLINE blocks approval. A PASS always requires MiniMax PASS with findings,
     including when legacy callers supply require_two_pass=False.
     """
-    tier = classify_risk_tier(pr)
+    tier = tier or classify_risk_tier(pr)
     all_results = []  # type: List[ReviewResult]
     pass_votes = []  # type: List[ReviewResult]
     fail_votes = []  # type: List[ReviewResult]
@@ -1189,3 +1194,79 @@ def run_review_chain(
         confidence=min(r.confidence for r in pass_votes + [second]),
         tier=tier, findings=primary.findings,
     ), all_results
+
+
+REVIEW_DIFF_LIMIT = 12000
+
+
+def split_review_diff(diff: str, limit: int = REVIEW_DIFF_LIMIT) -> List[str]:
+    """Keep file boundaries where possible; never drop even an oversized line.
+
+    Joining the returned chunks reproduces the exact original diff. Each fragment
+    keeps its file header as separate review context in run_review_chain.
+    """
+    if limit <= 0:
+        raise ValueError("Review chunk limit must be positive")
+    chunks = []
+    for section in re.split(r"(?m)(?=^diff --git )", diff):
+        chunk = ""
+        for line in section.splitlines(keepends=True):
+            if chunk and len(chunk) + len(line) > limit:
+                chunks.append(chunk)
+                chunk = ""
+            while len(line) > limit:
+                chunks.append(line[:limit])
+                line = line[limit:]
+            chunk += line
+        if chunk:
+            chunks.append(chunk)
+    return chunks
+
+
+def run_review_chain(pr, config, require_two_pass=True):
+    """Approve only after every part of the pinned diff has two valid votes.
+
+    Whole-PR deterministic checks run in the gate before this function. Preserve
+    the original risk tier, complete file manifest and SHA for every chunk. A
+    provider outage remains ERROR, never an actionable finding or a partial PASS.
+    """
+    if len(pr.diff) <= REVIEW_DIFF_LIMIT:
+        return _run_review_chain_single(pr, config, require_two_pass)
+
+    chunks = split_review_diff(pr.diff)
+    tier = classify_risk_tier(pr)
+    all_reviews = []
+    passed = []
+    offset = 0
+    file_header = "(diff preamble)"
+    for index, chunk in enumerate(chunks, 1):
+        if chunk.startswith("diff --git "):
+            file_header = chunk.splitlines()[0]
+        scope = {"chunk": index, "total": len(chunks), "start": offset,
+                 "end": offset + len(chunk), "head_sha": pr.head_sha,
+                 "file_header": file_header}
+        context = ("Review scope: chunk {}/{} at head {}, original diff characters "
+                   "{}:{} of {}. File context: {}. All chunks require independent "
+                   "primary and MiniMax PASS before approval. Flag uncertain "
+                   "cross-file interactions as BORDERLINE.\n\n").format(
+                       index, len(chunks), pr.head_sha, offset, scope["end"],
+                       len(pr.diff), file_header)
+        part = replace(pr, diff=chunk, description=context + pr.description)
+        result, reviews = _run_review_chain_single(part, config, require_two_pass, tier=tier)
+        all_reviews.extend(replace(review, scope=dict(scope)) for review in reviews)
+        if not result.passed:
+            return replace(result, reason="Chunk {}/{}: {}".format(
+                index, len(chunks), result.reason), scope=scope), all_reviews
+        passed.append(result)
+        offset += len(chunk)
+
+    findings = ReviewFindings()
+    for result in passed:
+        for name in ReviewFindings.__dataclass_fields__:
+            getattr(findings, name).extend(getattr(result.findings, name))
+    return ReviewResult(
+        reviewer="chunked-chain", verdict=ReviewVerdict.PASS,
+        reason="All {} chunks of the complete pinned diff independently passed primary and MiniMax review".format(len(chunks)),
+        confidence=min(result.confidence for result in passed), tier=tier,
+        findings=findings,
+    ), all_reviews
