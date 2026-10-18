@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-10-17T23:23:01.307248-05:00",
-  "generated_at_display": "Sat Oct 17, 2026 \u00b7 11:23 PM CDT",
+  "generated_at": "2026-10-17T23:38:03.004787-05:00",
+  "generated_at_display": "Sat Oct 17, 2026 \u00b7 11:38 PM CDT",
   "timezone": "America/Chicago",
   "owner": "rupret007",
   "dashboard": "bob-ops-dashboard",
@@ -454,18 +454,18 @@
           "url": "https://github.com/rupret007/Cursor-OpenClaw-Integration",
           "repo_url": "https://github.com/rupret007/Cursor-OpenClaw-Integration",
           "private": false,
-          "status": "green",
-          "chip": "Green",
+          "status": "yellow",
+          "chip": "Yellow",
           "default_branch": "main",
           "tip_sha": "2348c92",
           "tip_date": "2026-09-11T03:22:23Z",
-          "open_prs": 0,
-          "open_pr_url": null,
-          "open_pr_number": null,
+          "open_prs": 1,
+          "open_pr_url": "https://github.com/rupret007/Cursor-OpenClaw-Integration/pull/32",
+          "open_pr_number": 32,
           "open_pr_draft": false,
           "open_pr_stack": [],
           "pr_listing_complete": true,
-          "agent_url": null,
+          "agent_url": "https://cursor.com/agents/bc-b417dc93-e3d8-5802-adac-f895f47858a9",
           "ci": {
             "name": "Pull request integration",
             "conclusion": "success",
@@ -495,8 +495,8 @@
           "status": "yellow",
           "chip": "Yellow",
           "default_branch": "main",
-          "tip_sha": "534232e",
-          "tip_date": "2026-10-18T04:08:05Z",
+          "tip_sha": "b01f3aa",
+          "tip_date": "2026-10-18T04:23:15Z",
           "open_prs": 4,
           "open_pr_url": "https://github.com/rupret007/bob-ops-dashboard/pull/84",
           "open_pr_number": 84,
@@ -900,7 +900,7 @@
     "barker"
   ],
   "publish_notes": "Public board -- no secrets or customer paths. Private repositories stay high-level; AI Music Vault stays private-content-boundary only.",
-  "refresh_started_ms": 1792297350902,
+  "refresh_started_ms": 1792298252619,
   "agents_source": "file:stale->unknown",
   "agents": [
     {
@@ -1099,7 +1099,7 @@
     }
   ],
   "llm_work_now_freshness": {
-    "generated_at": "2026-10-17 23:23 CT",
+    "generated_at": "2026-10-17 23:38 CT",
     "warn_ttl_sec": 1200,
     "warnings": [],
     "ok": true
@@ -1130,7 +1130,7 @@
     ],
     "scorecards": {
       "v": "scorecards/v1",
-      "generated_at": "2026-10-18T04:23:02.533887+00:00",
+      "generated_at": "2026-10-18T04:38:04.342843+00:00",
       "windows": {
         "24h": {
           "providers": {
