@@ -3,7 +3,10 @@
     "id": "R01",
     "rule": "Verify real outcomes before claiming success (review posted, PR pushed at sha, merged). Never report intentions as results.",
     "status": "missing",
-    "scenario": "Worker exits zero without a changed remote SHA: ledger must remain unverified; a verified exact remote SHA alone may count as pushed."
+    "scenario": "Worker exits zero without a changed remote SHA: ledger must remain unverified; a verified exact remote SHA alone may count as pushed.",
+    "partial_evidence": [
+      "cluster/parity/tests/test_progress_timestamps.py: unchanged jobs retain timestamps; dashboard uses terminal event times. Remote-push and posted-review proof still need audit."
+    ]
   },
   {
     "id": "R02",

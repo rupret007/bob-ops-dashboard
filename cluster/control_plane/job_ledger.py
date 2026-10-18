@@ -141,11 +141,13 @@ class JobLedger:
     
     def _save_jobs(self, jobs: List[Job]) -> None:
         """Save all jobs to ledger file atomically."""
+        previous = {job.job_id: job.to_dict() for job in self._load_jobs()}
         tmp_file = self.jobs_dir / ".ledger.tmp"
         try:
             with open(tmp_file, "w") as f:
                 for job in jobs:
-                    job.updated_at = _now_iso()
+                    if previous.get(job.job_id) != job.to_dict():
+                        job.updated_at = _now_iso()
                     f.write(json.dumps(job.to_dict()) + "\n")
             tmp_file.rename(self.ledger_file)
         except OSError:

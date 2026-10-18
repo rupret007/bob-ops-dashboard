@@ -81,3 +81,17 @@ def test_live_panel_uses_svg_and_safe_text():
     assert 'textContent=data.monitor' in page
     assert 'http-equiv="refresh"' not in page
     assert 'https://cdn' not in page
+
+
+def test_old_failures_keep_their_actual_time_after_ledger_rewrite(tmp_path):
+    old = '2026-01-01T00:00:00+00:00'
+    now = datetime.now(timezone.utc).isoformat()
+    ledger = tmp_path / 'jobs' / 'ledger.jsonl'
+    ledger.parent.mkdir()
+    ledger.write_text(json.dumps(dict(job_id='old', state='failed', end_time=old,
+                                     created_at=old, updated_at=now)) + '\n' +
+                      json.dumps(dict(job_id='new', state='queued', created_at=now)) + '\n')
+    snapshot = EngineCollector(tmp_path, tmp_path, 'nucbox').collect()
+    assert snapshot['activity'][0]['text'].endswith('queued')
+    assert snapshot['activity'][1]['timestamp'] == old
+    assert snapshot['gauges'][5]['value'] is None

@@ -71,7 +71,11 @@ class EngineCollector:
         events = []
         for job in rows(self.data_dir / 'jobs' / 'ledger.jsonl'):
             jobs[job.get('job_id', '')] = job
-            events.append({'timestamp': job.get('updated_at') or job.get('created_at', ''),
+            # Terminal timestamps survive old ledger rewrites that refreshed updated_at.
+            event_time = (job.get('end_time') if job.get('state') in ('done', 'failed', 'expired')
+                          else job.get('start_time') if job.get('state') == 'running'
+                          else job.get('created_at'))
+            events.append({'timestamp': event_time or job.get('updated_at') or job.get('created_at', ''),
                            'text': '{} #{}: {}'.format(job.get('repo', ''), job.get('pr_number', ''), job.get('state', 'unknown'))})
         latest = [j for j in jobs.values() if j.get('machine', self.machine) == self.machine]
         completed = [j for j in latest if j.get('state') == 'done' and j.get('outcome_verified')]
