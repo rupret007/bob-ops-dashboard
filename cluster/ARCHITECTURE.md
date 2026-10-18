@@ -400,3 +400,14 @@ release and verifies administrative subjects remain denied on both CI runtimes.
 This template is a fresh-install contract: existing broker ACLs still require
 the documented operator migration/reload; monitors never bypass unavailable
 retry storage or silently rewrite an installed broker configuration.
+
+Peer endpoint provisioning: watchdog, verdict push and dashboard controls resolve
+explicit `STORYPOOL_<MACHINE>_URL`, then private `~/.config/storypool/peers.json`.
+Managed monitors can provision the same non-secret mapping in
+`~/.local/share/storypool/peers.json` (`STORYPOOL_DATA_DIR` overrides that directory).
+An explicitly selected `STORYPOOL_PEERS_FILE` is authoritative. Each endpoint must
+remain a private HTTP(S) origin; malformed configuration fails closed. Runtime
+provisioning avoids requiring a local tailscaled in WSL when its Windows host
+provides tailnet routing. Without either mapping, discovery still uses tailscale.
+Peer address failures are distinguished from transport failures in dashboard
+sync evidence, and last verified health is retained.

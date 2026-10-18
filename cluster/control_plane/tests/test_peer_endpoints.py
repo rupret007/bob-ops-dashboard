@@ -110,3 +110,46 @@ def test_assertion_string_spelling_does_not_weaken_gate_but_changed_values_fail(
         diff = 'diff --git a/test_host.py b/test_host.py\n--- a/test_host.py\n+++ b/test_host.py\n@@ -1 +1 @@\n-' + before + '\n+' + after + '\n'
         pr = PRInfo('owner', 'repo', 1, 'a'*40, '', '', False, diff, {}, [], [])
         assert check_tests_not_weakened(pr, KarenConfig()).verdict == expected
+
+
+def test_managed_runtime_endpoint_works_without_local_tailscaled(tmp_path, monkeypatch):
+    monkeypatch.delenv('STORYPOOL_PEERS_FILE')
+    monkeypatch.setenv('HOME', str(tmp_path / 'home'))
+    monkeypatch.setenv('STORYPOOL_DATA_DIR', str(tmp_path / 'state'))
+    state = tmp_path / 'state'
+    state.mkdir()
+    (state / 'peers.json').write_text(json.dumps({'mini': 'https://' + dns() + ':8790'}))
+    with patch.object(peers, 'tailnet_status', side_effect=AssertionError('no local tailscaled')):
+        assert peers.peer_url('mini') == 'https://' + dns() + ':8790'
+
+
+def test_managed_runtime_endpoint_still_rejects_public_or_malformed_state(tmp_path, monkeypatch):
+    monkeypatch.delenv('STORYPOOL_PEERS_FILE')
+    monkeypatch.setenv('HOME', str(tmp_path / 'home'))
+    monkeypatch.setenv('STORYPOOL_DATA_DIR', str(tmp_path))
+    path = tmp_path / 'peers.json'
+    for text in (json.dumps({'mini': 'https://example.com:8790'}), 'malformed'):
+        path.write_text(text)
+        with patch.object(peers, 'tailnet_status', side_effect=AssertionError('must fail closed')):
+            with pytest.raises(peers.PeerUnavailable):
+                peers.peer_url('mini')
+
+
+def test_explicit_configuration_precedes_managed_runtime_state(tmp_path, monkeypatch):
+    monkeypatch.setenv('STORYPOOL_DATA_DIR', str(tmp_path / 'state'))
+    (tmp_path / 'peers.json').write_text(json.dumps({'mini': 'https://' + dns() + ':8790'}))
+    (tmp_path / 'state').mkdir()
+    (tmp_path / 'state' / 'peers.json').write_text('malformed')
+    assert peers.peer_url('mini') == 'https://' + dns() + ':8790'
+
+
+def test_peer_sync_dashboard_explains_missing_discovery_without_transport_secrets(tmp_path, monkeypatch):
+    monkeypatch.setattr(watchdog, 'LOG_DIR', tmp_path)
+    with patch.object(peers, 'peer_url', side_effect=peers.PeerUnavailable('private diagnostic')):
+        assert not watchdog.sync_peer_health('nucbox')
+    status = json.loads((tmp_path / 'machines/mini/sync-status.json').read_text())
+    assert status['failure_kind'] == 'address-unavailable'
+    assert 'peer address unavailable' in status['detail']
+    assert 'private diagnostic' not in json.dumps(status)
+    view = EngineCollector(tmp_path, tmp_path / 'karen', 'nucbox').collect()
+    assert view['machines']['mini']['peer_sync']['detail'] == status['detail']

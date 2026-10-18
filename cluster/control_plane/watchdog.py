@@ -139,7 +139,7 @@ def _escalate_to_jeff(issue: str, details: str) -> None:
     logger.warning("Escalated to NEEDS_JEFF.md: %s", issue)
 
 
-from .peer_endpoints import PeerURLs
+from .peer_endpoints import PeerURLs, PeerUnavailable
 
 PEER_URLS = PeerURLs()
 
@@ -176,12 +176,16 @@ def store_peer_engine(peer: str, data: dict) -> bool:
     return True
 
 
-def _peer_sync_status(peer, ok):
+def _peer_sync_status(peer, ok, failure_kind=None):
     path = LOG_DIR / 'machines' / peer / 'sync-status.json'
     path.parent.mkdir(parents=True, exist_ok=True)
     value = {'timestamp': _now_iso(), 'ok': ok,
              'detail': 'Peer sync verified' if ok else
                        'Peer sync failed; check private endpoint configuration and connectivity'}
+    if failure_kind:
+        value['failure_kind'] = failure_kind
+        if failure_kind == 'address-unavailable':
+            value['detail'] += '; peer address unavailable; configure private peers.json'
     temporary = path.with_suffix('.tmp')
     temporary.write_text(json.dumps(value))
     temporary.replace(path)
@@ -211,8 +215,8 @@ def sync_peer_health(machine: str) -> bool:
             f.write(json.dumps(row) + "\n")
         _peer_sync_status(peer, True)
         return True
-    except Exception:
-        _peer_sync_status(peer, False)
+    except Exception as exc:
+        _peer_sync_status(peer, False, "address-unavailable" if isinstance(exc, PeerUnavailable) else "transport-or-response")
         logger.warning("peer health sync for %s failed; check private endpoint configuration and connectivity", peer)
         return False
 

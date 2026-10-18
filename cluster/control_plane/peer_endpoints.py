@@ -61,13 +61,21 @@ def peer_url(machine):
         raise PeerUnavailable('Unknown machine')
     value = os.environ.get('STORYPOOL_' + machine.upper() + '_URL')
     if not value:
-        path = Path(os.environ.get('STORYPOOL_PEERS_FILE', '~/.config/storypool/peers.json')).expanduser()
-        try:
-            value = json.loads(path.read_text()).get(machine)
-        except FileNotFoundError:
-            pass
-        except (OSError, ValueError, AttributeError) as exc:
-            raise PeerUnavailable('Private peer configuration unreadable') from exc
+        paths = [Path(os.environ.get('STORYPOOL_PEERS_FILE', '~/.config/storypool/peers.json')).expanduser()]
+        # A managed installation may be unable to change ~/.config (for example
+        # the monitor sandbox). Keep an explicit private endpoint in shared
+        # runtime state rather than depending on a local tailscaled in WSL.
+        if 'STORYPOOL_PEERS_FILE' not in os.environ:
+            paths.append(Path(os.environ.get('STORYPOOL_DATA_DIR', '~/.local/share/storypool')).expanduser() / 'peers.json')
+        for path in paths:
+            try:
+                value = json.loads(path.read_text()).get(machine)
+            except FileNotFoundError:
+                continue
+            except (OSError, ValueError, AttributeError) as exc:
+                raise PeerUnavailable('Private peer configuration unreadable') from exc
+            if value:
+                break
     if value:
         return private_url(value)
     node = peer_node(machine)
