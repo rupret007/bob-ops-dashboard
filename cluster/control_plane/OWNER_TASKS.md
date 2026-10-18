@@ -34,3 +34,35 @@ wire this consumer to the PR-only worker or local legacy queue. Until the
 runtime supplies those real gates and durable receipts, owner tasks remain
 pending and no Codex lane is started. This change requires review and deployment
 before Web Bob can see the module; it does not install or enable services.
+
+A generic execution boundary is now implemented in `owner_task_runtime.py`.
+It creates a new bounded draft branch at the request's full pinned SHA; it never
+maps owner descriptions to existing repair PRs. The runtime uses shared task and
+branch leases, an atomic lane reservation, fresh controls/quota, machine guards,
+and a durable running fence. A crash or uncertain push/PR response remains
+`running`/`uncertain` and requires operator reconciliation rather than replay.
+Every supervised command and every running process poll repeats the guards;
+lease loss, pause, stale quota, or a guard breach stops the process group.
+Tests and deterministic secret/dangerous-command/test-weakening checks precede
+commit and verified branch push. New PRs are always drafts. This provides no
+permission to merge, publish, send messages, or deploy.
+
+This is an opt-in implementation, not a live runtime. No scheduler is enabled.
+`OwnerTaskRuntime` deliberately has no production authority defaults. Before
+activation, an operator-owned adapter must implement fresh cluster
+`read_controls`, `read_codex_quota`, `check_lane`, atomic `reserve_lane`,
+`isolated_codex_command`, and `run_isolated_tests`. Authority records are read
+from that private adapter, never from the owner request. Controls and quota
+records require `scope=cluster` and `observed_at` within 30 seconds. Codex usage
+must be strictly below 75%. Lane reservations must enforce the shared guards,
+NucBox's seven-lane ceiling and two Codex reservations, and fail closed on an
+unreachable shared authority.
+
+The isolated command/tests adapters must enforce OS isolation, network denial,
+no host credentials or secret environment, and read-only Git metadata. They must
+preserve the default newest Codex model and xhigh effort. CLI prompt wording or
+workspace-write flags alone do not satisfy this contract. No fallback command
+exists. The test adapter demonstrates progression and race boundaries; it is
+not proof of production sandbox/authority availability. Live ACL provisioning,
+real authority integration, sandbox verification, scheduling and Karen review
+remain blockers. Keep Web Bob task receipts pending until those are reviewed.

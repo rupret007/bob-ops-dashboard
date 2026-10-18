@@ -24,6 +24,7 @@ from .local_karen.verdict import load_verdict
 
 CODEX_EFFORT = 'xhigh'
 _lease = ContextVar('cluster_lease', default=None)
+_execution_guard = ContextVar('owner_execution_guard', default=None)
 
 
 def codex_model():
@@ -68,6 +69,9 @@ def _run_claimed(args, cwd, lease, **kwargs):
     deadline = time.monotonic() + 1800
     try:
         while True:
+            guard = _execution_guard.get()
+            if guard is not None:
+                guard()
             if lease.lost:
                 from .coordination import ClaimLost
                 raise ClaimLost('Cluster claim lost during command; command stopped')
@@ -94,6 +98,9 @@ def _run_claimed(args, cwd, lease, **kwargs):
 
 
 def run(args, cwd=None, **kwargs):
+    guard = _execution_guard.get()
+    if guard is not None:
+        guard()
     lease = _lease.get()
     if lease is not None:
         lease.renew()
