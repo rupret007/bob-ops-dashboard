@@ -299,3 +299,18 @@ copied with peer engine snapshots, never echoed back as the local host's state.
 Mini peer health defaults to its verified tailnet HTTPS hostname on port 8790;
 `STORYPOOL_MINI_URL` remains the explicit deployment override. Plain HTTP to the
 TLS listener returns 400 and cannot be treated as machine failure.
+
+The guardian also GETs `http://127.0.0.1:8790/` every cycle, without proxy
+settings or redirects. HTTP failures trigger launchd dashboard reload on Mini or
+a systemd service restart on NucBox, followed by bounded HTTP verification.
+The shared Mini reload helper requires dashboard HTTP success after bootstrap
+and kickstart, so installer/self-update cannot report a registered but dead
+dashboard as successful. Periodic agents may legitimately be idle; their reloads
+verify launchd registration. A failed dashboard restart is logged and appended to
+NEEDS_JEFF.md once per host per UTC day. Guardian status and the dashboard show
+verified/failed/unknown HTTP evidence separately from service registration.
+
+A failed reinstall now returns FAILED and retains `.storypool-reinstall-pending`
+in the installation checkout. At the next tick, even when local and remote SHA
+match, the updater reruns the gate and retries installation. Only a verified
+installation removes the marker; updating Git alone cannot hide a failed deploy.

@@ -319,6 +319,7 @@ def run_tests(repo_dir: Path) -> bool:
              "cluster/tests/test_install_scripts.py",
              "cluster/tests/test_python39.py",
              "cluster/control_plane/tests/test_guardian.py",
+             "cluster/control_plane/tests/test_guardian_http.py",
              "-q", "--tb=short", "-r", "fE"],
             cwd=repo_dir,
             capture_output=True,
@@ -496,6 +497,22 @@ def reinstall(repo_dir: Path, machine: str) -> bool:
         return False
 
 
+def finish_install(repo_dir: Path, machine: str, result: dict) -> dict:
+    """Persist unfinished deployment so an unchanged HEAD still retries it."""
+    pending = repo_dir / '.storypool-reinstall-pending'
+    pending.touch()
+    result['reinstalled'] = reinstall(repo_dir, machine)
+    if result['reinstalled']:
+        pending.unlink(missing_ok=True)
+        result['outcome'] = 'UPDATED'
+        result['reason'] = 'code current and agents reinstalled and verified'
+    else:
+        result['outcome'] = 'FAILED'
+        result['reason'] = 'reinstall or agent verification failed; deployment will retry next cycle'
+    _log_update_outcome(result['outcome'] + ': ' + result['reason'], result)
+    return result
+
+
 def self_update(machine: str = "mini", install_dir: Optional[Path] = None) -> dict:
     """Attempt self-update if safe.
     
@@ -572,6 +589,13 @@ def self_update(machine: str = "mini", install_dir: Optional[Path] = None) -> di
     result["remote_head"] = remote_sha[:12]
     
     if remote_sha == old_head:
+        if (repo_dir / '.storypool-reinstall-pending').exists():
+            if not run_tests(repo_dir):
+                result['outcome'] = 'FAILED'
+                result['reason'] = 'pending reinstall gate tests failed; retry retained'
+                _log_update_outcome('FAILED: ' + result['reason'], result)
+                return result
+            return finish_install(repo_dir, machine, result)
         result["reason"] = "already at latest: {}".format(old_head[:12])
         result["outcome"] = "SKIPPED"
         _log_update_outcome("SKIPPED: already at latest {}".format(old_head[:12]), result)
@@ -618,16 +642,7 @@ def self_update(machine: str = "mini", install_dir: Optional[Path] = None) -> di
     if migrate_config():
         result["config_migrated"] = True
     
-    if reinstall(repo_dir, machine):
-        result["reinstalled"] = True
-        result["reason"] = "updated {} -> {} and reinstalled".format(old_head[:8], new_head[:8])
-    else:
-        result["reason"] = "updated {} -> {} but reinstall failed".format(old_head[:8], new_head[:8])
-    
-    result["outcome"] = "UPDATED"
-    _log_update_outcome("UPDATED: {} -> {}".format(old_head[:8], new_head[:8]), result)
-    
-    return result
+    return finish_install(repo_dir, machine, result)
 
 
 def main():

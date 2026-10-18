@@ -224,6 +224,9 @@ class EngineCollector:
                                'detail': detail, 'sync_age_seconds': sync_age if machine != self.machine else None,
                                'guardian': (read_json(self.data_dir / 'guardian-status.json') or {})
                                if machine == self.machine else peer.get('guardian', {})}
+            if health[machine]['guardian'].get('dashboard', {}).get('ok') is False:
+                health[machine]['state'] = 'red'
+                health[machine]['detail'] = 'dashboard HTTP restart failed; needs Jeff'
         dispatch = read_json(self.data_dir / 'dispatch' / 'dispatch-status.json')
         if isinstance(dispatch, dict):
             decisions = dispatch.get('summary', {}).get('decisions', [])
