@@ -13,6 +13,7 @@ from __future__ import annotations
 import fcntl
 import json
 import os
+import sys
 import subprocess
 import time
 from dataclasses import dataclass, field, asdict
@@ -91,8 +92,36 @@ class Job:
         try:
             os.kill(self.pid, 0)
             return True
+        except PermissionError:
+            # The process exists but belongs to another user/namespace.
+            return True
         except (OSError, ProcessLookupError):
-            return False
+            pass
+        # A checker in a different PID namespace (e.g. a sandboxed monitor)
+        # cannot see the worker. Linux workers run as transient systemd units,
+        # so ask systemd; if systemd cannot answer, do not declare the worker
+        # dead (the lease expiry still bounds a truly dead job).
+        unit_state = _systemd_job_unit_state(self.job_id)
+        if unit_state is None:
+            return sys.platform == "linux"
+        return unit_state in ("active", "activating", "reloading")
+
+
+def _systemd_job_unit_state(job_id: str) -> Optional[str]:
+    """Return systemd's state for a worker unit, or None when unknown."""
+    if sys.platform != "linux" or not job_id:
+        return None
+    try:
+        result = subprocess.run(
+            ["systemctl", "--user", "is-active", f"storypool-job-{job_id}.service"],
+            capture_output=True, text=True, timeout=10,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    state = (result.stdout or "").strip()
+    if state in ("active", "activating", "reloading", "inactive", "failed", "deactivating"):
+        return state
+    return None
 
 
 def _now_iso() -> str:
