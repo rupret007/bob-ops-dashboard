@@ -9,6 +9,9 @@ import unittest
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+from cluster.control_plane.budget_tracker import BudgetTracker
+from cluster.control_plane.metrics import MetricsTracker
+
 from cluster.control_plane.conductor import (
     CODEX_WEEKLY_CAP_PCT,
     ActionType,
@@ -261,9 +264,15 @@ class TestConductor(unittest.TestCase):
         self.log_dir = Path(self.tmpdir) / "logs"
         self.verdict_dir = Path(self.tmpdir) / "verdicts"
         self.conductor = Conductor(
+            budget_tracker=BudgetTracker(Path(self.tmpdir) / "budget"),
+            metrics_tracker=MetricsTracker(Path(self.tmpdir) / "metrics"),
             log_dir=self.log_dir,
             verdict_dir=self.verdict_dir,
         )
+
+    def test_budget_and_metrics_are_isolated(self):
+        self.assertEqual(self.conductor.budget.data_dir, Path(self.tmpdir) / "budget")
+        self.assertEqual(self.conductor.metrics.metrics_dir, Path(self.tmpdir) / "metrics")
 
     def test_writes_log_entries(self):
         """Log entries are written to JSONL file."""
@@ -325,6 +334,8 @@ class TestConductorValidation(unittest.TestCase):
         self.log_dir = Path(self.tmpdir) / "logs"
         self.verdict_dir = Path(self.tmpdir) / "verdicts"
         self.conductor = Conductor(
+            budget_tracker=BudgetTracker(Path(self.tmpdir) / "budget"),
+            metrics_tracker=MetricsTracker(Path(self.tmpdir) / "metrics"),
             log_dir=self.log_dir,
             verdict_dir=self.verdict_dir,
         )
@@ -554,6 +565,8 @@ class TestConductorExecution(unittest.TestCase):
     def setUp(self):
         self.tmpdir = tempfile.mkdtemp()
         self.conductor = Conductor(
+            budget_tracker=BudgetTracker(Path(self.tmpdir) / "budget"),
+            metrics_tracker=MetricsTracker(Path(self.tmpdir) / "metrics"),
             log_dir=Path(self.tmpdir) / "logs",
             verdict_dir=Path(self.tmpdir) / "verdicts",
         )
@@ -641,6 +654,8 @@ class TestConductorDigest(unittest.TestCase):
     def setUp(self):
         self.tmpdir = tempfile.mkdtemp()
         self.conductor = Conductor(
+            budget_tracker=BudgetTracker(Path(self.tmpdir) / "budget"),
+            metrics_tracker=MetricsTracker(Path(self.tmpdir) / "metrics"),
             log_dir=Path(self.tmpdir) / "logs",
             verdict_dir=Path(self.tmpdir) / "verdicts",
         )
@@ -689,6 +704,8 @@ class TestConductorRun(unittest.TestCase):
     def setUp(self):
         self.tmpdir = tempfile.mkdtemp()
         self.conductor = Conductor(
+            budget_tracker=BudgetTracker(Path(self.tmpdir) / "budget"),
+            metrics_tracker=MetricsTracker(Path(self.tmpdir) / "metrics"),
             log_dir=Path(self.tmpdir) / "logs",
             verdict_dir=Path(self.tmpdir) / "verdicts",
         )
