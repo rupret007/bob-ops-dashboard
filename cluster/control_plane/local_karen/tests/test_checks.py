@@ -149,43 +149,56 @@ diff --git a/file.py b/file.py
         self.assertEqual(result.verdict, CheckVerdict.PASS)
 
     def test_fails_api_key(self):
-        pr = self._make_pr(diff="""
-diff --git a/config.py b/config.py
-+API_KEY = "sk-1234567890abcdefghijklmnopqrstuvwxyz123456789012"
-""")
+        # Build synthetic inputs at runtime so the gate can scan its own tests.
+        pr = self._make_pr(diff=(
+            'diff --git a/config.py b/config.py\n+API_KEY = "{}"\n'
+        ).format("sk-" + "1234567890abcdefghijklmnopqrstuvwxyz123456789012"))
         config = self._make_config()
         result = check_no_secrets_in_diff(pr, config)
         self.assertEqual(result.verdict, CheckVerdict.FAIL)
         self.assertIn("secret", result.reason.lower())
 
     def test_fails_github_pat(self):
-        pr = self._make_pr(diff="""
-diff --git a/.env b/.env
-+GITHUB_TOKEN=ghp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
-""")
+        pr = self._make_pr(diff=(
+            "diff --git a/.env b/.env\n+GITHUB_TOKEN={}\n"
+        ).format("ghp_" + "x" * 36))
         config = self._make_config()
         result = check_no_secrets_in_diff(pr, config)
         self.assertEqual(result.verdict, CheckVerdict.FAIL)
 
     def test_fails_private_key(self):
-        pr = self._make_pr(diff="""
-diff --git a/key.pem b/key.pem
-+-----BEGIN RSA PRIVATE KEY-----
-+MIIEpQIBAAKCAQEA0Z...
-""")
+        pr = self._make_pr(diff=(
+            "diff --git a/key.pem b/key.pem\n+-----BEGIN {}-----\n"
+            "+MIIEpQIBAAKCAQEA0Z...\n"
+        ).format("RSA PRIVATE KEY"))
         config = self._make_config()
         result = check_no_secrets_in_diff(pr, config)
         self.assertEqual(result.verdict, CheckVerdict.FAIL)
 
     def test_ignores_deletions(self):
-        pr = self._make_pr(diff="""
-diff --git a/config.py b/config.py
--API_KEY = "sk-1234567890abcdefghijklmnopqrstuvwxyz123456789012"
-+API_KEY = os.environ.get("API_KEY")
-""")
+        pr = self._make_pr(diff=(
+            'diff --git a/config.py b/config.py\n-API_KEY = "{}"\n'
+            '+API_KEY = os.environ.get("API_KEY")\n'
+        ).format("sk-" + "1234567890abcdefghijklmnopqrstuvwxyz123456789012"))
         config = self._make_config()
         result = check_no_secrets_in_diff(pr, config)
         self.assertEqual(result.verdict, CheckVerdict.PASS)
+
+    def test_diagnostics_redact_source_including_test_files(self):
+        secret = "ghp_" + "x" * 36
+        pr = self._make_pr(diff=(
+            "diff --git a/tests/test_config.py b/tests/test_config.py\n"
+            "@@ -0,0 +1 @@\n+PRIVATE_CONTEXT={}\n"
+        ).format(secret))
+        result = check_no_secrets_in_diff(pr, self._make_config())
+
+        self.assertEqual(result.verdict, CheckVerdict.FAIL)
+        self.assertIn("GitHub PAT", result.details)
+        self.assertIn("tests/test_config.py at diff line 3", result.details)
+        self.assertIn("[REDACTED]", result.details)
+        self.assertNotIn(secret, str(result))
+        self.assertNotIn(secret[:12], str(result))
+        self.assertNotIn("PRIVATE_CONTEXT", str(result))
 
 
 class TestTestWeakeningCheck(TestCheckHelpers):
@@ -253,10 +266,9 @@ diff --git a/app.py b/app.py
         self.assertEqual(result.verdict, CheckVerdict.PASS)
 
     def test_fails_sudo(self):
-        pr = self._make_pr(diff="""
-diff --git a/install.sh b/install.sh
-+sudo apt install package
-""")
+        pr = self._make_pr(diff=(
+            "diff --git a/install.sh b/install.sh\n+{}\n"
+        ).format(" ".join(("sudo", "apt", "install", "package"))))
         config = self._make_config()
         result = check_no_dangerous_commands(pr, config)
         self.assertEqual(result.verdict, CheckVerdict.FAIL)
@@ -264,10 +276,9 @@ diff --git a/install.sh b/install.sh
         self.assertIn("sudo", result.details.lower())
 
     def test_fails_force_push(self):
-        pr = self._make_pr(diff="""
-diff --git a/deploy.sh b/deploy.sh
-+git push --force origin main
-""")
+        pr = self._make_pr(diff=(
+            "diff --git a/deploy.sh b/deploy.sh\n+{}\n"
+        ).format(" ".join(("git", "push", "--force", "origin", "main"))))
         config = self._make_config()
         result = check_no_dangerous_commands(pr, config)
         self.assertEqual(result.verdict, CheckVerdict.FAIL)
@@ -275,24 +286,58 @@ diff --git a/deploy.sh b/deploy.sh
         self.assertIn("force push", result.details.lower())
 
     def test_fails_rm_rf_root(self):
-        pr = self._make_pr(diff="""
-diff --git a/cleanup.sh b/cleanup.sh
-+rm -rf /var/log/*
-""")
+        pr = self._make_pr(diff=(
+            "diff --git a/cleanup.sh b/cleanup.sh\n+{}\n"
+        ).format(" ".join(("rm", "-rf", "/var/log/*"))))
         config = self._make_config()
         result = check_no_dangerous_commands(pr, config)
         self.assertEqual(result.verdict, CheckVerdict.FAIL)
 
     def test_fails_tag_creation(self):
-        pr = self._make_pr(diff="""
-diff --git a/release.sh b/release.sh
-+git tag v1.0.0
-""")
+        pr = self._make_pr(diff=(
+            "diff --git a/release.sh b/release.sh\n+{}\n"
+        ).format(" ".join(("git", "tag", "v1.0.0"))))
         config = self._make_config()
         result = check_no_dangerous_commands(pr, config)
         self.assertEqual(result.verdict, CheckVerdict.FAIL)
         self.assertIn("dangerous", result.reason.lower())
         self.assertIn("tag", result.details.lower())
+
+    def test_rejects_every_command_category_including_test_files(self):
+        commands = [
+            ["sudo", "apt", "install", "package"],
+            ["rm", "-rf", "/var/log/*"],
+            ["rm", "-rf", "~/fixture"],
+            ["git", "push", "--force", "origin", "main"],
+            ["git", "push", "-f", "origin", "main"],
+            ["git", "tag", "v1.0.0"],
+            ["gh", "release", "create", "v1.0.0"],
+            ["git", "push", "origin", "--tags"],
+            ["chmod", "777", "fixture"],
+        ]
+        source_lines = [" ".join(argv) for argv in commands]
+        source_lines += ["{}(payload)".format(name) for name in ("eval", "exec")]
+        for source in source_lines:
+            with self.subTest(source=source):
+                pr = self._make_pr(diff=(
+                    "diff --git a/tests/test_commands.py b/tests/test_commands.py\n+{}\n"
+                ).format(source))
+                result = check_no_dangerous_commands(pr, self._make_config())
+                self.assertEqual(result.verdict, CheckVerdict.FAIL)
+
+    def test_diagnostics_do_not_copy_command_arguments(self):
+        secret = "ghp_" + "x" * 36
+        command = " ".join(("sudo", "PRIVATE_CONTEXT", secret))
+        pr = self._make_pr(diff=(
+            "diff --git a/install.sh b/install.sh\n+{}\n"
+        ).format(command))
+        result = check_no_dangerous_commands(pr, self._make_config())
+
+        self.assertEqual(result.verdict, CheckVerdict.FAIL)
+        self.assertIn("sudo", result.details)
+        self.assertIn("install.sh at diff line 2", result.details)
+        self.assertNotIn(secret, str(result))
+        self.assertNotIn("PRIVATE_CONTEXT", str(result))
 
 
 class TestRunAllChecks(TestCheckHelpers):

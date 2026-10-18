@@ -276,7 +276,7 @@ def check_no_secrets_in_diff(pr: PRInfo, config: KarenConfig) -> CheckResult:
     issues = []
     current_file = None
 
-    for line in pr.diff.split("\n"):
+    for line_number, line in enumerate(pr.diff.split("\n"), 1):
         if line.startswith("diff --git"):
             match = re.search(r"b/(.+)$", line)
             if match:
@@ -290,8 +290,9 @@ def check_no_secrets_in_diff(pr: PRInfo, config: KarenConfig) -> CheckResult:
 
         for pattern, secret_type in SECRET_PATTERNS:
             if re.search(pattern, added_line):
-                snippet = added_line.strip()[:40]
-                issues.append(f"{secret_type} in {current_file}: {snippet}...")
+                issues.append(
+                    f"{secret_type} in {current_file} at diff line {line_number}: [REDACTED]"
+                )
                 break
 
     if issues:
@@ -313,20 +314,20 @@ def check_no_dangerous_commands(pr: PRInfo, config: KarenConfig) -> CheckResult:
     """Check for dangerous commands in diff additions.
 
     Looks for:
-    - sudo usage
+    - Privileged commands
     - rm -rf with dangerous paths
     - force push commands
     - tag/release creation
     """
     dangerous_patterns = [
-        (r"\bsudo\s+", "sudo usage"),
+        (r"\bsudo\s+", "sudo"),
         (r"rm\s+-rf\s+[/~]", "rm -rf on root/home paths"),
         (r"git\s+push\s+.*--force", "git force push"),
         (r"git\s+push\s+.*-f\b", "git force push"),
-        (r"git\s+tag\s+", "git tag creation"),
+        (r"git\s+tag\s+", "tag creation"),
         (r"gh\s+release\s+create", "GitHub release creation"),
         (r"git\s+push\s+.*--tags", "pushing tags"),
-        (r"chmod\s+777", "chmod 777"),
+        (r"chmod\s+777", "world writable permissions"),
         (r"eval\s*\(", "eval usage"),
         (r"\bexec\s*\(", "exec usage"),
     ]
@@ -334,7 +335,7 @@ def check_no_dangerous_commands(pr: PRInfo, config: KarenConfig) -> CheckResult:
     issues = []
     current_file = None
 
-    for line in pr.diff.split("\n"):
+    for line_number, line in enumerate(pr.diff.split("\n"), 1):
         if line.startswith("diff --git"):
             match = re.search(r"b/(.+)$", line)
             if match:
@@ -348,8 +349,7 @@ def check_no_dangerous_commands(pr: PRInfo, config: KarenConfig) -> CheckResult:
 
         for pattern, danger_type in dangerous_patterns:
             if re.search(pattern, added_line, re.IGNORECASE):
-                snippet = added_line.strip()[:50]
-                issues.append(f"{danger_type} in {current_file}: {snippet}")
+                issues.append(f"{danger_type} in {current_file} at diff line {line_number}")
                 break
 
     if issues:

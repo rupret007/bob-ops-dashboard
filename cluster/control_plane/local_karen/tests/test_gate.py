@@ -85,7 +85,8 @@ class TestGateRunner(unittest.TestCase):
                 self.assertIn("ci failed", result.verdict.reason.lower())
 
     def test_fails_on_secrets_in_diff(self):
-        pr = self._mock_pr_info(diff='+API_KEY = "sk-1234567890abcdefghijklmnopqrstuvwxyz123456789012"')
+        secret = "sk-" + "1234567890abcdefghijklmnopqrstuvwxyz123456789012"
+        pr = self._mock_pr_info(diff='+API_KEY = "{}"'.format(secret))
 
         with patch("cluster.control_plane.local_karen.gate.fetch_pr_info", return_value=pr):
             with patch("cluster.control_plane.local_karen.gate.verify_sha_current", return_value=True):
@@ -94,6 +95,11 @@ class TestGateRunner(unittest.TestCase):
 
                 self.assertFalse(result.verdict.passed)
                 self.assertIn("secret", result.verdict.reason.lower())
+                self.assertNotIn(secret, result.verdict.to_json())
+                self.assertNotIn(secret[:12], result.verdict.to_json())
+                self.assertNotIn(secret[:12], Path(result.verdict_path).read_text())
+                from cluster.control_plane.local_karen.verdict import format_verdict_comment
+                self.assertNotIn(secret[:12], format_verdict_comment(result.verdict))
 
     def test_passes_with_successful_review(self):
         pr = self._mock_pr_info()
