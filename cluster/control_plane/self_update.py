@@ -118,8 +118,14 @@ def can_fast_forward(repo_dir: Path) -> Tuple[bool, str]:
         return False, ""
 
 
-def fast_forward(repo_dir: Path) -> bool:
-    """Fast-forward to origin/BRANCH."""
+def fast_forward(repo_dir: Path) -> Tuple[bool, str]:
+    """Fast-forward to origin/BRANCH.
+    
+    Returns (success, old_head_for_rollback).
+    On failure, the repo should still be at old_head.
+    """
+    old_head = get_current_head(repo_dir)
+    
     try:
         result = subprocess.run(
             ["git", "checkout", BRANCH],
@@ -143,7 +149,43 @@ def fast_forward(repo_dir: Path) -> bool:
             text=True,
             timeout=30,
         )
-        return result.returncode == 0
+        return result.returncode == 0, old_head or ""
+    except (subprocess.SubprocessError, FileNotFoundError):
+        return False, old_head or ""
+
+
+def rollback_to_sha(repo_dir: Path, sha: str) -> bool:
+    """Rollback to a specific SHA after a failed update.
+    
+    This ensures the last good version keeps running.
+    """
+    if not sha:
+        return False
+    
+    try:
+        result = subprocess.run(
+            ["git", "checkout", sha],
+            cwd=repo_dir,
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        if result.returncode == 0:
+            logger.info("Rolled back to %s after failed update", sha[:12])
+            return True
+        
+        result = subprocess.run(
+            ["git", "reset", "--hard", sha],
+            cwd=repo_dir,
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        if result.returncode == 0:
+            logger.info("Hard reset to %s after failed update", sha[:12])
+            return True
+        
+        return False
     except (subprocess.SubprocessError, FileNotFoundError):
         return False
 
@@ -363,21 +405,29 @@ def self_update(machine: str = "mini", install_dir: Optional[Path] = None) -> di
     
     result["remote_head"] = remote_sha[:12]
     
-    if not fast_forward(repo_dir):
+    ff_success, rollback_sha = fast_forward(repo_dir)
+    if not ff_success:
         result["reason"] = "fast-forward failed"
         return result
     
     new_head = get_current_head(repo_dir)
     if new_head != remote_sha:
         result["reason"] = "HEAD mismatch after fast-forward"
+        rollback_to_sha(repo_dir, rollback_sha)
         return result
     
     result["new_head"] = new_head[:12]
     result["updated"] = True
     
     if not run_tests(repo_dir):
-        result["reason"] = "tests failed after update"
+        result["reason"] = "tests failed after update - rolling back"
         result["updated"] = False
+        result["rolled_back"] = rollback_to_sha(repo_dir, rollback_sha)
+        if result["rolled_back"]:
+            result["reason"] = "tests failed - rolled back to last good version"
+            logger.warning("Tests failed after update, rolled back to %s", rollback_sha[:12] if rollback_sha else "unknown")
+        else:
+            logger.error("Tests failed and rollback failed - manual intervention needed")
         return result
     
     result["pycache_cleared"] = clear_pycache(repo_dir / "cluster")
@@ -393,7 +443,8 @@ def self_update(machine: str = "mini", install_dir: Optional[Path] = None) -> di
         result["reinstalled"] = True
         result["reason"] = "updated and reinstalled"
     else:
-        result["reason"] = "updated but reinstall failed"
+        result["reason"] = "reinstall failed - keeping new code (services still running old)"
+        logger.warning("Reinstall failed but code is updated - services will use new code on next reload")
     
     logger.info("Self-update: %s -> %s (%s)", 
                 old_head[:8], new_head[:8], result["reason"])
