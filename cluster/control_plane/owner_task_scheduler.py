@@ -25,7 +25,8 @@ FORBIDDEN = re.compile(r'\b(?:rad-dad-show-night|grok|merge|undraft|force.push|g
 
 
 def validate_request(request):
-    if (not isinstance(request, dict) or type(request.get('contract')) is not int
+    if (not isinstance(request, dict) or set(request) != set(FIELDS) | {'description'}
+            or type(request.get('contract')) is not int
             or request['contract'] != OWNER_TASK_CONTRACT
             or request.get('repo') != 'rupret007/bob-brain'
             or request.get('provider') != 'codex' or request.get('policy') != POLICY
@@ -35,7 +36,7 @@ def validate_request(request):
             or not re.fullmatch(r'[a-f0-9]{40}', request['head_sha'])
             or request.get('branch') != 'draft/webbob-task-' + request['request_id'][7:31]
             or not isinstance(request.get('description'), str)
-            or not 1 <= len(request['description'].strip()) <= 2000
+            or not request['description'].strip() or len(request['description']) > 2000
             or '\x00' in request['description'] or FORBIDDEN.search(request['description'])):
         raise CoordinationError('Invalid bounded draft-only owner task')
 

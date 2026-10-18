@@ -56,6 +56,12 @@ class OwnerInboxTests(unittest.TestCase):
         with self.assertRaises(CoordinationError):
             stage_owner_draft_task(self.request, inbox=self.inbox)
 
+    def test_unknown_authority_fields_never_reach_inbox_or_runtime(self):
+        for key, value in [('execute', True), ('approved', True), ('options', ['--unsafe'])]:
+            with self.subTest(key=key), self.assertRaises(CoordinationError):
+                stage_owner_draft_task(dict(self.request, **{key: value}), inbox=self.inbox)
+        self.assertEqual(self.inbox.rows, {})
+
     def test_outage_and_invalid_scope_fail_closed(self):
         self.inbox.available = False
         with self.assertRaises(CoordinationError):
