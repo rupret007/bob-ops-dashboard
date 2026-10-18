@@ -30,8 +30,6 @@ from .github_client import (
     list_prs_with_label,
     remove_label,
     add_label,
-    check_pr_mergeable,
-    update_pr_branch,
     GitHubError,
 )
 
@@ -177,6 +175,7 @@ def poll_and_run(
     config,  # type: KarenConfig
     post_comment=True,  # type: bool
     remove_label_on_complete=True,  # type: bool
+    guard_machine=None,
 ):
     # type: (...) -> List[dict]
     """Poll for PRs with needs-karen label and run gate on them.
@@ -198,6 +197,8 @@ def poll_and_run(
             continue
 
         owner, repo = repo_str.split("/", 1)
+        if config.is_blocked_repo(owner, repo):
+            continue
 
         try:
             prs = list_prs_with_label(owner, repo, config.poll_label)
@@ -216,28 +217,17 @@ def poll_and_run(
             if not pr_number:
                 continue
 
-            # Check if PR branch is stale and needs update before review
-            is_mergeable, merge_status = check_pr_mergeable(owner, repo, pr_number)
-            if merge_status == "BEHIND":
-                logger.info(f"PR {owner}/{repo}#{pr_number} is behind base - updating branch")
-                update_success, update_msg = update_pr_branch(owner, repo, pr_number)
-                if update_success:
-                    logger.info(f"Updated {owner}/{repo}#{pr_number}: {update_msg}")
-                    # Give GitHub a moment to update status
-                    import time
-                    time.sleep(3)
-                else:
-                    logger.warning(f"Failed to update {owner}/{repo}#{pr_number}: {update_msg}")
-            elif merge_status == "DIRTY":
-                logger.warning(f"PR {owner}/{repo}#{pr_number} has conflicts - needs manual resolution")
-                results.append({
-                    "repo": f"{owner}/{repo}",
-                    "pr": pr_number,
-                    "skipped": True,
-                    "reason": "conflicts with base branch",
-                })
+            if pr_data.get("isDraft"):
+                results.append({"repo": repo_str, "pr": pr_number, "skipped": True,
+                                "reason": "Draft PR awaits author decision"})
                 continue
 
+            if guard_machine:
+                from ..guards import MachineGuards
+                guard = MachineGuards(guard_machine).check_all()
+                if not guard.passed:
+                    logger.warning("Remaining reviews deferred: %s", guard.reason)
+                    return results
             logger.info(f"Running gate on {owner}/{repo}#{pr_number}")
 
             try:
@@ -249,10 +239,13 @@ def poll_and_run(
                     post_comment=post_comment,
                 )
 
+                if result.error or not result.sha_verified or not result.verdict_path:
+                    raise RuntimeError(result.error or "Review did not produce a verified artifact")
+
                 results.append({
                     "repo": f"{owner}/{repo}",
                     "pr": pr_number,
-                    "sha": result.verdict.head_sha[:12],
+                    "sha": result.verdict.head_sha,
                     "passed": result.verdict.passed,
                     "reason": result.verdict.reason,
                 })
@@ -270,9 +263,17 @@ def poll_and_run(
                         result_label = "karen-pass" if result.verdict.passed else "karen-fail"
                         _ensure_result_label(f"{owner}/{repo}", result_label)
                         add_label(owner, repo, pr_number, result_label)
+                        remove_label(owner, repo, pr_number,
+                                     "karen-fail" if result.verdict.passed else "karen-pass")
                     except GitHubError as e:
                         logger.warning(f"Failed to update labels on {owner}/{repo}#{pr_number}: {e}")
                 
+                try:
+                    from .verdict_push import push
+                    logger.info("Verdict push: %s", push(config))
+                except Exception as exc:
+                    logger.warning("Verdict push will retry: %s", type(exc).__name__)
+
                 # Dispatch fix attempt for FAIL verdicts (max 2 attempts, never for security/high)
                 if not result.verdict.passed and FIX_DISPATCH_AVAILABLE:
                     _dispatch_fix_if_eligible(f"{owner}/{repo}", pr_number, result.verdict)
@@ -285,19 +286,12 @@ def poll_and_run(
                     "error": str(e),
                 })
                 
-                if remove_label_on_complete:
-                    try:
-                        remove_label(owner, repo, pr_number, config.poll_label)
-                        _ensure_result_label(f"{owner}/{repo}", "karen-fail")
-                        add_label(owner, repo, pr_number, "karen-fail")
-                        logger.info(f"Marked {owner}/{repo}#{pr_number} as karen-fail due to gate error")
-                    except GitHubError as label_err:
-                        logger.warning(f"Failed to update labels after gate error: {label_err}")
 
     return results
 
 
-def run_poll_once(config=None, auto_discover=True, auto_label=True, auto_update=True):
+def _run_poll_once(config=None, auto_discover=True, auto_label=True, auto_update=True,
+                  post_comment=False, remove_label_on_complete=True):
     # type: (Optional[KarenConfig], bool, bool, bool) -> List[dict]
     """Run a single poll cycle.
 
@@ -381,7 +375,13 @@ def run_poll_once(config=None, auto_discover=True, auto_label=True, auto_update=
 
     logger.info("Polling %d repo(s) for PRs with %s label", len(repos), config.poll_label)
 
-    results = poll_and_run(repos, config)
+    results = poll_and_run(repos, config, post_comment, remove_label_on_complete, machine)
+    try:
+        from .verdict_push import push
+        receipt = push(config)
+        logger.info("Verdict push: %s", receipt)
+    except Exception as exc:
+        logger.warning("Verdict push will retry: %s", type(exc).__name__)
 
     state = load_poll_state(config)
     state.last_poll = datetime.now(timezone.utc).isoformat()
@@ -413,6 +413,27 @@ def run_poll_once(config=None, auto_discover=True, auto_label=True, auto_update=
                 logger.warning("Karen failures report failed: %s", e)
 
     return results
+
+
+def run_poll_once(config=None, auto_discover=True, auto_label=True, auto_update=True,
+                  post_comment=False, remove_label_on_complete=True):
+    """One review process at a time; apply Mini guards before model work."""
+    import fcntl
+    from ..guards import MachineGuards
+    config = config or KarenConfig.load()
+    config.get_state_dir().mkdir(parents=True, exist_ok=True)
+    with (config.get_state_dir() / "poller.lock").open("a") as lock:
+        try:
+            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            logger.info("Poll skipped: another review cycle is active")
+            return []
+        guard = MachineGuards(os.environ.get("STORYPOOL_MACHINE", "mini")).check_all()
+        if not guard.passed:
+            logger.warning("Poll deferred: %s", guard.reason)
+            return []
+        return _run_poll_once(config, auto_discover, auto_label, auto_update,
+                              post_comment, remove_label_on_complete)
 
 
 def run_poll_loop(config: Optional[KarenConfig] = None) -> None:
@@ -459,6 +480,7 @@ def main() -> int:
         default=None,
         help="Comma-separated list of repos to poll (owner/repo)",
     )
+    parser.add_argument("--comment", action="store_true", help="Opt in to posting verdict comments")
     parser.add_argument(
         "--no-comment",
         action="store_true",
@@ -515,10 +537,12 @@ def main() -> int:
             auto_discover=not args.no_discover,
             auto_label=not args.no_label,
             auto_update=not args.no_update,
+            post_comment=args.comment and not args.no_comment,
+            remove_label_on_complete=not args.keep_label,
         )
         for r in results:
             if "error" in r:
-                print("X {repo}#{pr}: {error}".format(**r))
+                print("ERROR {repo}#{pr}: {error}".format(**r))
             elif r.get("skipped"):
                 print("SKIP {repo}#{pr}: {reason}".format(**r))
             elif r.get("passed"):

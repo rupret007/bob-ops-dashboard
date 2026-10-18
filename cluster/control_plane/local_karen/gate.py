@@ -87,24 +87,16 @@ class GateRunner:
 
         check_results = run_all_checks(pr, self.config)
 
-        if not all_checks_pass(check_results):
-            failed = get_failed_checks(check_results)
-            reason = "; ".join(f.reason for f in failed[:3])
-            verdict = create_verdict(
-                pr=pr,
-                check_results=check_results,
-                review_results=[],
-                final_passed=False,
-                final_reason=f"Deterministic checks failed: {reason}",
-                final_reviewer="checks",
-            )
-            if _metrics:
-                _metrics.record_karen_review(
-                    passed=False,
-                    first_try=True,
-                    caught_by_pre_llm=True,
-                )
-            return self._finalize(verdict, pr, post_comment, start_time)
+        errors = [r.reason for r in check_results if r.verdict.value == "ERROR"]
+        if errors:
+            return self._fail_closed(owner, repo, pr_number, pinned_sha, "; ".join(errors), check_results)
+
+        failed = get_failed_checks(check_results)
+        # Draft/blocked repositories and suspected credentials are not sent to a model.
+        deferred = [r for r in failed if r.check_name in ("blocked_repo", "not_draft", "no_secrets")]
+        if deferred:
+            return self._fail_closed(owner, repo, pr_number, pinned_sha,
+                                     "; ".join(r.reason for r in deferred), check_results)
 
         try:
             review_result, all_reviews = run_review_chain(pr, self.config)
@@ -116,17 +108,10 @@ class GateRunner:
             )
 
         if review_result.verdict == ReviewVerdict.ERROR:
-            verdict = create_verdict(
-                pr=pr,
-                check_results=check_results,
-                review_results=all_reviews,
-                final_passed=False,
-                final_reason=f"Review error (fail closed): {review_result.reason}",
-                final_reviewer=review_result.reviewer,
-            )
-            return self._finalize(verdict, pr, post_comment, start_time)
+            return self._fail_closed(owner, repo, pr_number, pinned_sha,
+                                     "Review error: " + review_result.reason, check_results)
 
-        final_passed = review_result.verdict == ReviewVerdict.PASS
+        final_passed = review_result.verdict == ReviewVerdict.PASS and not failed
 
         if review_result.verdict == ReviewVerdict.BORDERLINE:
             final_passed = False
@@ -136,7 +121,8 @@ class GateRunner:
             check_results=check_results,
             review_results=all_reviews,
             final_passed=final_passed,
-            final_reason=review_result.reason,
+            final_reason=("Deterministic checks failed: " + "; ".join(r.reason for r in failed)
+                          + "; Review: " + review_result.reason) if failed else review_result.reason,
             final_reviewer=review_result.reviewer,
         )
 
@@ -161,25 +147,18 @@ class GateRunner:
         verdict.duration_sec = time.time() - start_time
 
         try:
-            verdict_path = save_verdict(verdict, self.config)
-        except Exception as e:
-            verdict_path = None
-
-        try:
-            sha_verified = verify_sha_current(
-                pr.owner, pr.repo, pr.number, pr.head_sha
-            )
-        except GitHubError:
-            sha_verified = False
-
+            sha_verified = verify_sha_current(pr.owner, pr.repo, pr.number, pr.head_sha)
+        except GitHubError as exc:
+            return self._fail_closed(pr.owner, pr.repo, pr.number, pr.head_sha,
+                                     "SHA verification unavailable: " + str(exc))
         if not sha_verified:
-            verdict.passed = False
-            verdict.reason = f"SHA changed during gate run (was {pr.head_sha[:12]})"
-
-            try:
-                verdict_path = save_verdict(verdict, self.config)
-            except Exception:
-                pass
+            return self._fail_closed(pr.owner, pr.repo, pr.number, pr.head_sha,
+                                     "SHA changed during gate run; retry current head")
+        try:
+            verdict_path = save_verdict(verdict, self.config)
+        except Exception as exc:
+            return self._fail_closed(pr.owner, pr.repo, pr.number, pr.head_sha,
+                                     "Verdict persistence failed: " + type(exc).__name__)
 
         if post_comment:
             try:
@@ -206,7 +185,7 @@ class GateRunner:
         reason: str,
         check_results: Optional[list[CheckResult]] = None,
     ) -> GateRunResult:
-        """Create a FAIL verdict for any error (fail closed)."""
+        """Return a fail-closed diagnostic; errors never become durable verdicts."""
         verdict = Verdict(
             owner=owner,
             repo=repo,
@@ -233,10 +212,8 @@ class GateRunner:
         from datetime import datetime, timezone
         verdict.timestamp = datetime.now(timezone.utc).isoformat()
 
-        try:
-            verdict_path = save_verdict(verdict, self.config)
-        except Exception:
-            verdict_path = None
+        verdict.status = "ERROR"
+        verdict_path = None
 
         return GateRunResult(
             verdict=verdict,

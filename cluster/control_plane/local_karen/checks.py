@@ -26,6 +26,7 @@ class CheckVerdict(Enum):
     PASS = "PASS"
     FAIL = "FAIL"
     SKIP = "SKIP"
+    ERROR = "ERROR"
 
 
 @dataclass
@@ -775,7 +776,7 @@ def run_all_checks(pr, config):
         except Exception as e:
             results.append(CheckResult(
                 check_name=check.__name__.replace("check_", "").replace("run_", ""),
-                verdict=CheckVerdict.FAIL,
+                verdict=CheckVerdict.ERROR,
                 reason=f"Check crashed: {e}",
                 details=str(e),
             ))
@@ -797,7 +798,7 @@ def run_all_checks(pr, config):
 def all_checks_pass(results):
     # type: (list) -> bool
     """Return True if all checks passed (none failed)."""
-    return not any(r.failed for r in results)
+    return not any(r.failed or r.verdict == CheckVerdict.ERROR for r in results)
 
 
 def get_failed_checks(results):

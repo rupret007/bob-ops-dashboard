@@ -37,11 +37,14 @@ class Verdict:
     check_results: list[dict]
     review_results: list[dict]
 
+    status: str = "COMPLETE"
     budget_used_usd: float = 0.0
     duration_sec: float = 0.0
 
     @property
     def verdict_type(self) -> str:
+        if self.status != "COMPLETE":
+            return "ERROR"
         return "KARENPASS" if self.passed else "KARENFAIL"
 
     @property
@@ -80,6 +83,8 @@ def save_verdict(verdict: Verdict, config: KarenConfig) -> Path:
 
     Returns the path to the saved file.
     """
+    if verdict.status != "COMPLETE" or verdict.reason.strip().lower() in ("", "unknown"):
+        raise ValueError("An error or unknown reason is not a verdict")
     verdict_dir = config.get_verdict_dir()
     verdict_dir.mkdir(parents=True, exist_ok=True)
 
@@ -89,7 +94,11 @@ def save_verdict(verdict: Verdict, config: KarenConfig) -> Path:
     filename = f"{base_name}_{verdict.verdict_type}.json"
     path = verdict_dir / filename
 
-    path.write_text(verdict.to_json())
+    import tempfile
+    fd, temp = tempfile.mkstemp(dir=str(verdict_dir), prefix=".verdict-")
+    with os.fdopen(fd, "w") as stream:
+        stream.write(verdict.to_json())
+    os.replace(temp, str(path))
 
     symlink_name = f"{base_name}_LATEST.json"
     symlink_path = verdict_dir / symlink_name
@@ -114,15 +123,20 @@ def load_verdict(
     verdict_dir = config.get_verdict_dir()
     base_name = _verdict_filename(owner, repo, pr_number, sha)
 
+    candidates = []
     for verdict_type in ["KARENPASS", "KARENFAIL"]:
         path = verdict_dir / f"{base_name}_{verdict_type}.json"
         if path.is_file():
             try:
-                return Verdict.from_json(path.read_text())
+                candidate = Verdict.from_json(path.read_text())
+                if (candidate.head_sha == sha and candidate.owner == owner
+                        and candidate.repo == repo and candidate.pr_number == pr_number
+                        and candidate.status == "COMPLETE"):
+                    candidates.append(candidate)
             except (json.JSONDecodeError, TypeError, KeyError):
                 pass
 
-    return None
+    return max(candidates, key=lambda v: v.timestamp) if candidates else None
 
 
 def load_latest_verdict(
@@ -214,6 +228,9 @@ def create_verdict(
                 "confidence": r.confidence,
                 "cost_usd": r.cost_usd,
                 "duration_sec": r.duration_sec,
+                "findings": r.findings.to_dict() if r.findings else {},
+                "model": r.model,
+                "effort": r.effort,
             }
             for r in review_results
         ],

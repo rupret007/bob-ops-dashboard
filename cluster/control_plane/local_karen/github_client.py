@@ -8,6 +8,8 @@ from __future__ import annotations
 
 import json
 import subprocess
+import tempfile
+import re
 from dataclasses import dataclass
 from typing import Optional
 
@@ -19,7 +21,7 @@ class GitHubError(Exception):
     pass
 
 
-def _run_gh(args: list[str], timeout: int = 30) -> str:
+def _run_gh(args: list[str], timeout: int = 30, allowed_codes=(0,)) -> str:
     """Run a gh CLI command and return stdout.
 
     Raises GitHubError on failure.
@@ -32,7 +34,7 @@ def _run_gh(args: list[str], timeout: int = 30) -> str:
             timeout=timeout,
         )
 
-        if result.returncode != 0:
+        if result.returncode not in allowed_codes:
             raise GitHubError(f"gh {' '.join(args)} failed: {result.stderr}")
 
         return result.stdout
@@ -99,7 +101,7 @@ def fetch_pr_info(owner: str, repo: str, pr_number: int) -> PRInfo:
     pr_json = _run_gh([
         "pr", "view", str(pr_number),
         "--repo", f"{owner}/{repo}",
-        "--json", "number,title,author,headRefOid,isDraft,changedFiles,deletions,additions,files",
+        "--json", "number,title,body,author,headRefOid,baseRefOid,isDraft,changedFiles,deletions,additions,files",
     ])
     pr_data = json.loads(pr_json)
 
@@ -107,16 +109,23 @@ def fetch_pr_info(owner: str, repo: str, pr_number: int) -> PRInfo:
     if not head_sha:
         raise GitHubError(f"Could not get head SHA for PR #{pr_number}")
 
-    diff = _run_gh([
-        "pr", "diff", str(pr_number),
-        "--repo", f"{owner}/{repo}",
-    ], timeout=60)
+    try:
+        diff = _run_gh([
+            "pr", "diff", str(pr_number), "--repo", f"{owner}/{repo}",
+        ], timeout=60)
+    except GitHubError as exc:
+        if "406" not in str(exc) and "too_large" not in str(exc):
+            raise
+        diff, files_data = fetch_git_diff(owner, repo, head_sha, pr_data.get("baseRefOid", ""))
+        pr_data["files"] = files_data
+    if not verify_sha_current(owner, repo, pr_number, head_sha):
+        raise GitHubError("PR head changed while fetching diff; retry")
 
     ci_json = _run_gh([
         "pr", "checks", str(pr_number),
         "--repo", f"{owner}/{repo}",
         "--json", "name,state,bucket",
-    ])
+    ], allowed_codes=(0, 1, 8))
     ci_data = json.loads(ci_json)
     ci_status = _parse_ci_status(ci_data)
 
@@ -128,8 +137,18 @@ def fetch_pr_info(owner: str, repo: str, pr_number: int) -> PRInfo:
         path = f.get("path", "")
         if path:
             changed_files.append(path)
-            if f.get("deletions", 0) > 0 and f.get("additions", 0) == 0:
+            if f.get("status") == "removed":
                 deleted_files.append(path)
+
+    current_file = None
+    for line in diff.splitlines():
+        if line.startswith("diff --git "):
+            import shlex
+            parts = shlex.split(line)
+            current_file = parts[3][2:] if len(parts) == 4 else None
+        elif line.startswith("deleted file mode ") and current_file:
+            if current_file not in deleted_files:
+                deleted_files.append(current_file)
 
     return PRInfo(
         owner=owner,
@@ -143,6 +162,7 @@ def fetch_pr_info(owner: str, repo: str, pr_number: int) -> PRInfo:
         ci_status=ci_status,
         changed_files=changed_files,
         deleted_files=deleted_files,
+        description=pr_data.get("body", ""),
     )
 
 
@@ -298,3 +318,25 @@ def ensure_label_exists(owner: str, repo: str, label: str, color: str = "d4c5f9"
         return result.returncode == 0
     except subprocess.SubprocessError:
         return False
+
+
+def fetch_git_diff(owner, repo, head_sha, base_sha):
+    """Bypass GitHub's diff size cap with immutable objects, never a checkout."""
+    if not all(re.fullmatch(r"[0-9a-f]{40}", sha) for sha in (head_sha, base_sha)):
+        raise GitHubError("Missing full head/base SHA for complete diff")
+    with tempfile.TemporaryDirectory(prefix="karen-diff-") as directory:
+        def git(*args):
+            result = subprocess.run(["git", "-c", "core.hooksPath=/dev/null", *args],
+                                    cwd=directory, capture_output=True, text=True, timeout=180)
+            if result.returncode:
+                raise GitHubError("Pinned Git diff failed: " + " ".join(args[:2]))
+            return result.stdout
+        git("init", "--bare", "-q")
+        git("fetch", "--no-tags", "--filter=blob:none",
+            "https://github.com/{}/{}.git".format(owner, repo), head_sha, base_sha)
+        merge_base = git("merge-base", base_sha, head_sha).strip()
+        diff = git("diff", "--no-ext-diff", "--no-textconv", "--binary", merge_base, head_sha)
+        names = git("diff", "--name-status", "--no-renames", "-z", merge_base, head_sha).split("\0")
+        files = [{"path": names[i+1], "status": "removed" if names[i] == "D" else "modified"}
+                 for i in range(0, len(names)-1, 2)]
+        return diff, files

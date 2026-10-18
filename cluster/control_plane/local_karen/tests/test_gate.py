@@ -22,6 +22,12 @@ class TestGateRunner(unittest.TestCase):
             verdict_dir=self.tmpdir,
             state_dir=self.tmpdir,
         )
+        # Deterministic rejections still receive a real review in production.
+        # Tests isolate that provider boundary; individual tests override it below.
+        review = ReviewResult("codex", ReviewVerdict.PASS, "Reviewed complete diff", tier=ReviewTier.LOW)
+        patcher = patch("cluster.control_plane.local_karen.gate.run_review_chain", return_value=(review, [review]))
+        patcher.start()
+        self.addCleanup(patcher.stop)
 
     def _mock_pr_info(self, **overrides) -> PRInfo:
         defaults = {
@@ -202,6 +208,12 @@ class TestBorderlineHandling(unittest.TestCase):
             verdict_dir=self.tmpdir,
             state_dir=self.tmpdir,
         )
+        # Deterministic rejections still receive a real review in production.
+        # Tests isolate that provider boundary; individual tests override it below.
+        review = ReviewResult("codex", ReviewVerdict.PASS, "Reviewed complete diff", tier=ReviewTier.LOW)
+        patcher = patch("cluster.control_plane.local_karen.gate.run_review_chain", return_value=(review, [review]))
+        patcher.start()
+        self.addCleanup(patcher.stop)
 
     def _mock_pr_info(self) -> PRInfo:
         return PRInfo(

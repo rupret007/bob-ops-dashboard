@@ -17,6 +17,7 @@ def test_fix_runs_tests_before_commit_push_and_label(tmp_path):
             tree = __import__('pathlib').Path(args[-2])
             tree.mkdir(parents=True)
             (tree / 'tests').mkdir()
+            (tree / 'tests' / 'test_real.py').write_text('def test_real(): assert True\n')
         if args[:3] == ['git', 'rev-parse', 'HEAD']:
             return 'after' if any(c[:2] == ['git', 'commit'] for c in calls) else 'before'
         if args[:3] == ['git', 'diff', '--cached']:
@@ -79,3 +80,18 @@ def test_codex_model_label_matches_argv(monkeypatch):
     args = fix_worker.codex_args()
     assert args[:3] == ['exec', '-m', 'gpt-5-codex'] and 'model_reasoning_effort=xhigh' in args
     assert fix_worker.model_label() == 'gpt-5-codex xhigh'
+
+
+def test_jest_repo_is_not_misclassified_as_pytest(tmp_path):
+    from cluster.control_plane.fix_worker import test_command
+    (tmp_path / 'tests').mkdir()
+    (tmp_path / 'tests' / 'policy.test.ts').write_text('test("policy", () => {})')
+    (tmp_path / 'package.json').write_text(json.dumps({'scripts': {'test': 'jest'}}))
+    assert test_command(tmp_path) == ['npm', 'test']
+
+
+def test_empty_test_directory_does_not_claim_python_coverage(tmp_path):
+    from cluster.control_plane.fix_worker import test_command
+    (tmp_path / 'tests').mkdir()
+    with pytest.raises(RuntimeError, match='No supported test'):
+        test_command(tmp_path)

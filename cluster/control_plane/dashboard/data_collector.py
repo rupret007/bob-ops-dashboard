@@ -587,7 +587,8 @@ class DataCollector:
                     error=job.error,
                 ))
             
-            for job in ledger.get_recent_jobs(24)[:20]:
+            for job in sorted(ledger.get_recent_jobs(24),
+                              key=lambda j: j.end_time or j.start_time or j.created_at, reverse=True)[:20]:
                 recent.append(JobRecord(
                     job_id=job.job_id,
                     repo=job.repo,

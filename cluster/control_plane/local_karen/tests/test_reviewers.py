@@ -383,8 +383,9 @@ class TestReviewChain(unittest.TestCase):
                         with patch.object(MiniMaxReviewer, "is_available", return_value=(False, "no key")):
                             result, all_results = run_review_chain(pr, config, require_two_pass=True)
 
-                            self.assertEqual(result.verdict, ReviewVerdict.FAIL)
-                            self.assertIn("FAIL-CLOSED", result.reason)
+                            self.assertEqual(result.verdict, ReviewVerdict.ERROR)
+                            self.assertFalse(result.passed)
+                            self.assertIn("MiniMax", result.reason)
                             self.assertEqual(len(all_results), 2)
 
     def test_second_judge_on_borderline(self):
@@ -429,7 +430,9 @@ class TestCodexArgs(unittest.TestCase):
 
         self.assertIn("--skip-git-repo-check", args)
 
-        self.assertIn("-o", args)
+        self.assertIn("--ephemeral", args)
+        self.assertIn("--ignore-user-config", args)
+        self.assertEqual(args[args.index("-m") + 1], "gpt-6-astra")
 
         self.assertNotIn("--effort", args)
         self.assertNotIn("--quiet", args)
@@ -451,12 +454,11 @@ class TestCodexArgs(unittest.TestCase):
         args = reviewer._build_codex_args("low")
 
         expected = [
-            "codex", "exec",
+            "codex", "exec", "--ignore-user-config", "--ephemeral",
+            "-m", "gpt-6-astra",
             "-c", 'model_reasoning_effort="low"',
             "--sandbox", "read-only",
-            "--skip-git-repo-check",
-            "-o",
-            "-",
+            "--skip-git-repo-check", "-",
         ]
         self.assertEqual(args, expected)
 

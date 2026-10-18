@@ -15,10 +15,12 @@ def test_only_exact_local_fail_authorizes_findings(tmp_path, mismatch):
     config = KarenConfig(verdict_dir=str(tmp_path / 'verdicts'))
     verdict = Verdict(
         owner='owner', repo='repo', pr_number=1, head_sha=sha,
-        passed=False, reason='tests fail', timestamp='2026-10-18T16:00:00Z',
+        passed=False, reason='Tests fail at the pinned head', timestamp='2026-10-18T16:00:00Z',
         reviewer='local', tier='low', confidence=1.0,
         check_results=[{'verdict': 'FAIL', 'check': 'tests', 'reason': 'repair assertion'}],
-        review_results=[])
+        review_results=[{'reviewer': 'codex', 'verdict': 'PASS',
+                         'reason': 'Inspected QA and security; deterministic test finding still blocks',
+                         'findings': {'risk_notes': ['Complete diff reviewed']}}])
     path = save_verdict(verdict, config)
     if mismatch:
         value = {'passed': True, 'owner': 'attacker', 'repo': 'other',

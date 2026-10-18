@@ -632,11 +632,58 @@ class DashboardHandler(BaseHTTPRequestHandler):
             self._serve_engine()
         elif parsed.path == "/api/data":
             self._serve_api_data()
+        elif parsed.path == "/api/karen/status":
+            self._serve_karen_status()
         elif parsed.path == "/health":
             self._serve_health()
         else:
             self._serve_404()
     
+    def _serve_karen_status(self) -> None:
+        """Read-only delivery and dispatch evidence; no execution endpoint."""
+        from ..local_karen.config import KarenConfig
+        source = self.collector or DataCollector()
+        payload = {}
+        for key, path in (("receipt", KarenConfig.load().get_verdict_dir() / "push-receipt.json"),
+                          ("dispatch", source.data_dir / "dispatch" / "dispatch-status.json")):
+            try:
+                payload[key] = json.loads(path.read_text())
+            except (OSError, ValueError):
+                payload[key] = None
+        body = json.dumps(payload).encode()
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Cache-Control", "no-store")
+        self.end_headers()
+        self.wfile.write(body)
+
+    def do_POST(self) -> None:
+        from ..local_karen.verdict_push import PUSH_PATH, MAX_BYTES, receive
+        if self.path != PUSH_PATH:
+            self._serve_404()
+            return
+        try:
+            length = int(self.headers.get("Content-Length", "0"))
+            if not 0 < length <= MAX_BYTES:
+                self.send_error(413)
+                return
+            self.connection.settimeout(15)
+            body = self.rfile.read(length)
+            receipt = receive(body, self.headers.get("X-Karen-Signature", ""))
+            payload = json.dumps(receipt).encode()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(payload)))
+            self.end_headers()
+            self.wfile.write(payload)
+        except PermissionError:
+            self.send_error(403, "Invalid Karen signature")
+        except (ValueError, TypeError, KeyError):
+            self.send_error(400, "Invalid Karen delivery")
+        except Exception:
+            self.send_error(503, "Karen delivery unavailable")
+
     def _serve_dashboard(self) -> None:
         """Serve main dashboard HTML."""
         try:

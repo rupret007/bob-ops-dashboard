@@ -202,3 +202,27 @@ MiniMax reads `MINIMAX_API_KEY` first, otherwise the existing
 [documented API](https://platform.minimax.io/docs/api-reference/text-post),
 checks provider status and completion, and suppresses credential-bearing errors.
 No service restart or live review is performed by this change.
+
+### Review recovery and Mini delivery
+
+Operational failures return `ERROR` without writing KARENFAIL or changing result
+labels. The retry label remains queued. A SHA change invalidates the run before
+any file is published. The poller retries old labels lacking a completed review
+at the full current SHA, skips drafts, and never updates a PR branch to review it.
+
+Codex reviews use `gpt-6-astra` at `max` (overrides: `STORYPOOL_KAREN_MODEL` and
+`STORYPOOL_KAREN_EFFORT`). Complete diffs are provided, with no silent truncation.
+GitHub HTTP 406 falls back to a temporary bare Git repository with pinned head and
+base objects. Diffs over the review context budget remain ERROR/manual work.
+PASS still requires the independent MiniMax review. Comments are opt-in with
+`--comment`; artifacts and normal result labels are the default output.
+
+The Mini pushes completed artifacts to the NucBox dashboard at
+`POST /api/karen/verdicts`. RSA-SHA256 signatures cover the complete request,
+purpose and issue time. The pinned verification key is `mini-verdict-public.pem`;
+the private key exists only at `~/.local/share/karen/verdict-signing.pem` (0600).
+Never copy it into Git or onto the NucBox. Key rotation requires replacing the
+public key through the trusted deployment branch. The receiver rejects unsigned,
+tampered, expired, mismatched-SHA and incomplete artifacts, and older decisions.
+Public PR comments/labels are not authority. `GET /api/karen/status` reports the
+last receipt and dispatch decisions; it cannot execute or enqueue work.

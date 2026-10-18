@@ -489,9 +489,12 @@ def _has_verdict_for_head(verdict_dir, repo, pr):
     if len(sha) < 12 or "/" not in repo:
         return True  # cannot tell; keep the label decision
     owner, name = repo.split("/", 1)
-    base = "{}_{}_{}_{}".format(owner, name, pr.get("number"), sha[:12])
-    return any((verdict_dir / "{}_{}.json".format(base, kind)).is_file()
-               for kind in ("KARENPASS", "KARENFAIL"))
+    from .local_karen.verdict import load_verdict
+    from .local_karen.config import KarenConfig
+    from .local_karen.verdict_push import reviewed
+    verdict = load_verdict(owner, name, pr.get("number"), sha,
+                           KarenConfig(verdict_dir=str(verdict_dir)))
+    return reviewed(verdict)
 
 
 def label_queued_prs(repos=None, dry_run=True):
@@ -513,8 +516,8 @@ def label_queued_prs(repos=None, dry_run=True):
         
         for pr in prs:
             state = get_pr_state(pr)
-            if state in ("passed", "failed") and verdict_dir is not None \
-                    and not _has_verdict_for_head(verdict_dir, repo, pr):
+            if state in ("passed", "failed") and not pr.get("isDraft") \
+                    and (verdict_dir is None or not _has_verdict_for_head(verdict_dir, repo, pr)):
                 # A karen-pass/karen-fail label from an older commit must not
                 # stand in for a verdict at the current head: re-gate it.
                 state = "queued"

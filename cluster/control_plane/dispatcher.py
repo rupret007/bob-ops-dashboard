@@ -589,14 +589,6 @@ class Dispatcher:
         Returns:
             Summary of the dispatch run.
         """
-        if live and self.machine == "nucbox":
-            # Karen runs on the Mini; pull its local verdict artifacts over
-            # Tailscale so repair lanes can be authorized at the exact SHA.
-            try:
-                from .local_karen.verdict_sync import pull
-                pull()
-            except Exception as exc:
-                print(f"verdict sync failed: {type(exc).__name__}: {exc}")
         decisions = self.evaluate(live=live)
         
         summary = {

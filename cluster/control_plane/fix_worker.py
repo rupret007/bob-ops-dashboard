@@ -55,11 +55,12 @@ def run(args, cwd=None, **kwargs):
 
 def test_command(tree):
     """Select a real test runner; unsupported repos need a human decision."""
-    if (tree / 'pytest.ini').exists() or (tree / 'tests').is_dir() or list(tree.glob('test_*.py')):
-        return [sys.executable, '-m', 'pytest', '-q']
     package = tree / 'package.json'
     if package.exists() and json.loads(package.read_text()).get('scripts', {}).get('test'):
         return ['npm', 'test']
+    if ((tree / 'pytest.ini').exists() or list(tree.glob('test_*.py'))
+            or list((tree / 'tests').glob('**/test_*.py'))):
+        return [sys.executable, '-m', 'pytest', '-q']
     raise RuntimeError('No supported test command; leave for Jeff')
 
 
@@ -92,6 +93,10 @@ def fix_pr(repo, pr_number, head_sha, findings):
              f'https://github.com/{repo}.git', str(checkout)])
         run(['git', 'worktree', 'add', '--detach', str(tree), head_sha], checkout)
         tests = test_command(tree)
+        if tests[0] == 'npm':
+            if not (tree / 'package-lock.json').is_file():
+                raise RuntimeError('Node repair requires package-lock.json for reproducible tests')
+            run(['npm', 'ci', '--ignore-scripts', '--no-audit', '--no-fund'], tree)
         prompt = (f'Apply these Karen findings for {repo} PR #{pr_number}:\n' +
                   '\n'.join(findings) + '\nMake focused code fixes and run the tests. '
                   'Do not weaken tests. Do not commit or push; the supervisor does that. '
@@ -128,6 +133,9 @@ def findings_for_pr(repo, pr_number, head_sha):
     if (verdict is None or verdict.passed
             or verdict.owner != owner or verdict.repo != name
             or verdict.pr_number != pr_number or verdict.head_sha != head_sha):
+        return []
+    from .local_karen.verdict_push import reviewed
+    if not reviewed(verdict):
         return []
     return extract_findings_from_verdict(verdict.to_dict())
 

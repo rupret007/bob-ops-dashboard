@@ -88,7 +88,7 @@ def main():
         machine = os.environ.get('STORYPOOL_MACHINE', 'mini' if platform.system() == 'Darwin' else 'nucbox')
         with log.open('w') as output:
             os.chmod(log, 0o600)
-            for command in ([str(root / 'cluster/control_plane/install/storypool-smoke.sh')],
+            for command in ([sys.executable, '-m', 'cluster.control_plane.smoke'],
                             [sys.executable, '-m', 'cluster.control_plane.watchdog', '--machine', machine]):
                 output.write(f'CHECK {command[-1]}\n')
                 output.flush()
@@ -108,6 +108,12 @@ def main():
             print(f'Draft repair PR: {url}')
             return 0
         except Exception as exc:
+            with log.open('a') as output:
+                # Exit code and executable are useful; captured output may contain secrets.
+                if isinstance(exc, subprocess.CalledProcessError):
+                    output.write(f"REPAIR ERROR: {Path(exc.cmd[0]).name} exited {exc.returncode}\n")
+                else:
+                    output.write(f"REPAIR ERROR: {type(exc).__name__}\n")
             escalate(state_dir, f'Ops doctor repair failed ({type(exc).__name__}); diagnostics: {log}')
             return 1
 
