@@ -17,7 +17,9 @@ class TestGateRunner(unittest.TestCase):
     """Tests for GateRunner."""
 
     def setUp(self):
-        self.tmpdir = tempfile.mkdtemp()
+        scratch = tempfile.TemporaryDirectory()
+        self.addCleanup(scratch.cleanup)
+        self.tmpdir = scratch.name
         self.config = KarenConfig(
             verdict_dir=self.tmpdir,
             state_dir=self.tmpdir,
@@ -114,6 +116,21 @@ class TestGateRunner(unittest.TestCase):
                     self.assertTrue(result.verdict.passed)
                     self.assertEqual(result.verdict.reviewer, "codex")
 
+    def test_metrics_write_failure_preserves_failed_verdict_and_sha_check(self):
+        pr = self._mock_pr_info(ci_status={"build": "failure"})
+        with patch("cluster.control_plane.local_karen.gate.fetch_pr_info", return_value=pr):
+            with patch("cluster.control_plane.local_karen.gate.verify_sha_current", return_value=True) as verify:
+                with patch("cluster.control_plane.local_karen.gate._metrics") as metrics:
+                    with patch("cluster.control_plane.local_karen.gate.run_review_chain") as review:
+                        metrics.record_karen_review.side_effect = OSError("metrics storage unavailable")
+                        result = GateRunner(self.config).run(pr.owner, pr.repo, pr.number)
+
+        self.assertFalse(result.verdict.passed)
+        self.assertIn("ci failed", result.verdict.reason.lower())
+        self.assertTrue(Path(result.verdict_path).is_file())
+        verify.assert_called_once_with(pr.owner, pr.repo, pr.number, pr.head_sha)
+        review.assert_not_called()
+
     def test_fails_on_review_fail(self):
         pr = self._mock_pr_info()
 
@@ -197,7 +214,9 @@ class TestBorderlineHandling(unittest.TestCase):
     """Tests for borderline verdict handling."""
 
     def setUp(self):
-        self.tmpdir = tempfile.mkdtemp()
+        scratch = tempfile.TemporaryDirectory()
+        self.addCleanup(scratch.cleanup)
+        self.tmpdir = scratch.name
         self.config = KarenConfig(
             verdict_dir=self.tmpdir,
             state_dir=self.tmpdir,

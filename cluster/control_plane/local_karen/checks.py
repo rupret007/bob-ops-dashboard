@@ -693,23 +693,24 @@ def run_static_security_scan(pr: PRInfo, config: KarenConfig) -> CheckResult:
             in_diff_hunk = True
             continue
         
-        if in_diff_hunk:
-            if line.startswith("+") and not line.startswith("+++"):
-                line_num += 1
-                added_line = line[1:]
-                
-                for pattern, desc, category in all_patterns:
-                    if re.search(pattern, added_line, re.IGNORECASE):
-                        all_findings.append({
-                            "file": current_file,
-                            "line": line_num,
-                            "category": category,
-                            "description": desc,
-                            "evidence": added_line.strip()[:50],
-                        })
-                        break
-            elif not line.startswith("-"):
-                line_num += 1
+        # Scan additions even in diff fragments without hunk headers. Hunk
+        # metadata supplies locations; it must not be required for detection.
+        if line.startswith("+") and not line.startswith("+++"):
+            line_num += 1
+            added_line = line[1:]
+
+            for pattern, desc, category in all_patterns:
+                if re.search(pattern, added_line, re.IGNORECASE):
+                    all_findings.append({
+                        "file": current_file,
+                        "line": line_num,
+                        "category": category,
+                        "description": desc,
+                        "evidence": added_line.strip()[:50],
+                    })
+                    break
+        elif in_diff_hunk and not line.startswith("-"):
+            line_num += 1
     
     if all_findings:
         by_category = {}

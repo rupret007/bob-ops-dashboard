@@ -23,7 +23,7 @@ jobs:
         run: python3 -m unittest -v test_pr_source_only
       - name: Usage and scorecard fixture tests
         run: |
-          python3 -m unittest -v test_usage_collect test_scorecards test_usage_scorecards_unknown_mutants
+          python3 -m unittest -v test_usage_collect test_scorecards test_usage_scorecards_unknown_mutants test_usage_renderer test_decision_review
           node --check cluster/metrics_web/view.js
       - name: Live dashboard tests
         run: |

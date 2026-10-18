@@ -45,6 +45,9 @@ const state = {
   speed_index: speed,
   needs_you: [{kind: attack, title: attack, detail: attack, severity: attack}],
   ai_capacity: [{provider: attack, reset_ct: attack, remaining_pct: attack}],
+  cluster_caps: [{node: attack, role: attack, os: attack, active: attack, max_lanes: attack,
+    load1: attack, caps: [attack], online: true,
+    llm: {[attack]: {installed: true, logged_in: true, remaining_pct: attack}}}],
   pipeline: {draft: attack},
   pipeline_rows: [{stage: attack, repo: attack, number: attack, title: attack}],
   throughput: {merged_today: attack, merged_7d_avg: attack},
@@ -57,6 +60,7 @@ for (const id of ['machines', 'lanes', 'needsList', 'aiCap', 'pipeCounts', 'pipe
   assert.ok(elements.get(id).innerHTML.includes(escaped), `${id} must render escaped values`);
 }
 assert.ok(elements.get('gauges').children[0].innerHTML.includes(escaped));
+assert.ok(elements.get('clusterCap').innerHTML.includes(escaped), 'cluster capacity must render escaped values');
 assert.ok(elements.get('lanes').innerHTML.includes('&lt;IMG'), 'uppercase labels retain valid HTML entities');
 elements.get('tacho').onclick();
 assert.ok(elements.get('sheetBody').innerHTML.includes(escaped));

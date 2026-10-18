@@ -8,6 +8,8 @@ import unittest
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+from cluster.control_plane.budget_tracker import BudgetTracker
+from cluster.control_plane.job_ledger import JobLedger
 from cluster.control_plane.dispatcher import (
     PROVIDER_RULES,
     Dispatcher,
@@ -84,10 +86,14 @@ class TestDispatcher(unittest.TestCase):
     """Tests for Dispatcher class."""
 
     def setUp(self):
-        self.tmpdir = tempfile.mkdtemp()
+        scratch = tempfile.TemporaryDirectory()
+        self.addCleanup(scratch.cleanup)
+        self.tmpdir = scratch.name
         self.dispatcher = Dispatcher(
             machine="mini",
             log_dir=Path(self.tmpdir),
+            budget_tracker=BudgetTracker(Path(self.tmpdir) / "budget"),
+            job_ledger=JobLedger(Path(self.tmpdir) / "jobs"),
         )
 
     def test_writes_decisions_to_jsonl(self):
@@ -158,6 +164,8 @@ class TestDispatcher(unittest.TestCase):
         nucbox_dispatcher = Dispatcher(
             machine="nucbox",
             log_dir=Path(self.tmpdir),
+            budget_tracker=self.dispatcher.budget,
+            job_ledger=self.dispatcher.ledger,
         )
         # Mock budget tracker to return allowed (both weekly_pct and can_use)
         with patch.object(nucbox_dispatcher.budget, "weekly_pct", return_value=0.0):
@@ -315,10 +323,14 @@ class TestNucBoxDispatcher(unittest.TestCase):
     """Tests for NucBox-specific dispatcher behavior."""
 
     def setUp(self):
-        self.tmpdir = tempfile.mkdtemp()
+        scratch = tempfile.TemporaryDirectory()
+        self.addCleanup(scratch.cleanup)
+        self.tmpdir = scratch.name
         self.dispatcher = Dispatcher(
             machine="nucbox",
             log_dir=Path(self.tmpdir),
+            budget_tracker=BudgetTracker(Path(self.tmpdir) / "budget"),
+            job_ledger=JobLedger(Path(self.tmpdir) / "jobs"),
         )
 
     def test_nucbox_lane_capacity_no_codex_work(self):

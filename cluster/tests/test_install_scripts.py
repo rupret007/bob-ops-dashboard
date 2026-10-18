@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -90,13 +92,26 @@ class TestShadowRunnerOutput(unittest.TestCase):
     def test_shadow_runner_json_output(self):
         """Shadow runner --json should produce valid JSON."""
         repo_root = Path(__file__).parent.parent.parent
+        scratch = tempfile.TemporaryDirectory(prefix="shadow-runner-test-")
+        self.addCleanup(scratch.cleanup)
+        root = Path(scratch.name)
+        fake_bin = root / "bin"
+        fake_bin.mkdir()
+        fake_gh = fake_bin / "gh"
+        fake_gh.write_text("#!/bin/sh\nprintf '[]\\n'\n", encoding="utf-8")
+        fake_gh.chmod(0o755)
         
         result = subprocess.run(
-            ["python3", "-m", "cluster.control_plane.shadow_runner", "--machine", "mini", "--json"],
+            [sys.executable, "-m", "cluster.control_plane.shadow_runner", "--machine", "mini", "--json"],
             capture_output=True,
             text=True,
             cwd=repo_root,
-            env={"PYTHONPATH": str(repo_root)},
+            env={
+                "PYTHONPATH": str(repo_root),
+                "PATH": str(fake_bin) + os.pathsep + os.defpath,
+                "STORYPOOL_SHADOW_LOG_DIR": str(root / "logs"),
+                "STORYPOOL_DATA_DIR": str(root / "budget"),
+            },
             timeout=30,
         )
         

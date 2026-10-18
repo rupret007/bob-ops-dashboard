@@ -6,6 +6,7 @@ Enforces all invariants: fail closed, never merge/push/sudo, SHA pinning.
 
 from __future__ import annotations
 
+import logging
 import time
 from dataclasses import dataclass
 from typing import Optional
@@ -24,8 +25,17 @@ from .github_client import fetch_pr_info, verify_sha_current, GitHubError
 try:
     from ..metrics import MetricsTracker
     _metrics = MetricsTracker()
-except ImportError:
+except (ImportError, OSError):
     _metrics = None  # type: ignore
+
+
+def _record_review_metrics(**kwargs) -> None:
+    """Optional telemetry must not interrupt verdict saving or SHA checks."""
+    if _metrics:
+        try:
+            _metrics.record_karen_review(**kwargs)
+        except OSError:
+            logging.getLogger(__name__).warning("Unable to persist Karen review metrics")
 
 
 @dataclass
@@ -98,12 +108,11 @@ class GateRunner:
                 final_reason=f"Deterministic checks failed: {reason}",
                 final_reviewer="checks",
             )
-            if _metrics:
-                _metrics.record_karen_review(
-                    passed=False,
-                    first_try=True,
-                    caught_by_pre_llm=True,
-                )
+            _record_review_metrics(
+                passed=False,
+                first_try=True,
+                caught_by_pre_llm=True,
+            )
             return self._finalize(verdict, pr, post_comment, start_time)
 
         try:
@@ -140,13 +149,12 @@ class GateRunner:
             final_reviewer=review_result.reviewer,
         )
 
-        if _metrics:
-            _metrics.record_karen_review(
-                passed=final_passed,
-                first_try=True,
-                caught_by_pre_llm=False,
-                caught_by_llm=not final_passed,
-            )
+        _record_review_metrics(
+            passed=final_passed,
+            first_try=True,
+            caught_by_pre_llm=False,
+            caught_by_llm=not final_passed,
+        )
 
         return self._finalize(verdict, pr, post_comment, start_time)
 

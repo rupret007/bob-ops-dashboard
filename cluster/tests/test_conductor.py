@@ -9,6 +9,8 @@ import unittest
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+from cluster.control_plane.budget_tracker import BudgetTracker
+from cluster.control_plane.metrics import MetricsTracker
 from cluster.control_plane.conductor import (
     CODEX_WEEKLY_CAP_PCT,
     ActionType,
@@ -159,7 +161,9 @@ class TestVerdictFile(unittest.TestCase):
     """Tests for verdict file handling."""
 
     def setUp(self):
-        self.tmpdir = tempfile.mkdtemp()
+        scratch = tempfile.TemporaryDirectory()
+        self.addCleanup(scratch.cleanup)
+        self.tmpdir = scratch.name
         self.verdict_dir = Path(self.tmpdir)
 
     def test_get_verdict_file_path(self):
@@ -257,12 +261,16 @@ class TestConductor(unittest.TestCase):
     """Tests for Conductor class."""
 
     def setUp(self):
-        self.tmpdir = tempfile.mkdtemp()
+        scratch = tempfile.TemporaryDirectory()
+        self.addCleanup(scratch.cleanup)
+        self.tmpdir = scratch.name
         self.log_dir = Path(self.tmpdir) / "logs"
         self.verdict_dir = Path(self.tmpdir) / "verdicts"
         self.conductor = Conductor(
             log_dir=self.log_dir,
             verdict_dir=self.verdict_dir,
+            budget_tracker=BudgetTracker(Path(self.tmpdir) / "budget"),
+            metrics_tracker=MetricsTracker(Path(self.tmpdir) / "metrics"),
         )
 
     def test_writes_log_entries(self):
@@ -321,12 +329,16 @@ class TestConductorValidation(unittest.TestCase):
     """Tests for conductor action validation (deterministic rails)."""
 
     def setUp(self):
-        self.tmpdir = tempfile.mkdtemp()
+        scratch = tempfile.TemporaryDirectory()
+        self.addCleanup(scratch.cleanup)
+        self.tmpdir = scratch.name
         self.log_dir = Path(self.tmpdir) / "logs"
         self.verdict_dir = Path(self.tmpdir) / "verdicts"
         self.conductor = Conductor(
             log_dir=self.log_dir,
             verdict_dir=self.verdict_dir,
+            budget_tracker=BudgetTracker(Path(self.tmpdir) / "budget"),
+            metrics_tracker=MetricsTracker(Path(self.tmpdir) / "metrics"),
         )
         self.snapshot = StateSnapshot(
             timestamp=_now_iso(),
@@ -551,10 +563,14 @@ class TestConductorExecution(unittest.TestCase):
     """Tests for conductor action execution."""
 
     def setUp(self):
-        self.tmpdir = tempfile.mkdtemp()
+        scratch = tempfile.TemporaryDirectory()
+        self.addCleanup(scratch.cleanup)
+        self.tmpdir = scratch.name
         self.conductor = Conductor(
             log_dir=Path(self.tmpdir) / "logs",
             verdict_dir=Path(self.tmpdir) / "verdicts",
+            budget_tracker=BudgetTracker(Path(self.tmpdir) / "budget"),
+            metrics_tracker=MetricsTracker(Path(self.tmpdir) / "metrics"),
         )
 
     def test_execute_shadow_mode(self):
@@ -627,10 +643,14 @@ class TestConductorDigest(unittest.TestCase):
     """Tests for conductor digest generation."""
 
     def setUp(self):
-        self.tmpdir = tempfile.mkdtemp()
+        scratch = tempfile.TemporaryDirectory()
+        self.addCleanup(scratch.cleanup)
+        self.tmpdir = scratch.name
         self.conductor = Conductor(
             log_dir=Path(self.tmpdir) / "logs",
             verdict_dir=Path(self.tmpdir) / "verdicts",
+            budget_tracker=BudgetTracker(Path(self.tmpdir) / "budget"),
+            metrics_tracker=MetricsTracker(Path(self.tmpdir) / "metrics"),
         )
 
     def test_writes_digest_file(self):
@@ -675,10 +695,14 @@ class TestConductorRun(unittest.TestCase):
     """Tests for conductor run cycle."""
 
     def setUp(self):
-        self.tmpdir = tempfile.mkdtemp()
+        scratch = tempfile.TemporaryDirectory()
+        self.addCleanup(scratch.cleanup)
+        self.tmpdir = scratch.name
         self.conductor = Conductor(
             log_dir=Path(self.tmpdir) / "logs",
             verdict_dir=Path(self.tmpdir) / "verdicts",
+            budget_tracker=BudgetTracker(Path(self.tmpdir) / "budget"),
+            metrics_tracker=MetricsTracker(Path(self.tmpdir) / "metrics"),
         )
 
     @patch.object(Conductor, "get_llm_proposals")

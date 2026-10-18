@@ -23,8 +23,11 @@ THRESHOLDS = {
 
 
 def timestamp(value):
-    if type(value) in (int, float) and math.isfinite(value):
-        return float(value)
+    if type(value) in (int, float):
+        try:
+            return float(value) if math.isfinite(value) else None
+        except OverflowError:
+            return None
     if not isinstance(value, str):
         return None
     try:
@@ -35,7 +38,10 @@ def timestamp(value):
 
 
 def numeric(value):
-    return type(value) in (int, float) and math.isfinite(value) and value >= 0
+    try:
+        return type(value) in (int, float) and math.isfinite(value) and value >= 0
+    except OverflowError:
+        return False
 
 
 def status(name, value):
@@ -195,9 +201,17 @@ def normalize_scorecards(raw):
     if not isinstance(raw, dict) or raw.get('v') != 'scorecards/v1':
         return clean
     stamp = timestamp(raw.get('generated_at'))
-    clean['generated_at'] = datetime.fromtimestamp(stamp, timezone.utc).isoformat() if stamp is not None else ''
+    try:
+        clean['generated_at'] = datetime.fromtimestamp(stamp, timezone.utc).isoformat() if stamp is not None else ''
+    except (ValueError, OverflowError, OSError):
+        clean['generated_at'] = ''
+    windows = raw.get('windows')
+    if not isinstance(windows, dict):
+        return clean
     for window, groups in clean['windows'].items():
-        source = (raw.get('windows') or {}).get(window) or {}
+        source = windows.get(window)
+        if not isinstance(source, dict):
+            continue
         for category in ('providers', 'repos', 'idle_slot_hours'):
             incoming = source.get(category) or {}
             if not isinstance(incoming, dict):
