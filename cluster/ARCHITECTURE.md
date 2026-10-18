@@ -26,6 +26,16 @@ unsafe fallback, macOS process-group preservation, dead-PID reconciliation, and
 Python 3.9 compatibility. Real service survival on each host must also be verified
 from post-deployment jobs; unit tests do not establish deployment health.
 
+Karen distinguishes concrete findings from review infrastructure errors. Secret
+findings bypass model providers and become a persisted KARENFAIL only after the
+full head SHA is rechecked. The artifact contains only the security check, with
+file:line and rule names; source lines and credential values are never copied.
+These failures retain high-risk handling in the fix dispatcher. Stale heads,
+provider failures, and persistence failures remain retryable ERROR with no
+published verdict. Known scanner fixtures use exact whole-line patterns in two
+specific Karen test files, including the bogus private-key body and terminator;
+other test files and adjacent credentials still fail the scanner.
+
 Node maintenance lives in `~/.local/share/storypool/node-control.json`, survives
 reboots, and fails closed on malformed state. A locked atomic write records each
 operator action in HANDOFF.md with America/Chicago time and source address.

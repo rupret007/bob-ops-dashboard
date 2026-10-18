@@ -92,11 +92,23 @@ class GateRunner:
             return self._fail_closed(owner, repo, pr_number, pinned_sha, "; ".join(errors), check_results)
 
         failed = get_failed_checks(check_results)
-        # Draft/blocked repositories and suspected credentials are not sent to a model.
-        deferred = [r for r in failed if r.check_name in ("blocked_repo", "not_draft", "no_secrets")]
+        # Draft/blocked repositories remain deferred, without a published verdict.
+        deferred = [r for r in failed if r.check_name in ("blocked_repo", "not_draft")]
         if deferred:
             return self._fail_closed(owner, repo, pr_number, pinned_sha,
                                      "; ".join(r.reason for r in deferred), check_results)
+
+        secrets = [r for r in failed if r.check_name == "no_secrets"]
+        if secrets:
+            # A concrete security finding is a FAIL, not a provider outage. Never
+            # send suspected credentials to models; publish only redacted locations.
+            verdict = create_verdict(
+                pr, [r for r in check_results if r.check_name == "no_secrets"], [],
+                False, "; ".join(r.reason + ": " + (r.details or "") for r in secrets),
+                "deterministic_security",
+            )
+            verdict.tier = "high"
+            return self._finalize(verdict, pr, post_comment, start_time)
 
         try:
             review_result, all_reviews = run_review_chain(pr, self.config)
