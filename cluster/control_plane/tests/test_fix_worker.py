@@ -6,8 +6,11 @@ from cluster.control_plane.fix_worker import fix_pr
 
 def test_fix_runs_tests_before_commit_push_and_label(tmp_path):
     calls = []
+    codex_inputs = []
     def command(args, cwd=None, **kwargs):
         calls.append(args)
+        if args[0] == str(tmp_path / 'codex'):
+            codex_inputs.append(kwargs.get('input'))
         if args[:3] == ['gh', 'pr', 'view']:
             return json.dumps(dict(headRefName='fix/one', headRefOid='before', isCrossRepository=False, state='OPEN'))
         if args[:3] == ['git', 'worktree', 'add']:
@@ -29,7 +32,12 @@ def test_fix_runs_tests_before_commit_push_and_label(tmp_path):
     assert tests < commit < push < len(calls)-1
     assert calls[push][-1] == 'HEAD:refs/heads/fix/one'
     assert calls[-1][-2:] == ['--add-label', 'needs-karen']
-    assert any('model_reasoning_effort=low' in c and 'exec' in c for c in calls)
+    codex_calls = [c for c in calls if c[0] == str(tmp_path / 'codex')]
+    assert codex_calls == [[str(tmp_path / 'codex'), 'exec', '-s', 'workspace-write',
+                            '-c', 'model_reasoning_effort=low',
+                            '-c', 'sandbox_workspace_write.network_access=true', '-']]
+    assert all('--full-auto' not in c for c in codex_calls)
+    assert len(codex_inputs) == 1 and 'repair finding' in codex_inputs[0]
 
 
 def test_protected_branch_and_never_touch_cannot_run_codex(tmp_path):
