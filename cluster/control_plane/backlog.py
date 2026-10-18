@@ -259,16 +259,56 @@ def write_backlog_report(backlog, repo_root=None):
         logger.info("Wrote backlog to %s", docs_path)
 
 
+def ensure_label_exists(repo, label, color="d4c5f9", description=""):
+    # type: (str, str, str, str) -> bool
+    """Ensure a label exists in the repo, creating it if missing.
+    
+    Returns True if label was created, False if it already existed or failed.
+    """
+    try:
+        result = subprocess.run(
+            ["gh", "label", "list", "--repo", repo, "--json", "name"],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        if result.returncode == 0:
+            labels = json.loads(result.stdout)
+            if any(l.get("name", "").lower() == label.lower() for l in labels):
+                return False
+    except (subprocess.SubprocessError, json.JSONDecodeError):
+        pass
+    
+    try:
+        args = ["gh", "label", "create", label, "--repo", repo, "--color", color]
+        if description:
+            args.extend(["--description", description])
+        result = subprocess.run(
+            args,
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        if result.returncode == 0:
+            logger.info("Created label '%s' in %s", label, repo)
+            return True
+        return False
+    except subprocess.SubprocessError:
+        return False
+
+
 def label_queued_prs(repos=None, dry_run=True):
     # type: (Optional[List[str]], bool) -> List[Dict]
     """Label all queued PRs with needs-karen.
     
+    Creates the needs-karen label if it doesn't exist.
     Returns list of PRs that were labeled.
     """
     if repos is None:
         repos = discover_repos()
     
     labeled = []  # type: List[Dict]
+    labels_ensured = set()  # type: set
     
     for repo in repos:
         prs = get_open_prs(repo)
@@ -285,6 +325,14 @@ def label_queued_prs(repos=None, dry_run=True):
             if dry_run:
                 logger.info("[DRY-RUN] Would label %s#%d with needs-karen", repo, pr_num)
             else:
+                if repo not in labels_ensured:
+                    ensure_label_exists(
+                        repo, "needs-karen", 
+                        color="d4c5f9", 
+                        description="Ready for Karen gate review"
+                    )
+                    labels_ensured.add(repo)
+                
                 try:
                     result = subprocess.run(
                         ["gh", "pr", "edit", str(pr_num), "--repo", repo, "--add-label", "needs-karen"],

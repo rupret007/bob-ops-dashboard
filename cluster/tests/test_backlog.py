@@ -8,7 +8,7 @@ import subprocess
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch, MagicMock, Mock
 
 from cluster.control_plane.backlog import (
     EXCLUDED_REPOS,
@@ -19,6 +19,7 @@ from cluster.control_plane.backlog import (
     format_backlog_md,
     write_backlog_report,
     label_queued_prs,
+    ensure_label_exists,
     BACKLOG_PATH,
 )
 
@@ -305,6 +306,36 @@ class TestCollectBacklog(unittest.TestCase):
         self.assertEqual(backlog["summary"]["total_prs"], 2)
         self.assertEqual(backlog["summary"]["queued"], 1)
         self.assertEqual(backlog["summary"]["draft"], 1)
+
+
+class TestEnsureLabelExists(unittest.TestCase):
+    """Test label creation."""
+
+    @patch("subprocess.run")
+    def test_creates_label_if_missing(self, mock_run):
+        """Should create label if it doesn't exist."""
+        mock_run.side_effect = [
+            MagicMock(returncode=0, stdout="[]"),
+            MagicMock(returncode=0, stdout=""),
+        ]
+        
+        result = ensure_label_exists("rupret007/webjam", "needs-karen")
+        
+        self.assertTrue(result)
+        self.assertEqual(mock_run.call_count, 2)
+
+    @patch("subprocess.run")
+    def test_skips_if_label_exists(self, mock_run):
+        """Should skip creation if label already exists."""
+        mock_run.return_value = MagicMock(
+            returncode=0, 
+            stdout='[{"name": "needs-karen"}]'
+        )
+        
+        result = ensure_label_exists("rupret007/webjam", "needs-karen")
+        
+        self.assertFalse(result)
+        self.assertEqual(mock_run.call_count, 1)
 
 
 if __name__ == "__main__":

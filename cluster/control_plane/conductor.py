@@ -304,6 +304,25 @@ class CodexClient:
     def __init__(self, host: str = "nuc", effort: str = "low"):
         self.host = host
         self.effort = effort
+        self.last_error = ""
+    
+    def is_available(self) -> tuple:
+        """Check if Codex CLI is available.
+        
+        Returns (available, reason).
+        """
+        try:
+            result = subprocess.run(
+                ["which", "codex"],
+                capture_output=True,
+                text=True,
+                timeout=5,
+            )
+            if result.returncode != 0:
+                return False, "codex CLI not found in PATH"
+            return True, "ok"
+        except (subprocess.SubprocessError, FileNotFoundError):
+            return False, "codex CLI not found"
     
     def complete(self, prompt: str, high_effort: bool = False) -> Optional[str]:
         """Run codex exec with the given prompt."""
@@ -320,9 +339,19 @@ class CodexClient:
                 env=env,
             )
             if result.returncode == 0:
+                self.last_error = ""
                 return result.stdout.strip()
+            self.last_error = "codex exec failed (exit {}): {}".format(
+                result.returncode, result.stderr[:200] if result.stderr else "no stderr")
             return None
-        except (subprocess.SubprocessError, FileNotFoundError):
+        except subprocess.TimeoutExpired:
+            self.last_error = "codex exec timed out after 300s"
+            return None
+        except FileNotFoundError:
+            self.last_error = "codex CLI not found in PATH"
+            return None
+        except subprocess.SubprocessError as e:
+            self.last_error = "codex subprocess error: {}".format(e)
             return None
 
 
@@ -331,6 +360,7 @@ class GeminiClient:
     
     def __init__(self, api_key: Optional[str] = None):
         self.api_key = api_key or self._load_key()
+        self.last_error = ""
     
     def _load_key(self) -> str:
         key_file = Path("~/.config/storypool/gemini.key").expanduser()
@@ -338,11 +368,23 @@ class GeminiClient:
             return key_file.read_text().strip()
         return os.environ.get("GEMINI_API_KEY", "")
     
+    def is_available(self) -> tuple:
+        """Check if Gemini is available.
+        
+        Returns (available, reason).
+        """
+        if not self.api_key:
+            key_file = Path("~/.config/storypool/gemini.key").expanduser()
+            return False, "no Gemini API key (check {} or GEMINI_API_KEY env)".format(key_file)
+        return True, "ok"
+    
     def complete(self, prompt: str) -> Optional[str]:
         """Call Gemini API with the given prompt."""
         if not self.api_key:
+            self.last_error = "no Gemini API key configured"
             return None
-        return "[Gemini stub - not implemented]"
+        self.last_error = "Gemini API not yet implemented"
+        return None
 
 
 CONDUCTOR_SYSTEM_PROMPT = """You are the StoryPool conductor, an intelligent orchestrator for a coding lane system.
@@ -881,12 +923,47 @@ class Conductor:
         validated_actions = []
         
         if proposals is None:
+            codex_avail, codex_reason = self.codex.is_available()
+            gemini_avail, gemini_reason = self.gemini.is_available()
+            can_codex, codex_budget_reason = self._can_use_codex()
+            can_gemini, gemini_budget_reason = self._can_use_gemini()
+            
+            reasons = []
+            if not codex_avail:
+                reasons.append("Codex: {}".format(codex_reason))
+            elif not can_codex:
+                reasons.append("Codex: {}".format(codex_budget_reason))
+            elif self.codex.last_error:
+                reasons.append("Codex: {}".format(self.codex.last_error))
+            else:
+                reasons.append("Codex: returned empty response")
+            
+            if not gemini_avail:
+                reasons.append("Gemini: {}".format(gemini_reason))
+            elif not can_gemini:
+                reasons.append("Gemini: {}".format(gemini_budget_reason))
+            elif self.gemini.last_error:
+                reasons.append("Gemini: {}".format(self.gemini.last_error))
+            else:
+                reasons.append("Gemini: returned empty response")
+            
+            reason_str = "; ".join(reasons)
             self._write_alert(
-                "LLM unavailable - pausing conductor",
-                {"codex_reason": self._can_use_codex()[1], 
-                 "gemini_reason": self._can_use_gemini()[1]}
+                "LLM unavailable - pausing conductor: {}".format(reason_str),
+                {
+                    "codex_available": codex_avail,
+                    "codex_reason": codex_reason if not codex_avail else codex_budget_reason,
+                    "codex_last_error": self.codex.last_error,
+                    "gemini_available": gemini_avail,
+                    "gemini_reason": gemini_reason if not gemini_avail else gemini_budget_reason,
+                    "gemini_last_error": self.gemini.last_error,
+                }
             )
-            self._write_log({"action": "fail_safe", "reason": "llm_unavailable"})
+            self._write_log({
+                "action": "fail_safe", 
+                "reason": "llm_unavailable",
+                "details": reason_str,
+            })
         else:
             for action_dict in proposals.get("proposed_actions", []):
                 try:

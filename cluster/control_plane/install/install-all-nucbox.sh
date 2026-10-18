@@ -189,6 +189,30 @@ install_conductor() {
     log_info "Conductor installed (hourly, shadow mode)"
 }
 
+install_selfupdate() {
+    log_header "Installing Self-Update Timer"
+
+    mkdir -p "$SYSTEMD_DIR"
+
+    local service_src="$SCRIPT_DIR/storypool-selfupdate.service"
+    local timer_src="$SCRIPT_DIR/storypool-selfupdate.timer"
+
+    if [[ ! -f "$service_src" ]] || [[ ! -f "$timer_src" ]]; then
+        log_warn "Self-update service/timer not found — skipping"
+        return
+    fi
+
+    sed -e "s|__REPO_PATH__|$REPO_ROOT|g" \
+        "$service_src" > "$SYSTEMD_DIR/storypool-selfupdate.service"
+    cp "$timer_src" "$SYSTEMD_DIR/storypool-selfupdate.timer"
+
+    systemctl --user daemon-reload
+    systemctl --user enable storypool-selfupdate.timer
+    systemctl --user start storypool-selfupdate.timer
+
+    log_info "Self-update timer installed (30 min interval)"
+}
+
 install_karen_cli() {
     log_header "Installing Karen Gate CLI"
 
@@ -287,6 +311,15 @@ run_self_check() {
         all_pass=false
     fi
 
+    if systemctl --user is-active storypool-selfupdate.timer &>/dev/null; then
+        log_pass "self-update: timer active"
+        RESULTS+=("self-update: PASS")
+    else
+        log_fail "self-update: timer not active"
+        RESULTS+=("self-update: FAIL")
+        all_pass=false
+    fi
+
     if command -v karen-gate &>/dev/null || [[ -x "$HOME/.local/bin/karen-gate" ]]; then
         log_info "Testing karen-gate --help..."
         if PATH="$HOME/.local/bin:$PATH" karen-gate --help &>/dev/null; then
@@ -346,7 +379,7 @@ run_self_check() {
 uninstall_all() {
     log_header "Uninstalling All Components"
 
-    for unit in storypool-shadow storypool-dispatch storypool-conductor storypool-karen-poller; do
+    for unit in storypool-shadow storypool-dispatch storypool-conductor storypool-selfupdate storypool-karen-poller; do
         if systemctl --user is-active "$unit.timer" &>/dev/null; then
             log_info "Stopping $unit.timer..."
             systemctl --user stop "$unit.timer" 2>/dev/null || true
@@ -396,6 +429,7 @@ main() {
     install_shadow
     install_dispatcher
     install_conductor
+    install_selfupdate
     install_karen_cli
     run_self_check
 

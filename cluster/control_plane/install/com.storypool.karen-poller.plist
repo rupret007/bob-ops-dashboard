@@ -1,6 +1,18 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
+<!--
+StoryPool Karen Poller - Mac mini launchd plist
+
+Runs every 10 minutes to:
+- Auto-discover all rupret007 repos with open PRs (excluding never-touch repos)
+- Label queued PRs with needs-karen
+- Run gate on PRs with needs-karen label
+- Write backlog report to ~/.local/share/storypool/backlog.md
+
+Install: installed by install-all-mini.sh
+Go-live: go-live-mini.sh (enables RunAtLoad)
+-->
 <dict>
     <key>Label</key>
     <string>com.storypool.karen-poller</string>
@@ -22,8 +34,12 @@
         <string>__REPO_PATH__</string>
         <key>HOME</key>
         <string>__HOME__</string>
-        <key>KAREN_REPOS</key>
-        <string>rupret007/webjam,rupret007/StoryLiner,rupret007/StoryBoard,rupret007/Rad-Dad-Merch,rupret007/RadDadSite,rupret007/Turdanoid,rupret007/Andrea_NanoBot,rupret007/bob-ops-dashboard,rupret007/Cursor-OpenClaw-Integration</string>
+        <key>PATH</key>
+        <string>__PATH__</string>
+        <key>STORYPOOL_INSTALL_DIR</key>
+        <string>__REPO_PATH__</string>
+        <key>STORYPOOL_MACHINE</key>
+        <string>mini</string>
     </dict>
 
     <key>StandardOutPath</key>

@@ -213,3 +213,37 @@ def add_label(owner: str, repo: str, pr_number: int, label: str) -> None:
         "--repo", f"{owner}/{repo}",
         "--add-label", label,
     ])
+
+
+def ensure_label_exists(owner: str, repo: str, label: str, color: str = "d4c5f9", description: str = "") -> bool:
+    """Ensure a label exists in the repo, creating it if missing.
+    
+    Returns True if label was created, False if it already existed.
+    """
+    try:
+        result = subprocess.run(
+            ["gh", "label", "list", "--repo", "{}/{}".format(owner, repo), "--json", "name"],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        if result.returncode == 0:
+            labels = json.loads(result.stdout)
+            if any(l.get("name", "").lower() == label.lower() for l in labels):
+                return False
+    except (subprocess.SubprocessError, json.JSONDecodeError):
+        pass
+    
+    try:
+        args = ["gh", "label", "create", label, "--repo", "{}/{}".format(owner, repo), "--color", color]
+        if description:
+            args.extend(["--description", description])
+        result = subprocess.run(
+            args,
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        return result.returncode == 0
+    except subprocess.SubprocessError:
+        return False

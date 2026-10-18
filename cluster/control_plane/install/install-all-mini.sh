@@ -27,6 +27,34 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
 
+detect_gh_path() {
+    local gh_bin
+    gh_bin=$(command -v gh 2>/dev/null || true)
+    if [[ -n "$gh_bin" ]]; then
+        dirname "$gh_bin"
+    elif [[ -x "/opt/homebrew/bin/gh" ]]; then
+        echo "/opt/homebrew/bin"
+    elif [[ -x "/usr/local/bin/gh" ]]; then
+        echo "/usr/local/bin"
+    else
+        echo ""
+    fi
+}
+
+build_launchd_path() {
+    local gh_dir
+    gh_dir=$(detect_gh_path)
+    local base_path="/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
+    
+    if [[ -n "$gh_dir" ]]; then
+        echo "${gh_dir}:${base_path}:$HOME/.local/bin"
+    else
+        echo "/opt/homebrew/bin:${base_path}:$HOME/.local/bin"
+    fi
+}
+
+LAUNCHD_PATH=$(build_launchd_path)
+
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
@@ -105,6 +133,7 @@ install_shadow() {
 
     sed -e "s|__REPO_PATH__|$REPO_ROOT|g" \
         -e "s|__HOME__|$HOME|g" \
+        -e "s|__PATH__|$LAUNCHD_PATH|g" \
         "$plist_src" > "$plist_dst"
 
     clear_pycache "$REPO_ROOT/cluster"
@@ -115,6 +144,7 @@ install_shadow() {
     launchctl load "$plist_dst"
 
     log_info "Shadow runner installed (15 min interval)"
+    log_info "PATH: $LAUNCHD_PATH"
 }
 
 install_dispatcher() {
@@ -135,6 +165,7 @@ install_dispatcher() {
 
     sed -e "s|__REPO_PATH__|$REPO_ROOT|g" \
         -e "s|__HOME__|$HOME|g" \
+        -e "s|__PATH__|$LAUNCHD_PATH|g" \
         "$plist_src" > "$plist_dst"
 
     clear_pycache "$REPO_ROOT/cluster"
@@ -145,6 +176,7 @@ install_dispatcher() {
     launchctl load "$plist_dst"
 
     log_info "Dispatcher installed (15 min interval, shadow mode)"
+    log_info "PATH: $LAUNCHD_PATH"
 }
 
 install_conductor() {
@@ -166,6 +198,7 @@ install_conductor() {
 
     sed -e "s|__REPO_PATH__|$REPO_ROOT|g" \
         -e "s|__HOME__|$HOME|g" \
+        -e "s|__PATH__|$LAUNCHD_PATH|g" \
         "$plist_src" > "$plist_dst"
 
     clear_pycache "$REPO_ROOT/cluster"
@@ -176,6 +209,7 @@ install_conductor() {
     launchctl load "$plist_dst"
 
     log_info "Conductor installed (hourly, shadow mode)"
+    log_info "PATH: $LAUNCHD_PATH"
 }
 
 install_karen_cli() {
@@ -243,8 +277,10 @@ CONFIG
     if [[ -f "$poller_plist_src" ]]; then
         sed -e "s|__REPO_PATH__|$REPO_ROOT|g" \
             -e "s|__HOME__|$HOME|g" \
+            -e "s|__PATH__|$LAUNCHD_PATH|g" \
             "$poller_plist_src" > "$poller_plist_dst"
         log_info "Karen poller plist installed (NOT loaded in shadow mode)"
+        log_info "PATH: $LAUNCHD_PATH"
     fi
     
     log_info "Karen poller NOT loaded (shadow mode — run karen-gate --dry-run manually)"

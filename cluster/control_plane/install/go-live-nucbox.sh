@@ -167,20 +167,69 @@ enable_live_mode() {
     
     systemctl --user stop storypool-dispatch.timer 2>/dev/null || true
     systemctl --user stop storypool-conductor.timer 2>/dev/null || true
+    systemctl --user stop storypool-dispatch.service 2>/dev/null || true
+    systemctl --user stop storypool-conductor.service 2>/dev/null || true
     
-    if ! grep -q -- '--live' "$dispatch_service"; then
-        sed -i 's|ExecStart=\(.*\)|ExecStart=\1 --live|' "$dispatch_service"
+    if [[ -f "$dispatch_service" ]]; then
+        if ! grep -q -- '--live' "$dispatch_service"; then
+            sed -i 's|ExecStart=\(.*dispatcher[^-]*\)$|ExecStart=\1 --live|' "$dispatch_service"
+            sed -i 's|ExecStart=\(.*dispatcher.* --machine nucbox\)$|ExecStart=\1 --live|' "$dispatch_service"
+            log_info "Added --live to dispatcher service"
+        else
+            log_info "Dispatcher already has --live flag"
+        fi
+    else
+        log_fail "Dispatcher service not found: $dispatch_service"
+        ALL_PASS=false
+        FAILURES+=("dispatch-service-missing")
     fi
     
-    if ! grep -q -- '--live' "$conductor_service"; then
-        sed -i 's|ExecStart=\(.*\)|ExecStart=\1 --live|' "$conductor_service"
+    if [[ -f "$conductor_service" ]]; then
+        if ! grep -q -- '--live' "$conductor_service"; then
+            sed -i 's|ExecStart=\(.*conductor\)$|ExecStart=\1 --live|' "$conductor_service"
+            log_info "Added --live to conductor service"
+        else
+            log_info "Conductor already has --live flag"
+        fi
+    else
+        log_fail "Conductor service not found: $conductor_service"
+        ALL_PASS=false
+        FAILURES+=("conductor-service-missing")
     fi
     
+    log_info "Reloading systemd daemon..."
     systemctl --user daemon-reload
-    systemctl --user start storypool-dispatch.timer
-    systemctl --user start storypool-conductor.timer
     
-    log_pass "Dispatcher and Conductor now in LIVE mode"
+    log_info "Restarting timers..."
+    systemctl --user restart storypool-dispatch.timer
+    systemctl --user restart storypool-conductor.timer
+    
+    sleep 1
+    
+    if systemctl --user is-active storypool-dispatch.timer &>/dev/null; then
+        log_pass "Dispatcher timer active"
+    else
+        log_fail "Dispatcher timer not active after restart"
+        FAILURES+=("dispatch-timer-restart")
+    fi
+    
+    if systemctl --user is-active storypool-conductor.timer &>/dev/null; then
+        log_pass "Conductor timer active"
+    else
+        log_fail "Conductor timer not active after restart"
+        FAILURES+=("conductor-timer-restart")
+    fi
+    
+    local dispatch_live=$(grep -o -- '--live' "$dispatch_service" 2>/dev/null || echo "")
+    local conductor_live=$(grep -o -- '--live' "$conductor_service" 2>/dev/null || echo "")
+    
+    if [[ -n "$dispatch_live" ]] && [[ -n "$conductor_live" ]]; then
+        log_pass "Dispatcher and Conductor now in LIVE mode"
+    else
+        log_warn "Live flag may not have been applied correctly"
+        log_info "Dispatch: $(grep ExecStart "$dispatch_service" 2>/dev/null || echo 'not found')"
+        log_info "Conductor: $(grep ExecStart "$conductor_service" 2>/dev/null || echo 'not found')"
+    fi
 }
 
 skip_karen_poller() {

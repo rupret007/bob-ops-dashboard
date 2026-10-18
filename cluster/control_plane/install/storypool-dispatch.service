@@ -13,6 +13,9 @@ Type=oneshot
 ExecStart=/usr/bin/env python3 -m cluster.control_plane.dispatcher --machine nucbox
 WorkingDirectory=__REPO_PATH__
 Environment="PYTHONPATH=__REPO_PATH__"
+Environment="PATH=/usr/local/bin:/usr/bin:/bin:/home/%u/.local/bin"
+Environment="HOME=/home/%u"
+Environment="STORYPOOL_INSTALL_DIR=__REPO_PATH__"
 Environment="STORYPOOL_MACHINE=nucbox"
 
 # Resource limits
