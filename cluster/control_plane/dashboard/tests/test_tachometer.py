@@ -233,3 +233,9 @@ def test_live_panel_displays_current_sync_issue_without_repeating_detail():
     page = render_dashboard(DashboardData(timestamp='', machine='nucbox', live_mode=True))
     assert 'health.sync_issue&&!health.detail.startsWith(health.sync_issue)' in page
     assert 'health.peer_sync?.ok===false' not in page
+
+
+def test_current_sync_failure_keeps_operator_recovery_detail():
+    page = render_dashboard(DashboardData(timestamp='', machine='nucbox', live_mode=True))
+    # Recovery details are shown only while the collector marks sync degraded.
+    assert "health.sync_issue&&health.peer_sync?.detail?' · '+health.peer_sync.detail:''" in page
