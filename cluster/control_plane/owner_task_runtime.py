@@ -18,7 +18,7 @@ from pathlib import Path
 
 from .coordination import CoordinationError, Lease
 from .guards import MachineGuards
-from .owner_task_snapshot import WorkspaceSnapshot, verify_regression_evidence
+from .owner_task_snapshot import WorkspaceSnapshot, verify_regression_evidence, capture_staged_tree
 from .owner_task_scheduler import CHECKS, FIELDS, validate_request
 from . import fix_worker as worker
 
@@ -240,7 +240,10 @@ def create_owner_draft(request, authority):
         required = check_draft_diff(tree, request, git)
         # Trusted staging updates the index; fence tests against that new state.
         baseline = _metadata_snapshot(git_dir, tree)
-        snapshot = WorkspaceSnapshot.capture(tree)
+        tested_git_tree = git(['write-tree'])
+        if not re.fullmatch(r'[0-9a-f]{40}', tested_git_tree):
+            raise CoordinationError('Invalid staged Git tree')
+        snapshot = capture_staged_tree(tree, git(['ls-tree', '-rz', '--full-tree', tested_git_tree]))
         test_tree = snapshot.materialize(Path(temp) / 'tests')
         evidence = authority.run_isolated_tests(test_tree, tests, worker.run, trusted_git_dir=git_dir,
             denied_paths=(test_tree / '.git', git_dir), immutable_snapshot=snapshot,
@@ -260,6 +263,8 @@ def create_owner_draft(request, authority):
         check_draft_diff(tree, request, git)
         git(['commit', '-m', 'feat: owner-approved Web Bob draft task'])
         sha = git(['rev-parse', 'HEAD'])
+        if git(['rev-parse', 'HEAD^{tree}']) != tested_git_tree:
+            raise CoordinationError('Committed Git tree differs from tested tree')
         if not re.fullmatch(r'[0-9a-f]{40}', sha):
             raise CoordinationError('Invalid completed commit')
         # Each operation is fenced again by run(): pause/quota/claim changes

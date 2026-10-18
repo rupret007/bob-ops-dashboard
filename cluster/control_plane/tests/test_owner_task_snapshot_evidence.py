@@ -74,3 +74,19 @@ def test_regression_evidence_requires_observed_fail_before_pass_after(attack):
         evidence['observer'] = 'repository-result-file'
     with pytest.raises(CoordinationError, match='regression evidence'):
         verify_regression_evidence(evidence, 'a' * 64, {test}, 'b' * 40)
+
+
+def test_staged_snapshot_excludes_ignored_helpers_and_rejects_filtered_content(tmp_path):
+    import hashlib
+    from cluster.control_plane.owner_task_snapshot import capture_staged_tree
+    (tmp_path / 'tracked.py').write_bytes(b'pass\n')
+    (tmp_path / 'ignored_helper.py').write_bytes(b'untested helper\n')
+    blob = hashlib.sha1(b'blob 5\0pass\n').hexdigest()
+    listing = '100644 blob ' + blob + '\ttracked.py\0'
+    snapshot = capture_staged_tree(tmp_path, listing)
+    destination = snapshot.materialize(tmp_path / 'publish')
+    assert not (destination / 'ignored_helper.py').exists()
+    assert (destination / 'tracked.py').read_bytes() == b'pass\n'
+    (tmp_path / 'tracked.py').write_bytes(b'filter changed bytes\n')
+    with pytest.raises(CoordinationError, match='Staged blob differs'):
+        capture_staged_tree(tmp_path, listing)
