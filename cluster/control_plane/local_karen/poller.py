@@ -22,7 +22,7 @@ import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Optional, List
+from typing import Optional, List, Any
 
 from .config import KarenConfig
 from .gate import run_gate
@@ -40,11 +40,16 @@ try:
         MAX_UNDRAFTS_PER_TICK,
     )
     from ..self_update import self_update
+    from ..fix_dispatcher import dispatch_fix, should_attempt_fix
     BACKLOG_AVAILABLE = True
+    FIX_DISPATCH_AVAILABLE = True
 except ImportError:
     BACKLOG_AVAILABLE = False
+    FIX_DISPATCH_AVAILABLE = False
     MAX_UNDRAFTS_PER_TICK = 5
     ensure_label_exists = None  # type: ignore
+    dispatch_fix = None  # type: ignore
+    should_attempt_fix = None  # type: ignore
 
 logging.basicConfig(
     level=logging.INFO,
@@ -73,6 +78,42 @@ def _ensure_result_label(repo, label):
         _result_labels_ensured.add(cache_key)
     except Exception as e:
         logger.debug(f"Could not ensure label {label} in {repo}: {e}")
+
+
+def _dispatch_fix_if_eligible(repo, pr_number, verdict):
+    # type: (str, int, Any) -> None
+    """Dispatch a fix attempt if eligible (low effort, not security, under cap)."""
+    if not FIX_DISPATCH_AVAILABLE or dispatch_fix is None:
+        return
+    
+    verdict_dict = verdict.to_dict() if hasattr(verdict, "to_dict") else {}
+    
+    try:
+        should_fix, reason = should_attempt_fix(repo, pr_number, verdict_dict)
+        if not should_fix:
+            logger.debug(f"Skip fix for {repo}#{pr_number}: {reason}")
+            return
+        
+        machine = os.environ.get("STORYPOOL_MACHINE", "mini")
+        live_mode = os.environ.get("STORYPOOL_LIVE", "").lower() in ("1", "true", "yes")
+        
+        logger.info(f"Dispatching fix for {repo}#{pr_number}...")
+        result = dispatch_fix(
+            repo=repo,
+            pr_number=pr_number,
+            verdict=verdict_dict,
+            dry_run=not live_mode,
+            machine=machine,
+        )
+        
+        if result.get("dispatched"):
+            logger.info(f"Fix dispatched for {repo}#{pr_number}: {result.get('reason')}")
+        elif result.get("left_for_jeff") or "left for Jeff" in result.get("reason", ""):
+            logger.info(f"Left {repo}#{pr_number} for Jeff: {result.get('reason')}")
+        else:
+            logger.debug(f"Fix not dispatched for {repo}#{pr_number}: {result.get('reason')}")
+    except Exception as e:
+        logger.warning(f"Fix dispatch error for {repo}#{pr_number}: {e}")
 
 
 @dataclass
@@ -191,6 +232,10 @@ def poll_and_run(
                         add_label(owner, repo, pr_number, result_label)
                     except GitHubError as e:
                         logger.warning(f"Failed to update labels on {owner}/{repo}#{pr_number}: {e}")
+                
+                # Dispatch fix attempt for FAIL verdicts (max 2 attempts, never for security/high)
+                if not result.verdict.passed and FIX_DISPATCH_AVAILABLE:
+                    _dispatch_fix_if_eligible(f"{owner}/{repo}", pr_number, result.verdict)
 
             except Exception as e:
                 logger.error(f"Failed to run gate on {owner}/{repo}#{pr_number}: {e}")
