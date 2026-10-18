@@ -475,3 +475,14 @@ credentials and token prefixes/suffixes remain findings.
 Dashboard verdict evidence freshness describes locally observed artifacts,
 independently of machine health and merge authorization. A stale display directs
 the operator to the poller and verdict sync without asserting a service outage.
+
+Peer discovery identity (2026-10-18): NucBox names may carry an anchored
+hardware-model suffix (one to four letters and one to three digits, with an
+optional hyphen). Existing exact aliases remain supported. Multiple matching
+nodes always refuse discovery, including one exact name plus one model name;
+explicit private configuration selects the intended host. CLI unavailability,
+missing identity and ambiguous identity now carry separate safe diagnostic
+codes into watchdog sync status and the dashboard. No hostname, address, raw
+CLI output or transport exception is copied into the diagnostic. The badge
+labels last peer contact separately from the last machine health report;
+successful discovery alone never makes stale health green or authorizes work.

@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import subprocess
 from pathlib import Path
 from urllib.parse import urlsplit
@@ -11,7 +12,9 @@ from .node_control import allowed_address
 
 
 class PeerUnavailable(RuntimeError):
-    pass
+    def __init__(self, message, kind='address-unavailable'):
+        super().__init__(message)
+        self.kind = kind
 
 
 def tailnet_status():
@@ -23,7 +26,8 @@ def tailnet_status():
             raise ValueError('Invalid status')
         return status
     except (OSError, ValueError, subprocess.SubprocessError) as exc:
-        raise PeerUnavailable('Peer discovery unavailable; configure private peers.json') from exc
+        raise PeerUnavailable('Peer discovery unavailable; configure private peers.json',
+                              kind='discovery-unavailable') from exc
 
 
 def peer_node(machine):
@@ -35,10 +39,15 @@ def peer_node(machine):
     matches = []
     for node in nodes:
         host = str(node.get('HostName', '')).lower().removesuffix('.local')
-        if any(host == name or host.endswith('-' + name) for name in aliases[machine]):
+        # Hardware model suffixes are common on NucBox hosts. Keep the grammar
+        # anchored and reject multiple matches rather than selecting a host by
+        # list order, online state, or a loose substring match.
+        model_host = machine == 'nucbox' and re.fullmatch(r'nucbox-?[a-z]{1,4}[0-9]{1,3}', host)
+        if model_host or any(host == name or host.endswith('-' + name) for name in aliases[machine]):
             matches.append(node)
     if len(matches) != 1:
-        raise PeerUnavailable('Peer discovery ambiguous or missing; configure private peers.json')
+        kind = 'identity-ambiguous' if matches else 'identity-missing'
+        raise PeerUnavailable('Peer discovery ambiguous or missing; configure private peers.json', kind=kind)
     return matches[0]
 
 

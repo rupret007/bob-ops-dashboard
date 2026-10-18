@@ -187,8 +187,14 @@ def _peer_sync_status(peer, ok, failure_kind=None):
                        'Peer sync failed; check private endpoint configuration and connectivity'}
     if failure_kind:
         value['failure_kind'] = failure_kind
-        if failure_kind == 'address-unavailable':
-            value['detail'] += '; peer address unavailable; configure private peers.json'
+        action = {
+            'address-unavailable': 'peer address unavailable; configure private peers.json',
+            'discovery-unavailable': 'check Tailscale CLI access or configure private peers.json',
+            'identity-missing': 'peer hostname not recognized; configure private peers.json',
+            'identity-ambiguous': 'multiple matching hosts; select one peer in private peers.json',
+        }.get(failure_kind)
+        if action:
+            value['detail'] += '; ' + action
     temporary = path.with_suffix('.tmp')
     temporary.write_text(json.dumps(value))
     temporary.replace(path)
@@ -219,7 +225,7 @@ def sync_peer_health(machine: str) -> bool:
         _peer_sync_status(peer, True)
         return True
     except Exception as exc:
-        _peer_sync_status(peer, False, "address-unavailable" if isinstance(exc, PeerUnavailable) else "transport-or-response")
+        _peer_sync_status(peer, False, exc.kind if isinstance(exc, PeerUnavailable) else "transport-or-response")
         logger.warning("peer health sync for %s failed; check private endpoint configuration and connectivity", peer)
         return False
 
