@@ -383,10 +383,17 @@ _TEST_SECRET_LITERALS = frozenset({
 
 
 def _placeholder_secret(match, secret_type, filepath):
-    if secret_type not in ("API key", "Secret/password") or not _is_test_file(filepath or ""):
+    if secret_type not in ("API key", "Secret/password"):
         return False
     value = re.search(r"[\"']([^\"']*)[\"']$", match.group(0))
-    return value is not None and value.group(1) in _TEST_SECRET_LITERALS
+    if value is None:
+        return False
+    # Only complete variable substitutions in configuration templates. A real
+    # credential, literal suffix/prefix, or adjacent match remains a finding.
+    if str(filepath or '').endswith('.template') and re.fullmatch(
+            r'\{\{[A-Z][A-Z0-9_]*_(?:TOKEN|KEY|PASSWORD|SECRET)\}\}', value.group(1)):
+        return True
+    return _is_test_file(filepath or "") and value.group(1) in _TEST_SECRET_LITERALS
 
 
 def _added_lines(diff):

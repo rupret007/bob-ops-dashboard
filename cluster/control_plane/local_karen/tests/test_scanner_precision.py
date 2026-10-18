@@ -11,6 +11,21 @@ def pr(path, added, deleted='old'):
     return checks.PRInfo('owner', 'repo', 1, 'a' * 40, '', '', False, diff, {}, [path], [])
 
 
+def test_complete_broker_template_token_is_an_inert_placeholder():
+    field = "pass" + "word"
+    candidate = pr('cluster/nats.conf.template', field + ': "{{COORD_TOKEN}}"')
+    for scanner in (checks.check_no_secrets_in_diff, checks.run_static_security_scan):
+        assert scanner(candidate, KarenConfig()).passed
+
+
+@pytest.mark.parametrize('value', ['{{COORD_TOKEN}}suffix', 'prefix{{COORD_TOKEN}}',
+                                  'unreviewed-real-password', 'ghp_' + 'B7c9' * 9])
+def test_template_placeholder_never_hides_real_or_adjacent_credentials(value):
+    candidate = pr('cluster/nats.conf.template', 'password: "' + value + '"')
+    for scanner in (checks.check_no_secrets_in_diff, checks.run_static_security_scan):
+        assert scanner(candidate, KarenConfig()).failed
+
+
 @pytest.mark.parametrize('value', sorted({
     "synthetic-approle-secret-value", "synthetic-media-secret", "client-secret",
     "synthetic-secret-do-not-return", "synthetic-unit-test-session-value-with-32-characters",
