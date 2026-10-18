@@ -176,3 +176,60 @@ def test_fresh_peer_contact_does_not_claim_stale_health_is_green(tmp_path):
     result = EngineCollector(tmp_path, tmp_path, 'nucbox').collect()
     assert result['machines']['mini']['detail'] == 'peer reachable; health report stale'
     assert result['machines']['mini']['state'] == 'yellow'
+
+
+def test_failed_peer_sync_is_yellow_even_when_last_health_is_green(tmp_path):
+    now = datetime.now(timezone.utc)
+    write(tmp_path / 'watchdog.log', {'timestamp': now.isoformat(), 'checks': [{'passed': True}]})
+    peer = tmp_path / 'machines/mini'
+    write(peer / 'watchdog.log', {'timestamp': now.isoformat(), 'checks': [{'passed': True}]})
+    write(peer / 'engine.json', {'synced_at': (now - timedelta(minutes=12)).isoformat()})
+    write(peer / 'sync-status.json', {'timestamp': now.isoformat(), 'ok': False})
+    result = EngineCollector(tmp_path, tmp_path, 'nucbox').collect()
+    assert result['machines']['mini']['state'] == 'yellow'
+    assert result['machines']['mini']['reported_state'] == 'green'
+    assert result['machines']['mini']['sync_issue'] == 'peer sync failed'
+    assert result['machines']['mini']['detail'] == 'peer sync failed; last health report was green'
+    assert result['engine'] == 'yellow'
+
+
+def test_stale_peer_sync_does_not_keep_recent_healthy_report_green(tmp_path):
+    now = datetime.now(timezone.utc)
+    peer = tmp_path / 'machines/mini'
+    write(peer / 'watchdog.log', {'timestamp': (now - timedelta(minutes=20)).isoformat(), 'checks': [{'passed': True}]})
+    write(peer / 'engine.json', {'synced_at': (now - timedelta(minutes=20)).isoformat()})
+    result = EngineCollector(tmp_path, tmp_path, 'nucbox').collect()['machines']['mini']
+    assert result['state'] == 'yellow'
+    assert result['reported_state'] == 'green'
+    assert result['detail'] == 'peer sync stale; last health report was green'
+
+
+def test_new_peer_snapshot_recovers_after_older_sync_failure(tmp_path):
+    now = datetime.now(timezone.utc)
+    peer = tmp_path / 'machines/mini'
+    write(peer / 'watchdog.log', {'timestamp': now.isoformat(), 'checks': [{'passed': True}]})
+    write(peer / 'engine.json', {'synced_at': now.isoformat()})
+    write(peer / 'sync-status.json', {'timestamp': (now - timedelta(minutes=1)).isoformat(), 'ok': False})
+    result = EngineCollector(tmp_path, tmp_path, 'nucbox').collect()['machines']['mini']
+    assert result['state'] == 'green'
+    assert result['detail'] == '0 failed checks'
+    assert result['sync_issue'] is None
+
+
+def test_peer_sync_failure_does_not_hide_fresh_machine_failure(tmp_path):
+    now = datetime.now(timezone.utc)
+    peer = tmp_path / 'machines/mini'
+    write(peer / 'watchdog.log', {'timestamp': now.isoformat(), 'checks': [{'passed': False}]})
+    write(peer / 'engine.json', {'synced_at': (now - timedelta(minutes=12)).isoformat()})
+    write(peer / 'sync-status.json', {'timestamp': now.isoformat(), 'ok': False})
+    result = EngineCollector(tmp_path, tmp_path, 'nucbox').collect()['machines']['mini']
+    assert result['state'] == 'red'
+    assert result['reported_state'] == 'red'
+    assert result['detail'] == '1 failed checks'
+    assert result['sync_issue'] == 'peer sync failed'
+
+
+def test_live_panel_displays_current_sync_issue_without_repeating_detail():
+    page = render_dashboard(DashboardData(timestamp='', machine='nucbox', live_mode=True))
+    assert 'health.sync_issue&&!health.detail.startsWith(health.sync_issue)' in page
+    assert 'health.peer_sync?.ok===false' not in page

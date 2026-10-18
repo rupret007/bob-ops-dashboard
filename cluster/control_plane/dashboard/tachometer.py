@@ -236,8 +236,25 @@ class EngineCollector:
             detail = 'stale or unavailable' if not fresh else '{} failed checks'.format(len(failed))
             if machine != self.machine and not fresh and peer.get('synced_at'):
                 detail = 'peer sync stale' if sync_age >= PEER_FRESH_SEC else 'peer reachable; health report stale'
+            reported_state = state
+            sync_status = (read_json(self.data_dir / 'machines' / machine / 'sync-status.json') or {}) if machine != self.machine else {}
+            # Watchdog checks can still be recent after peer contact stops. Do
+            # not present that old green report as current cluster health.
+            # A newer snapshot supersedes a previous failed sync attempt.
+            sync_failed = (sync_status.get('ok') is False and
+                           stamp(sync_status.get('timestamp')) >= stamp(peer.get('synced_at')))
+            sync_issue = ('peer sync failed' if sync_failed else
+                          'peer sync stale' if sync_age is not None and sync_age >= PEER_FRESH_SEC else None)
+            if machine != self.machine and state == 'yellow' and sync_failed:
+                detail = 'peer sync failed; latest machine health unconfirmed'
+            if machine != self.machine and state == 'green':
+                if sync_failed:
+                    state, detail = 'yellow', 'peer sync failed; last health report was green'
+                elif sync_age is not None and sync_age >= PEER_FRESH_SEC:
+                    state, detail = 'yellow', 'peer sync stale; last health report was green'
             health[machine] = {'state': state, 'timestamp': last.get('timestamp'),
-                               'peer_sync': (read_json(self.data_dir / 'machines' / machine / 'sync-status.json') or {}) if machine != self.machine else {},
+                               'reported_state': reported_state, 'peer_sync': sync_status,
+                               'sync_issue': sync_issue if machine != self.machine else None,
                                'detail': detail, 'sync_age_seconds': sync_age if machine != self.machine else None,
                                'guardian': (read_json(self.data_dir / 'guardian-status.json') or {})
                                if machine == self.machine else peer.get('guardian', {})}

@@ -17,6 +17,12 @@ remote health from the current machine's load. `MONITOR.md` and activity strings
 are rendered as text, never HTML. Dashboard assets ship with self-update's
 existing package copy on both machines.
 
+A failed latest peer sync or a snapshot older than 15 minutes turns an otherwise
+green remote badge yellow. Its detail preserves the last reported green health,
+so a sync outage is not described as a dead machine. A newer snapshot supersedes
+an older sync failure; fresh reported machine failures remain red. The JSON
+exposes `reported_state` and `sync_issue` separately for that distinction.
+
 Node maintenance controls use `/api/control/node` (POST only): JSON contains
 `machine` (`mini` or `nucbox`), boolean `maintenance`, and literal `confirm: true`.
 A same-origin browser confirmation is required. Requests must originate from
