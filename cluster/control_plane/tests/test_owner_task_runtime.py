@@ -14,7 +14,9 @@ from cluster.control_plane.tests.test_owner_task_scheduler import MemoryInbox
 
 
 @pytest.fixture
-def setup_runtime():
+def setup_runtime(monkeypatch):
+    # Candidate-boundary unit tests are not production execution authorization.
+    monkeypatch.setattr('cluster.control_plane.owner_task_runtime.EXECUTION_REVIEW_BLOCKED', False)
     request = dict(contract=1, request_id='webbob-' + 'a' * 64,
         repo='rupret007/bob-brain', head_sha='b' * 40,
         branch='draft/webbob-task-' + 'a' * 24, provider='codex',
@@ -219,3 +221,56 @@ def test_untrusted_git_mutation_blocks_all_privileged_followups(setup_runtime, a
     _, kwargs = authority.isolated_codex_command.call_args
     assert git_dir in kwargs['denied_paths']
     assert tree / '.git' in kwargs['denied_paths']
+
+
+def test_review_latch_blocks_execution_without_test_override(setup_runtime, monkeypatch):
+    runtime, request, _, _ = setup_runtime
+    monkeypatch.setattr('cluster.control_plane.owner_task_runtime.EXECUTION_REVIEW_BLOCKED', True)
+    with patch('cluster.control_plane.owner_task_runtime.create_owner_draft') as worker:
+        with pytest.raises(CoordinationError, match='execution blocked'):
+            runtime.execute(request['request_id'])
+        worker.assert_not_called()
+    with pytest.raises(CoordinationError, match='admission blocked'):
+        runtime(request, branch_lease=MagicMock())
+    runtime.client.acquire_task.assert_not_called()
+
+
+def test_pause_during_lease_renew_never_starts_push():
+    paused = False
+    def pause():
+        nonlocal paused
+        paused = True
+    def guard():
+        if paused:
+            raise CoordinationError('paused during renewal')
+    lease = MagicMock()
+    lease.renew.side_effect = pause
+    lease_token = fix_worker._lease.set(lease)
+    guard_token = fix_worker._execution_guard.set(guard)
+    try:
+        with patch('cluster.control_plane.fix_worker.subprocess.Popen') as spawn:
+            with pytest.raises(CoordinationError, match='paused during renewal'):
+                fix_worker.run(['git', 'push', 'origin', 'HEAD:refs/heads/draft/example'])
+            spawn.assert_not_called()
+    finally:
+        fix_worker._execution_guard.reset(guard_token)
+        fix_worker._lease.reset(lease_token)
+
+
+@pytest.mark.parametrize('filepath,added', [
+    ('tests/conftest.py', '+def pytest_collection_modifyitems(items):\n+    for item in items:\n+        item.add_marker(pytest.mark.skip(reason="skip suite"))'),
+    ('tests/test_chat.py', '+def test_chat():\n+    assert True\n+def pytest_collection_modifyitems(items):\n+    items.clear()'),
+    ('tests/helper.py', '+def helper():\n+    return True'),
+])
+def test_collection_suppression_and_helper_only_are_rejected(setup_runtime, filepath, added):
+    from cluster.control_plane.owner_task_runtime import check_draft_diff
+    _, request, _, _ = setup_runtime
+    diff = 'diff --git a/' + filepath + ' b/' + filepath + '\n--- a/' + filepath + '\n+++ b/' + filepath + '\n@@ -0,0 +1,5 @@\n' + added + '\n'
+    def command(args, cwd=None):
+        if '--diff-filter=D' in args:
+            return ''
+        if '--name-only' in args:
+            return filepath
+        return diff
+    with patch.object(fix_worker, 'run', side_effect=command), pytest.raises(CoordinationError):
+        check_draft_diff(None, request)

@@ -21,6 +21,11 @@ from .guards import MachineGuards
 from .owner_task_scheduler import CHECKS, FIELDS, validate_request
 from . import fix_worker as worker
 
+# Hard review latch: no public/constructor/env override. The incomplete adapter
+# contract cannot prove sandbox teardown or executed regression-test evidence.
+# Unit tests explicitly lift this latch only to exercise candidate boundaries.
+EXECUTION_REVIEW_BLOCKED = True
+
 
 def _fresh(record, now):
     if not isinstance(record, dict) or record.get('scope') != 'cluster':
@@ -61,6 +66,8 @@ class OwnerTaskRuntime:
         return quota
 
     def __call__(self, request, *, branch_lease):
+        if EXECUTION_REVIEW_BLOCKED:
+            raise CoordinationError('Owner runtime admission blocked pending execution-safety review')
         validate_request(request)
         branch_lease.renew()
         quota = self.gates(request)
@@ -78,6 +85,8 @@ class OwnerTaskRuntime:
                     codex_weekly_pct=quota, checks={k: True for k in CHECKS})
 
     def execute(self, request_id):
+        if EXECUTION_REVIEW_BLOCKED:
+            raise CoordinationError('Owner runtime execution blocked pending sandbox and regression-evidence review')
         key = 'runtime.' + request_id
         entry = self.inbox.call('get', key)
         if entry is None:
@@ -125,15 +134,26 @@ class OwnerTaskRuntime:
 
 
 def check_draft_diff(tree, request, git=None):
-    from .local_karen.checks import (PRInfo, CheckVerdict, check_no_secrets_in_diff,
+    from .local_karen.checks import (PRInfo, CheckVerdict, _added_lines, check_no_secrets_in_diff,
         check_no_dangerous_commands, check_tests_not_weakened)
     from .local_karen.config import KarenConfig
     git = git or (lambda args: worker.run(['git'] + args, tree))
     diff = git(['diff', '--cached', '--no-ext-diff', '--no-textconv', '--unified=3'])
     files = git(['diff', '--cached', '--name-only']).splitlines()
     deleted = git(['diff', '--cached', '--diff-filter=D', '--name-only']).splitlines()
-    if not files or not any(re.search(r'(^|/)(tests?/|test_)|\.(test|spec)\.', f) for f in files):
-        raise CoordinationError('Owner draft must include regression tests')
+    control_files = {'conftest.py', 'pytest.ini', 'pyproject.toml', 'setup.cfg', 'tox.ini',
+                     'package.json', '.mocharc.json', '.mocharc.js', 'jest.config.js',
+                     'jest.config.ts', 'vitest.config.js', 'vitest.config.ts'}
+    if any(Path(f).name in control_files for f in files):
+        raise CoordinationError('Owner draft may not alter test collection or runner controls')
+    additions = list(_added_lines(diff))
+    if not files or not any(re.match(r'\s*(?:async\s+)?def\s+test_[A-Za-z0-9_]+\s*\(|\s*(?:it|test)\s*\(', line)
+                            for path, _, line in additions
+                            if re.search(r'(^|/)(tests?/|test_)|\.(test|spec)\.', path)):
+        raise CoordinationError('Owner draft must add an actual regression test function')
+    suppression = re.compile(r'pytest_(?:collection|ignore_collect|deselected)|add_marker|pytestmark|\.mark\.(?:skip|xfail)|\b(?:deselect|skipif)\b')
+    if any(suppression.search(line) for _, _, line in additions):
+        raise CoordinationError('Owner draft may not suppress test execution')
     pr = PRInfo('rupret007', 'bob-brain', 0, request['head_sha'], '', '', True,
                 diff, {}, files, deleted)
     for check in (check_no_secrets_in_diff, check_no_dangerous_commands, check_tests_not_weakened):

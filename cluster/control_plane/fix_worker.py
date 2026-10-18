@@ -63,6 +63,9 @@ TEST_OUTPUT_TAIL = 6000
 def _run_claimed(args, cwd, lease, **kwargs):
     """Stop the entire command process group if ownership is lost mid-command."""
     prompt = kwargs.pop('input', None)
+    guard = _execution_guard.get()
+    if guard is not None:
+        guard()  # Final fence after run() renewal/logging, immediately before spawn.
     process = subprocess.Popen(args, cwd=cwd, text=True, stdout=subprocess.PIPE,
         stderr=subprocess.PIPE, stdin=subprocess.PIPE if prompt is not None else None,
         start_new_session=True, **kwargs)
@@ -112,6 +115,8 @@ def run(args, cwd=None, **kwargs):
     event('fix-worker', 'command_started', executable=executable, operation=operation)
     try:
         if lease is None:
+            if guard is not None:
+                guard()
             result = subprocess.run(args, cwd=cwd, check=True, text=True,
                                     capture_output=True, timeout=1800, **kwargs)
         else:

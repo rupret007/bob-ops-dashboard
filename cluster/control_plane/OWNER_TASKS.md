@@ -76,3 +76,22 @@ immutable original repository HTTPS URL for push/remote verification. Metadata,
 the pointer and Git attribute files are hashed before isolation and checked
 after both model and tests; any mutation aborts before privileged Git resumes.
 Symlinks fail closed, and diffs disable external drivers/text conversion.
+
+**REVIEW BLOCKER — EXECUTION AND ADMISSION DISABLED.** Independent review found
+that the candidate isolated-adapter contract cannot prove all descendants have
+terminated (a child can call `setsid` and survive process-group cleanup), or that
+a reported successful suite actually executed the new regression test. The
+hard `EXECUTION_REVIEW_BLOCKED` latch rejects both admission and execution.
+There is no environment or constructor override. Unit tests explicitly lift
+this latch to exercise candidate boundaries; those results do not close these
+review blockers. Do not wire this runtime into a deployed scheduler or lift the
+latch until a reviewed OS containment/teardown barrier, immutable workspace
+snapshot, and actual executed-regression evidence are implemented and tested.
+
+Known collection/runner control files and added collection suppression are now
+rejected, and an actual added test-function declaration is required. These
+static checks are additional safety checks; they cannot replace execution
+coverage evidence. Commands now repeat the owner guard immediately before
+`Popen`, after lease renewal and logging, to prevent a pause during renewal from
+starting a push. Normal process-group cleanup remains insufficient sandbox
+quiescence evidence, so execution stays disabled.
