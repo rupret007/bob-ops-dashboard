@@ -28,10 +28,14 @@ def check_ci(repo, ref='main'):
         checks = gh_json('api', '--paginate', '--slurp', f'repos/{repo}/commits/{ref}/check-runs?per_page=100')
         status = gh_json('api', f'repos/{repo}/commits/{ref}/status')
         runs = [run for page in checks for run in page['check_runs']]
-        # A rerun supersedes an older attempt of the same app/check.
+        # Names are shared across workflows. Only attempts from the same
+        # check suite may supersede each other; otherwise a green workflow
+        # can hide an unrelated red workflow with the same job name.
         latest = {}
         for run in runs:
-            key = (run.get('app', {}).get('id'), run['name'])
+            suite = (run.get('check_suite') or {}).get('id')
+            key = (run.get('app', {}).get('id'), run['name'],
+                   ('suite', suite) if suite is not None else ('run', run['id']))
             if run['id'] > latest.get(key, {}).get('id', -1):
                 latest[key] = run
         states = [r.get('conclusion') if r.get('status') == 'completed' else 'pending'

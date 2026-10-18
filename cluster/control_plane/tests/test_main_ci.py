@@ -33,10 +33,22 @@ def test_check_run_ci(conclusion, expected):
 
 
 def test_successful_rerun_supersedes_old_failure():
-    runs = [dict(id=i, name='test', app={'id':1}, status='completed', conclusion=verdict)
+    runs = [dict(id=i, name='test', app={'id':1}, check_suite={'id':99}, status='completed', conclusion=verdict)
             for i,verdict in [(2,'success'),(1,'failure')]]
     with patch.object(m, 'gh_json', side_effect=[[{'check_runs':runs}], {'statuses':[]}]):
         assert m.check_ci(REPO, SHA) == (True,'success')
+
+
+@pytest.mark.parametrize('include_suite', [True, False])
+@pytest.mark.parametrize('blocked', ['failure', None])
+def test_same_name_other_workflow_cannot_hide_red_or_pending_ci(include_suite, blocked):
+    runs = [dict(id=1, name='test', app={'id':1}, status='completed' if blocked else 'in_progress', conclusion=blocked),
+            dict(id=2, name='test', app={'id':1}, status='completed', conclusion='success')]
+    if include_suite:
+        for run in runs:
+            run['check_suite'] = {'id':run['id']}
+    with patch.object(m, 'gh_json', side_effect=[[{'check_runs':runs}], {'statuses':[]}]):
+        assert m.check_ci(REPO, SHA) == (False, 'failure' if blocked else 'pending')
 
 
 @pytest.mark.parametrize('response', [([], {'statuses':[]}), ([{'check_runs':[]}], {'statuses':[{}], 'state':'failure'})])
