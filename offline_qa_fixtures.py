@@ -91,12 +91,28 @@ print(json.dumps(value))
 ''').lstrip("\\\n")
 
 
+def has_repository_ancestor(root: Path) -> bool:
+    """Reject repository markers, allowing an empty shared-temp placeholder."""
+    temp_roots = {Path(tempfile.gettempdir()).resolve(), Path("/tmp").resolve()}
+    for parent in (root, *root.parents):
+        marker = parent / ".git"
+        if not marker.exists():
+            continue
+        # Sandboxes may reserve .git at a shared temporary root. An empty
+        # directory there cannot be a worktree; populated markers still block.
+        # Empty markers below the shared root reserve their directories too.
+        if parent in temp_roots and marker.is_dir() and not any(marker.iterdir()):
+            continue
+        return True
+    return False
+
+
 def require_temporary_child(root: Path) -> Path:
     resolved = root.resolve()
     temp_roots = {Path(tempfile.gettempdir()).resolve(), Path("/tmp").resolve()}
     if not any(resolved != base and resolved.is_relative_to(base) for base in temp_roots):
         raise ValueError("Fixture files must stay in a child of a temporary directory")
-    if any((parent / ".git").exists() for parent in (resolved, *resolved.parents)):
+    if has_repository_ancestor(resolved):
         raise ValueError("Fixture files must not overwrite a repository")
     return resolved
 

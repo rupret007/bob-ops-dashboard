@@ -30,6 +30,10 @@ TAG="${TAG:-}"
 RELEASE_URL="${RELEASE_URL:-}"
 SOURCE_REPO="${SOURCE_REPO:-}"
 
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+python3 "$ROOT/cluster/never_touch.py" write \
+  --repo "${TARGET_OWNER}/${TARGET_REPO}" --operation repository_dispatch
+
 if ! command -v gh >/dev/null 2>&1; then
   echo "gh CLI required" >&2
   exit 1

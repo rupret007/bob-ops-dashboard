@@ -1033,6 +1033,9 @@ for iss in issues:
     if decision in ("approve", "deny"):
         resolved.add(pid)
     if apply_decisions:
+        from cluster.never_touch import assert_not_never_touch
+
+        assert_not_never_touch("rupret007/bob-ops-dashboard", "close decision issue")
         try:
             subprocess.check_call(
                 [
@@ -4073,8 +4076,10 @@ fi
 if [[ $PUSH -eq 1 ]]; then
   WORK="$(mktemp -d)"
   gh repo clone "$OWNER/bob-ops-dashboard" "$WORK" -- --quiet
-  mkdir -p "$WORK/.github/workflows"
+  mkdir -p "$WORK/.github/workflows" "$WORK/cluster"
   cp "$ROOT/index.html" "$ROOT/status.json" "$ROOT/README.md" "$ROOT/refresh.sh" "$WORK/"
+  cp "$ROOT/cluster/never_touch.py" "$WORK/cluster/"
+  cp "$ROOT/_config.yml" "$WORK/"
   [[ -f "$ROOT/llm-work-now.json" ]] && cp "$ROOT/llm-work-now.json" "$WORK/"
   [[ -f "$ROOT/harden-window.json" ]] && cp "$ROOT/harden-window.json" "$WORK/"
   [[ -f "$ROOT/write_harden_window.py" ]] && cp "$ROOT/write_harden_window.py" "$WORK/"
@@ -4107,6 +4112,7 @@ if [[ $PUSH -eq 1 ]]; then
   [[ -f llm-work-now.json ]] && PAGES_ARTIFACTS+=(llm-work-now.json)
   [[ -f harden-window.json ]] && PAGES_ARTIFACTS+=(harden-window.json)
   git add "${PAGES_ARTIFACTS[@]}" README.md refresh.sh
+  git add cluster/never_touch.py _config.yml
   [[ -f write_harden_window.py ]] && git add write_harden_window.py
   [[ -f board_meta.py ]] && git add board_meta.py
   [[ -f probe-agents-status.sh ]] && git add probe-agents-status.sh
@@ -4129,6 +4135,7 @@ if [[ $PUSH -eq 1 ]]; then
     # Race-safe vs concurrent Actions refresh / other --push (mirror workflow).
     pushed=0
     for attempt in 1 2 3 4 5; do
+      python3 "$ROOT/cluster/never_touch.py" push --remote origin
       if git push origin HEAD:main; then
         echo "Pushed on attempt ${attempt}."
         pushed=1

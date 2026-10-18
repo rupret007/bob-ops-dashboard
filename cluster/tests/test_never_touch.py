@@ -4,8 +4,15 @@ These guards must block all write operations to never-touch repos
 unless explicitly approved. The tests verify fail-closed behavior.
 """
 
+import os
+import subprocess
+import sys
+import tempfile
+import textwrap
 import time
 import unittest
+from pathlib import Path
+from unittest.mock import Mock, patch
 
 from cluster.never_touch import (
     GatePassReceipt,
@@ -50,6 +57,25 @@ class NormalizeRepoTests(unittest.TestCase):
         for bad in invalid:
             with self.assertRaises(ValueError, msg=f"should reject {bad!r}"):
                 normalize_repo(bad)
+
+    def test_clone_url_forms_are_canonical(self):
+        for repo in (
+            "Owner/Repo.git",
+            "https://github.com/Owner/Repo.git",
+            "HTTPS://GITHUB.COM/Owner/Repo.GIT/",
+            "git@github.com:Owner/Repo.git",
+            "ssh://git@github.com/Owner/Repo.git",
+        ):
+            with self.subTest(repo=repo):
+                self.assertEqual(normalize_repo(repo), "owner/repo")
+
+    def test_non_string_repositories_fail_closed(self):
+        for repo in (None, 0, [], {}):
+            with self.subTest(repo=repo):
+                with self.assertRaises(ValueError):
+                    normalize_repo(repo)
+                with self.assertRaises(NeverTouchViolation):
+                    assert_not_never_touch(repo, "write")
 
 
 class IsNeverTouchTests(unittest.TestCase):
@@ -268,6 +294,225 @@ class NeverTouchViolationTests(unittest.TestCase):
     def test_is_permission_error(self):
         exc = NeverTouchViolation("owner/repo", "push")
         self.assertIsInstance(exc, PermissionError)
+
+
+ROOT = Path(__file__).resolve().parents[2]
+GUARD = ROOT / "cluster" / "never_touch.py"
+PROTECTED_REPO = "rupret007/rad-dad-show-night"
+
+
+class CloneUrlGuardTests(unittest.TestCase):
+    def test_clone_urls_cannot_bypass_any_write_guard(self):
+        for repo in (
+            PROTECTED_REPO + ".git",
+            f"https://github.com/{PROTECTED_REPO}.git",
+            f"https://github.com/{PROTECTED_REPO.upper()}.GIT/",
+            f"git@github.com:{PROTECTED_REPO}.git",
+            f"ssh://git@github.com/{PROTECTED_REPO}.git",
+        ):
+            with self.subTest(repo=repo):
+                self.assertTrue(is_never_touch(repo))
+                for guard, args in (
+                    (guard_push, (repo, "fixture", "a" * 40)),
+                    (guard_pr_create, (repo, "fixture", "main")),
+                    (guard_pr_merge, (repo, 1, "a" * 40)),
+                    (check_gate_pass_at_sha, (repo, "a" * 40, None, "merge")),
+                ):
+                    with self.assertRaises(NeverTouchViolation):
+                        guard(*args)
+
+
+class RemotePushGuardTests(unittest.TestCase):
+    """Exercise real Git configuration resolution, with no network or commits."""
+
+    def setUp(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.cwd = Path(tmp.name)
+        self.env = {"PATH": os.defpath, "HOME": tmp.name,
+                    "GIT_CONFIG_NOSYSTEM": "1", "GIT_CONFIG_GLOBAL": os.devnull}
+        self.git("init", "--quiet")
+        self.git("remote", "add", "origin", "https://github.com/rupret007/bob-ops-dashboard.git")
+
+    def git(self, *args):
+        return subprocess.run(["git", *args], cwd=self.cwd, env=self.env,
+                              capture_output=True, text=True, check=True)
+
+    def check_guard(self):
+        return subprocess.run([sys.executable, str(GUARD), "push", "--remote", "origin"],
+                              cwd=self.cwd, env=self.env, capture_output=True, text=True)
+
+    def test_allowed_remote_passes(self):
+        result = self.check_guard()
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_protected_pushurl_blocks_even_with_allowed_fetch_url(self):
+        self.git("remote", "set-url", "--push", "origin", f"https://github.com/{PROTECTED_REPO}.git")
+        result = self.check_guard()
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("BLOCKED", result.stderr)
+
+    def test_all_pushurls_are_checked(self):
+        self.git("remote", "set-url", "--add", "--push", "origin", "https://github.com/owner/allowed.git")
+        self.git("remote", "set-url", "--add", "--push", "origin", f"git@github.com:{PROTECTED_REPO}.git")
+        self.assertNotEqual(self.check_guard().returncode, 0)
+
+    def test_push_instead_of_rewrite_is_checked(self):
+        self.git("config", f"url.https://github.com/{PROTECTED_REPO}.git.pushInsteadOf",
+                 "https://github.com/rupret007/bob-ops-dashboard.git")
+        self.assertNotEqual(self.check_guard().returncode, 0)
+
+    def test_missing_and_unrecognized_destinations_fail_closed(self):
+        self.git("remote", "remove", "origin")
+        self.assertNotEqual(self.check_guard().returncode, 0)
+        self.git("remote", "add", "origin", "/unrecognized/local/path")
+        self.assertNotEqual(self.check_guard().returncode, 0)
+
+
+class ProductionWritePathTests(unittest.TestCase):
+    def test_decision_issue_guard_runs_before_github_write(self):
+        from cluster import never_touch
+
+        refresh = (ROOT / "refresh.sh").read_text()
+        start = refresh.index("    if apply_decisions:\n")
+        end = refresh.index("\nstanding =", start)
+        code = compile(textwrap.dedent(refresh[start:end]), "refresh.sh", "exec")
+        process = Mock(DEVNULL=subprocess.DEVNULL)
+        context = {"apply_decisions": True, "subprocess": process,
+                   "iss": {"number": 1}, "decision": "hold"}
+        with patch.object(never_touch, "NEVER_TOUCH_REPOS", frozenset({"rupret007/bob-ops-dashboard"})):
+            with self.assertRaises(NeverTouchViolation):
+                exec(code, context)
+        process.check_call.assert_not_called()
+        exec(code, context)
+        process.check_call.assert_called_once()
+
+    def test_mesh_jobs_are_blocked_before_checkout_or_runner_launch(self):
+        from cluster.mesh_worker import Executor
+
+        for repo in (PROTECTED_REPO, f"https://github.com/{PROTECTED_REPO}.git", None):
+            for dry_run in (False, True):
+                with self.subTest(repo=repo, dry_run=dry_run), \
+                        patch("cluster.job_exec.prepare_worktree") as checkout, \
+                        patch.object(Executor, "_proc") as run:
+                    with self.assertRaises(NeverTouchViolation):
+                        Executor("member", dry_run).run({
+                            "v": 2, "id": "fixture", "repo": repo, "ref": "main",
+                            "cap": "llm.codex", "prompt": "Run the fixture checks",
+                            "timeout_s": 60, "load_ceiling": 4,
+                        })
+                    checkout.assert_not_called()
+                    run.assert_not_called()
+
+    def test_job_execution_guard_remains_effective_if_allowlist_expands(self):
+        from cluster import job_exec
+        from cluster.tests.test_security import valid_spec
+
+        for dry_run in (False, True):
+            with self.subTest(dry_run=dry_run), \
+                    patch("cluster.spec.ALLOWED_REPOS", {PROTECTED_REPO}), \
+                    patch.object(job_exec, "job_workdir") as workdir, \
+                    patch.object(job_exec.subprocess, "run") as run:
+                spec = valid_spec(repo=PROTECTED_REPO)
+                with self.assertRaises(NeverTouchViolation):
+                    job_exec.prepare_worktree(spec, dry_run)
+                with self.assertRaises(NeverTouchViolation):
+                    job_exec.run_cmd(spec, Path("/unused"), dry_run)
+                workdir.assert_not_called()
+                run.assert_not_called()
+
+    def test_dispatch_blocks_before_calling_github(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            scratch = Path(tmp)
+            calls = scratch / "calls"
+            for cli in ("gh", "jq"):
+                stub = scratch / cli
+                stub.write_text('#!/bin/sh\nprintf "%s\\n" "$*" >> "$CALL_LOG"\nprintf "{}\\n"\n')
+                stub.chmod(0o755)
+            env = {"PATH": str(scratch) + os.pathsep + os.defpath,
+                   "HOME": tmp, "CALL_LOG": str(calls),
+                   "TARGET_OWNER": "rupret007", "TARGET_REPO": "rad-dad-show-night"}
+            script = ["bash", str(ROOT / "scripts" / "dispatch-board-refresh.sh")]
+            blocked = subprocess.run(script, env=env, cwd=scratch, capture_output=True, text=True)
+            self.assertNotEqual(blocked.returncode, 0)
+            self.assertIn("BLOCKED", blocked.stderr)
+            self.assertFalse(calls.exists())
+            env["TARGET_REPO"] = "bob-ops-dashboard"
+            allowed = subprocess.run(script, env=env, cwd=scratch, capture_output=True, text=True)
+            self.assertEqual(allowed.returncode, 0, allowed.stderr)
+            self.assertIn("/repos/rupret007/bob-ops-dashboard/dispatches", calls.read_text())
+
+    def test_both_production_push_loops_stop_before_protected_push(self):
+        workflow = (ROOT / ".github/workflows/refresh-dashboard.yml").read_text()
+        workflow_body = textwrap.dedent(workflow.split(
+            "      - name: Commit and push if changed\n        run: |\n", 1)[1])
+        refresh = (ROOT / "refresh.sh").read_text()
+        start = refresh.index("    pushed=0\n")
+        end = refresh.index("    # K2 post-push dual-SoT", start)
+        refresh_body = textwrap.dedent(refresh[start:end])
+        with tempfile.TemporaryDirectory() as tmp:
+            scratch = Path(tmp)
+            (scratch / "cluster").symlink_to(ROOT / "cluster", target_is_directory=True)
+            fake_git = scratch / "git"
+            fake_git.write_text(
+                '#!/bin/sh\nprintf "%s\\n" "$*" >> "$CALL_LOG"\n'
+                'case "$1 $2" in\n'
+                '  "remote get-url") printf "%s\\n" "$PUSH_URL";;\n'
+                '  "diff --cached") exit 1;;\n'
+                'esac\n')
+            fake_git.chmod(0o755)
+            env = {"PATH": str(scratch) + os.pathsep + os.defpath,
+                   "HOME": tmp, "ROOT": str(ROOT)}
+            for name, body in (("workflow", workflow_body), ("refresh", refresh_body)):
+                for destination in (f"https://github.com/{PROTECTED_REPO}.git", "malformed"):
+                    with self.subTest(path=name, destination=destination):
+                        calls = scratch / "calls"
+                        calls.unlink(missing_ok=True)
+                        env.update(CALL_LOG=str(calls), PUSH_URL=destination)
+                        result = subprocess.run(["bash", "-c", "set -euo pipefail\n" + body],
+                                                cwd=scratch, env=env, capture_output=True, text=True)
+                        self.assertNotEqual(result.returncode, 0)
+                        self.assertIn("BLOCKED", result.stderr)
+                        self.assertFalse(any(line.startswith("push ") for line in calls.read_text().splitlines()))
+
+    def test_refresh_push_carries_guard_and_pages_config_together(self):
+        body = (ROOT / "refresh.sh").read_text().split('if [[ $PUSH -eq 1 ]]; then\n', 1)[1]
+        with tempfile.TemporaryDirectory() as tmp:
+            scratch = Path(tmp)
+            source = scratch / "source"
+            (source / "cluster").mkdir(parents=True)
+            for name in ("index.html", "status.json", "README.md", "refresh.sh"):
+                (source / name).write_text("synthetic fixture\n")
+            (source / "cluster/never_touch.py").write_text(GUARD.read_text())
+            (source / "_config.yml").write_text((ROOT / "_config.yml").read_text())
+            scripts = {
+                "gh": 'mkdir -p "$4"\n',
+                "python3": 'if [ "$1" = "-c" ]; then exit 0; fi\nexec "$PYTHON" "$@"\n',
+                "git": (
+                    'printf "%s\\n" "$*" >> "$CALL_LOG"\n'
+                    'case "$1 $2" in\n'
+                    '  "diff --cached") exit 1;;\n'
+                    '  "remote get-url") printf "https://github.com/owner/allowed.git\\n";;\n'
+                    '  "push origin")\n'
+                    '    cmp cluster/never_touch.py "$ROOT/cluster/never_touch.py" || exit 90\n'
+                    '    cmp _config.yml "$ROOT/_config.yml" || exit 91\n'
+                    '    : > "$RECEIPT";;\n'
+                    'esac\n'
+                ),
+            }
+            for name, script in scripts.items():
+                path = scratch / name
+                path.write_text("#!/bin/sh\n" + script)
+                path.chmod(0o755)
+            calls, receipt = scratch / "calls", scratch / "receipt"
+            env = {"PATH": str(scratch) + os.pathsep + os.defpath, "HOME": tmp,
+                   "ROOT": str(source), "OWNER": "fixture-owner", "TMPDIR": tmp,
+                   "CALL_LOG": str(calls), "RECEIPT": str(receipt), "PYTHON": sys.executable}
+            result = subprocess.run(["bash", "-c", 'set -euo pipefail\nif true; then\n' + body],
+                                    cwd=scratch, env=env, capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertTrue(receipt.exists(), "guard and Pages policy must reach the publisher together")
+            self.assertIn("add cluster/never_touch.py _config.yml", calls.read_text())
 
 
 if __name__ == "__main__":

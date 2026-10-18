@@ -25,6 +25,7 @@ from cluster.capabilities import (
     CAPABILITIES, GUEST_CAPS, build_heartbeat, cap_consumer, guest_consumer, detect_providers, detected_caps,
     effective_caps, heartbeat_subject, load_quota_hints, sandbox_runtime, _default_which,
 )
+from cluster.never_touch import assert_not_never_touch
 from cluster.registry import STREAM_CAPJOBS, STREAM_SANDBOX, _read_env, inbox_prefix
 from cluster.routing import CLI_FOR_PROVIDER, checkout_spec, llm_argv, validate_cap_spec
 from cluster.sanitize import sanitize_tail
@@ -72,6 +73,9 @@ class Executor:
         self.which = which
 
     def run(self, spec: dict[str, Any]) -> tuple[str, int, str]:
+        # LLM runners use the member's authenticated HOME and can write remotely.
+        # Refuse protected targets before checkout or launching any runner.
+        assert_not_never_touch(spec.get("repo"), "execute mesh job")
         if self.dry_run:
             return "ok", 0, f"dry-run {spec['cap']} {spec['id']}\n"
         from cluster.job_exec import prepare_worktree

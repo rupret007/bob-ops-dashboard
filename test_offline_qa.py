@@ -131,6 +131,22 @@ class OfflineQaTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 qa.validate_output_directory(str(link))
 
+    def test_shared_temp_root_placeholder_is_not_a_repository(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            marker = root / ".git"
+            marker.mkdir()
+            output = root / "output"
+            with patch("offline_qa_fixtures.tempfile.gettempdir", return_value=str(root)):
+                self.assertEqual(require_temporary_child(output), output)
+                self.assertEqual(qa.validate_output_directory(str(output)), output)
+                # Any repository data at the shared root restores the block.
+                (marker / "HEAD").write_text("ref: refs/heads/main\n", encoding="utf-8")
+                with self.assertRaisesRegex(ValueError, "repository"):
+                    require_temporary_child(output)
+                with self.assertRaisesRegex(ValueError, "repository"):
+                    qa.validate_output_directory(str(output))
+
     def test_nested_tmpdir_keeps_bsd_mktemp_and_private_fixture_seed_contained(self):
         with tempfile.TemporaryDirectory() as tmp:
             env = fixture_environment(Path(tmp))

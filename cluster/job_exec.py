@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from cluster.config import WORKER_PATH
+from cluster.never_touch import assert_not_never_touch
 from cluster.spec import JOB_ID_PATTERN, SpecError, validate_job_spec
 
 WORK_ROOT = Path.home() / "work" / "cluster-jobs" / "jobs"
@@ -68,6 +69,7 @@ def ensure_mirror(repo: str, dry_run: bool) -> Path:
 
 def prepare_worktree(spec: dict[str, Any], dry_run: bool) -> Path:
     spec = validate_job_spec(spec)
+    assert_not_never_touch(spec["repo"], "prepare cluster job worktree")
     job_id = spec["id"]
     wd = job_workdir(job_id)
     if dry_run:
@@ -97,6 +99,7 @@ def run_cmd(
     dry_run: bool,
 ) -> tuple[int, str, bool]:
     spec = validate_job_spec(spec)
+    assert_not_never_touch(spec["repo"], "execute cluster job")
     if dry_run:
         time.sleep(0.01)
         return 0, "dry-run\n", False

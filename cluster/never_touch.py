@@ -10,6 +10,7 @@ Incident reference: docs/incidents/2026-10-17-show-night-leak.md
 from __future__ import annotations
 
 import re
+import subprocess
 from dataclasses import dataclass
 from typing import Optional
 
@@ -43,10 +44,16 @@ class GatePassReceipt:
 
 def normalize_repo(repo: str) -> str:
     """Normalize repository to lowercase owner/name format."""
-    repo = (repo or "").strip().lower()
-    if repo.startswith("https://github.com/"):
-        repo = repo[len("https://github.com/"):]
+    if not isinstance(repo, str):
+        raise ValueError("repository must be a string")
+    repo = repo.strip().lower()
+    for prefix in ("https://github.com/", "ssh://git@github.com/", "git@github.com:"):
+        if repo.startswith(prefix):
+            repo = repo[len(prefix):]
+            break
     repo = repo.rstrip("/")
+    if repo.endswith(".git"):
+        repo = repo[:-4]
     if not _REPO_RE.fullmatch(repo):
         raise ValueError(f"invalid repository format: {repo!r}")
     return repo
@@ -164,3 +171,51 @@ def guard_pr_merge(
     For other repos with gate_required=True (future), requires valid gate_pass.
     """
     assert_not_never_touch(repo, f"merge PR #{pr_number}")
+
+
+def guard_remote_push(remote: str = "origin") -> None:
+    """Check every effective push URL, including pushurl and pushInsteadOf.
+
+    Use the configured destination rather than a caller's repository label.
+    Failure to resolve a destination must stop the caller before git push.
+    """
+    try:
+        result = subprocess.run(
+            ["git", "remote", "get-url", "--push", "--all", "--", remote],
+            check=True, capture_output=True, text=True,
+        )
+    except (OSError, subprocess.CalledProcessError) as e:
+        raise NeverTouchViolation(remote, "push", "cannot resolve push destination") from e
+    destinations = result.stdout.splitlines()
+    if not destinations:
+        raise NeverTouchViolation(remote, "push", "missing push destination")
+    for destination in destinations:
+        guard_push(destination, remote, "")
+
+
+def main(argv: list[str] | None = None) -> int:
+    """Command-line guard for shell and Actions write paths."""
+    import argparse
+    import sys
+
+    parser = argparse.ArgumentParser(description=__doc__)
+    commands = parser.add_subparsers(dest="command", required=True)
+    push = commands.add_parser("push")
+    push.add_argument("--remote", default="origin")
+    write = commands.add_parser("write")
+    write.add_argument("--repo", required=True)
+    write.add_argument("--operation", required=True)
+    args = parser.parse_args(argv)
+    try:
+        if args.command == "push":
+            guard_remote_push(args.remote)
+        else:
+            assert_not_never_touch(args.repo, args.operation)
+    except NeverTouchViolation as e:
+        print(e, file=sys.stderr)
+        return 1
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
