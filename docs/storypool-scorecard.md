@@ -95,7 +95,18 @@ Median age of items in backlog.
 
 ### Digest
 
-#### 1. Week-over-Week Comparison
+#### 1. Morning Digest (8 AM CT)
+
+Daily digest includes:
+- **Merged**: PRs merged in last 24h
+- **Fixed**: PRs auto-fixed by fix loop
+- **Still failing**: PRs with FAIL verdicts and reasons
+- **NEEDS_JEFF items**: Issues requiring human intervention
+- **Scorecard metrics**: Week-over-week comparison
+
+**Schedule**: 8 AM CT (Central Time)
+
+#### 2. Week-over-Week Comparison
 
 Every digest includes comparison to previous week.
 

@@ -79,7 +79,7 @@ BAND_PROJECT_PATTERNS = [
     "band",
 ]
 
-DIGEST_HOURS_CT = [8, 20]
+DIGEST_HOURS_CT = [8]
 
 
 class ActionType(Enum):
@@ -1124,11 +1124,75 @@ This PR reverts commit {merge_sha[:12]} which broke main CI.
         
         return validated
     
+    def _get_merged_today(self) -> list:
+        """Get list of PRs merged in the last 24 hours."""
+        state = self._load_merge_state()
+        now_ts = datetime.now(timezone.utc).timestamp()
+        day_ago = now_ts - 86400
+        return [m for m in state.get("merges", []) if m.get("ts", 0) > day_ago]
+    
+    def _get_fixed_prs(self) -> list:
+        """Get list of PRs that were fixed by the fix loop."""
+        try:
+            from .fix_dispatcher import FIX_STATE_DIR, FixState
+            fixed = []
+            if FIX_STATE_DIR.is_dir():
+                for path in FIX_STATE_DIR.glob("*.json"):
+                    try:
+                        state = FixState.from_dict(json.loads(path.read_text()))
+                        for attempt in state.attempts:
+                            if attempt.success:
+                                fixed.append({
+                                    "repo": state.repo,
+                                    "pr": state.pr_number,
+                                    "timestamp": attempt.timestamp,
+                                })
+                    except (json.JSONDecodeError, KeyError):
+                        pass
+            return fixed
+        except ImportError:
+            return []
+    
+    def _get_still_failing_prs(self, verdicts: list) -> list:
+        """Get PRs that still have FAIL verdicts with reasons."""
+        failing = []
+        seen = set()
+        for v in verdicts:
+            key = (v.get("repo"), v.get("pr_number"))
+            if key in seen:
+                continue
+            if v.get("verdict") == "KARENFAIL":
+                seen.add(key)
+                failing.append({
+                    "repo": v.get("repo"),
+                    "pr": v.get("pr_number"),
+                    "reason": v.get("reason", "unknown")[:100],
+                    "sha": v.get("sha", "")[:8],
+                })
+        return failing
+    
+    def _read_needs_jeff_items(self) -> list:
+        """Read items from NEEDS_JEFF.md."""
+        needs_jeff = self._needs_jeff_file()
+        if not needs_jeff.is_file():
+            return []
+        
+        items = []
+        content = needs_jeff.read_text()
+        sections = content.split("## ")[1:]
+        for section in sections[:10]:
+            lines = section.strip().split("\n")
+            if lines:
+                title = lines[0].strip()
+                items.append(title[:80])
+        return items
+    
     def write_digest(self, snapshot: StateSnapshot, proposals: Optional[dict], 
                      validated_actions: list[ValidatedAction]) -> None:
-        """Write twice-daily human-readable digest (8 AM / 8 PM CT).
+        """Write morning digest at 8 AM CT.
         
-        BETTER-THAN-GROK: Includes week-over-week comparison.
+        Includes: merged, fixed, still-failing with reasons, NEEDS_JEFF items,
+        scorecard metrics with week-over-week comparison.
         """
         now = datetime.now(timezone.utc)
         ct_hour = _get_ct_hour()
@@ -1136,66 +1200,75 @@ This PR reverts commit {merge_sha[:12]} which broke main CI.
         stuck_prs = self._count_stuck_prs(snapshot.open_prs)
         self.metrics.update_pr_counts(len(snapshot.open_prs), stuck_prs)
         
+        merged_today = self._get_merged_today()
+        fixed_prs = self._get_fixed_prs()
+        still_failing = self._get_still_failing_prs(snapshot.karen_verdicts)
+        needs_jeff_items = self._read_needs_jeff_items()
+        
         lines = [
-            f"# StoryPool Conductor Digest",
+            f"# StoryPool Morning Digest",
             f"Generated: {now.strftime('%Y-%m-%d %H:%M UTC')} ({ct_hour}:00 CT)",
             "",
-            "## Summary",
         ]
         
-        if proposals:
-            lines.append(f"**Analysis:** {proposals.get('analysis', 'N/A')}")
-            lines.append(f"**Summary:** {proposals.get('summary', 'N/A')}")
+        lines.extend([
+            "## Merged (last 24h)",
+            "",
+        ])
+        if merged_today:
+            for m in merged_today[:20]:
+                lines.append(f"- {m.get('repo')} #{m.get('pr')} ({m.get('sha', '?')})")
+            lines.append(f"")
+            lines.append(f"**Total: {len(merged_today)} PRs merged**")
         else:
-            lines.append("**Status:** LLM unavailable - running in fail-safe mode")
-        
-        priority_prs = [pr for pr in snapshot.open_prs if pr.get("is_priority")]
-        if priority_prs:
-            lines.extend([
-                "",
-                "## Priority PRs ⭐",
-            ])
-            for pr in priority_prs[:10]:
-                status = "draft" if pr.get("isDraft") else "ready"
-                ci = snapshot.ci_statuses.get(f"{pr.get('repo')}/{pr.get('number')}", {})
-                ci_summary = "✅" if all(s == "success" for s in ci.values()) else "❌"
-                lines.append(f"- {pr.get('repo')} #{pr.get('number')}: {status} {ci_summary}")
+            lines.append("- No merges in the last 24 hours")
         
         lines.extend([
             "",
-            "## Actions",
+            "## Fixed by Fix Loop",
+            "",
         ])
-        
-        for va in validated_actions:
-            status = "✅ Executed" if va.executed else ("⏸️ Shadow" if va.validated else "❌ Rejected")
-            lines.append(f"- {status}: {va.proposal.action_type} - {va.proposal.reason}")
-            if not va.validated:
-                lines.append(f"  - Rejection: {va.validation_reason}")
-        
-        if not validated_actions:
-            lines.append("- No actions this cycle")
-        
-        if proposals and proposals.get("anomalies"):
-            lines.extend([
-                "",
-                "## Anomalies Detected",
-                *[f"- ⚠️ {a}" for a in proposals["anomalies"]],
-            ])
-        
-        needs_jeff = self._needs_jeff_file()
-        if needs_jeff.is_file():
-            lines.extend([
-                "",
-                "## ⚠️ NEEDS_JEFF.md exists - human review required",
-                f"See: {needs_jeff}",
-            ])
+        if fixed_prs:
+            for f in fixed_prs[:10]:
+                lines.append(f"- {f.get('repo')} #{f.get('pr')}")
+            lines.append(f"")
+            lines.append(f"**Total: {len(fixed_prs)} PRs auto-fixed**")
+        else:
+            lines.append("- No PRs auto-fixed")
         
         lines.extend([
+            "",
+            "## Still Failing (need attention)",
+            "",
+        ])
+        if still_failing:
+            for f in still_failing[:15]:
+                lines.append(f"- {f.get('repo')} #{f.get('pr')}: {f.get('reason')}")
+            if len(still_failing) > 15:
+                lines.append(f"- ... and {len(still_failing) - 15} more")
+        else:
+            lines.append("- No failing PRs (backlog clear!)")
+        
+        if needs_jeff_items:
+            lines.extend([
+                "",
+                "## ⚠️ NEEDS_JEFF Items",
+                "",
+            ])
+            for item in needs_jeff_items:
+                lines.append(f"- {item}")
+            lines.append("")
+            lines.append(f"**See: {self._needs_jeff_file()}**")
+        
+        lines.extend([
+            "",
+            "## Scorecard Metrics",
             "",
             self.metrics.format_comparison_markdown(),
             "",
         ])
         
+        priority_prs = [pr for pr in snapshot.open_prs if pr.get("is_priority")]
         lines.extend([
             "",
             "## System State",
@@ -1238,14 +1311,6 @@ This PR reverts commit {merge_sha[:12]} which broke main CI.
                     pass
         
         return stuck
-        
-        lines.extend([
-            "",
-            "---",
-            f"*Log: {self._log_file()}*",
-        ])
-        
-        self._digest_file().write_text("\n".join(lines))
     
     def run(self, live: bool = False) -> dict:
         """Run a conductor cycle.

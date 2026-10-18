@@ -664,9 +664,10 @@ class TestConductorDigest(unittest.TestCase):
         self.assertTrue(digest_file.exists())
         
         content = digest_file.read_text()
-        self.assertIn("StoryPool Conductor Digest", content)
-        self.assertIn("Test analysis", content)
-        self.assertIn("Test anomaly", content)
+        self.assertIn("StoryPool Morning Digest", content)
+        self.assertIn("Merged", content)
+        self.assertIn("Fixed by Fix Loop", content)
+        self.assertIn("Still Failing", content)
         self.assertIn("codex", content)
 
 
