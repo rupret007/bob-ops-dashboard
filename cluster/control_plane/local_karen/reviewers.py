@@ -1123,7 +1123,10 @@ def _run_review_chain_single(
         if name == "minimax":
             continue
 
+        from .gate import review_checkpoint
+        review_checkpoint()
         result = reviewer.review(pr, tier, config)
+        review_checkpoint()
         all_results.append(result)
 
         if result.verdict == ReviewVerdict.ERROR:
@@ -1178,7 +1181,10 @@ def _run_review_chain_single(
         ok, _ = minimax.is_available(config)
         if not ok:
             return ReviewResult("chain", ReviewVerdict.ERROR, "Required MiniMax unavailable; retry", tier=tier), all_results
+        from .gate import review_checkpoint
+        review_checkpoint()
         second = minimax.review_as_second_judge(pr, primary, config)
+        review_checkpoint()
         all_results.append(second)
         if second.verdict in (ReviewVerdict.FAIL, ReviewVerdict.BORDERLINE):
             return second, all_results

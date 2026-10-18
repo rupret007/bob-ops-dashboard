@@ -96,9 +96,9 @@ Mini Codex remains disabled until every work entry point and quota is covered.
 | --- | --- | --- | --- |
 | Fix admission | Shared `STORYPOOL_CLAIMS` KV | Cluster, repo/PR | Implemented: create-only PR key; full SHA in value; separate heads cannot race on one branch. |
 | Fix lifecycle/ledger | Worker; local JSONL is an observation | Cluster claim, machine-local process | Implemented: persisted claim handoff, CAS heartbeat, CAS release; worker commands fenced on loss; command process group stopped. Expired claims recover after broker TTL cleanup. |
-| Karen poller/review | Karen | Cluster repo/PR/SHA | GAP: local seen/retry state can duplicate reviews. Must adopt shared lease before providers. |
+| Karen poller/review | Shared PR claim; Karen owns its lease | Cluster repo/PR, pinned full SHA | Implemented: gate and CLI acquire the same create-only key as fix workers; heartbeat and provider/publication fences; contention/outage returns retryable ERROR with no verdict or label failure. Local poll history is only an observation. Sequential duplicate review/cache deduplication remains open. |
 | Verdict storage/sync | Signing reviewer | Cluster immutable repo/PR/full SHA | GAP: signed sync exists; local caches are not one canonical artifact index. |
-| Merge attempt | Karen exact-SHA gate | Cluster repo/PR/SHA | GAP: exact-SHA gate exists; add shared admission and idempotent merge outcome. |
+| Merge attempt | Conductor under shared PR claim | Cluster repo/PR, pinned full SHA | Implemented: claim before live merge; revalidate Karen and GitHub under ownership; pinned GitHub merge; heartbeat through CI observation. Contention/outage defers without counting a failed merge. Global durable outcome/event deduplication remains open. |
 | Priority queue/fix attempts | Dispatcher/conductor | Cluster | GAP: local snapshots/counters; shared claims prevent duplicate fix admission, not starvation or attempt double counting. |
 | Codex weekly accounting | Provider account | Cluster, one weekly plan | GAP: machine-local usage cannot authorize increased lanes. Shared stop and fresh provider quota needed. |
 | Lanes and guards | Node supervisor | Cluster allocation + node limits | GAP: local caps only. Keep Mini off and NucBox at existing limits. |
@@ -136,3 +136,28 @@ with the operator identity before enabling the restricted service identity.
 Missing setup intentionally pauses new fixes after deployment. Do not enable the
 Mini lane or raise throughput until live claims, remaining entry-point migrations,
 shared quota, distinct-PR work and the 24-hour duplicate audit are verified.
+
+### Karen and merge admission
+
+The production Karen gate acquires the PR claim after fetching the full head,
+before any deterministic verdict publication or provider call. CLI and poller
+use this same entry point. A ContextVar carries the lease through chunked review;
+each primary/fallback and second-judge call checks ownership before and after the
+request. A background heartbeat renews long requests. Lost ownership prevents the
+next provider request, verdict save, or optional comment. In-flight provider
+requests may finish but cannot authorize publication after ownership is lost.
+Infrastructure failures are ERROR diagnostics, never durable KARENFAILs.
+
+Conductor acquires that same claim for a live merge and revalidates Karen at the
+full pinned SHA under ownership. Missing GitHub state fails closed, and closed or
+merged PRs cannot issue another merge. GitHub receives --match-head-commit as a
+final fence. Claims are held through the initial main-CI observation, then released
+with revision checks. Broker errors and contention defer work without recording a
+failed merge. A request already accepted by GitHub cannot be retracted on later
+lease loss; durable global merge receipts and post-merge CI reconciliation remain
+required. Shadow mode never acquires or mutates claims.
+
+This change intentionally extends the existing configuration requirement to
+Karen and conductor merges: both pause new work until the shared account and KV
+identity described above exist on both nodes. It does not enable Mini Codex or
+assert that the remaining global-state migrations are complete.

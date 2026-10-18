@@ -581,8 +581,10 @@ class TestConductorExecution(unittest.TestCase):
         self.assertEqual(result.execution_result, "labeled")
         mock_run.assert_called_once()
 
+    @patch("cluster.control_plane.conductor.ClaimClient.from_env")
+    @patch("cluster.control_plane.conductor.Conductor.validate_action")
     @patch("subprocess.run")
-    def test_execute_live_merge(self, mock_run):
+    def test_execute_live_merge(self, mock_run, mock_validate, mock_client):
         """Merge action is executed in live mode."""
         def mock_run_side_effect(cmd, **kwargs):
             result = MagicMock(returncode=0)
@@ -590,12 +592,14 @@ class TestConductorExecution(unittest.TestCase):
                 result.stdout = '{"state": "success"}'
             return result
         mock_run.side_effect = mock_run_side_effect
+        mock_client.return_value.ttl = 300
+        mock_validate.side_effect = lambda proposal, _: ValidatedAction(proposal, True, "Fresh validation")
         
         proposal = ProposedAction(
             action_type="merge_pr", 
             repo="test/repo", 
             pr_number=1,
-            head_sha="abc123",
+            head_sha="aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
         )
         validated = ValidatedAction(proposal, True, "Validated")
         
@@ -607,7 +611,8 @@ class TestConductorExecution(unittest.TestCase):
         self.assertTrue(len(merge_call) > 0)
         call_args = merge_call[0][0][0]
         self.assertIn("--match-head-commit", call_args)
-        self.assertIn("abc123", call_args)
+        self.assertIn("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", call_args)
+        mock_validate.assert_called_once()
 
     @patch("subprocess.run")
     def test_execute_handles_error(self, mock_run):

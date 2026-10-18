@@ -45,6 +45,7 @@ from pathlib import Path
 from typing import Any, Optional
 
 from ..never_touch import check_merge_allowed, NEVER_TOUCH_REPOS
+from .coordination import ClaimClient, CoordinationError, Lease
 from .budget_tracker import BudgetTracker
 from .dispatcher import _get_open_prs, _run_gh, REPOS
 from .guards import MachineGuards, mini_guards_pass, nucbox_guards_pass
@@ -256,7 +257,7 @@ def _get_pr_details(repo: str, pr_number: int) -> Optional[dict]:
     pr = _run_gh(
         ["pr", "view", str(pr_number), "--repo", repo, "--json",
          "number,title,author,headRefOid,isDraft,url,body,files,additions,deletions,"
-         "reviewDecision,statusCheckRollup,reviews,labels,mergeStateStatus"],
+         "reviewDecision,statusCheckRollup,reviews,labels,mergeStateStatus,state"],
         default=None
     )
     return pr if isinstance(pr, dict) else None
@@ -1033,7 +1034,11 @@ This PR reverts commit {merge_sha[:12]} which broke main CI.
                     f"RAIL: No KARENPASS verdict for {repo}#{pr_number} at SHA {head_sha[:8]}")
             
             pr_details = _get_pr_details(repo, pr_number) if pr_number else None
+            if not pr_details:
+                return ValidatedAction(action, False, "RAIL: Cannot fetch PR details")
             if pr_details:
+                if pr_details.get("state") in ("MERGED", "CLOSED"):
+                    return ValidatedAction(action, False, "RAIL: PR is no longer open")
                 current_sha = pr_details.get("headRefOid", "")
                 if current_sha != head_sha:
                     return ValidatedAction(action, False,
@@ -1089,31 +1094,43 @@ This PR reverts commit {merge_sha[:12]} which broke main CI.
         
         try:
             if action.action_type == ActionType.MERGE_PR.value:
-                merge_start = time.time()
+                client = ClaimClient.from_env()
+                claim = client.acquire(action.repo, action.pr_number, action.head_sha,
+                                       os.environ.get("STORYPOOL_MACHINE", "nucbox"))
+                with Lease(client, claim) as lease:
+                    # A proposal can wait behind another owner. Recheck the
+                    # exact-SHA Karen gate under ownership, immediately before ship.
+                    fresh = self.validate_action(action, None)
+                    if not fresh.validated:
+                        validated.executed = False
+                        validated.execution_result = fresh.validation_reason
+                        return validated
+                    lease.renew()
+                    merge_start = time.time()
                 
-                subprocess.run(
-                    ["gh", "pr", "merge", str(action.pr_number), "--repo", action.repo,
-                     "--squash", "--delete-branch", "--match-head-commit", action.head_sha],
-                    capture_output=True, timeout=60, check=True,
-                )
-                validated.executed = True
-                validated.execution_result = "merged"
+                    subprocess.run(
+                        ["gh", "pr", "merge", str(action.pr_number), "--repo", action.repo,
+                         "--squash", "--delete-branch", "--match-head-commit", action.head_sha],
+                        capture_output=True, timeout=60, check=True,
+                    )
+                    validated.executed = True
+                    validated.execution_result = "merged"
                 
-                self._record_merge(action.repo, action.pr_number, action.head_sha)
+                    self._record_merge(action.repo, action.pr_number, action.head_sha)
                 
-                merge_duration_hours = (time.time() - merge_start) / 3600
-                time_to_merge = action.extra.get("time_to_merge_hours", merge_duration_hours)
-                self.metrics.record_merge(time_to_merge, successful=True)
+                    merge_duration_hours = (time.time() - merge_start) / 3600
+                    time_to_merge = action.extra.get("time_to_merge_hours", merge_duration_hours)
+                    self.metrics.record_merge(time_to_merge, successful=True)
                 
-                time.sleep(10)
-                ci_ok, ci_status = self._check_main_ci_after_merge(action.repo)
-                self._record_ci_result(
-                    action.repo, ci_ok,
-                    merge_sha=action.head_sha,
-                    pr_number=action.pr_number,
-                )
-                if not ci_ok:
-                    validated.execution_result = "merged (CI: {})".format(ci_status)
+                    time.sleep(10)
+                    ci_ok, ci_status = self._check_main_ci_after_merge(action.repo)
+                    self._record_ci_result(
+                        action.repo, ci_ok,
+                        merge_sha=action.head_sha,
+                        pr_number=action.pr_number,
+                    )
+                    if not ci_ok:
+                        validated.execution_result = "merged (CI: {})".format(ci_status)
                 
             elif action.action_type == ActionType.LABEL_NEEDS_KAREN.value:
                 subprocess.run(
@@ -1128,6 +1145,10 @@ This PR reverts commit {merge_sha[:12]} which broke main CI.
                 validated.executed = True
                 validated.execution_result = "logged"
                 
+        except CoordinationError as e:
+            # Contention/outage is a deferral, not a failed merge outcome.
+            validated.executed = False
+            validated.execution_result = "deferred: " + str(e)
         except subprocess.SubprocessError as e:
             validated.executed = False
             validated.execution_result = f"error: {str(e)[:100]}"
