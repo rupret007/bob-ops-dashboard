@@ -18,6 +18,7 @@ from pathlib import Path
 
 from .coordination import CoordinationError, Lease
 from .guards import MachineGuards
+from .owner_task_snapshot import WorkspaceSnapshot, verify_regression_evidence
 from .owner_task_scheduler import CHECKS, FIELDS, validate_request
 from . import fix_worker as worker
 
@@ -160,6 +161,14 @@ def check_draft_diff(tree, request, git=None):
         if check(pr, KarenConfig()).verdict != CheckVerdict.PASS:
             raise CoordinationError('Owner draft failed deterministic safety checks')
 
+    required = frozenset(path + '::' + match.group(1)
+        for path, _, line in additions
+        for match in [re.match(r'(?:async\s+)?def\s+(test_[A-Za-z0-9_]+)\s*\(', line)]
+        if match is not None and re.search(r'(^|/)(tests?/|test_)', path))
+    if not required:
+        raise CoordinationError('Owner draft requires identifiable top-level Python regression tests')
+    return required
+
 
 def _metadata_snapshot(git_dir, tree):
     """Hash trusted metadata before isolation; never execute Git to inspect it."""
@@ -226,12 +235,27 @@ def create_owner_draft(request, authority):
         worker.run(command, tree, input=prompt)
         if _metadata_snapshot(git_dir, tree) != baseline:
             raise CoordinationError('Git metadata changed by untrusted model')
-        authority.run_isolated_tests(tree, tests, worker.run, trusted_git_dir=git_dir,
-            denied_paths=(tree / '.git', git_dir))
+        # Stage and scan before testing, then retain trusted immutable bytes.
+        git(['add', '-A'])
+        required = check_draft_diff(tree, request, git)
+        # Trusted staging updates the index; fence tests against that new state.
+        baseline = _metadata_snapshot(git_dir, tree)
+        snapshot = WorkspaceSnapshot.capture(tree)
+        test_tree = snapshot.materialize(Path(temp) / 'tests')
+        evidence = authority.run_isolated_tests(test_tree, tests, worker.run, trusted_git_dir=git_dir,
+            denied_paths=(test_tree / '.git', git_dir), immutable_snapshot=snapshot,
+            snapshot_sha256=snapshot.digest, required_regressions=required,
+            baseline_sha=request['head_sha'])
+        verify_regression_evidence(evidence, snapshot.digest, required, request['head_sha'])
+        if WorkspaceSnapshot.capture(test_tree) != snapshot:
+            raise CoordinationError('Test workspace changed after snapshot')
         if _metadata_snapshot(git_dir, tree) != baseline:
             raise CoordinationError('Git metadata changed by untrusted tests')
         if git(['rev-parse', 'HEAD']) != request['head_sha']:
             raise CoordinationError('Owner worker changed pinned HEAD')
+        # A fresh worktree is rebuilt from immutable reviewed/tested bytes.
+        tree = snapshot.materialize(Path(temp) / 'publish')
+        (tree / '.git').write_text('gitdir: ' + str(git_dir) + '\n')
         git(['add', '-A'])
         check_draft_diff(tree, request, git)
         git(['commit', '-m', 'feat: owner-approved Web Bob draft task'])
