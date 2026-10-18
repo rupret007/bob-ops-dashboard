@@ -186,3 +186,32 @@ class TestCICheckIntegration(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def test_workflow_identity_keeps_each_check():
+    result = _parse_ci_status([
+        {'name':'tests', 'workflow':'Linux', 'bucket':'fail'},
+        {'name':'tests', 'workflow':'Mac', 'bucket':'pass'},
+    ])
+    assert result == {'Linux / tests':'failure', 'Mac / tests':'success'}
+
+
+def test_duplicate_check_never_hides_failure_or_pending():
+    for workflow in (None, 'CI'):
+        for bucket, expected in [('fail','failure'), ('pending','pending')]:
+            blocked = {'name':'tests', 'bucket':bucket}
+            green = {'name':'tests', 'bucket':'pass'}
+            if workflow:
+                blocked['workflow'] = green['workflow'] = workflow
+            for checks in ([blocked,green], [green,blocked]):
+                result = _parse_ci_status(checks)
+                assert expected in result.values()
+                assert not all(value in ('success','skipped') for value in result.values())
+
+
+def test_different_workflows_cannot_hide_pending():
+    result = _parse_ci_status([
+        {'name':'tests', 'workflow':'Linux', 'bucket':'pending'},
+        {'name':'tests', 'workflow':'Mac', 'bucket':'pass'},
+    ])
+    assert result == {'Linux / tests':'pending', 'Mac / tests':'success'}

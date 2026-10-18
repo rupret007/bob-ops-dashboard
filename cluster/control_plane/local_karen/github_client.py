@@ -55,12 +55,19 @@ def _parse_ci_status(ci_data: list[dict]) -> dict[str, str]:
     bucket values: pass, fail, pending, skipping, cancel
     state values: SUCCESS, FAILURE, PENDING, etc.
 
-    We normalize to: success, failure, pending, skipped, cancelled
+    We normalize to: success, failure, pending, skipped, cancelled.
+    Workflow names distinguish checks; duplicate identities retain their worst
+    state because list order alone cannot establish that an attempt supersedes
+    another. Missing workflow identity must never erase blocking evidence.
     """
     ci_status = {}
 
     for check in ci_data:
         name = check.get("name", "unknown")
+        workflow = check.get("workflow")
+        if isinstance(workflow, str) and workflow.strip():
+            name = f"{workflow} / {name}"
+        previous = ci_status.get(name)
         bucket = check.get("bucket", "").lower()
         state = check.get("state", "").lower()
 
@@ -89,6 +96,12 @@ def _parse_ci_status(ci_data: list[dict]) -> dict[str, str]:
                 ci_status[name] = state
         else:
             ci_status[name] = "unknown"
+
+        if previous is not None:
+            severity = {"success": 0, "skipped": 0, "pending": 2,
+                        "unknown": 2, "cancelled": 3, "failure": 4}
+            ci_status[name] = max((previous, ci_status[name]),
+                                  key=lambda value: severity.get(value, 2))
 
     return ci_status
 
@@ -125,7 +138,7 @@ def fetch_pr_info(owner: str, repo: str, pr_number: int) -> PRInfo:
     ci_json = _run_gh([
         "pr", "checks", str(pr_number),
         "--repo", f"{owner}/{repo}",
-        "--json", "name,state,bucket",
+        "--json", "name,state,bucket,workflow",
     ], allowed_codes=(0, 1, 8))
     ci_data = json.loads(ci_json)
     ci_status = _parse_ci_status(ci_data)
