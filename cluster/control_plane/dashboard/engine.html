@@ -1,0 +1,46 @@
+<style>
+#engine-panel{margin-bottom:1.5rem;padding:1rem;border:1px solid #30363d;border-radius:12px;background:linear-gradient(135deg,#172330,#0b1119)}
+#engine-panel header{display:flex;gap:1rem;flex-wrap:wrap;align-items:center} .engine-light{display:inline-block;width:14px;height:14px;border-radius:50%;background:#d29922;box-shadow:0 0 12px currentColor}
+#engine-gauges{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:1rem;margin:1rem 0}.dial{text-align:center}.dial svg{width:100%;max-width:190px;overflow:visible}.dial line{transition:transform 1s ease-in-out;transform-origin:90px 90px}.dial strong{display:block;font:600 1.3rem monospace}.dial small{color:#8b949e}
+#engine-activity{max-height:9rem;overflow:auto;font:0.8rem monospace;padding:0.5rem 1.5rem}#engine-monitor{padding:.7rem;border-top:1px solid #30363d;white-space:pre-wrap}#engine-notes{color:#8b949e;font-size:.75rem}
+@media(prefers-reduced-motion:reduce){.dial line{transition:none}}
+</style>
+<section id="engine-panel" aria-label="Live StoryPool tachometer">
+<header><h2><span id="engine-light" class="engine-light"></span> StoryPool engine</h2><span id="engine-state">Connecting…</span><span id="engine-machines"></span></header>
+<div id="engine-gauges"></div><p id="engine-monitor" aria-live="polite">Loading monitor status…</p>
+<h3>Live activity</h3><ol id="engine-activity" aria-live="polite"></ol><p id="engine-notes"></p>
+</section>
+<script>
+(()=>{
+ const root=document.getElementById('engine-gauges');
+ const colors={green:'#3fb950',yellow:'#d29922',red:'#f85149'};
+ let lastActivity='';
+ async function refresh(){
+  try{
+   const response=await fetch('/api/engine',{cache:'no-store',signal:AbortSignal.timeout ? AbortSignal.timeout(4000) : undefined});
+   if(!response.ok)throw new Error('unavailable');
+   const data=await response.json();
+   document.getElementById('engine-light').style.background=colors[data.engine];
+   document.getElementById('engine-state').textContent=data.engine.toUpperCase()+' · '+new Date(data.timestamp).toLocaleTimeString();
+   const machines=document.getElementById('engine-machines');machines.replaceChildren();
+   Object.entries(data.machines).forEach(([name,health])=>{const badge=document.createElement('span');badge.textContent=name+': '+health.detail+'  ';badge.style.color=colors[health.state];badge.title=health.timestamp||'No synced evidence';machines.append(badge);});
+   data.gauges.forEach((g,i)=>{
+    let dial=root.children[i];
+    if(!dial){dial=document.createElement('div');dial.className='dial';dial.innerHTML='<svg viewBox="0 0 180 108" role="img"><path d="M20 90 A70 70 0 0 1 160 90" fill="none" stroke="#303d4d" stroke-width="12"/><path d="M20 90 A70 70 0 0 1 160 90" fill="none" stroke="#58a6ff" stroke-width="3"/><line x1="90" y1="90" x2="24" y2="90" stroke="#f6c45a" stroke-width="3"/><circle cx="90" cy="90" r="5" fill="#c9d1d9"/></svg><strong></strong><span></span><br><small></small>';root.append(dial);}
+    const scale=g.max||Math.max(10,Math.ceil((g.value||0)/10)*10);
+    const value=g.value==null?'—':g.value+g.unit+(g.max&&g.unit!=='%'?' / '+g.max:'');
+    dial.querySelector('line').style.transform='rotate('+Math.min(180,Math.max(0,(g.value||0)/scale*180))+'deg)';
+    dial.querySelector('strong').textContent=value;dial.querySelector('span').textContent=g.label;
+    dial.querySelector('small').textContent=g.value==null?'No evidence':'Scale 0–'+scale;
+    dial.querySelector('svg').setAttribute('aria-label',g.label+': '+value);
+   });
+   document.getElementById('engine-monitor').textContent=data.monitor;
+   const activity=JSON.stringify(data.activity);
+   if(activity!==lastActivity){const list=document.getElementById('engine-activity');list.replaceChildren();data.activity.forEach(event=>{const item=document.createElement('li');item.textContent=event.timestamp+' · '+event.text;list.append(item);});lastActivity=activity;}
+   document.getElementById('engine-notes').textContent=data.notes;
+  }catch(error){document.getElementById('engine-light').style.background=colors.yellow;document.getElementById('engine-state').textContent='STALE · connection unavailable';}
+  finally{setTimeout(refresh,3000);}
+ }
+ refresh();
+})();
+</script>

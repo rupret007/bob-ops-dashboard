@@ -21,6 +21,7 @@ from typing import Optional
 from urllib.parse import urlparse, parse_qs
 
 from .data_collector import DataCollector, DashboardData
+from .tachometer import EngineCollector
 
 DEFAULT_PORT = 8790
 DEFAULT_HOST = "127.0.0.1"
@@ -29,7 +30,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta http-equiv="refresh" content="30">
+
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>StoryPool Dashboard - {machine}</title>
     <style>
@@ -206,7 +207,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         <h1>StoryPool Dashboard</h1>
         <div>
             <span class="mode-badge mode-{mode_class}">{mode}</span>
-            <span class="timestamp">Updated: {timestamp} (auto-refresh 30s)</span>
+            <span class="timestamp">Updated: {timestamp} (engine auto-refresh 3s)</span>
         </div>
     </div>
     
@@ -609,7 +610,7 @@ def render_dashboard(data: DashboardData) -> str:
         verdicts_card=_render_verdicts(data),
         fix_attempts_card=_render_fix_attempts(data),
         watchdog_card=_render_watchdog(data),
-    )
+    ).replace("    <div class=\"grid\">", Path(__file__).with_name("engine.html").read_text() + "    <div class=\"grid\">", 1)
 
 
 class DashboardHandler(BaseHTTPRequestHandler):
@@ -627,6 +628,8 @@ class DashboardHandler(BaseHTTPRequestHandler):
         
         if parsed.path == "/" or parsed.path == "/index.html":
             self._serve_dashboard()
+        elif parsed.path == "/api/engine":
+            self._serve_engine()
         elif parsed.path == "/api/data":
             self._serve_api_data()
         elif parsed.path == "/health":
@@ -669,6 +672,22 @@ class DashboardHandler(BaseHTTPRequestHandler):
         except Exception as e:
             self._serve_error(str(e))
     
+    def _serve_engine(self) -> None:
+        try:
+            collector = getattr(self.server, 'engine_collector', None)
+            if collector is None:
+                source = self.collector or DataCollector()
+                collector = EngineCollector(source.data_dir, source.karen_dir, source.machine)
+                self.server.engine_collector = collector
+            payload = json.dumps(collector.collect()).encode('utf-8')
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json')
+            self.send_header('Cache-Control', 'no-store')
+            self.end_headers()
+            self.wfile.write(payload)
+        except Exception:
+            self._serve_error('Engine snapshot unavailable')
+
     def _serve_health(self) -> None:
         """Serve health check endpoint."""
         self.send_response(200)
