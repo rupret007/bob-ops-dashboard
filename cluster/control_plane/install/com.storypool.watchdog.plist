@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<!--
+StoryPool Watchdog - Mac mini launchd plist
+
+Runs every 10 minutes to detect and auto-repair:
+- Stuck services (no log in 30 min)
+- Repeated tracebacks
+- gh/codex missing from PATH
+- Missing labels
+- Stale install
+
+Anything it can't fix goes to NEEDS_JEFF.md.
+-->
+<dict>
+    <key>Label</key>
+    <string>com.storypool.watchdog</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/usr/bin/python3</string>
+        <string>-m</string>
+        <string>cluster.control_plane.watchdog</string>
+    </array>
+
+    <key>WorkingDirectory</key>
+    <string>__REPO_PATH__</string>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PYTHONPATH</key>
+        <string>__REPO_PATH__</string>
+        <key>HOME</key>
+        <string>__HOME__</string>
+        <key>PATH</key>
+        <string>__PATH__</string>
+        <key>STORYPOOL_INSTALL_DIR</key>
+        <string>__REPO_PATH__</string>
+        <key>STORYPOOL_MACHINE</key>
+        <string>mini</string>
+    </dict>
+
+    <key>StandardOutPath</key>
+    <string>__HOME__/.local/share/storypool/watchdog.log</string>
+
+    <key>StandardErrorPath</key>
+    <string>__HOME__/.local/share/storypool/watchdog.log</string>
+
+    <key>StartInterval</key>
+    <integer>600</integer>
+
+    <key>RunAtLoad</key>
+    <true/>
+</dict>
+</plist>

@@ -16,6 +16,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
+source "$SCRIPT_DIR/launchd-reload.sh"
 PLIST_SRC="$SCRIPT_DIR/com.storypool.shadow.plist"
 PLIST_DST="$HOME/Library/LaunchAgents/com.storypool.shadow.plist"
 LOG_DIR="$HOME/.local/share/storypool/shadow"
@@ -68,15 +69,16 @@ install() {
         -e "s|__HOME__|$HOME|g" \
         "$PLIST_SRC" > "$PLIST_DST"
     
+    # Clear stale .pyc files to avoid import issues
+    echo "  Clearing __pycache__..."
+    find "$REPO_ROOT/cluster" -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
+    find "$REPO_ROOT/cluster" -name "*.pyc" -delete 2>/dev/null || true
+    
     # Unload if already loaded
-    if launchctl list "$LABEL" &>/dev/null; then
-        echo "  Unloading existing agent..."
-        launchctl unload "$PLIST_DST" 2>/dev/null || true
-    fi
     
     # Load the agent
     echo "  Loading agent..."
-    launchctl load "$PLIST_DST"
+    storypool_reload_agent "$PLIST_DST"
     
     echo ""
     echo "StoryPool shadow mode installed!"

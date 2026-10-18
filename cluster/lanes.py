@@ -290,7 +290,8 @@ class LeaseService:
             parts = msg.subject.split(".")
             if (len(parts) != 4 or ".".join(parts[:2]) != LEASE_SVC_PREFIX
                     or not is_valid_host(parts[2])
-                    or not msg.reply.startswith(f"_INBOX_{parts[2]}.")):
+                    or not msg.reply.startswith(f"_INBOX_{parts[2]}.")
+                    or any(not token or token in {"*", ">"} for token in msg.reply.split("."))):
                 # All request fields, including subjects and reply addresses, are untrusted.
                 logging.getLogger(__name__).warning(
                     "Dropped lease request with reply outside the requesting host's inbox"

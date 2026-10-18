@@ -8,6 +8,7 @@ SCRATCH="$(mktemp -d)"
 trap 'rm -rf "$SCRATCH"' EXIT
 
 cp "$ROOT/README.md" "$ROOT/board_meta.py" "$ROOT/index.html" \
+  "$ROOT/usage_collect.py" "$ROOT/usage-machines.json" \
   "$ROOT/refresh.sh" "$ROOT/status.json" "$SCRATCH/"
 chmod +x "$SCRATCH/refresh.sh" "$ROOT/qa-claim-smoke.sh"
 

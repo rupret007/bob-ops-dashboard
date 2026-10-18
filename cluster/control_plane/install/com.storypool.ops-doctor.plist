@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>EnvironmentVariables</key>
+	<dict>
+		<key>HOME</key>
+		<string>__HOME__</string>
+		<key>PATH</key>
+		<string>__PATH__</string>
+		<key>PYTHONPATH</key>
+		<string>__REPO_PATH__</string>
+		<key>STORYPOOL_MACHINE</key>
+		<string>mini</string>
+	</dict>
+	<key>Label</key>
+	<string>com.storypool.ops-doctor</string>
+	<key>ProgramArguments</key>
+	<array>
+		<string>/usr/bin/python3</string>
+		<string>-m</string>
+		<string>cluster.control_plane.ops_doctor</string>
+		<string>--findings-only</string>
+	</array>
+	<key>RunAtLoad</key>
+	<false/>
+	<key>StandardErrorPath</key>
+	<string>__HOME__/.local/share/storypool/doctor/launchd.log</string>
+	<key>StandardOutPath</key>
+	<string>__HOME__/.local/share/storypool/doctor/launchd.log</string>
+	<key>StartInterval</key>
+	<integer>3600</integer>
+	<key>WorkingDirectory</key>
+	<string>__REPO_PATH__</string>
+</dict>
+</plist>

@@ -306,7 +306,7 @@ class TestNatsConfigSecurity(unittest.TestCase):
     def test_nucbox_worker_can_ack_jobs(self):
         block = self.config.split("user: nucbox", 1)[1].split("user:", 1)[0]
         publish = set(re.findall(r'"([^\"]+)"', re.search(r'publish: \[(.*?)\]', block).group(1)))
-        self.assertIn("$JS.ACK.JOBS.workers.>", publish)
+        self.assertIn("$JS.ACK.JOBS.workers_nucbox.>", publish)
 
     def test_monitoring_is_loopback_and_does_not_conflict_with_vaultwarden(self):
         self.assertRegex(self.config, r'(?m)^http: "127\.0\.0\.1:8232"$')
@@ -317,7 +317,7 @@ class TestNatsConfigSecurity(unittest.TestCase):
         for node in ("mini", "macbook"):
             block = self.config.split(f"user: {node}", 1)[1].split("user:", 1)[0]
             publish = set(re.findall(r'"([^\"]+)"', re.search(r'publish: \[(.*?)\]', block).group(1)))
-            self.assertEqual(publish, {f"metrics.{node}", "results.>",
-                                      "$JS.API.CONSUMER.INFO.JOBS.workers",
-                                      "$JS.API.CONSUMER.MSG.NEXT.JOBS.workers",
-                                      "$JS.ACK.JOBS.workers.>"})
+            self.assertEqual(publish, {f"metrics.{node}", f"results.{node}.>",
+                                      f"$JS.API.CONSUMER.INFO.JOBS.workers_{node}",
+                                      f"$JS.API.CONSUMER.MSG.NEXT.JOBS.workers_{node}",
+                                      f"$JS.ACK.JOBS.workers_{node}.>"})

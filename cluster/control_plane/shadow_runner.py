@@ -22,7 +22,7 @@ import time
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Optional, List, Dict
 
 from .budget_tracker import BudgetTracker
 from .gate_runner import (
@@ -34,6 +34,7 @@ from .gate_runner import (
     PRContext,
 )
 from .guards import MachineGuards, mini_guards_pass, nucbox_guards_pass
+from .pr_ci import ci_status_from_pr as _ci_status_from_pr
 
 
 SHADOW_LOG_DIR = Path(
@@ -82,7 +83,8 @@ def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
-def _run_gh(args: list[str], default: Any = None) -> Any:
+def _run_gh(args, default=None):
+    # type: (List[str], Any) -> Any
     """Run a gh CLI command and return parsed JSON, or default on failure."""
     try:
         result = subprocess.run(
@@ -98,7 +100,8 @@ def _run_gh(args: list[str], default: Any = None) -> Any:
         return default
 
 
-def _get_open_prs(repo: str) -> list[dict]:
+def _get_open_prs(repo):
+    # type: (str) -> List[dict]
     """Get open PRs for a repository."""
     prs = _run_gh(["pr", "list", "--repo", repo, "--state", "open", "--json",
                    "number,title,author,headRefOid,isDraft,url,reviewDecision,statusCheckRollup"],
@@ -106,7 +109,8 @@ def _get_open_prs(repo: str) -> list[dict]:
     return prs if isinstance(prs, list) else []
 
 
-def _get_pr_details(repo: str, pr_number: int) -> Optional[dict]:
+def _get_pr_details(repo, pr_number):
+    # type: (str, int) -> Optional[dict]
     """Get detailed PR information."""
     pr = _run_gh(["pr", "view", str(pr_number), "--repo", repo, "--json",
                   "number,title,author,headRefOid,isDraft,url,body,files,additions,deletions,"
@@ -115,28 +119,8 @@ def _get_pr_details(repo: str, pr_number: int) -> Optional[dict]:
     return pr if isinstance(pr, dict) else None
 
 
-def _ci_status_from_pr(pr: dict) -> dict[str, str]:
-    """Extract CI status from PR statusCheckRollup."""
-    checks = pr.get("statusCheckRollup") or []
-    result = {}
-    for check in checks:
-        if not isinstance(check, dict):
-            continue
-        name = check.get("name") or check.get("context") or "unknown"
-        state = check.get("conclusion") or check.get("state") or "pending"
-        state = state.lower() if isinstance(state, str) else "pending"
-        if state in ("success", "neutral", "skipped"):
-            result[name] = "success"
-        elif state in ("failure", "error", "timed_out", "cancelled", "action_required"):
-            result[name] = "failure"
-        elif state in ("pending", "queued", "in_progress", "waiting"):
-            result[name] = "pending"
-        else:
-            result[name] = state
-    return result
-
-
-def _reviews_from_pr(pr: dict) -> list[dict]:
+def _reviews_from_pr(pr):
+    # type: (dict) -> List[dict]
     """Extract reviews from PR."""
     reviews = pr.get("reviews") or []
     return [{"state": r.get("state", "").upper(), "user": r.get("author", {})}
@@ -153,28 +137,32 @@ class ShadowRunner:
 
     def __init__(
         self,
-        machine: str = "unknown",
-        log_dir: Optional[Path] = None,
-        budget_tracker: Optional[BudgetTracker] = None,
+        machine="unknown",
+        log_dir=None,
+        budget_tracker=None,
     ):
+        # type: (str, Optional[Path], Optional[BudgetTracker]) -> None
         self.machine = machine.lower()
         self.log_dir = log_dir or SHADOW_LOG_DIR
         self.log_dir.mkdir(parents=True, exist_ok=True)
         self.budget = budget_tracker or BudgetTracker()
-        self.decisions: list[ShadowDecision] = []
+        self.decisions = []  # type: List[ShadowDecision]
 
-    def _log_file(self) -> Path:
+    def _log_file(self):
+        # type: () -> Path
         """Get the log file for today."""
         date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-        return self.log_dir / f"shadow-{date}.jsonl"
+        return self.log_dir / "shadow-{}.jsonl".format(date)
 
-    def _write_decision(self, decision: ShadowDecision) -> None:
+    def _write_decision(self, decision):
+        # type: (ShadowDecision) -> None
         """Append a decision to the log file."""
         self.decisions.append(decision)
         with open(self._log_file(), "a", encoding="utf-8") as f:
             f.write(json.dumps(decision.to_dict(), sort_keys=True) + "\n")
 
-    def check_machine_guards(self) -> tuple[bool, str, dict]:
+    def check_machine_guards(self):
+        # type: () -> tuple
         """Check if this machine can accept work."""
         guards = MachineGuards(self.machine)
         result = guards.check_all()
@@ -186,7 +174,8 @@ class ShadowRunner:
         }
         return result.passed, result.reason, guard_values
 
-    def _priority_score(self, pr: dict) -> float:
+    def _priority_score(self, pr):
+        # type: (dict) -> float
         """Calculate priority score for a PR (higher = more urgent).
 
         Scoring:
@@ -220,13 +209,14 @@ class ShadowRunner:
 
         return score
 
-    def evaluate_dispatch(self) -> list[ShadowDecision]:
+    def evaluate_dispatch(self):
+        # type: () -> List[ShadowDecision]
         """Evaluate what lanes WOULD be dispatched.
 
         Returns a list of decisions (dispatches and skips).
         Does NOT actually dispatch anything.
         """
-        decisions = []
+        decisions = []  # type: List[ShadowDecision]
 
         guards_ok, guards_reason, guard_values = self.check_machine_guards()
         if not guards_ok:
@@ -234,7 +224,7 @@ class ShadowRunner:
                 timestamp=_now_iso(),
                 decision_type="dispatch",
                 action="would_skip",
-                reason=f"Machine guards failed: {guards_reason}",
+                reason="Machine guards failed: {}".format(guards_reason),
                 machine=self.machine,
                 guard_values=guard_values,
             )
@@ -249,7 +239,7 @@ class ShadowRunner:
                     timestamp=_now_iso(),
                     decision_type="dispatch",
                     action="would_skip",
-                    reason=f"Budget cap: {budget_reason}",
+                    reason="Budget cap: {}".format(budget_reason),
                     machine=self.machine,
                     lane_provider=provider,
                     guard_values=guard_values,
@@ -257,7 +247,7 @@ class ShadowRunner:
                 self._write_decision(decision)
                 decisions.append(decision)
 
-        candidates = []
+        candidates = []  # type: List[dict]
         for repo in REPOS:
             prs = _get_open_prs(repo)
             for pr in prs:
@@ -284,7 +274,7 @@ class ShadowRunner:
                 timestamp=_now_iso(),
                 decision_type="dispatch",
                 action="would_dispatch",
-                reason=f"Priority score {pr.get('_score', 0):.1f}",
+                reason="Priority score {:.1f}".format(pr.get("_score", 0)),
                 machine=self.machine,
                 pr_number=pr.get("number"),
                 pr_url=pr.get("url"),
@@ -313,7 +303,8 @@ class ShadowRunner:
 
         return decisions
 
-    def evaluate_gate(self, repo: str, pr_number: int) -> ShadowDecision:
+    def evaluate_gate(self, repo, pr_number):
+        # type: (str, int) -> ShadowDecision
         """Evaluate what gate verdict WOULD be returned.
 
         Returns a decision (pass, fail, or needs_review).
@@ -408,7 +399,7 @@ class ShadowRunner:
                 timestamp=_now_iso(),
                 decision_type="gate",
                 action="would_skip",
-                reason=f"Would need LLM but budget cap: {budget_reason}",
+                reason="Would need LLM but budget cap: {}".format(budget_reason),
                 machine=self.machine,
                 pr_number=pr_number,
                 pr_url=pr.get("url"),
@@ -433,12 +424,13 @@ class ShadowRunner:
         self._write_decision(decision)
         return decision
 
-    def evaluate_all_gates(self) -> list[ShadowDecision]:
+    def evaluate_all_gates(self):
+        # type: () -> List[ShadowDecision]
         """Evaluate gates for all open non-draft PRs.
 
         Returns a list of gate decisions.
         """
-        decisions = []
+        decisions = []  # type: List[ShadowDecision]
         for repo in REPOS:
             prs = _get_open_prs(repo)
             for pr in prs:
@@ -448,7 +440,8 @@ class ShadowRunner:
                 decisions.append(decision)
         return decisions
 
-    def run(self) -> dict:
+    def run(self):
+        # type: () -> dict
         """Run a full shadow evaluation cycle.
 
         Returns a summary of all decisions made.
@@ -458,7 +451,7 @@ class ShadowRunner:
             "machine": self.machine,
             "dispatch_decisions": [],
             "gate_decisions": [],
-        }
+        }  # type: Dict[str, Any]
 
         dispatch_decisions = self.evaluate_dispatch()
         summary["dispatch_decisions"] = [d.to_dict() for d in dispatch_decisions]
@@ -477,7 +470,8 @@ class ShadowRunner:
         return summary
 
 
-def main() -> int:
+def main():
+    # type: () -> int
     """CLI entry point for shadow runner."""
     import argparse
 
@@ -512,13 +506,15 @@ def main() -> int:
     if args.json:
         print(json.dumps(summary, indent=2))
     else:
-        print(f"Shadow run at {summary['timestamp']} on {summary['machine']}")
-        print(f"  Dispatch: {summary['totals']['would_dispatch']} would dispatch, "
-              f"{summary['totals']['dispatch_skipped']} skipped")
-        print(f"  Gate: {summary['totals']['gate_pass']} pass, "
-              f"{summary['totals']['gate_fail']} fail, "
-              f"{summary['totals']['gate_needs_llm']} need LLM")
-        print(f"  Log: {runner._log_file()}")
+        print("Shadow run at {} on {}".format(summary['timestamp'], summary['machine']))
+        print("  Dispatch: {} would dispatch, {} skipped".format(
+            summary['totals']['would_dispatch'],
+            summary['totals']['dispatch_skipped']))
+        print("  Gate: {} pass, {} fail, {} need LLM".format(
+            summary['totals']['gate_pass'],
+            summary['totals']['gate_fail'],
+            summary['totals']['gate_needs_llm']))
+        print("  Log: {}".format(runner._log_file()))
 
     return 0
 

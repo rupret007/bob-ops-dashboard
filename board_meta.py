@@ -19,6 +19,7 @@ CONTROL_ACTIONS = frozenset({"refresh-hint", "open-repo", "mark-reviewed"})
 OPS_SECTION_ORDER = (
     "live-shipping",
     "apps-utilities",
+    "usage-machines",
     "active-agents",
     "cisco",
     "messaging",
@@ -37,6 +38,7 @@ TYPE_TAB_IDS = (
     "controls",
     "live-shipping",
     "apps-utilities",
+    "usage-machines",
     "cisco",
     "messaging",
     "private-media",
@@ -46,6 +48,7 @@ TYPE_TAB_LABELS = {
     "controls": "Decisions",
     "live-shipping": "Live",
     "apps-utilities": "Apps",
+    "usage-machines": "Usage",
     "cisco": "Cisco",
     "messaging": "Bots",
     "private-media": "Media",
@@ -2859,6 +2862,248 @@ def merge_first_class(sections: list[Any] | None) -> list[dict[str, Any]]:
     return out
 
 
+USAGE_MACHINES_V = "usage-machines/v1"
+USAGE_CHART_DAYS_MAX = 14
+USAGE_PROVIDER_LABELS = {
+    "codex": "Codex",
+    "gemini": "Gemini",
+    "cursor": "Cursor",
+    "claude": "Claude",
+    "minimax": "MiniMax",
+}
+
+
+def _usage_millions(value: Any) -> str:
+    try:
+        n = int(value)
+    except (TypeError, ValueError):
+        return "0"
+    if n >= 1_000_000:
+        return f"{n / 1_000_000:.2f}M"
+    if n >= 1_000:
+        return f"{n / 1_000:.1f}K"
+    return str(n)
+
+
+def _usage_millions_or_unknown(value: Any) -> str:
+    if value is None:
+        return "unknown"
+    return _usage_millions(value)
+
+
+def _usage_gb_or_unknown(value: Any) -> str:
+    if value is None:
+        return "unknown"
+    try:
+        return f"{float(value)}G"
+    except (TypeError, ValueError):
+        return "unknown"
+
+
+def usage_unknown_display(value: Any) -> str:
+    """Public-safe label for missing usage measurements (never the literal 'None')."""
+    if value is None:
+        return "unknown"
+    if isinstance(value, bool):
+        return "unknown"
+    if isinstance(value, (int, float)) and math.isfinite(value):
+        return str(int(value)) if float(value).is_integer() else str(value)
+    text = str(value).strip()
+    return text if text and text != "None" else "unknown"
+
+
+def _usage_day_display(row: dict[str, Any]) -> dict[str, str]:
+    codex = row.get("codex") if isinstance(row.get("codex"), dict) else {}
+    gemini = row.get("gemini") if isinstance(row.get("gemini"), dict) else {}
+    merged = row.get("merged_prs") if isinstance(row.get("merged_prs"), dict) else {}
+    gemini_usd = gemini.get("usd")
+    return {
+        "codex_total_tokens": _usage_millions_or_unknown(codex.get("total_tokens")),
+        "gemini_tokens": _usage_millions_or_unknown(gemini.get("tokens")),
+        "gemini_usd": (
+            f"{float(gemini_usd):.2f}" if gemini_usd is not None and not isinstance(gemini_usd, bool) else "unknown"
+        ),
+        "merged_prs_count": usage_unknown_display(merged.get("count")) if merged else "unknown",
+    }
+
+
+def normalize_usage_machines(raw: Any) -> dict[str, Any]:
+    """Public-safe usage snapshot for status.json."""
+    from scorecards import normalize_scorecards
+    if not isinstance(raw, dict):
+        return {"v": USAGE_MACHINES_V, "days": [], "generated_at": "", "timezone": BOARD_TZ}
+    days_out: list[dict[str, Any]] = []
+    for row in raw.get("days") or []:
+        if not isinstance(row, dict):
+            continue
+        day = str(row.get("date") or "")[:10]
+        if len(day) != 10:
+            continue
+        day_row = {
+            "date": day,
+            "codex": row.get("codex") if isinstance(row.get("codex"), dict) else None,
+            "codex_by_host": row.get("codex_by_host")
+            if isinstance(row.get("codex_by_host"), dict)
+            else None,
+            "gemini": row.get("gemini") if isinstance(row.get("gemini"), dict) else None,
+            "lanes": row.get("lanes") if isinstance(row.get("lanes"), dict) else None,
+            "cursor": row.get("cursor") if isinstance(row.get("cursor"), dict) else None,
+            "claude": row.get("claude") if isinstance(row.get("claude"), dict) else None,
+            "minimax": row.get("minimax") if isinstance(row.get("minimax"), dict) else None,
+            "grok_bot": {"status": "unknown", "source": None},
+            "machines": row.get("machines")
+            if isinstance(row.get("machines"), dict)
+            else None,
+            "merged_prs": row.get("merged_prs")
+            if isinstance(row.get("merged_prs"), dict)
+            else None,
+        }
+        day_row["display"] = _usage_day_display(day_row)
+        days_out.append(day_row)
+    days_out.sort(key=lambda r: r.get("date") or "")
+    if len(days_out) > USAGE_CHART_DAYS_MAX:
+        days_out = days_out[-USAGE_CHART_DAYS_MAX :]
+    return {
+        "v": str(raw.get("v") or USAGE_MACHINES_V),
+        "generated_at": str(raw.get("generated_at") or "").strip(),
+        "timezone": str(raw.get("timezone") or BOARD_TZ),
+        "hosts": list(raw.get("hosts") or []),
+        "scorecards": normalize_scorecards(raw.get("scorecards")),
+        "days": days_out,
+    }
+
+
+def usage_machines_chart_bars(days: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Daily bar heights (0-100) for Codex total tokens."""
+    vals: list[int] = []
+    for row in days:
+        codex = row.get("codex") if isinstance(row.get("codex"), dict) else {}
+        vals.append(codex.get("total_tokens"))
+    peak = max((v for v in vals if v is not None), default=0)
+    out: list[dict[str, Any]] = []
+    for row, val in zip(days, vals):
+        pct = 0 if val is None or peak <= 0 else min(100, max(4, int(100 * val / peak)))
+        out.append({"date": row.get("date"), "value": val, "height_pct": pct})
+    return out
+
+
+def _usage_machines_html(data: Any) -> str:
+    """Server-rendered Usage & machines panel (aggregate numbers only)."""
+    snap = normalize_usage_machines(data)
+    days = snap.get("days") or []
+    grok_row = (
+        "<tr><th>Grok Bot (conserve-only)</th>"
+        "<td class='muted'>unknown — no usage source; conserve-only</td></tr>"
+    )
+    if not days:
+        return (
+            '<div class="usage-panel" id="usage-machines-panel">'
+            '<p class="usage-empty">No usage history yet. Run '
+            "<code>python3 usage_collect.py</code> on mini and nucbox.</p>"
+            + "<table class='usage-table'><tbody>" + grok_row + "</tbody></table></div>"
+        )
+    bars = usage_machines_chart_bars(days)
+    bar_bits: list[str] = []
+    for bar in bars:
+        label = html_lib.escape(str(bar.get("date") or "")[5:])
+        tip = html_lib.escape(_usage_millions_or_unknown(bar.get("value")))
+        height = int(bar.get("height_pct") or 0)
+        bar_bits.append(
+            f'<div class="usage-bar" title="{label} Codex {tip}">'
+            f'<i style="height:{height}%"></i>'
+            f'<span>{label}</span></div>'
+        )
+    latest = days[-1]
+    day_label = html_lib.escape(str(latest.get("date") or ""))
+    codex = latest.get("codex") if isinstance(latest.get("codex"), dict) else {}
+    gemini = latest.get("gemini") if isinstance(latest.get("gemini"), dict) else {}
+    merged = latest.get("merged_prs") if isinstance(latest.get("merged_prs"), dict) else {}
+    rows: list[str] = []
+    if codex:
+        rows.append(
+            "<tr><th>Codex</th><td>"
+            + html_lib.escape(_usage_millions_or_unknown(codex.get("total_tokens")))
+            + " total · "
+            + html_lib.escape(_usage_millions_or_unknown(codex.get("output_tokens")))
+            + " out · cached "
+            + html_lib.escape(_usage_millions_or_unknown(codex.get("cached_tokens")))
+            + " · reasoning "
+            + html_lib.escape(_usage_millions_or_unknown(codex.get("reasoning_tokens")))
+            + "</td></tr>"
+        )
+    else:
+        rows.append("<tr><th>Codex</th><td class='muted'>no data</td></tr>")
+    if gemini:
+        rows.append(
+            "<tr><th>Gemini</th><td>"
+            + html_lib.escape(_usage_millions_or_unknown(gemini.get("tokens")))
+            + " tok · $"
+            + html_lib.escape(f"{float(gemini['usd']):.2f}" if gemini.get("usd") is not None else "unknown")
+            + "</td></tr>"
+        )
+    else:
+        rows.append("<tr><th>Gemini</th><td class='muted'>no data</td></tr>")
+    for prov in ("cursor", "claude", "minimax"):
+        slot = latest.get(prov)
+        label = USAGE_PROVIDER_LABELS.get(prov, prov)
+        if isinstance(slot, dict) and (slot.get("tokens") or slot.get("usd")):
+            rows.append(
+                f"<tr><th>{html_lib.escape(label)}</th><td>"
+                + html_lib.escape(_usage_millions(slot.get("tokens")))
+                + " tok</td></tr>"
+            )
+        else:
+            rows.append(
+                f"<tr><th>{html_lib.escape(label)}</th>"
+                "<td class='muted'>no data</td></tr>"
+            )
+    rows.append(grok_row)
+    if merged:
+        count = merged.get("count")
+        if count is None:
+            rows.append(
+                "<tr><th>Merged PRs</th><td class='muted'>"
+                + html_lib.escape(usage_unknown_display(count))
+                + "</td></tr>"
+            )
+        elif count:
+            tpp = merged.get("tokens_per_pr")
+            tpp_s = html_lib.escape(_usage_millions(tpp)) if tpp else "no data"
+            rows.append(
+                "<tr><th>Merged PRs</th><td>"
+                + html_lib.escape(str(count))
+                + " · "
+                + tpp_s
+                + " tok/PR</td></tr>"
+            )
+    machines = latest.get("machines") if isinstance(latest.get("machines"), dict) else {}
+    for host in ("mini", "nucbox"):
+        m = machines.get(host) if isinstance(machines.get(host), dict) else None
+        if not m:
+            continue
+        rows.append(
+            f"<tr><th>{html_lib.escape(host)}</th><td>load "
+            + html_lib.escape(str(m.get("load1") or "?"))
+            + " · mem "
+            + html_lib.escape(_usage_gb_or_unknown(m.get("mem_used_gb")))
+            + " · swap "
+            + html_lib.escape(_usage_gb_or_unknown(m.get("swap_used_gb")))
+            + " · disk free "
+            + html_lib.escape(str(m.get("disk_free_gb") or "?"))
+            + "G</td></tr>"
+        )
+    table = "<table class='usage-table'><tbody>" + "".join(rows) + "</tbody></table>"
+    return (
+        '<div class="usage-panel" id="usage-machines-panel">'
+        f'<p class="usage-day-label">Latest day: {day_label}</p>'
+        '<div class="usage-chart" aria-label="Daily Codex token history">'
+        + "".join(bar_bits)
+        + "</div>"
+        + table
+        + "</div>"
+    )
+
+
 # Gemini lanes (ROUTING v6, 2026-10-16): Mini fill.sh writes gemini-lanes.json
 # (job, mode, started_at; spend estimate; pause reason). Rows carry the snapshot
 # stamp as heartbeat_at so a stale snapshot is demoted by the normal TTL path.
@@ -3073,3 +3318,8 @@ def load_gemini_lane_rows(path: Any, *, now: float | None = None) -> list[dict[s
     if not rows:
         return gemini_lane_rows_unknown("malformed")
     return rows
+
+
+def usage_machines_html(data: Any) -> str:
+    from scorecards import scorecards_html
+    return _usage_machines_html(data) + scorecards_html((data or {}).get("scorecards") if isinstance(data, dict) else None)

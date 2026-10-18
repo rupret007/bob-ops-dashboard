@@ -1,0 +1,27 @@
+[Unit]
+Description=StoryPool Self-Update (git fetch + reinstall)
+Documentation=https://github.com/rupret007/bob-ops-dashboard/blob/main/docs/design/storypool-control-plane.md
+
+# Self-update service:
+# - Fetches from git origin
+# - Fast-forwards if possible (never if dirty or diverged)
+# - Runs quick tests
+# - Reinstalls if HEAD changed
+
+[Service]
+Type=oneshot
+WorkingDirectory=__REPO_PATH__
+Environment=PYTHONPATH=__REPO_PATH__
+Environment=STORYPOOL_MACHINE=nucbox
+Environment=STORYPOOL_INSTALL_DIR=__REPO_PATH__
+Environment="PATH=/usr/local/bin:/usr/bin:/bin:/home/%u/.local/bin"
+Environment="HOME=/home/%u"
+ExecStart=/usr/bin/python3 -c "from cluster.control_plane.self_update import self_update; import json; print(json.dumps(self_update(machine='nucbox'), indent=2))"
+
+# Resource limits
+Nice=10
+MemoryMax=512M
+CPUQuota=50%
+
+# Timeout for git operations
+TimeoutStartSec=600

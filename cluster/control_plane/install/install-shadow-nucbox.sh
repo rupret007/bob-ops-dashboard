@@ -75,6 +75,11 @@ install() {
     echo "  Installing timer file..."
     cp "$TIMER_SRC" "$SYSTEMD_DIR/storypool-shadow.timer"
     
+    # Clear stale .pyc files to avoid import issues
+    echo "  Clearing __pycache__..."
+    find "$REPO_ROOT/cluster" -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
+    find "$REPO_ROOT/cluster" -name "*.pyc" -delete 2>/dev/null || true
+    
     # Reload systemd
     echo "  Reloading systemd..."
     systemctl --user daemon-reload
