@@ -951,6 +951,18 @@ This PR reverts commit {merge_sha[:12]} which broke main CI.
         
         lane_usage = {"codex": 0, "cursor": 0, "claude": 0, "minimax": 0}
         
+        job_stats = {}
+        try:
+            from .job_ledger import JobLedger
+            ledger = JobLedger()
+            job_stats = ledger.summary()
+            for job in ledger.get_running_jobs():
+                provider = job.provider
+                if provider in lane_usage:
+                    lane_usage[provider] += 1
+        except (ImportError, Exception):
+            pass
+        
         return StateSnapshot(
             timestamp=_now_iso(),
             repos=REPOS,
@@ -1267,6 +1279,28 @@ This PR reverts commit {merge_sha[:12]} which broke main CI.
             self.metrics.format_comparison_markdown(),
             "",
         ])
+        
+        job_stats = {}
+        try:
+            from .job_ledger import JobLedger
+            ledger = JobLedger()
+            job_stats = ledger.summary()
+        except (ImportError, Exception):
+            pass
+        
+        if job_stats:
+            lines.extend([
+                "",
+                "## Job Ledger (OUTCOME-VERIFIED)",
+                "",
+                f"- Running jobs: {job_stats.get('running', 0)}",
+                f"- Queued jobs: {job_stats.get('queued', 0)}",
+                f"- Done (24h): {job_stats.get('done_24h', 0)}",
+                f"- Failed (24h): {job_stats.get('failed_24h', 0)}",
+                f"- Verified (24h): {job_stats.get('verified_24h', 0)}",
+                f"- Jobs (1h): {job_stats.get('jobs_last_hour', 0)}",
+                "",
+            ])
         
         priority_prs = [pr for pr in snapshot.open_prs if pr.get("is_priority")]
         lines.extend([

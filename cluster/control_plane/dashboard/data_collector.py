@@ -1,5 +1,6 @@
 """Data collector for StoryPool dashboard.
 
+OUTCOME-VERIFIED: Reads from job ledger and verdicts for verified outcomes.
 Reads from existing JSON/log files to build dashboard state.
 Read-only, no secrets displayed.
 """
@@ -13,6 +14,15 @@ from dataclasses import dataclass, field, asdict
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from typing import Optional, List, Dict, Any
+
+try:
+    from ..job_ledger import JobLedger, Job, JobState
+    LEDGER_AVAILABLE = True
+except ImportError:
+    LEDGER_AVAILABLE = False
+    JobLedger = None
+    Job = None
+    JobState = None
 
 STORYPOOL_DATA_DIR = Path(
     os.environ.get("STORYPOOL_LOG_DIR", "~/.local/share/storypool")
@@ -148,6 +158,24 @@ class MergeRecord:
 
 
 @dataclass
+class JobRecord:
+    """A job from the ledger (OUTCOME-VERIFIED)."""
+    job_id: str
+    repo: str
+    pr_number: int
+    head_sha: str
+    provider: str
+    machine: str
+    state: str
+    outcome: str
+    outcome_verified: bool
+    pid: int
+    start_time: str
+    end_time: str
+    error: str
+
+
+@dataclass
 class WatchdogEvent:
     """A watchdog event."""
     timestamp: str
@@ -215,6 +243,10 @@ class DashboardData:
     providers: List[ProviderBudget] = field(default_factory=list)
     scorecard: Optional[ScorecardMetrics] = None
     
+    jobs_running: List[JobRecord] = field(default_factory=list)
+    jobs_recent: List[JobRecord] = field(default_factory=list)
+    jobs_stats: Dict[str, Any] = field(default_factory=dict)
+    
     def to_dict(self) -> dict:
         d = asdict(self)
         return d
@@ -235,7 +267,10 @@ class DataCollector:
         self.machine = _get_machine()
     
     def collect(self) -> DashboardData:
-        """Collect all dashboard data."""
+        """Collect all dashboard data.
+        
+        OUTCOME-VERIFIED: Reads from job ledger for verified job outcomes.
+        """
         data = DashboardData(
             timestamp=datetime.now(timezone.utc).isoformat(),
             machine=self.machine,
@@ -257,6 +292,11 @@ class DataCollector:
         data.needs_jeff = self._collect_needs_jeff()
         data.providers = self._collect_providers()
         data.scorecard = self._collect_scorecard()
+        
+        jobs_running, jobs_recent, jobs_stats = self._collect_jobs()
+        data.jobs_running = jobs_running
+        data.jobs_recent = jobs_recent
+        data.jobs_stats = jobs_stats
         
         return data
     
@@ -504,6 +544,70 @@ class DataCollector:
                 pass
         
         return count
+    
+    def _collect_jobs(self) -> tuple:
+        """Collect job ledger data (OUTCOME-VERIFIED).
+        
+        Returns (running_jobs, recent_jobs, stats).
+        """
+        running = []
+        recent = []
+        stats = {
+            "total_jobs": 0,
+            "running": 0,
+            "queued": 0,
+            "done_24h": 0,
+            "failed_24h": 0,
+            "verified_24h": 0,
+            "jobs_last_hour": 0,
+        }
+        
+        if not LEDGER_AVAILABLE:
+            return running, recent, stats
+        
+        try:
+            ledger = JobLedger()
+            
+            stats = ledger.summary()
+            
+            for job in ledger.get_running_jobs():
+                running.append(JobRecord(
+                    job_id=job.job_id,
+                    repo=job.repo,
+                    pr_number=job.pr_number,
+                    head_sha=job.head_sha[:8],
+                    provider=job.provider,
+                    machine=job.machine,
+                    state=job.state,
+                    outcome=job.outcome,
+                    outcome_verified=job.outcome_verified,
+                    pid=job.pid,
+                    start_time=job.start_time,
+                    end_time=job.end_time,
+                    error=job.error,
+                ))
+            
+            for job in ledger.get_recent_jobs(24)[:20]:
+                recent.append(JobRecord(
+                    job_id=job.job_id,
+                    repo=job.repo,
+                    pr_number=job.pr_number,
+                    head_sha=job.head_sha[:8],
+                    provider=job.provider,
+                    machine=job.machine,
+                    state=job.state,
+                    outcome=job.outcome,
+                    outcome_verified=job.outcome_verified,
+                    pid=job.pid,
+                    start_time=job.start_time,
+                    end_time=job.end_time,
+                    error=job.error,
+                ))
+            
+        except Exception:
+            pass
+        
+        return running, recent, stats
     
     def _collect_watchdog_events(self) -> List[WatchdogEvent]:
         """Collect recent watchdog events."""
