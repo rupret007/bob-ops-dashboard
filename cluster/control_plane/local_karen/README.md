@@ -185,3 +185,20 @@ The poller uses these labels:
 ```
 
 This removes the CLI, launchd agent, and module files but keeps config and verdicts.
+
+### Required MiniMax second review
+
+Every PASS now requires MiniMax's independent structured PASS alongside the
+primary reviewers, with findings from both. Two other reviewers cannot bypass
+MiniMax, and the legacy `require_two_pass=False` argument cannot disable it.
+Any FAIL/BORDERLINE, missing MiniMax key, timeout, incomplete output, malformed
+response or missing findings blocks approval. Primary transport errors may still
+fall back to the next configured primary. Diffs above the complete-review limit
+require human review.
+
+MiniMax reads `MINIMAX_API_KEY` first, otherwise the existing
+`minimax_api_key_file` in Karen's config. No credentials are copied. Configure
+`minimax_model` if needed (default `MiniMax-M2.7`). The request uses MiniMax's
+[documented API](https://platform.minimax.io/docs/api-reference/text-post),
+checks provider status and completion, and suppresses credential-bearing errors.
+No service restart or live review is performed by this change.

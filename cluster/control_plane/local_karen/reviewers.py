@@ -3,7 +3,7 @@
 Reviewer order (configurable):
 1. Codex CLI (primary) - via CODEX_HOST=nuc, low effort default, high for security
 2. Gemini API (fallback) - prepaid
-3. MiniMax (second judge) - borderline/high-risk tiers
+3. MiniMax (required independent second reviewer) - every PASS
 4. Claude (last resort) - off by default, capped
 
 NEVER read or copy auth files. Use existing sign-ins only.
@@ -757,64 +757,29 @@ class GeminiReviewer(BaseReviewer):
 
 
 class MiniMaxReviewer(BaseReviewer):
-    """MiniMax reviewer for second judge on borderline/high-risk."""
+    """Mandatory independent MiniMax reviewer; every non-PASS blocks approval."""
 
     name = "minimax"
 
-    SECOND_JUDGE_PROMPT = """The primary reviewer (Karen) gave a {verdict} verdict on this PR.
-
-Karen's reason: {reason}
-Karen's findings: {findings}
-
-PR #{pr_number}: {title}
-Author: {author}
-Changed files: {file_count}
-
-Diff summary (first 5000 chars):
-{diff_summary}
-
-As a second judge, do you agree with Karen's assessment?
-If Karen said BORDERLINE or FAIL, should this PR actually pass?
-If Karen said PASS, are there concerns she missed?
-
-Respond with ONLY a valid JSON object:
-{{
-  "decision": "AGREE" | "OVERRIDE_PASS" | "OVERRIDE_FAIL",
-  "reason": "One sentence explanation",
-  "additional_findings": ["any issues Karen missed"]
-}}
-"""
-
     def is_available(self, config: KarenConfig) -> Tuple[bool, str]:
-        """Check if MiniMax API key is configured.
-
-        Missing key file is a skip (not an error) - second judge is optional.
-        """
-        key_file = Path(config.minimax_api_key_file).expanduser()
-        if not key_file.is_file():
-            env_key = os.environ.get("MINIMAX_API_KEY", "")
-            if not env_key:
-                return False, "MiniMax API key not found (no {} or MINIMAX_API_KEY env)".format(key_file)
-        key = self._load_key(config)
-        if not key:
-            return False, "MiniMax API key file exists but is empty"
-        return True, "ok"
+        """MiniMax is required; missing/unreadable credentials block approval."""
+        try:
+            return (True, "ok") if self._load_key(config) else (False, "MiniMax key unavailable")
+        except OSError:
+            return False, "MiniMax key unreadable"
 
     def _load_key(self, config: KarenConfig) -> str:
-        """Load MiniMax API key from file or environment."""
+        """Prefer the environment, then the existing configured key file."""
+        env_key = os.environ.get("MINIMAX_API_KEY", "").strip()
+        if env_key:
+            return env_key
         key_file = Path(config.minimax_api_key_file).expanduser()
-        if key_file.is_file():
-            return key_file.read_text().strip()
-        return os.environ.get("MINIMAX_API_KEY", "")
+        return key_file.read_text().strip() if key_file.is_file() else ""
 
     def _get_key_source(self, config: KarenConfig) -> str:
-        """Get the source of the MiniMax API key."""
-        key_file = Path(config.minimax_api_key_file).expanduser()
-        if key_file.is_file():
-            return "file:{}".format(key_file)
-        if os.environ.get("MINIMAX_API_KEY", ""):
+        if os.environ.get("MINIMAX_API_KEY", "").strip():
             return "env:MINIMAX_API_KEY"
-        return "none"
+        return "configured key file"
 
     def review_as_second_judge(
         self,
@@ -838,32 +803,31 @@ Respond with ONLY a valid JSON object:
                 key_source=key_source,
             )
 
-        findings_str = ""
-        if primary_result.findings:
-            findings_str = json.dumps(primary_result.findings.to_dict(), indent=2)
-        else:
-            findings_str = "(no structured findings)"
-
-        prompt = self.SECOND_JUDGE_PROMPT.format(
-            verdict=primary_result.verdict.value,
-            reason=primary_result.reason,
-            findings=findings_str,
-            pr_number=pr.number,
-            title=pr.title,
-            author=pr.author,
-            file_count=len(pr.changed_files),
-            diff_summary=pr.diff[:5000],
+        # Independently review the pinned diff, rather than rubber-stamping
+        # the primary's answer. Both reviewers use the same strict contract.
+        if len(pr.diff) > 15000 or len(pr.changed_files) > 30:
+            return ReviewResult(
+                reviewer=self.name, verdict=ReviewVerdict.ERROR,
+                reason="Diff exceeds complete review limit; human review required",
+                tier=primary_result.tier, key_source=key_source,
+            )
+        prompt = STRUCTURED_REVIEW_PROMPT.format(
+            owner=pr.owner, repo=pr.repo, pr_number=pr.number,
+            title=pr.title, author=pr.author, sha=pr.head_sha,
+            pr_description=pr.description[:2000],
+            changed_files="\n".join(pr.changed_files),
+            diff=pr.diff, diff_len=len(pr.diff),
         )
 
         try:
             import urllib.request
 
-            url = "https://api.minimax.chat/v1/text/chatcompletion_v2"
+            url = "https://api.minimax.io/v1/text/chatcompletion_v2"
 
             payload = json.dumps({
-                "model": "abab6.5s-chat",
+                "model": config.minimax_model,
                 "messages": [{"role": "user", "content": prompt}],
-                "max_tokens": 300,
+                "max_completion_tokens": 4096,
                 "temperature": 0.1,
             }).encode("utf-8")
 
@@ -882,6 +846,10 @@ Respond with ONLY a valid JSON object:
 
             duration = time.time() - start_time
 
+            if result.get("base_resp", {}).get("status_code", 0) != 0:
+                raise ValueError("provider rejected request")
+            if result.get("choices", [{}])[0].get("finish_reason") != "stop":
+                raise ValueError("incomplete review")
             response_text = result.get("choices", [{}])[0].get(
                 "message", {}
             ).get("content", "")
@@ -904,7 +872,7 @@ Respond with ONLY a valid JSON object:
             return ReviewResult(
                 reviewer=self.name,
                 verdict=ReviewVerdict.ERROR,
-                reason="MiniMax error: {}".format(e),
+                reason="MiniMax request or response failed (details suppressed)",
                 tier=primary_result.tier,
                 duration_sec=time.time() - start_time,
                 key_source=key_source,
@@ -918,78 +886,34 @@ Respond with ONLY a valid JSON object:
         duration: float,
         key_source: str = "",
     ) -> ReviewResult:
-        """Parse second judge verdict from JSON response."""
-        response = response.strip()
-        if response.startswith("```json"):
-            response = response[7:]
-        if response.startswith("```"):
-            response = response[3:]
-        if response.endswith("```"):
-            response = response[:-3]
-        response = response.strip()
-
+        """Only a complete, structured independent verdict is accepted."""
         try:
             data = json.loads(response)
-            decision = data.get("decision", "").upper()
-            reason = data.get("reason", "")
-        except json.JSONDecodeError:
-            decision = ""
-            reason = response
-            response_upper = response.upper()
-            if "OVERRIDE_PASS" in response_upper:
-                decision = "OVERRIDE_PASS"
-            elif "OVERRIDE_FAIL" in response_upper:
-                decision = "OVERRIDE_FAIL"
-            elif "AGREE" in response_upper:
-                decision = "AGREE"
-
-        if decision == "OVERRIDE_PASS":
-            return ReviewResult(
-                reviewer=self.name,
-                verdict=ReviewVerdict.PASS,
-                reason="Ken overrode Karen: {}".format(reason),
-                confidence=0.7,
-                tier=primary.tier,
-                duration_sec=duration,
-                raw_response=response,
+            if not isinstance(data, dict):
+                raise ValueError("review must be an object")
+            if (not isinstance(data.get("verdict"), str)
+                    or not isinstance(data.get("reason"), str)
+                    or type(data.get("confidence")) not in (int, float)
+                    or not 0 <= data["confidence"] <= 1
+                    or not isinstance(data.get("findings"), dict)):
+                raise ValueError("invalid review schema")
+            findings = data["findings"]
+            fields = ReviewFindings.__dataclass_fields__
+            if any(not isinstance(findings.get(name), list) or
+                   any(not isinstance(item, str) or not item.strip() for item in findings[name])
+                   for name in fields):
+                raise ValueError("invalid findings")
+            if data["verdict"] == "PASS" and any(findings[name] for name in fields if name != "risk_notes"):
+                raise ValueError("PASS contradicts reported issues")
+            result = self._parse_structured_verdict(response, pr, primary.tier, key_source)
+        except (TypeError, ValueError, AttributeError):
+            result = ReviewResult(
+                reviewer=self.name, verdict=ReviewVerdict.ERROR,
+                reason="Malformed MiniMax review", tier=primary.tier,
                 key_source=key_source,
             )
-        elif decision == "OVERRIDE_FAIL":
-            return ReviewResult(
-                reviewer=self.name,
-                verdict=ReviewVerdict.FAIL,
-                reason="Ken overrode Karen: {}".format(reason),
-                confidence=0.7,
-                tier=primary.tier,
-                duration_sec=duration,
-                raw_response=response,
-                key_source=key_source,
-            )
-        elif decision == "AGREE":
-            final_verdict = primary.verdict
-            if final_verdict == ReviewVerdict.BORDERLINE:
-                final_verdict = ReviewVerdict.FAIL
-            return ReviewResult(
-                reviewer=self.name,
-                verdict=final_verdict,
-                reason="Ken agreed with Karen: {}".format(reason),
-                confidence=0.8,
-                tier=primary.tier,
-                duration_sec=duration,
-                raw_response=response,
-                key_source=key_source,
-            )
-        else:
-            return ReviewResult(
-                reviewer=self.name,
-                verdict=primary.verdict if primary.verdict != ReviewVerdict.BORDERLINE else ReviewVerdict.FAIL,
-                reason="Ken unclear, defaulting to Karen's verdict: {}".format(response[:100]),
-                confidence=0.5,
-                tier=primary.tier,
-                duration_sec=duration,
-                raw_response=response,
-                key_source=key_source,
-            )
+        result.duration_sec = duration
+        return result
 
     def review(self, pr: PRInfo, tier: ReviewTier, config: KarenConfig) -> ReviewResult:
         """MiniMax is only used as second judge, not primary."""
@@ -1152,23 +1076,11 @@ def run_review_chain(
     require_two_pass=True,  # type: bool
 ):
     # type: (...) -> Tuple[ReviewResult, List[ReviewResult]]
-    """Run the review chain and return final verdict plus all results.
+    """Merge primary reviews and required MiniMax review fail-closed.
 
-    Returns (final_result, all_results).
-
-    LIVE SAFETY REQUIREMENT (require_two_pass=True):
-    Karen PASS requires TWO independent reviewer agreements with structured findings.
-    This prevents rubber-stamp passes from a single model.
-
-    The chain tries:
-    1. Codex (primary) - if available
-    2. Gemini (secondary) - if available
-    3. MiniMax (confirming judge) - for PASS confirmation
-
-    For a PASS verdict in live mode:
-    - Need at least 2 reviewers to agree on PASS
-    - Both must have structured findings (not empty)
-    - If only one reviewer available, FAIL-CLOSED
+    Errors may fall back to another configured primary. Any primary FAIL or
+    BORDERLINE blocks approval. A PASS always requires MiniMax PASS with findings,
+    including when legacy callers supply require_two_pass=False.
     """
     tier = classify_risk_tier(pr)
     all_results = []  # type: List[ReviewResult]
@@ -1235,57 +1147,30 @@ def run_review_chain(
             tier=tier,
         ), all_results
 
-    if require_two_pass:
-        if len(pass_votes) >= 2:
-            logger.info("Two reviewers agreed on PASS: %s, %s",
-                       pass_votes[0].reviewer, pass_votes[1].reviewer)
-            return ReviewResult(
-                reviewer="chain({},{})".format(pass_votes[0].reviewer, pass_votes[1].reviewer),
-                verdict=ReviewVerdict.PASS,
-                reason="Two reviewers agreed: {} AND {}".format(
-                    pass_votes[0].reason[:50], pass_votes[1].reason[:50]),
-                confidence=min(pass_votes[0].confidence, pass_votes[1].confidence),
-                tier=tier,
-                findings=pass_votes[0].findings,
-            ), all_results
+    # The legacy argument remains for callers, but cannot disable the safety gate.
+    # Two primary/fallback votes never substitute for MiniMax's independent vote.
+    primary = pass_votes[0]
+    minimax = MiniMaxReviewer()
+    try:
+        ok, _ = minimax.is_available(config)
+        if not ok:
+            raise RuntimeError("MiniMax unavailable")
+        second = minimax.review_as_second_judge(pr, primary, config)
+        all_results.append(second)
+        if (second.verdict != ReviewVerdict.PASS or not second.findings
+                or not second.findings.has_content()):
+            raise RuntimeError("MiniMax did not pass with findings")
+    except Exception:
+        return ReviewResult(
+            reviewer="chain", verdict=ReviewVerdict.FAIL,
+            reason="FAIL-CLOSED: Required MiniMax review unavailable or did not PASS with findings",
+            tier=tier,
+        ), all_results
 
-        if len(pass_votes) == 1:
-            primary = pass_votes[0]
-            minimax = MiniMaxReviewer()
-            ok, reason = minimax.is_available(config)
-            if ok:
-                logger.info("Only one PASS vote from %s, asking MiniMax to confirm", primary.reviewer)
-                second_result = minimax.review_as_second_judge(pr, primary, config)
-                all_results.append(second_result)
-
-                if second_result.verdict == ReviewVerdict.PASS:
-                    logger.info("MiniMax confirmed PASS")
-                    return ReviewResult(
-                        reviewer="chain({},minimax)".format(primary.reviewer),
-                        verdict=ReviewVerdict.PASS,
-                        reason="Primary {} confirmed by MiniMax: {}".format(
-                            primary.reviewer, second_result.reason[:50]),
-                        confidence=min(primary.confidence, second_result.confidence),
-                        tier=tier,
-                        findings=primary.findings,
-                    ), all_results
-                else:
-                    logger.info("MiniMax did not confirm PASS: %s", second_result.reason)
-                    return ReviewResult(
-                        reviewer="chain",
-                        verdict=ReviewVerdict.FAIL,
-                        reason="FAIL-CLOSED: Single PASS not confirmed by second reviewer",
-                        tier=tier,
-                        findings=primary.findings,
-                    ), all_results
-            else:
-                logger.warning("Only one PASS vote and MiniMax unavailable: %s", reason)
-                return ReviewResult(
-                    reviewer="chain",
-                    verdict=ReviewVerdict.FAIL,
-                    reason="FAIL-CLOSED: Only one reviewer PASS, no second reviewer available to confirm",
-                    tier=tier,
-                    findings=primary.findings,
-                ), all_results
-
-    return pass_votes[0], all_results
+    return ReviewResult(
+        reviewer="chain({})".format(",".join(r.reviewer for r in pass_votes + [second])),
+        verdict=ReviewVerdict.PASS,
+        reason="Primary and required MiniMax independently passed with findings",
+        confidence=min(r.confidence for r in pass_votes + [second]),
+        tier=tier, findings=primary.findings,
+    ), all_results

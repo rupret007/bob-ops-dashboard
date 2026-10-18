@@ -44,6 +44,7 @@ class KarenConfig:
 
     gemini_api_key_file: str = "~/.config/storypool/gemini.key"
     gemini_model: str = "gemini-2.5-flash"
+    minimax_model: str = "MiniMax-M2.7"
     minimax_api_key_file: str = "~/.config/storypool/minimax.key"
 
     claude_enabled: bool = False

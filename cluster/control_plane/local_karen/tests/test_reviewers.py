@@ -281,7 +281,12 @@ class TestReviewChain(unittest.TestCase):
             deleted_files=[],
         )
 
-    def test_chain_requires_two_pass_agreements(self):
+    @patch.object(MiniMaxReviewer, "is_available", return_value=(True, "ok"))
+    @patch.object(MiniMaxReviewer, "review_as_second_judge", return_value=ReviewResult(
+        reviewer="minimax", verdict=ReviewVerdict.PASS,
+        reason="Independent review found no issues", findings=ReviewFindings(risk_notes=["Checked diff"]),
+    ))
+    def test_chain_requires_two_pass_agreements(self, minimax_review, minimax_available):
         """Two-reviewer agreement required for PASS in live mode."""
         pr = self._make_pr()
         config = KarenConfig(reviewer_order=["codex", "gemini"])
@@ -317,6 +322,8 @@ class TestReviewChain(unittest.TestCase):
                         self.assertEqual(result.verdict, ReviewVerdict.PASS)
                         self.assertIn("codex", result.reviewer)
                         self.assertIn("gemini", result.reviewer)
+                        self.assertIn("minimax", result.reviewer)
+                        minimax_review.assert_called_once()
 
     def test_chain_single_pass_needs_minimax_confirmation(self):
         """Single PASS needs MiniMax confirmation."""
@@ -336,6 +343,7 @@ class TestReviewChain(unittest.TestCase):
             verdict=ReviewVerdict.PASS,
             reason="Confirmed",
             tier=ReviewTier.LOW,
+            findings=ReviewFindings(risk_notes=["Independently checked diff"]),
         )
 
         with patch.object(CodexReviewer, "is_available", return_value=(True, "ok")):
