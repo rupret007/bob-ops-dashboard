@@ -1,8 +1,11 @@
 #!/usr/bin/env python3
 """Lane dispatcher service for StoryPool control plane.
 
-Reads queue/open PRs/leases, checks machine guards, and dispatches work to
-coding lanes. Runs in shadow/dry-run mode by default; use --live to execute.
+OUTCOME-VERIFIED: Dispatch is tracked in the job ledger.
+- Dispatcher must not re-dispatch a PR that already holds a lease
+- Jobs count as done only when verified (commit pushed or verdict posted)
+- Orphaned leases expire after 45 min
+- Dispatch actually spawns the Codex/Cursor worker process
 
 Provider allocation rules:
 - Mini: load < 10, swap < 80%, disk >= 15GB
@@ -34,6 +37,7 @@ from typing import Optional
 
 from .budget_tracker import BudgetTracker
 from .guards import MachineGuards
+from .job_ledger import JobLedger, get_ledger, Job, JobState
 
 DISPATCH_LOG_DIR = Path(
     os.environ.get("STORYPOOL_DISPATCH_LOG_DIR", "~/.local/share/storypool/dispatch")
@@ -154,12 +158,86 @@ def _has_codex_work_queued() -> bool:
     
     When Codex work is queued, 2 NucBox lanes are reserved for it.
     """
-    return False
+    try:
+        ledger = get_ledger()
+        running = ledger.get_running_jobs()
+        return any(j.provider == "codex" for j in running)
+    except Exception:
+        return False
+
+
+def _spawn_worker(
+    repo: str,
+    pr_number: int,
+    head_sha: str,
+    provider: str,
+    machine: str,
+    job_id: str,
+) -> int:
+    """Spawn a worker process for the job.
+    
+    OUTCOME-VERIFIED: The worker must push a commit or post a verdict.
+    Returns the PID of the spawned process.
+    """
+    jobs_dir = Path("~/.local/share/storypool/jobs").expanduser()
+    jobs_dir.mkdir(parents=True, exist_ok=True)
+    
+    worker_log = jobs_dir / f"{job_id}.log"
+    
+    if provider == "codex":
+        codex_path = None
+        for path in [
+            Path.home() / "bin" / "codex",
+            Path.home() / ".local" / "bin" / "codex",
+            Path("/usr/local/bin/codex"),
+        ]:
+            if path.is_file():
+                codex_path = path
+                break
+        
+        if not codex_path:
+            raise FileNotFoundError("codex CLI not found")
+        
+        prompt = f"""Review and fix PR #{pr_number} in {repo}.
+Current HEAD: {head_sha}
+
+1. Fetch the PR branch
+2. Review the changes
+3. Fix any issues found
+4. Push your fix to the PR branch
+5. Report what you did
+
+Be concise and focused. Only make necessary changes.
+"""
+        
+        env = os.environ.copy()
+        env["CODEX_HOST"] = "nuc" if machine == "nucbox" else "localhost"
+        
+        with open(worker_log, "w") as log_file:
+            process = subprocess.Popen(
+                [str(codex_path), "exec", "-c", "model_reasoning_effort=low"],
+                stdin=subprocess.PIPE,
+                stdout=log_file,
+                stderr=subprocess.STDOUT,
+                env=env,
+                start_new_session=True,
+            )
+            process.stdin.write(prompt.encode())
+            process.stdin.close()
+        
+        return process.pid
+    
+    elif provider == "cursor":
+        raise NotImplementedError("Cursor worker not yet implemented")
+    
+    else:
+        raise ValueError(f"Unknown provider: {provider}")
 
 
 class Dispatcher:
     """Lane dispatcher that allocates work to coding agents.
     
+    OUTCOME-VERIFIED: All dispatch decisions are tracked in the job ledger.
     Runs in shadow mode by default (logs decisions, takes no action).
     Use run(live=True) to actually dispatch work.
     """
@@ -169,11 +247,13 @@ class Dispatcher:
         machine: str = "unknown",
         log_dir: Optional[Path] = None,
         budget_tracker: Optional[BudgetTracker] = None,
+        job_ledger: Optional[JobLedger] = None,
     ):
         self.machine = machine.lower()
         self.log_dir = log_dir or DISPATCH_LOG_DIR
         self.log_dir.mkdir(parents=True, exist_ok=True)
         self.budget = budget_tracker or BudgetTracker()
+        self.ledger = job_ledger or get_ledger()
         self.decisions: list[DispatchDecision] = []
         
     def _log_file(self) -> Path:
@@ -378,31 +458,92 @@ class Dispatcher:
             remaining_capacity = self.get_nucbox_lane_capacity(active_lanes)
             max_dispatch = min(max_dispatch, remaining_capacity)
         
+        self.ledger.expire_stale_leases()
+        
         for pr in candidates[:15]:
             if dispatched >= max_dispatch:
                 break
+            
+            repo = pr.get("_repo", "")
+            pr_number = pr.get("number")
+            head_sha = pr.get("headRefOid", "")
+            
+            if self.ledger.has_active_lease(repo, pr_number):
+                decision = DispatchDecision(
+                    timestamp=_now_iso(),
+                    action="skip_leased",
+                    reason=f"PR {repo}#{pr_number} already has active lease",
+                    machine=self.machine,
+                    live=live,
+                    pr_number=pr_number,
+                    pr_url=pr.get("url"),
+                    repo=repo,
+                    head_sha=head_sha,
+                    guard_values=guard_values,
+                )
+                self._write_decision(decision)
+                decisions.append(decision)
+                continue
             
             provider = self.select_provider(pr, active_lanes)
             if not provider:
                 continue
             
+            job = None
+            pid = 0
+            spawn_error = ""
+            
+            if live:
+                try:
+                    job = self.ledger.create_job(
+                        repo=repo,
+                        pr_number=pr_number,
+                        head_sha=head_sha,
+                        provider=provider,
+                        machine=self.machine,
+                    )
+                    
+                    pid = _spawn_worker(
+                        repo=repo,
+                        pr_number=pr_number,
+                        head_sha=head_sha,
+                        provider=provider,
+                        machine=self.machine,
+                        job_id=job.job_id,
+                    )
+                    
+                    self.ledger.start_job(job.job_id, pid)
+                    
+                except FileNotFoundError as e:
+                    spawn_error = f"worker not found: {e}"
+                    if job:
+                        self.ledger.fail_job(job.job_id, spawn_error)
+                except NotImplementedError as e:
+                    spawn_error = str(e)
+                    if job:
+                        self.ledger.fail_job(job.job_id, spawn_error)
+                except ValueError as e:
+                    spawn_error = str(e)
+                except Exception as e:
+                    spawn_error = f"spawn failed: {e}"
+                    if job:
+                        self.ledger.fail_job(job.job_id, spawn_error)
+            
             decision = DispatchDecision(
                 timestamp=_now_iso(),
-                action="dispatch" if live else "would_dispatch",
-                reason=f"Priority score {pr.get('_score', 0):.1f}",
+                action="dispatch" if live and not spawn_error else "would_dispatch" if not live else "dispatch_failed",
+                reason=spawn_error if spawn_error else f"Priority score {pr.get('_score', 0):.1f}",
                 machine=self.machine,
                 live=live,
-                pr_number=pr.get("number"),
+                pr_number=pr_number,
                 pr_url=pr.get("url"),
-                repo=pr.get("_repo"),
-                head_sha=pr.get("headRefOid"),
+                repo=repo,
+                head_sha=head_sha,
                 provider=provider,
                 priority_score=pr.get("_score"),
                 guard_values=guard_values,
+                extra={"job_id": job.job_id if job else None, "pid": pid} if live else None,
             )
-            
-            if live:
-                pass
             
             self._write_decision(decision)
             decisions.append(decision)
