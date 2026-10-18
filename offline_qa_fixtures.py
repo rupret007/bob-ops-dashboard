@@ -91,12 +91,32 @@ print(json.dumps(value))
 ''').lstrip("\\\n")
 
 
+def has_repository_ancestor(root: Path) -> bool:
+    """Reject repository markers, allowing empty markers at shared temp roots."""
+    temp_roots = {Path(tempfile.gettempdir()).resolve(), Path("/tmp").resolve()}
+    resolved = root.resolve()
+    for parent in (resolved, *resolved.parents):
+        marker = parent / ".git"
+        if not marker.exists() and not marker.is_symlink():
+            continue
+        # Shared temporary mounts may carry an empty administrative marker.
+        # Real Git directories, gitfiles, symlinks and nested markers still block.
+        if parent in temp_roots and marker.is_dir() and not marker.is_symlink():
+            try:
+                if not any(marker.iterdir()):
+                    continue
+            except OSError:
+                return True
+        return True
+    return False
+
+
 def require_temporary_child(root: Path) -> Path:
     resolved = root.resolve()
     temp_roots = {Path(tempfile.gettempdir()).resolve(), Path("/tmp").resolve()}
     if not any(resolved != base and resolved.is_relative_to(base) for base in temp_roots):
         raise ValueError("Fixture files must stay in a child of a temporary directory")
-    if any((parent / ".git").exists() for parent in (resolved, *resolved.parents)):
+    if has_repository_ancestor(resolved):
         raise ValueError("Fixture files must not overwrite a repository")
     return resolved
 

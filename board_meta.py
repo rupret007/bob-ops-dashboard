@@ -2363,6 +2363,97 @@ def decision_href(verb: Any, pid: Any, title: Any = "") -> str:
     return DECISION_ISSUE_NEW + "?" + query
 
 
+def _decision_review_text(value: Any, limit: int, *, multiline: bool) -> bool:
+    """Validate exact public text using the browser's UTF-16 length limits."""
+    if not isinstance(value, str):
+        return False
+    try:
+        if len(value.encode("utf-16-le")) // 2 > limit:
+            return False
+    except UnicodeEncodeError:
+        return False
+    allowed_controls = "\t\r\n" if multiline else ""
+    return not any(
+        (ord(char) < 32 and char not in allowed_controls) or ord(char) == 127
+        for char in value
+    )
+
+
+def decision_review_item(item: Any) -> dict[str, str] | None:
+    """Copy only valid public review fields, without coercion or truncation."""
+    if not isinstance(item, dict):
+        return None
+    ident = item.get("id")
+    title = item.get("title")
+    detail = item.get("detail", "")
+    risk = item.get("risk")
+    kind = item.get("kind", "ops")
+    for value in (ident, kind):
+        if not isinstance(value, str) or not re.fullmatch(r"[A-Za-z0-9._-]{1,64}", value):
+            return None
+    if not isinstance(risk, str) or risk not in PENDING_RISK_ORDER:
+        return None
+    if not _decision_review_text(title, 160, multiline=False):
+        return None
+    # Match JavaScript trim(), whose whitespace differs from Python str.strip().
+    browser_whitespace = (
+        " \t\n\r\v\f\u00a0\u1680\u2000\u2001\u2002\u2003\u2004\u2005"
+        "\u2006\u2007\u2008\u2009\u200a\u2028\u2029\u202f\u205f\u3000\ufeff"
+    )
+    if not title.strip(browser_whitespace):
+        return None
+    if not _decision_review_text(detail, 2000, multiline=True):
+        return None
+    return {"id": ident, "title": title, "detail": detail, "risk": risk, "kind": kind}
+
+
+def decision_review_identity(item: Any) -> str:
+    """Stable receipt identity covering every published decision field."""
+    reviewed = decision_review_item(item)
+    if reviewed is None:
+        return ""
+    return json.dumps(
+        [reviewed[key] for key in ("id", "title", "detail", "risk", "kind")],
+        ensure_ascii=False,
+        separators=(",", ":"),
+    )
+
+
+def review_decision_href(verb: Any, item: Any, reviewed_snapshot: Any) -> str:
+    """Compose a complete review receipt; invalid or overlong receipts fail closed."""
+    if not isinstance(verb, str) or verb not in DECISION_VERBS:
+        return ""
+    reviewed = decision_review_item(item)
+    if reviewed is None or not isinstance(reviewed_snapshot, str):
+        return ""
+    if not re.fullmatch(
+        r"[0-9]{4}-[0-9]{2}-[0-9]{2}T(?:[01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9]"
+        r"(?:\.[0-9]{1,6})?(?:Z|[+-](?:[01][0-9]|2[0-3]):[0-5][0-9])",
+        reviewed_snapshot,
+    ):
+        return ""
+    try:
+        datetime.fromisoformat(reviewed_snapshot.replace("Z", "+00:00"))
+    except ValueError:
+        return ""
+    body = "\n".join(
+        [
+            decision_body(reviewed["id"], reviewed["title"], verb),
+            "",
+            "risk: " + reviewed["risk"],
+            "kind: " + reviewed["kind"],
+            "Reviewed public detail:\n" + reviewed["detail"],
+            "reviewed_snapshot: " + reviewed_snapshot,
+            "reviewed_item: " + decision_review_identity(reviewed),
+            "Bob: re-check current work before acting.",
+        ]
+    )
+    href = DECISION_ISSUE_NEW + "?" + urlencode(
+        {"title": "BOB-" + verb + ": " + reviewed["id"], "body": body}
+    )
+    return href if len(href) <= 8192 else ""
+
+
 def pending_risk_rank(item: Any) -> int:
     """Lower = needs Jeff sooner. Unknown risk sorts last."""
     if not isinstance(item, dict):
