@@ -503,6 +503,27 @@ def check_security_patterns(pr: PRInfo, config: KarenConfig) -> CheckResult:
     )
 
 
+_UNSET = object()
+_UNKNOWN = "unknown"
+
+
+def _pages_source(owner: str, repo: str):
+    """Pages publish path ("/" or "/docs"), None if Pages is off, or _UNKNOWN."""
+    try:
+        result = subprocess.run(
+            ["gh", "api", f"repos/{owner}/{repo}/pages", "-q", ".source.path"],
+            capture_output=True, text=True, timeout=30,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return _UNKNOWN
+    if result.returncode == 0:
+        path = result.stdout.strip()
+        return path if path in ("/", "/docs") else _UNKNOWN
+    if "404" in (result.stdout + result.stderr):
+        return None
+    return _UNKNOWN
+
+
 def check_pages_exposure(pr: PRInfo, config: KarenConfig) -> CheckResult:
     """Check for accidental GitHub Pages exposure.
 
@@ -513,6 +534,7 @@ def check_pages_exposure(pr: PRInfo, config: KarenConfig) -> CheckResult:
     """
     issues = []
     current_file = None
+    pages_source = _UNSET
 
     for line in pr.diff.split("\n"):
         if line.startswith("diff --git"):
@@ -522,7 +544,16 @@ def check_pages_exposure(pr: PRInfo, config: KarenConfig) -> CheckResult:
 
             if current_file:
                 if current_file.lower().startswith("docs/"):
-                    issues.append(f"Changes to docs/ folder: {current_file}")
+                    if pages_source is _UNSET:
+                        pages_source = _pages_source(pr.owner, pr.repo)
+                    # Only a repo that publishes Pages from / or /docs can
+                    # expose docs/ files. Unknown state fails closed.
+                    if pages_source is None:
+                        pass
+                    elif pages_source in ("/", "/docs") or pages_source == _UNKNOWN:
+                        issues.append(f"Changes to published docs/ folder: {current_file}"
+                                      + ("" if pages_source != _UNKNOWN
+                                         else " (Pages status unknown; fail closed)"))
                 if "_config.yml" in current_file.lower():
                     issues.append(f"Jekyll config modified: {current_file}")
                 if current_file.upper() == "CNAME":
