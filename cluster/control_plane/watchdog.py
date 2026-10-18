@@ -166,6 +166,7 @@ def store_peer_engine(peer: str, data: dict) -> bool:
         return False
     snapshot = {"synced_at": datetime.now(timezone.utc).isoformat(), "machine": peer,
                 "peer_timestamp": data.get("timestamp"), "control": data.get("control", {}),
+                "guardian": data.get("machines", {}).get(peer, {}).get("guardian", {}),
                 "jobs": dict(jobs, running=list(jobs.get("running") or [])[:50]),
                 "llm_local": [g for g in (data.get("llm_local") or []) if isinstance(g, dict)][:20]}
     out = LOG_DIR / "machines" / peer / "engine.json"

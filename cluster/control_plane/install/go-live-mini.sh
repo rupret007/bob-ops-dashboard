@@ -15,6 +15,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
+source "$SCRIPT_DIR/launchd-reload.sh"
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -160,8 +161,6 @@ enable_live_mode() {
     local conductor_plist="$HOME/Library/LaunchAgents/com.storypool.conductor.plist"
     local live_marker="$HOME/.config/storypool/live"
     
-    launchctl unload "$dispatch_plist" 2>/dev/null || true
-    launchctl unload "$conductor_plist" 2>/dev/null || true
     
     sed -i '' 's|<!-- <string>--live</string> -->|<string>--live</string>|g' "$dispatch_plist" 2>/dev/null || true
     sed -i '' 's|<!--<string>--live</string>-->|<string>--live</string>|g' "$dispatch_plist" 2>/dev/null || true
@@ -176,8 +175,8 @@ enable_live_mode() {
         sed -i '' 's|</array>|<string>--live</string>\n</array>|' "$conductor_plist"
     fi
     
-    launchctl load "$dispatch_plist"
-    launchctl load "$conductor_plist"
+    storypool_reload_agent "$dispatch_plist"
+    storypool_reload_agent "$conductor_plist"
     
     # Persist live marker so install/self-update won't strip --live
     mkdir -p "$(dirname "$live_marker")"
@@ -193,8 +192,7 @@ load_karen_poller() {
     local poller_plist_dst="$HOME/Library/LaunchAgents/com.storypool.karen-poller.plist"
     
     if [[ -f "$poller_plist_dst" ]]; then
-        launchctl unload "$poller_plist_dst" 2>/dev/null || true
-        launchctl load "$poller_plist_dst"
+        storypool_reload_agent "$poller_plist_dst"
         
         log_pass "Karen poller loaded (polls every 10 min)"
     else

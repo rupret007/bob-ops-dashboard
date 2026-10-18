@@ -212,6 +212,14 @@ EOF
     log_info "Conductor installed (hourly, shadow mode)"
 }
 
+install_guardian() {
+    mkdir -p "$SYSTEMD_DIR" "$HOME/.local/share/storypool"
+    sed -e "s|__REPO_PATH__|$REPO_ROOT|g" "$SCRIPT_DIR/storypool-guardian.service" > "$SYSTEMD_DIR/storypool-guardian.service"
+    cp "$SCRIPT_DIR/storypool-guardian.timer" "$SYSTEMD_DIR/storypool-guardian.timer"
+    systemctl --user daemon-reload
+    systemctl --user enable --now storypool-guardian.timer
+}
+
 install_selfupdate() {
     log_header "Installing Self-Update Timer"
 
@@ -458,7 +466,7 @@ run_self_check() {
 uninstall_all() {
     log_header "Uninstalling All Components"
 
-    for unit in storypool-ops-doctor storypool-shadow storypool-dispatch storypool-conductor storypool-selfupdate storypool-karen-poller; do
+    for unit in storypool-guardian storypool-ops-doctor storypool-shadow storypool-dispatch storypool-conductor storypool-selfupdate storypool-karen-poller; do
         if systemctl --user is-active "$unit.timer" &>/dev/null; then
             log_info "Stopping $unit.timer..."
             systemctl --user stop "$unit.timer" 2>/dev/null || true
@@ -508,6 +516,7 @@ main() {
     install_shadow
     install_dispatcher
     install_conductor
+    install_guardian
     install_selfupdate
     install_watchdog
     install_ops_doctor

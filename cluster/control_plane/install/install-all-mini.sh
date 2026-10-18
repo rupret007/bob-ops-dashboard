@@ -26,6 +26,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
+source "$SCRIPT_DIR/launchd-reload.sh"
 
 detect_gh_path() {
     local gh_bin
@@ -115,6 +116,15 @@ clear_pycache() {
     fi
 }
 
+install_guardian() {
+    mkdir -p "$HOME/.local/bin" "$HOME/.local/share/storypool" "$HOME/Library/LaunchAgents"
+    sed -e "s|__REPO_PATH__|$REPO_ROOT|g" "$SCRIPT_DIR/storypool-guardian.sh" > "$HOME/.local/bin/storypool-guardian"
+    chmod +x "$HOME/.local/bin/storypool-guardian"
+    local dst="$HOME/Library/LaunchAgents/com.storypool.guardian.plist"
+    sed -e "s|__HOME__|$HOME|g" "$SCRIPT_DIR/com.storypool.guardian.plist" > "$dst"
+    storypool_reload_agent "$dst"
+}
+
 install_shadow() {
     log_header "Installing Shadow Runner"
 
@@ -138,10 +148,7 @@ install_shadow() {
 
     clear_pycache "$REPO_ROOT/cluster"
 
-    if launchctl list com.storypool.shadow &>/dev/null; then
-        launchctl unload "$plist_dst" 2>/dev/null || true
-    fi
-    launchctl load "$plist_dst"
+    storypool_reload_agent "$plist_dst"
 
     log_info "Shadow runner installed (15 min interval)"
     log_info "PATH: $LAUNCHD_PATH"
@@ -179,10 +186,7 @@ install_dispatcher() {
 
     clear_pycache "$REPO_ROOT/cluster"
 
-    if launchctl list com.storypool.dispatch &>/dev/null; then
-        launchctl unload "$plist_dst" 2>/dev/null || true
-    fi
-    launchctl load "$plist_dst"
+    storypool_reload_agent "$plist_dst"
 
     log_info "Dispatcher installed (15 min interval)"
     log_info "PATH: $LAUNCHD_PATH"
@@ -221,10 +225,7 @@ install_conductor() {
 
     clear_pycache "$REPO_ROOT/cluster"
 
-    if launchctl list com.storypool.conductor &>/dev/null; then
-        launchctl unload "$plist_dst" 2>/dev/null || true
-    fi
-    launchctl load "$plist_dst"
+    storypool_reload_agent "$plist_dst"
     launchctl kickstart -k "gui/$(id -u)/com.storypool.conductor"
 
     log_info "Conductor installed (hourly)"
@@ -254,10 +255,7 @@ install_watchdog() {
 
     clear_pycache "$REPO_ROOT/cluster"
 
-    if launchctl list com.storypool.watchdog &>/dev/null; then
-        launchctl unload "$plist_dst" 2>/dev/null || true
-    fi
-    launchctl load "$plist_dst"
+    storypool_reload_agent "$plist_dst"
 
     log_info "Watchdog installed (10 min interval, self-healing)"
     log_info "Logs: ~/.local/share/storypool/watchdog.log"
@@ -286,10 +284,7 @@ install_dashboard() {
 
     clear_pycache "$REPO_ROOT/cluster"
 
-    if launchctl list com.storypool.dashboard &>/dev/null; then
-        launchctl unload "$plist_dst" 2>/dev/null || true
-    fi
-    launchctl load "$plist_dst"
+    storypool_reload_agent "$plist_dst"
 
     log_info "Dashboard installed on http://127.0.0.1:8790/"
     log_info "Accessible over Tailscale"
@@ -300,8 +295,7 @@ install_ops_doctor() {
     mkdir -p "$HOME/Library/LaunchAgents" "$HOME/.local/share/storypool/doctor"
     sed -e "s|__REPO_PATH__|$REPO_ROOT|g" -e "s|__HOME__|$HOME|g" -e "s|__PATH__|$LAUNCHD_PATH|g" \
         "$SCRIPT_DIR/com.storypool.ops-doctor.plist" > "$dst"
-    launchctl unload "$dst" 2>/dev/null || true
-    launchctl load "$dst"
+    storypool_reload_agent "$dst"
 }
 
 install_selfupdate() {
@@ -309,10 +303,7 @@ install_selfupdate() {
     mkdir -p "$HOME/Library/LaunchAgents" "$HOME/.local/share/storypool"
     sed -e "s|__REPO_PATH__|$REPO_ROOT|g" -e "s|__HOME__|$HOME|g" -e "s|__PATH__|$LAUNCHD_PATH|g" \
         "$SCRIPT_DIR/com.storypool.selfupdate.plist" > "$dst"
-    # Keep a running updater loaded until it exits; avoid killing its own reinstall.
-    if ! launchctl list com.storypool.selfupdate >/dev/null 2>&1; then
-        launchctl load "$dst"
-    fi
+    storypool_reload_agent "$dst" --defer-running
 }
 
 install_karen_cli() {
@@ -384,7 +375,10 @@ CONFIG
             -e "s|__HOME__|$HOME|g" \
             -e "s|__PATH__|$LAUNCHD_PATH|g" \
             "$poller_plist_src" > "$poller_plist_dst"
-        log_info "Karen poller plist installed (NOT loaded in shadow mode)"
+        if [[ -f "$HOME/.config/storypool/live" ]] || launchctl list com.storypool.karen-poller &>/dev/null; then
+            storypool_reload_agent "$poller_plist_dst"
+        fi
+        log_info "Karen poller plist installed (shadow mode preserved)"
         log_info "PATH: $LAUNCHD_PATH"
     fi
     
@@ -480,7 +474,7 @@ run_self_check() {
 uninstall_all() {
     log_header "Uninstalling All Components"
 
-    for label in com.storypool.selfupdate com.storypool.ops-doctor com.storypool.shadow com.storypool.dispatch com.storypool.conductor com.storypool.watchdog com.storypool.dashboard com.storypool.karen-poller; do
+    for label in com.storypool.guardian com.storypool.selfupdate com.storypool.ops-doctor com.storypool.shadow com.storypool.dispatch com.storypool.conductor com.storypool.watchdog com.storypool.dashboard com.storypool.karen-poller; do
         local plist="$HOME/Library/LaunchAgents/$label.plist"
         if launchctl list "$label" &>/dev/null; then
             log_info "Unloading $label..."
@@ -523,6 +517,7 @@ main() {
 
     check_dependencies
     setup_config_dir
+    install_guardian
     install_shadow
     install_dispatcher
     install_conductor

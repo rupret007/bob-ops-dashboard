@@ -67,7 +67,7 @@
    document.getElementById('engine-light').style.background=colors[data.engine];
    document.getElementById('engine-state').textContent=data.engine.toUpperCase()+' · '+new Date(data.timestamp).toLocaleTimeString();
    const machines=document.getElementById('engine-machines');machines.replaceChildren();
-   Object.entries(data.machines).forEach(([name,health])=>{const badge=document.createElement('span');badge.textContent=name+': '+health.detail+'  ';badge.style.color=colors[health.state];badge.title=health.timestamp||'No synced evidence';machines.append(badge);});
+   Object.entries(data.machines).forEach(([name,health])=>{const badge=document.createElement('span');badge.textContent=name+': '+health.detail+(health.sync_age_seconds!=null?' · sync '+Math.floor(health.sync_age_seconds/60)+'m ago':'')+(health.guardian?.reloads!=null?' · guardian recoveries '+health.guardian.reloads:'')+'  ';badge.style.color=colors[health.state];badge.title=health.timestamp||'No synced evidence';machines.append(badge);});
    const controls=document.getElementById('node-controls');
    if(!controls.children.length){['mini','nucbox'].forEach(name=>{
     const button=el('button',null,name);button.dataset.machine=name;

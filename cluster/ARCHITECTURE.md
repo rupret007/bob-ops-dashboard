@@ -235,3 +235,27 @@ deferred. Global rate counters, quota and remaining authority gaps above are
 still open; this change does not enable Mini Codex.
 Follow-up diagnostics use `~/.local/share/storypool/main-ci.jsonl`, separate from
 the watchdog health snapshots so an action record cannot imply healthy checks.
+
+## Supervisor registration and recovery
+
+Every Mini installer now validates the rendered plist, explicitly enables its GUI
+service, boots out the old definition, bootstraps the new definition and verifies
+registration. Previously the installers used legacy unchecked unload/load pairs;
+unload also interacts with launchd's persistent disabled state, and a failed load
+could leave the watchdog absent. Historical logs do not establish which caller
+unloaded it twice. Per-agent file locks prevent installer/guardian reload races.
+The self-updater writes a pending reload marker while its launchd PID is running;
+the guardian applies the new definition only after that process exits, avoiding
+self-termination during reinstall. Invalid definitions never unload the old agent.
+
+The Mini installer installs the repository guardian wrapper and renders both its
+repository path and the plist's `__HOME__` placeholder. The existing two-minute
+LaunchAgent cadence is retained. NucBox gets a two-minute user timer which restores
+only installed `storypool-*.timer` units that are inactive or disabled. Neither
+guardian starts provider work directly; existing maintenance and shared-claim gates
+still apply. Shadow Karen stays unloaded until live mode has been authorized.
+Recovery outcomes and failures use rotating structured `logs/guardian.jsonl`;
+`guardian-status.json` retains the last check and cumulative verified recoveries.
+The dashboard shows recovery counts and peer sync age; reachable peers with old
+health evidence stay yellow with a stale-report explanation. Guardian telemetry is
+copied with peer engine snapshots, never echoed back as the local host's state.

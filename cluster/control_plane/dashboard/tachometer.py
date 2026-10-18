@@ -180,14 +180,22 @@ class EngineCollector:
             # Remote health uses synced watchdog evidence, never local load under a remote name.
             path = self.data_dir / 'watchdog.log' if machine == self.machine else self.data_dir / 'machines' / machine / 'watchdog.log'
             evidence = list(rows(path))
+            evidence = [row for row in evidence if isinstance(row.get("checks"), list)]
             last = evidence[-1] if evidence else {}
             age = now.timestamp() - stamp(last.get('timestamp'))
             checks = last.get('checks', [])
             fresh = bool(checks) and 0 <= age < 1800
             failed = [c for c in checks if not c.get('passed') and not c.get('repaired')]
             state = ('red' if failed else 'green') if fresh else 'yellow'
+            peer = read_json(self.data_dir / 'machines' / machine / 'engine.json') or {}
+            sync_age = max(0, int(now.timestamp() - stamp(peer.get('synced_at')))) if peer.get('synced_at') else None
+            detail = 'stale or unavailable' if not fresh else '{} failed checks'.format(len(failed))
+            if machine != self.machine and not fresh and peer.get('synced_at'):
+                detail = 'peer sync stale' if sync_age >= PEER_FRESH_SEC else 'peer reachable; health report stale'
             health[machine] = {'state': state, 'timestamp': last.get('timestamp'),
-                               'detail': 'stale or unavailable' if not fresh else '{} failed checks'.format(len(failed))}
+                               'detail': detail, 'sync_age_seconds': sync_age if machine != self.machine else None,
+                               'guardian': (read_json(self.data_dir / 'guardian-status.json') or {})
+                               if machine == self.machine else peer.get('guardian', {})}
         dispatch = read_json(self.data_dir / 'dispatch' / 'dispatch-status.json')
         if isinstance(dispatch, dict):
             decisions = dispatch.get('summary', {}).get('decisions', [])

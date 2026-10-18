@@ -318,6 +318,7 @@ def run_tests(repo_dir: Path) -> bool:
              "cluster/tests/test_never_touch.py",
              "cluster/tests/test_install_scripts.py",
              "cluster/tests/test_python39.py",
+             "cluster/control_plane/tests/test_guardian.py",
              "-q", "--tb=short", "-r", "fE"],
             cwd=repo_dir,
             capture_output=True,

@@ -230,6 +230,11 @@ PLIST
 
     log_info "launchd plist installed to $LAUNCHD_DIR/$PLIST_NAME"
     log_info "To load the agent:"
+    if launchctl list com.storypool.karen-poller >/dev/null 2>&1; then
+        local reload_root
+        reload_root="$(cd "$SCRIPT_DIR/../../.." && pwd)"
+        PYTHONPATH="$reload_root${PYTHONPATH:+:$PYTHONPATH}" python3 -m cluster.control_plane.guardian --reload "$LAUNCHD_DIR/$PLIST_NAME"
+    fi
     log_info "  launchctl load $LAUNCHD_DIR/$PLIST_NAME"
     log_info "To unload:"
     log_info "  launchctl unload $LAUNCHD_DIR/$PLIST_NAME"

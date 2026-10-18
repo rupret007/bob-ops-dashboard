@@ -151,3 +151,28 @@ def test_live_panel_has_jobs_and_speedometers():
     page = render_dashboard(DashboardData(timestamp='', machine='mini', live_mode=True))
     assert 'engine-machine-jobs' in page and 'engine-llm' in page and 'renderLlm(data.llm)' in page
     assert 'no data' in page and 'conserve' in page
+
+
+def test_health_ignores_followup_events_and_reports_guardian_and_peer_sync(tmp_path):
+    now = datetime.now(timezone.utc)
+    healthy = {'timestamp': now.isoformat(), 'checks': [{'passed': True}]}
+    (tmp_path / 'watchdog.log').write_text(json.dumps(healthy) + '\n' +
+        json.dumps({'timestamp': now.isoformat(), 'action': 'main_ci_followup'}) + '\n')
+    write(tmp_path / 'guardian-status.json', {'reloads': 3, 'timestamp': now.isoformat()})
+    write(tmp_path / 'machines/mini/engine.json', {'synced_at': (now - timedelta(hours=1)).isoformat(),
+                                                'guardian': {'reloads': 2}})
+    result = EngineCollector(tmp_path, tmp_path, 'nucbox').collect()
+    assert result['machines']['nucbox']['state'] == 'green'
+    assert result['machines']['nucbox']['guardian']['reloads'] == 3
+    assert result['machines']['mini']['detail'] == 'peer sync stale'
+    assert result['machines']['mini']['sync_age_seconds'] >= 3600
+    assert result['machines']['mini']['guardian']['reloads'] == 2
+    assert result['machines']['mini']['state'] == 'yellow'
+
+
+def test_fresh_peer_contact_does_not_claim_stale_health_is_green(tmp_path):
+    now = datetime.now(timezone.utc)
+    write(tmp_path / 'machines/mini/engine.json', {'synced_at': now.isoformat()})
+    result = EngineCollector(tmp_path, tmp_path, 'nucbox').collect()
+    assert result['machines']['mini']['detail'] == 'peer reachable; health report stale'
+    assert result['machines']['mini']['state'] == 'yellow'
