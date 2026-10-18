@@ -22,6 +22,7 @@ import logging
 import os
 import shutil
 import subprocess
+import sys
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional, Tuple
@@ -312,7 +313,7 @@ def run_tests(repo_dir: Path) -> bool:
     """Run quick tests to verify update is safe."""
     try:
         result = subprocess.run(
-            ["python3", "-m", "pytest", 
+            [sys.executable, "-m", "pytest", 
              "cluster/tests/test_never_touch.py",
              "cluster/tests/test_install_scripts.py",
              "cluster/tests/test_python39.py",
