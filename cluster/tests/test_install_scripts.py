@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -114,6 +115,7 @@ class TestShadowRunnerOutput(unittest.TestCase):
         self.assertIn("dispatch_decisions", data)
 
 
+@unittest.skipUnless(sys.platform == "linux", "NucBox systemd installer requires Linux and GNU sed")
 class TestLiveMarkerPreservation(unittest.TestCase):
     """Test that --live mode is preserved across reinstalls."""
 
