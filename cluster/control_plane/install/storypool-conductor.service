@@ -1,0 +1,37 @@
+[Unit]
+Description=StoryPool Conductor (hourly orchestrator)
+Documentation=https://github.com/rupret007/bob-ops-dashboard/blob/main/docs/design/storypool-control-plane.md
+
+# Hourly orchestrator that:
+# - Labels ready PRs with needs-karen
+# - Merges PRs with KARENPASS verdict (sha-pinned)
+# - Notes stuck PRs for attention
+#
+# Default is shadow/dry-run mode (logs decisions, takes no action).
+# Add --live to ExecStart to enable live actions.
+#
+# NEVER auto-merges repos in cluster/never_touch.py
+# NO SUDO, NO FORCE-PUSH, NO TAGS/RELEASES
+# Never touches: ~/.cursor, auth files, Keychain, svc-* screens
+# Never sends messages to people
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/env python3 -m cluster.control_plane.conductor
+WorkingDirectory=__REPO_PATH__
+Environment="PYTHONPATH=__REPO_PATH__"
+Environment="PATH=/usr/local/bin:/usr/bin:/bin:/home/%u/.local/bin"
+Environment="HOME=/home/%u"
+Environment="STORYPOOL_INSTALL_DIR=__REPO_PATH__"
+Environment="STORYPOOL_MACHINE=nucbox"
+
+# Resource limits
+Nice=10
+CPUWeight=50
+MemoryMax=512M
+
+# Timeouts
+TimeoutStartSec=600
+
+[Install]
+WantedBy=default.target

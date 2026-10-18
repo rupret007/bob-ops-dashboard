@@ -4,10 +4,40 @@ import asyncio
 import json
 import secrets
 import unittest
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
+from types import SimpleNamespace
 
 from cluster import lanes, lanes_perms
 from cluster.tests.nats_test_util import EphemeralNats, find_nats_binary, require_or_skip
+
+
+class TestLeaseReplyBoundary(unittest.IsolatedAsyncioTestCase):
+    async def test_reply_subjects_at_service_boundary(self):
+        # Direct delivery cannot be rejected by broker ACLs before reaching the guard.
+        # Reserved roles must be rejected even when their reply prefix matches.
+        for host in ("nuc", "mini", "hub", "conductor"):
+            for target in ("nuc", "mini", "hub", "conductor"):
+                for suffix in ("probe", "nested.probe", "*", ">", "*.probe", ">.probe",
+                               "probe.*", "probe.>", "", ".probe", "probe.", "probe..x"):
+                    reply = f"_INBOX_{target}.{suffix}"
+                    subject = f"lanesvc.lease.{host}.acquire"
+                    with self.subTest(subject=subject, reply=reply):
+                        nc = SimpleNamespace(publish=AsyncMock())
+                        svc = lanes.LeaseService(nc, None)
+                        svc.handle = AsyncMock(return_value={"ok": True})
+                        msg = SimpleNamespace(subject=subject, reply=reply, data=b"{}")
+                        allowed = host in ("nuc", "mini") and target == host and suffix in (
+                            "probe", "nested.probe",
+                        )
+                        if allowed:
+                            await svc._on_msg(msg)
+                            svc.handle.assert_awaited_once_with(subject, b"{}")
+                            nc.publish.assert_awaited_once_with(reply, b'{"ok": true}')
+                        else:
+                            with self.assertLogs("cluster.lanes", level="WARNING"):
+                                await svc._on_msg(msg)
+                            svc.handle.assert_not_awaited()
+                            nc.publish.assert_not_awaited()
 
 
 @require_or_skip(find_nats_binary(), "nats-server binary not installed")
@@ -15,9 +45,10 @@ class TestLeaseReplyGuard(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
         import nats
 
-        passwords = {u: secrets.token_urlsafe(18) for u in ("hub", "nuc", "mini", "observer")}
+        passwords = {u: secrets.token_urlsafe(18) for u in ("hub", "conductor", "nuc", "mini", "observer")}
         users = {
             "hub": (passwords["hub"], lanes_perms.operator()),
+            "conductor": (passwords["conductor"], lanes_perms.conductor()),
             "nuc": (passwords["nuc"], lanes_perms.host("nuc", ["codex"])),
             "mini": (passwords["mini"], lanes_perms.host("mini", ["codex"])),
             # Test-only wire observer: no publish privileges, all subjects visible.
@@ -126,6 +157,29 @@ class TestLeaseReplyGuard(unittest.IsolatedAsyncioTestCase):
                     self.assertIsNone(await lanes.holder(self.kv, "o.request.pr.1"))
                     consumer = await self.js.consumer_info(lanes.LANES_STREAM, "lane_codex_mini")
                     self.assertEqual(consumer.num_ack_pending, 1)
+
+    async def test_hub_and_conductor_inboxes_never_receive_host_replies(self):
+        captures = [await self.hub.subscribe("_INBOX_hub.reply_guard"),
+                    await self.conductor.subscribe("_INBOX_conductor.reply_guard")]
+        await self.hub.flush()
+        await self.conductor.flush()
+        for host in ("nuc", "mini"):
+            nc = getattr(self, host)
+            for reply in ("_INBOX_hub.reply_guard", "_INBOX_conductor.reply_guard"):
+                with self.subTest(host=host, reply=reply):
+                    with self.assertLogs("cluster.lanes", level="WARNING"):
+                        await nc.publish(lanes.lease_subject(host, "holder"),
+                                         b'{"key":"o.seed.pr.1"}', reply=reply)
+                        response = await nc.request(lanes.lease_subject(host, "holder"),
+                                                    b'{"key":"o.seed.pr.1"}', timeout=2)
+                    self.assertTrue(response.subject.startswith(f"_INBOX_{host}."))
+                    self.assertEqual(json.loads(response.data)["holder"]["owner"], "mini")
+        await self.hub.flush()
+        await self.conductor.flush()
+        for capture in captures:
+            self.assertEqual(capture.pending_msgs, 0)
+            await capture.unsubscribe()
+        self.assertEqual(self.errors, [])
 
     async def test_forged_ack_is_blocked_by_broker_and_by_service(self):
         from nats.aio.msg import Msg

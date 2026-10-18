@@ -1,0 +1,11 @@
+[Unit]
+Description=StoryPool Conductor Timer (hourly)
+Documentation=https://github.com/rupret007/bob-ops-dashboard/blob/main/docs/design/storypool-control-plane.md
+
+[Timer]
+OnCalendar=hourly
+Persistent=true
+RandomizedDelaySec=120
+
+[Install]
+WantedBy=timers.target

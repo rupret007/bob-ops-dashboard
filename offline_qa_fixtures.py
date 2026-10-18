@@ -94,10 +94,17 @@ print(json.dumps(value))
 def require_temporary_child(root: Path) -> Path:
     resolved = root.resolve()
     temp_roots = {Path(tempfile.gettempdir()).resolve(), Path("/tmp").resolve()}
-    if not any(resolved != base and resolved.is_relative_to(base) for base in temp_roots):
+    containing_roots = [base for base in temp_roots if resolved.is_relative_to(base)]
+    if resolved in temp_roots or not containing_roots:
         raise ValueError("Fixture files must stay in a child of a temporary directory")
-    if any((parent / ".git").exists() for parent in (resolved, *resolved.parents)):
-        raise ValueError("Fixture files must not overwrite a repository")
+    # Shared temporary roots are the boundary, not fixture repositories. Use
+    # the outermost root so a nested TMPDIR cannot hide a repository ancestor.
+    boundary = min(containing_roots, key=lambda base: len(base.parts))
+    for parent in (resolved, *resolved.parents):
+        if parent == boundary:
+            break
+        if (parent / ".git").exists():
+            raise ValueError("Fixture files must not overwrite a repository")
     return resolved
 
 
@@ -119,7 +126,7 @@ def prepare_generator(source: Path, destination: Path) -> None:
     if destination.exists() and any(destination.iterdir()):
         raise ValueError("Fixture generator destination must be empty")
     destination.mkdir(parents=True, exist_ok=True)
-    for name in ("README.md", "board_meta.py", "refresh.sh"):
+    for name in ("README.md", "board_meta.py", "usage_collect.py", "scorecards.py", "refresh.sh"):
         shutil.copyfile(source / name, destination / name)
     work_now = source / "llm-work-now.json"
     if work_now.is_file():

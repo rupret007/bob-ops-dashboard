@@ -6,7 +6,7 @@
 # - Installs systemd user service and timer
 # - Enables and starts the timer
 #
-# NO SUDO REQUIRED (uses systemd --user)
+# USER-LEVEL INSTALLATION (uses systemd --user)
 # Does NOT touch: ~/.cursor, Codex/Claude auth, Keychain, svc-* screens
 #
 # Usage: bash install-shadow-nucbox.sh
@@ -38,7 +38,7 @@ uninstall() {
     systemctl --user daemon-reload
     
     echo "Done. Log directory preserved at $LOG_DIR"
-    echo "To remove logs: rm -rf $LOG_DIR"
+    echo "Review and back up $LOG_DIR before deleting logs manually."
 }
 
 install() {
@@ -52,7 +52,7 @@ install() {
     
     # Check for gh CLI
     if ! command -v gh &>/dev/null; then
-        echo "ERROR: gh CLI not found. Install with: sudo apt install gh"
+        echo "ERROR: gh CLI not found. Install gh in your user PATH before continuing"
         exit 1
     fi
     
@@ -74,6 +74,11 @@ install() {
     # Copy timer file
     echo "  Installing timer file..."
     cp "$TIMER_SRC" "$SYSTEMD_DIR/storypool-shadow.timer"
+    
+    # Clear stale .pyc files to avoid import issues
+    echo "  Clearing __pycache__..."
+    find "$REPO_ROOT/cluster" -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
+    find "$REPO_ROOT/cluster" -name "*.pyc" -delete 2>/dev/null || true
     
     # Reload systemd
     echo "  Reloading systemd..."

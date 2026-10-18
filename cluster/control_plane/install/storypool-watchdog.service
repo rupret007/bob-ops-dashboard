@@ -1,0 +1,28 @@
+[Unit]
+Description=StoryPool Watchdog (self-healing)
+Documentation=https://github.com/rupret007/bob-ops-dashboard
+
+# Watchdog service:
+# - Detects stuck services (no log in 30 min)
+# - Detects repeated tracebacks
+# - Checks gh/codex in PATH
+# - Checks required labels exist
+# - Checks install is not stale
+# - Auto-repairs or escalates to NEEDS_JEFF.md
+
+[Service]
+Type=oneshot
+WorkingDirectory=__REPO_PATH__
+Environment=PYTHONPATH=__REPO_PATH__
+Environment=STORYPOOL_MACHINE=nucbox
+Environment=STORYPOOL_INSTALL_DIR=__REPO_PATH__
+Environment="PATH=/home/%u/bin:/home/%u/.local/bin:/usr/local/bin:/usr/bin:/bin"
+Environment="HOME=/home/%u"
+ExecStart=/usr/bin/python3 -m cluster.control_plane.watchdog
+
+# Resource limits
+Nice=15
+MemoryMax=256M
+CPUQuota=25%
+
+TimeoutStartSec=120

@@ -6,7 +6,7 @@
 # - Installs the launchd plist to ~/Library/LaunchAgents
 # - Loads the agent
 #
-# NO SUDO REQUIRED
+# USER-LEVEL INSTALLATION
 # Does NOT touch: ~/.cursor, Codex/Claude auth, Keychain, svc-* screens
 #
 # Usage: bash install-shadow-mini.sh
@@ -35,7 +35,7 @@ uninstall() {
     fi
     
     echo "Done. Log directory preserved at $LOG_DIR"
-    echo "To remove logs: rm -rf $LOG_DIR"
+    echo "Review and back up $LOG_DIR before deleting logs manually."
 }
 
 install() {
@@ -67,6 +67,11 @@ install() {
     sed -e "s|__REPO_PATH__|$REPO_ROOT|g" \
         -e "s|__HOME__|$HOME|g" \
         "$PLIST_SRC" > "$PLIST_DST"
+    
+    # Clear stale .pyc files to avoid import issues
+    echo "  Clearing __pycache__..."
+    find "$REPO_ROOT/cluster" -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
+    find "$REPO_ROOT/cluster" -name "*.pyc" -delete 2>/dev/null || true
     
     # Unload if already loaded
     if launchctl list "$LABEL" &>/dev/null; then

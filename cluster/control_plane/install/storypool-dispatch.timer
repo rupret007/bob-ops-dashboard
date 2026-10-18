@@ -1,0 +1,11 @@
+[Unit]
+Description=StoryPool Lane Dispatcher Timer
+Documentation=https://github.com/rupret007/bob-ops-dashboard/blob/main/docs/design/storypool-control-plane.md
+
+[Timer]
+OnCalendar=*:0/15
+Persistent=true
+RandomizedDelaySec=60
+
+[Install]
+WantedBy=timers.target

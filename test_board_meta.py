@@ -301,6 +301,7 @@ class BoardMetaTests(unittest.TestCase):
                 "controls",
                 "live-shipping",
                 "apps-utilities",
+                "usage-machines",
                 "cisco",
                 "messaging",
                 "private-media",

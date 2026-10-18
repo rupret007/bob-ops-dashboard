@@ -38,8 +38,12 @@ Uninstall:    launchctl unload ~/Library/LaunchAgents/com.storypool.shadow.plist
         <string>__REPO_PATH__</string>
         <key>STORYPOOL_MACHINE</key>
         <string>mini</string>
+        <key>STORYPOOL_INSTALL_DIR</key>
+        <string>__REPO_PATH__</string>
         <key>PATH</key>
-        <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
+        <string>__PATH__</string>
+        <key>HOME</key>
+        <string>__HOME__</string>
     </dict>
     
     <key>StartInterval</key>

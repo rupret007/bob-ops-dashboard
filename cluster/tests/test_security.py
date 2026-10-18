@@ -306,7 +306,19 @@ class TestNatsConfigSecurity(unittest.TestCase):
     def test_nucbox_worker_can_ack_jobs(self):
         block = self.config.split("user: nucbox", 1)[1].split("user:", 1)[0]
         publish = set(re.findall(r'"([^\"]+)"', re.search(r'publish: \[(.*?)\]', block).group(1)))
-        self.assertIn("$JS.ACK.JOBS.workers.>", publish)
+        self.assertIn("$JS.ACK.JOBS.workers_nucbox.>", publish)
+
+    def test_worker_ack_permissions_are_isolated_per_node(self):
+        nodes = ("mini", "nucbox", "macbook")
+        for node in nodes:
+            with self.subTest(node=node):
+                block = self.config.split(f"user: {node}", 1)[1].split("user:", 1)[0]
+                publish = set(re.findall(r'"([^\"]+)"', re.search(r'publish: \[(.*?)\]', block).group(1)))
+                self.assertEqual({subject for subject in publish if subject.startswith("$JS.ACK.")},
+                                 {f"$JS.ACK.JOBS.workers_{node}.>"})
+                for other in nodes:
+                    if other != node:
+                        self.assertNotIn(f"$JS.ACK.JOBS.workers_{other}.>", publish)
 
     def test_monitoring_is_loopback_and_does_not_conflict_with_vaultwarden(self):
         self.assertRegex(self.config, r'(?m)^http: "127\.0\.0\.1:8232"$')
@@ -317,7 +329,7 @@ class TestNatsConfigSecurity(unittest.TestCase):
         for node in ("mini", "macbook"):
             block = self.config.split(f"user: {node}", 1)[1].split("user:", 1)[0]
             publish = set(re.findall(r'"([^\"]+)"', re.search(r'publish: \[(.*?)\]', block).group(1)))
-            self.assertEqual(publish, {f"metrics.{node}", "results.>",
-                                      "$JS.API.CONSUMER.INFO.JOBS.workers",
-                                      "$JS.API.CONSUMER.MSG.NEXT.JOBS.workers",
-                                      "$JS.ACK.JOBS.workers.>"})
+            self.assertEqual(publish, {f"metrics.{node}", f"results.{node}.>",
+                                      f"$JS.API.CONSUMER.INFO.JOBS.workers_{node}",
+                                      f"$JS.API.CONSUMER.MSG.NEXT.JOBS.workers_{node}",
+                                      f"$JS.ACK.JOBS.workers_{node}.>"})

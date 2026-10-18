@@ -1,0 +1,27 @@
+[Unit]
+Description=StoryPool Dashboard
+Documentation=https://github.com/rupret007/bob-ops-dashboard
+After=network.target
+
+# Local dashboard server on 127.0.0.1:8790
+# Read-only view of cluster status, auto-refreshes every 30s
+# Accessible over Tailscale
+
+[Service]
+Type=simple
+WorkingDirectory=__REPO_PATH__
+Environment=PYTHONPATH=__REPO_PATH__
+Environment=STORYPOOL_MACHINE=nucbox
+Environment="PATH=/home/%u/bin:/home/%u/.local/bin:/usr/local/bin:/usr/bin:/bin"
+Environment="HOME=/home/%u"
+ExecStart=/usr/bin/python3 -m cluster.control_plane.dashboard --host 127.0.0.1 --port 8790
+
+Restart=always
+RestartSec=10
+
+# Resource limits
+Nice=10
+MemoryMax=128M
+
+[Install]
+WantedBy=default.target

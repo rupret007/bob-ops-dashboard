@@ -71,7 +71,8 @@ svg{display:block;max-width:100%}.mc small{display:block;color:var(--mu);margin-
 <div id="gauges"></div>
 <section id="needs"><h2>Needs you <span id="needsCount">0</span></h2><div id="needsList"></div></section>
 <section id="health"><h2>Health</h2><div class="mach" id="machines"></div>
-<h2 style="margin-top:12px">AI capacity</h2><div id="aiCap"></div></section>
+<h2 style="margin-top:12px">AI capacity</h2><div id="aiCap"></div>
+<h2 style="margin-top:12px">Cluster LLM capacity</h2><div id="clusterCap"></div></section>
 <section id="live"><h2>Live work</h2><div id="lanes"></div></section>
 <section id="pipe"><h2>Pipeline</h2><div class="pipe" id="pipeCounts"></div><div id="pipeRows"></div></section>
 <section id="thru"><h2>Throughput</h2><svg id="thruSpark" viewBox="0 0 300 80" width="100%" height="80"></svg><div id="thruRows"></div></section>
@@ -295,6 +296,39 @@ function render(state){
     return `<div class="row"><div class="m">${esc(a.provider)}<div class="bar ${unk?'unknown':''}">${unk?'':`<i style="width:${pct}%;background:${pct<10?'var(--bad)':'var(--ok)'}"></i>`}</div></div>
       <span class="${unk?'unk':pct<10?'bad':'ok'}">${unk?'unknown':pct+'%'} · ${esc(a.reset_ct||'')}</span></div>`;
   }).join(''):'<div class="row"><div class="m">No AI capacity reports</div></div>';
+
+  const cc=document.getElementById('clusterCap');
+  const cnodes=state.cluster_caps||[];
+  const capacityElement=(tag,className,text)=>{
+    const el=document.createElement(tag);
+    el.className=className;
+    if(text!==undefined)el.textContent=String(text??'');
+    return el;
+  };
+  const capacityRows=cnodes.map(n=>{
+    const details=capacityElement('div','m');
+    details.appendChild(capacityElement('b','',n.node));
+    details.appendChild(capacityElement('small','',` ${n.role??''} · ${n.os??''} · lanes ${n.active??''}/${n.max_lanes??''} · load ${n.load1??''}`));
+    const providers=capacityElement('div','');
+    Object.entries(n.llm||{}).filter(([,v])=>v.installed).forEach(([k,v])=>{
+      const q=v.remaining_pct==null?'':' '+Math.round(v.remaining_pct)+'%';
+      providers.appendChild(capacityElement('span','pill '+(v.logged_in?'ok':'warn'),
+        k+(v.logged_in?'':' (signed out)')+q));
+    });
+    if(!providers.children.length)providers.appendChild(capacityElement('small','unk','no LLM sign-ins'));
+    details.appendChild(providers);
+    details.appendChild(capacityElement('small','unk',(n.caps||[]).join(', ')));
+    const row=capacityElement('div','row');
+    row.appendChild(details);
+    row.appendChild(capacityElement('span',n.online?'ok':'bad',n.online?'online':'offline'));
+    return row;
+  });
+  if(!capacityRows.length){
+    const row=capacityElement('div','row');
+    row.appendChild(capacityElement('div','m','No cluster heartbeats yet'));
+    capacityRows.push(row);
+  }
+  cc.replaceChildren(...capacityRows);
 
   const lanesEl=document.getElementById('lanes');
   const nodeById=Object.create(null);

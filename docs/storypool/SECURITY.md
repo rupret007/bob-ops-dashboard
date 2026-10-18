@@ -4,7 +4,7 @@ StoryPool runs other people's work on Jeff's machines, and (soon) Jeff's work on
 
 - **The network is private.** The queue only listens on localhost; the only way in is Tailscale.
 - **Every machine has its own credential**, and the NATS server decides what each one may publish and subscribe to.
-- **A host can only touch its own work, except the open HIGH lease-reply hole, pending #76.** It can't write leases directly, ack someone else's job, or read someone else's replies.
+- **A host can only touch its own work.** It can't write leases directly, ack someone else's job, or read someone else's replies. The HIGH lease-reply hole is **closed** by bob-ops-dashboard #76 (c838b310).
 - **Guests get a sandbox with no keys.** Friends' machines only ever run sandboxed, no-key jobs.
 - **Secrets never ride in jobs**, and donor credentials never leave the donor's machine.
 
@@ -25,7 +25,7 @@ StoryPool runs other people's work on Jeff's machines, and (soon) Jeff's work on
 | # | Threat | Example | Defense |
 |---|---|---|---|
 | T1 | **Outsider on the internet** | Port scan finds the queue | Server binds `127.0.0.1` only. Tailscale userspace forwards tailnet traffic; nothing listens on a public interface. |
-| T2 | **A member host misbehaves** (bug or compromise) | Mini tries to steal the NucBox's lease, or ack its job | Per-host NATS permissions: own lease subject, own consumer, own inbox. Raw `$KV` writes denied, except the open HIGH lease-reply hole, pending #76. |
+| T2 | **A member host misbehaves** (bug or compromise) | Mini tries to steal the NucBox's lease, or ack its job | Per-host NATS permissions: own lease subject, own consumer, own inbox. Raw `$KV` writes denied; lease-reply redirection **closed (HIGH)** by #76 (c838b310). |
 | T3 | **Identity spoofing** | A host claims "I'm nucbox" in the request body | The lease service takes the host from the **NATS subject**, which the server only lets each host publish for itself. The body is never trusted for identity. |
 | T4 | **Forged system events** | A host publishes a fake `MAX_DELIVERIES` advisory to get a job dead-lettered | Hosts have no publish grant on `$JS.EVENT.>`, so forged advisories are denied by the server. |
 | T5 | **Lost work during dead-lettering** | Crash between copy and delete | The DLQ copies, **waits for the server's confirm**, then deletes. Idempotent `Nats-Msg-Id` makes a repeat copy harmless. |
@@ -141,4 +141,4 @@ Which jobs can go to a friend's machine: **sandboxed, no-key jobs only** (builds
 | **Lease metadata is readable by any host** | The `holder` op returns who holds any key and its metadata. Low risk among Jeff's machines; worth scoping before guests. | Known, open. |
 | **A nak'd job holds its slot during the delay** | On nats-server 2.15.1 a delay-nak'd job keeps its `max_ack_pending` slot until redelivered, so a held lease can cost one lane slot for up to one TTL (900 s). | Known, documented and asserted in tests. |
 | **Apply stage-2 permissions to the live hub** | Until then the live hub runs the looser stage-1 grants. | Planned (needs Jeff's approval for the config change). |
-| **Reply redirection (lease service reply must not become a lease write)** | A host can set its reply subject to a lease key and trick the hub into writing it. Lease keys must only be written by the service's own compare-and-set, not via an arbitrary reply subject. | **Open (HIGH).** Fix in progress in bob-ops-dashboard #76. |
+| **Reply redirection (lease service reply must not become a lease write)** | A host can set its reply subject to a lease key and trick the hub into writing it. Lease keys must only be written by the service's own compare-and-set, not via an arbitrary reply subject. | **Closed (HIGH).** Fixed in bob-ops-dashboard #76 (c838b310). |

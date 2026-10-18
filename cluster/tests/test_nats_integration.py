@@ -152,7 +152,7 @@ class TestWorkerPermissions(unittest.TestCase):
         from cluster.setup_streams import setup
 
         await setup(server.url, server.passwords["nucbox"], "nucbox")
-        admin = await nats.connect(server.url, user="nucbox", password=server.passwords["nucbox"])
+        admin = await nats.connect(server.url, user="nucbox", password=server.passwords["nucbox"], inbox_prefix=b"_INBOX_nucbox")
         try:
             for node in ("mini", "macbook"):
                 errors = asyncio.Queue()
@@ -160,20 +160,20 @@ class TestWorkerPermissions(unittest.TestCase):
                 async def error_cb(error):
                     await errors.put(error)
 
-                worker = await nats.connect(server.url, user=node, password=server.passwords[node], error_cb=error_cb)
+                worker = await nats.connect(server.url, user=node, password=server.passwords[node], error_cb=error_cb, inbox_prefix=f"_INBOX_{node}".encode())
                 try:
                     js = worker.jetstream()
-                    sub = await js.pull_subscribe("", durable="workers", stream="JOBS")
-                    await admin.jetstream().publish(f"jobs.test.{node}", b"test-only-job")
+                    sub = await js.pull_subscribe("", durable=f"workers_{node}", stream="JOBS")
+                    await admin.jetstream().publish(f"jobs.n.{node}.test.job", b"test-only-job")
                     messages = await sub.fetch(1, timeout=3)
                     await messages[0].in_progress()
                     await messages[0].nak()
                     messages = await sub.fetch(1, timeout=3)
                     await messages[0].ack_sync()
-                    await admin.jetstream().publish(f"jobs.test.{node}-term", b"test-only-job")
+                    await admin.jetstream().publish(f"jobs.n.{node}.test.term", b"test-only-job")
                     messages = await sub.fetch(1, timeout=3)
                     await messages[0].term()
-                    await js.publish(f"results.{node}", b"test-only-result")
+                    await js.publish(f"results.{node}.job", b"test-only-result")
                     await worker.publish(f"metrics.{node}", b"{}")
                     await worker.flush()
                     self.assertTrue(errors.empty())
@@ -187,7 +187,7 @@ class TestWorkerPermissions(unittest.TestCase):
                         error = await asyncio.wait_for(errors.get(), timeout=3)
                         self.assertIn("permissions violation", str(error).lower())
                     self.assertEqual((await admin.jetstream().stream_info("JOBS")).config.name, "JOBS")
-                    await admin.jetstream().consumer_info("JOBS", "workers")
+                    await admin.jetstream().consumer_info("JOBS", f"workers_{node}")
                 finally:
                     await worker.close()
         finally:

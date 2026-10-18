@@ -1,0 +1,11 @@
+[Unit]
+Description=StoryPool Self-Update Timer (every 30 minutes)
+
+[Timer]
+# Run every 30 minutes
+OnBootSec=5min
+OnUnitActiveSec=30min
+Persistent=true
+
+[Install]
+WantedBy=timers.target
