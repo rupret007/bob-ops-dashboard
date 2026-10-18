@@ -46,16 +46,31 @@ def get_current_head(repo_dir: Path) -> Optional[str]:
 
 
 def is_working_tree_dirty(repo_dir: Path) -> bool:
-    """Check if working tree has uncommitted changes."""
+    """Check if working tree has uncommitted changes to tracked files.
+    
+    Ignores untracked files (like a stray file named '-') because they don't
+    affect fast-forward safety. Only blocks on modified/staged tracked files.
+    """
     try:
+        # Use git diff to check for modifications to tracked files
+        # (staged or unstaged), ignoring untracked files entirely
         result = subprocess.run(
-            ["git", "status", "--porcelain"],
+            ["git", "diff", "--quiet", "HEAD"],
             cwd=repo_dir,
             capture_output=True,
-            text=True,
             timeout=10,
         )
-        return bool(result.stdout.strip())
+        if result.returncode != 0:
+            return True  # Has uncommitted changes to tracked files
+        
+        # Also check for staged changes
+        result = subprocess.run(
+            ["git", "diff", "--cached", "--quiet"],
+            cwd=repo_dir,
+            capture_output=True,
+            timeout=10,
+        )
+        return result.returncode != 0
     except (subprocess.SubprocessError, FileNotFoundError):
         return True
 
