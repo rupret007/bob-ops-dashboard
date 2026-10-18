@@ -1,15 +1,16 @@
 #!/usr/bin/env python3
-"""LLM-in-the-loop Conductor service for StoryPool control plane.
+"""Deterministic merge and LLM-assisted Conductor service for StoryPool control plane.
 
 Hourly orchestrator that uses a reasoning model (Codex primary, Gemini fallback)
 to propose actions, while deterministic rails validate every proposal.
 
 Each hourly tick:
 1. Build state snapshot (queue, PRs, CI, verdicts, lanes, guards, budgets, errors)
-2. Ask reasoning model to propose actions and flag anomalies
-3. Validate each proposal against deterministic rails
-4. Execute validated actions (in live mode) or log what would happen (shadow mode)
-5. Generate twice-daily digest for human review
+2. Evaluate every PR through the deterministic merge gate
+3. Ask reasoning model for optional actions and anomaly reports
+4. Validate each proposal against deterministic rails
+5. Execute validated actions (in live mode) or log what would happen (shadow mode)
+6. Generate the scheduled digest for human review
 
 LLM Provider Priority:
 - Primary: Codex CLI (codex exec, NucBox via CODEX_HOST=nuc, low effort default)
@@ -24,9 +25,8 @@ Deterministic Rails (model CANNOT override):
 - Budget caps (Codex 75% weekly, etc.)
 - No sudo, no force-push, no tags/releases, no sends
 
-Fail-safe: If model unavailable or returns invalid output:
-- Pause (no actions)
-- Write alert file
+If the model is unavailable, optional proposals pause and an alert is written.
+Deterministic merge admission continues with every safety gate enforced.
 
 Runs in shadow/dry-run mode by default; use --live to execute.
 """
@@ -56,7 +56,7 @@ CONDUCTOR_LOG_DIR = Path(
 ).expanduser()
 
 VERDICT_DIR = Path(
-    os.environ.get("STORYPOOL_VERDICT_DIR", "~/.local/share/storypool/verdicts")
+    os.environ.get("STORYPOOL_VERDICT_DIR", "~/.local/share/karen/verdicts")
 ).expanduser()
 
 CODEX_WEEKLY_CAP_PCT = 75.0
@@ -290,10 +290,65 @@ def _has_label(pr: dict, label_name: str) -> bool:
     return any(lbl.get("name") == label_name for lbl in labels if isinstance(lbl, dict))
 
 
-def _is_approved(pr: dict) -> bool:
-    """Check if PR has an approved review."""
+def _is_approved(pr: dict, verdict: Optional[dict] = None) -> bool:
+    """Karen's independent exact-head votes satisfy Jeff's merge approval rule."""
+    if verdict is not None:
+        sha = pr.get("headRefOid", "")
+        votes = verdict.get("review_results") or []
+        reviewers = {v.get("reviewer") for v in votes
+                     if isinstance(v, dict) and isinstance(v.get("reviewer"), str)
+                     and v.get("verdict") == "PASS"}
+        return bool(re.fullmatch(r"[0-9a-f]{40}", sha)
+                    and verdict.get("sha") == sha and verdict.get("_latest")
+                    and verdict.get("verdict") == "KARENPASS"
+                    and len(reviewers - {None, ""}) >= 2
+                    and all(isinstance(v, dict) and v.get("verdict") == "PASS" for v in votes))
     reviews = pr.get("reviews") or []
     return any(r.get("state", "").upper() == "APPROVED" for r in reviews if isinstance(r, dict))
+
+
+def _read_flat_verdict(root: Path, repo: str, pr_number: int, head_sha: str) -> Optional[dict]:
+    """Read trusted local Karen artifacts; LATEST is required, newest outcome wins.
+
+    Historical FAIL/PASS files remain on disk after re-review. Compare embedded
+    timestamps, never filenames or mtime. A malformed LATEST fails closed.
+    """
+    if not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", repo):
+        return None
+    prefix = f"{repo.replace('/', '_')}_{pr_number}_{head_sha[:12]}_"
+    latest = root / (prefix + "LATEST.json")
+    if not latest.is_file():
+        return None
+    candidates = []
+    latest_passed = False
+    for suffix in ("LATEST", "KARENFAIL", "KARENPASS"):
+        path = root / (prefix + suffix + ".json")
+        if not path.is_file():
+            continue
+        try:
+            v = json.loads(path.read_text())
+            if (not isinstance(v, dict) or v.get("head_sha") != head_sha
+                    or f"{v.get('owner')}/{v.get('repo')}" != repo
+                    or v.get("pr_number") != pr_number):
+                return None
+            ts = datetime.fromisoformat(v["timestamp"].replace("Z", "+00:00"))
+            if ts.tzinfo is None:
+                return None
+            passed = v.get("passed") is True or v.get("passed") == "True"
+            complete = v.get("status", "COMPLETE") == "COMPLETE"
+            if suffix == "LATEST":
+                latest_passed = passed and complete
+            normalized = {**v, "sha": head_sha, "repo": repo,
+                          "verdict": "KARENPASS" if passed and complete else "KARENFAIL",
+                          "_latest": True}
+            # On equal timestamps, a disagreement fails closed.
+            candidates.append((ts.timestamp(), not (passed and complete), suffix == "LATEST", normalized))
+        except (OSError, ValueError, KeyError, TypeError):
+            return None
+    result = max(candidates, key=lambda item: item[:3])[3] if candidates else None
+    if result and not latest_passed:
+        result["verdict"] = "KARENFAIL"
+    return result
 
 
 def _get_verdict_file(repo: str, pr_number: int, head_sha: str) -> Path:
@@ -303,9 +358,16 @@ def _get_verdict_file(repo: str, pr_number: int, head_sha: str) -> Path:
     return VERDICT_DIR / safe_repo / f"pr-{pr_number}-{head_sha[:12]}.json"
 
 
-def _read_verdict(repo: str, pr_number: int, head_sha: str) -> Optional[dict]:
+def _read_verdict(repo: str, pr_number: int, head_sha: str, root: Optional[Path] = None) -> Optional[dict]:
     """Read the Karen verdict file for a specific PR and SHA."""
-    verdict_file = _get_verdict_file(repo, pr_number, head_sha)
+    if not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", repo):
+        return None
+    root = root if root is not None else VERDICT_DIR
+    flat = _read_flat_verdict(root, repo, pr_number, head_sha)
+    prefix = f"{repo.replace('/', '_')}_{pr_number}_{head_sha[:12]}_LATEST.json"
+    if flat is not None or (root / prefix).exists():
+        return flat
+    verdict_file = root / repo.replace("/", "_") / f"pr-{pr_number}-{head_sha[:12]}.json"
     if not verdict_file.is_file():
         return None
     try:
@@ -314,7 +376,7 @@ def _read_verdict(repo: str, pr_number: int, head_sha: str) -> Optional[dict]:
             return None
         if verdict.get("sha") != head_sha:
             return None
-        return verdict
+        return {**verdict, "_latest": False}
     except (json.JSONDecodeError, OSError):
         return None
 
@@ -324,6 +386,15 @@ def _list_verdicts(verdict_dir: Path) -> list[dict]:
     verdicts = []
     if not verdict_dir.is_dir():
         return verdicts
+    for path in verdict_dir.glob("*_LATEST.json"):
+        try:
+            v = json.loads(path.read_text())
+            normalized = _read_flat_verdict(verdict_dir, f"{v['owner']}/{v['repo']}",
+                                            v['pr_number'], v['head_sha'])
+            if normalized:
+                verdicts.append(normalized)
+        except (OSError, ValueError, KeyError, TypeError):
+            continue
     for repo_dir in verdict_dir.iterdir():
         if not repo_dir.is_dir():
             continue
@@ -913,7 +984,12 @@ This PR reverts commit {merge_sha[:12]} which broke main CI.
         open_prs = []
         ci_statuses = {}
         
-        for repo in REPOS:
+        discovered = _run_gh(["repo", "list", "rupret007", "--limit", "1000",
+                              "--json", "nameWithOwner,isArchived"], default=[])
+        repos = sorted(set(REPOS) | {r["nameWithOwner"] for r in discovered
+                       if isinstance(r, dict) and r.get("nameWithOwner") and not r.get("isArchived")})
+        repos = [repo for repo in repos if check_merge_allowed(repo)[0]]
+        for repo in repos:
             prs = _get_open_prs(repo)
             for pr in prs:
                 pr["repo"] = repo
@@ -966,7 +1042,7 @@ This PR reverts commit {merge_sha[:12]} which broke main CI.
         
         return StateSnapshot(
             timestamp=_now_iso(),
-            repos=REPOS,
+            repos=repos,
             open_prs=open_prs,
             ci_statuses=ci_statuses,
             karen_verdicts=verdicts,
@@ -1028,7 +1104,8 @@ This PR reverts commit {merge_sha[:12]} which broke main CI.
             if not merge_allowed:
                 return ValidatedAction(action, False, "RAIL: {}".format(reason))
             
-            verdict = _read_verdict(repo, pr_number, head_sha) if pr_number else None
+            verdict = (_read_verdict(repo, pr_number, head_sha, self.verdict_dir)
+                       if pr_number else None)
             if not verdict or verdict.get("verdict") != "KARENPASS":
                 return ValidatedAction(action, False, 
                     f"RAIL: No KARENPASS verdict for {repo}#{pr_number} at SHA {head_sha[:8]}")
@@ -1045,11 +1122,17 @@ This PR reverts commit {merge_sha[:12]} which broke main CI.
                         f"RAIL: SHA mismatch - verdict for {head_sha[:8]}, current is {current_sha[:8]}")
                 
                 ci_status = _ci_status_from_pr(pr_details)
-                if not all(s == "success" for s in ci_status.values()):
+                if not ci_status or not all(s == "success" for s in ci_status.values()):
                     return ValidatedAction(action, False, "RAIL: CI not passing")
                 
-                if not _is_approved(pr_details):
-                    return ValidatedAction(action, False, "RAIL: PR not approved")
+                if pr_details.get("state") != "OPEN":
+                    return ValidatedAction(action, False, "RAIL: PR is no longer open")
+                if pr_details.get("isDraft", True):
+                    return ValidatedAction(action, False, "RAIL: PR is still a draft")
+                if pr_details.get("mergeStateStatus") != "CLEAN":
+                    return ValidatedAction(action, False, "RAIL: PR mergeability is not CLEAN")
+                if not _is_approved(pr_details, verdict):
+                    return ValidatedAction(action, False, "RAIL: Karen requires two agreeing reviewers at the full head SHA")
         
         elif action.action_type == ActionType.LABEL_NEEDS_KAREN.value:
             pr_details = _get_pr_details(repo, pr_number) if pr_number else None
@@ -1367,6 +1450,25 @@ This PR reverts commit {merge_sha[:12]} which broke main CI.
         
         return stuck
     
+    def deterministic_merge_pass(self, snapshot: StateSnapshot, live: bool = False) -> list:
+        """Evaluate every open PR independently of model availability/proposals."""
+        results = []
+        for pr in snapshot.open_prs:
+            repo, number, sha = pr.get("repo"), pr.get("number"), pr.get("headRefOid", "")
+            if not repo or not number or pr.get("isDraft") or not check_merge_allowed(repo)[0]:
+                continue
+            action = ProposedAction(ActionType.MERGE_PR.value, repo=repo,
+                                    pr_number=number, head_sha=sha,
+                                    reason="Deterministic exact-head Karen merge gate")
+            result = self.validate_action(action, snapshot)
+            if result.validated:
+                result = self.execute_action(result, live=live)
+            self._write_log({"action": "deterministic_merge", "proposal": action.to_dict(),
+                             "validated": result.validated, "executed": result.executed,
+                             "reason": result.validation_reason, "result": result.execution_result})
+            results.append(result)
+        return results
+
     def run(self, live: bool = False) -> dict:
         """Run a conductor cycle.
         
@@ -1384,10 +1486,9 @@ This PR reverts commit {merge_sha[:12]} which broke main CI.
         
         snapshot = self.build_state_snapshot()
         
+        validated_actions = self.deterministic_merge_pass(snapshot, live=live)
         has_anomalies = len(snapshot.recent_errors) > 5
         proposals = self.get_llm_proposals(snapshot, high_effort=has_anomalies)
-        
-        validated_actions = []
         
         llm_unavailable_reason = ""
         
@@ -1418,7 +1519,7 @@ This PR reverts commit {merge_sha[:12]} which broke main CI.
             
             llm_unavailable_reason = "; ".join(reasons)
             self._write_alert(
-                "LLM unavailable - pausing conductor: {}".format(llm_unavailable_reason),
+                "LLM unavailable - optional proposals paused: {}".format(llm_unavailable_reason),
                 {
                     "codex_available": codex_avail,
                     "codex_reason": codex_reason if not codex_avail else codex_budget_reason,
@@ -1448,7 +1549,9 @@ This PR reverts commit {merge_sha[:12]} which broke main CI.
                     continue
                 
                 validated = self.validate_action(action, snapshot)
-                
+                if action.action_type == ActionType.MERGE_PR.value and validated.validated:
+                    validated = ValidatedAction(action, False, "Merges handled by deterministic pass")
+
                 self._write_log({
                     "action": "validate_proposal",
                     "proposal": action.to_dict(),

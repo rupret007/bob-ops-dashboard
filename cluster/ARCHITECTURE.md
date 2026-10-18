@@ -184,3 +184,24 @@ PR claims, TTL plus revision fencing allows recovery without deleting a successo
 An already accepted remote GitHub request cannot be retracted. Global Codex quota,
 centralized daily counters, Web Bob scheduling and action deduplication remain
 open; this change does not authorize enabling Mini Codex.
+
+### Deterministic merge admission and Karen disk contract
+
+Every conductor tick evaluates the open PR snapshot before optional model calls.
+The default verdict root is `~/.local/share/karen/verdicts`; the flat
+`owner_repo_N_sha12_LATEST.json` marker is required. The newest embedded timestamp
+across LATEST/PASS/FAIL wins, with conflicting equal-time failures blocking merge.
+The authenticated signed receiver atomically writes LATEST after validation and
+replay rejection; previously only outcome files were synced to NucBox.
+Artifacts must match owner, repository, PR and full SHA. Two distinct reviewers
+must agree on PASS; a GitHub review from the repository owner is unnecessary.
+Malformed markers, partial/error reviews and legacy verdicts cannot authorize a
+merge. Legacy reads remain available for diagnostics. Drafts, missing/red CI,
+non-CLEAN mergeability and never-touch repositories fail closed.
+
+Live attempts retain the shared PR claim, under-claim revalidation, rate limits,
+SHA-pinned squash merge and initial main-CI/revert handling. The Mini plist now
+contains a real `--live` argument; the self-update installer reloads and kickstarts
+the conductor. Shared coordination provisioning is still required on both hosts.
+Durable shared merge receipts/counters and complete delayed main-CI reconciliation
+remain open architecture work; an initial pending CI result is not verified green.

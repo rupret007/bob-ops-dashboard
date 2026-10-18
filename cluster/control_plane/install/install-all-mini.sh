@@ -225,6 +225,7 @@ install_conductor() {
         launchctl unload "$plist_dst" 2>/dev/null || true
     fi
     launchctl load "$plist_dst"
+    launchctl kickstart -k "gui/$(id -u)/com.storypool.conductor"
 
     log_info "Conductor installed (hourly)"
     log_info "PATH: $LAUNCHD_PATH"

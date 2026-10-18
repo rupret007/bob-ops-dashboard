@@ -426,9 +426,10 @@ class TestConductorValidation(unittest.TestCase):
     @patch("cluster.control_plane.conductor._read_verdict")
     def test_validate_merge_accepts_valid(self, mock_read_verdict, mock_get_details):
         """Merge is accepted when all conditions met."""
-        mock_read_verdict.return_value = {"verdict": "KARENPASS", "sha": "abc123"}
+        mock_read_verdict.return_value = {"verdict": "KARENPASS", "sha": "a" * 40, "_latest": True, "review_results": [{"reviewer": "codex", "verdict": "PASS"}, {"reviewer": "gemini", "verdict": "PASS"}]}
         mock_get_details.return_value = {
-            "headRefOid": "abc123",
+            "headRefOid": "a" * 40,
+            "isDraft": False, "state": "OPEN", "mergeStateStatus": "CLEAN",
             "statusCheckRollup": [{"name": "build", "conclusion": "SUCCESS"}],
             "reviews": [{"state": "APPROVED"}],
         }
@@ -437,7 +438,7 @@ class TestConductorValidation(unittest.TestCase):
             action_type=ActionType.MERGE_PR.value,
             repo="owner/repo",
             pr_number=123,
-            head_sha="abc123",
+            head_sha="a" * 40,
         )
         
         result = self.conductor.validate_action(action, self.snapshot)

@@ -145,7 +145,7 @@ def _run_gh(args: list[str], default=None):
 def _get_open_prs(repo: str) -> list[dict]:
     """Get open PRs for a repository."""
     prs = _run_gh(
-        ["pr", "list", "--repo", repo, "--state", "open", "--json",
+        ["pr", "list", "--repo", repo, "--state", "open", "--limit", "1000", "--json",
          "number,title,author,headRefOid,isDraft,url,reviewDecision,statusCheckRollup,labels"],
         default=[]
     )

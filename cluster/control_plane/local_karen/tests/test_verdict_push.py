@@ -79,3 +79,27 @@ def test_replay_cannot_replace_newer_decision(tmp_path,keys):
     old,sig=signed(keys)
     with pytest.raises(ValueError,match='older'):
         delivery.receive(old,sig,folder,keys[1],now=1100)
+
+
+def test_authenticated_delivery_preserves_latest_for_conductor(tmp_path, keys):
+    from cluster.control_plane.conductor import _read_flat_verdict, _is_approved
+    folder = tmp_path/'verdicts'
+    v = verdict()
+    body, signature = signed(keys, v)
+    delivery.receive(body, signature, folder, keys[1], now=1000)
+    assert _read_flat_verdict(folder, 'owner/repo', 1, 'a'*40)['verdict'] == 'KARENFAIL'
+    v.passed = True
+    v.timestamp = datetime.fromtimestamp(1100, timezone.utc).isoformat()
+    v.review_results[0]['verdict'] = 'PASS'
+    v.review_results.append(dict(v.review_results[0], reviewer='minimax'))
+    body, signature = signed(keys, v, issued=1100)
+    delivery.receive(body, signature, folder, keys[1], now=1100)
+    latest = folder / ('owner_repo_1_' + 'a'*12 + '_LATEST.json')
+    assert json.loads(latest.read_text())['passed'] is True
+    normalized = _read_flat_verdict(folder, 'owner/repo', 1, 'a'*40)
+    assert normalized['verdict'] == 'KARENPASS'
+    assert _is_approved({'headRefOid': 'a'*40, 'reviews': []}, normalized)
+    old_body, old_sig = signed(keys)
+    with pytest.raises(ValueError, match='older'):
+        delivery.receive(old_body, old_sig, folder, keys[1], now=1100)
+    assert latest.read_text() == v.to_json()

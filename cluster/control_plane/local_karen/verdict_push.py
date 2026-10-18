@@ -106,6 +106,13 @@ def receive(body, signature, verdict_dir=None, public_key=PUBLIC_KEY, now=None):
             for path in siblings:
                 if path != dest and path.exists():
                     path.unlink()
+            # Preserve the authoritative marker on the receiving node too.
+            # Only authenticated, validated and non-replayed decisions reach it.
+            latest = directory / (prefix + '_LATEST.json')
+            fd, temp = tempfile.mkstemp(dir=str(directory), prefix='.latest-')
+            with os.fdopen(fd, 'w') as stream:
+                stream.write(content)
+            os.replace(temp, str(latest))
             accepted.append({'repo': verdict.owner + '/' + verdict.repo,
                              'pr': verdict.pr_number, 'sha': verdict.head_sha,
                              'passed': verdict.passed})
