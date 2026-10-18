@@ -16,6 +16,9 @@ logger = logging.getLogger(__name__)
 
 NEVER_TOUCH_REPOS = frozenset([
     "rupret007/rad-dad-show-night",
+    "rupret007/hang-out",
+    "rupret007/Hang-Out",
+    "rupret007/HangOut",
 ])
 
 DEFAULT_REVIEWER_ORDER = ["codex", "gemini", "minimax"]

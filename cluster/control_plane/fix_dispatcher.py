@@ -41,7 +41,7 @@ FIX_STATE_DIR = Path(
 ).expanduser()
 
 MAX_FIX_ATTEMPTS = 2
-MAX_FIX_JOBS_PER_HOUR = 3
+MAX_FIX_JOBS_PER_HOUR = 6
 HIGH_EFFORT_TIERS = frozenset(["high", "security", "critical"])
 CODEX_HOST_NUCBOX = os.environ.get("CODEX_HOST", "nuc")
 

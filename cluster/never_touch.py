@@ -15,11 +15,17 @@ from typing import Optional
 
 NEVER_TOUCH_REPOS: frozenset[str] = frozenset({
     "rupret007/rad-dad-show-night",
+    "rupret007/hang-out",
+    "rupret007/Hang-Out",
+    "rupret007/HangOut",
 })
 
 CONDUCTOR_NEVER_MERGE_REPOS: frozenset[str] = frozenset({
     "rupret007/rad-dad-show-night",
     "rupret007/bob-ops-dashboard",
+    "rupret007/hang-out",
+    "rupret007/Hang-Out",
+    "rupret007/HangOut",
 })
 
 _REPO_RE = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
