@@ -158,6 +158,7 @@ enable_live_mode() {
     
     local dispatch_plist="$HOME/Library/LaunchAgents/com.storypool.dispatch.plist"
     local conductor_plist="$HOME/Library/LaunchAgents/com.storypool.conductor.plist"
+    local live_marker="$HOME/.config/storypool/live"
     
     launchctl unload "$dispatch_plist" 2>/dev/null || true
     launchctl unload "$conductor_plist" 2>/dev/null || true
@@ -177,6 +178,11 @@ enable_live_mode() {
     
     launchctl load "$dispatch_plist"
     launchctl load "$conductor_plist"
+    
+    # Persist live marker so install/self-update won't strip --live
+    mkdir -p "$(dirname "$live_marker")"
+    date -Iseconds > "$live_marker"
+    log_info "Created live marker: $live_marker"
     
     log_pass "Dispatcher and Conductor now in LIVE mode"
 }

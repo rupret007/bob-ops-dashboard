@@ -40,6 +40,8 @@ Go-live: go-live-mini.sh (enables RunAtLoad)
         <string>__REPO_PATH__</string>
         <key>STORYPOOL_MACHINE</key>
         <string>mini</string>
+        <key>STORYPOOL_LIVE</key>
+        <string>1</string>
     </dict>
 
     <key>StandardOutPath</key>

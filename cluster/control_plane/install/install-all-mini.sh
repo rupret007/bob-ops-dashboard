@@ -151,6 +151,7 @@ install_dispatcher() {
     log_header "Installing Lane Dispatcher"
 
     local log_dir="$HOME/.local/share/storypool/dispatch"
+    local live_marker="$HOME/.config/storypool/live"
     mkdir -p "$log_dir"
 
     local plist_src="$SCRIPT_DIR/com.storypool.dispatch.plist"
@@ -168,6 +169,14 @@ install_dispatcher() {
         -e "s|__PATH__|$LAUNCHD_PATH|g" \
         "$plist_src" > "$plist_dst"
 
+    # Preserve --live if go-live was previously run
+    if [[ -f "$live_marker" ]]; then
+        if ! grep -q '<string>--live</string>' "$plist_dst"; then
+            sed -i '' 's|</array>|<string>--live</string>\n</array>|' "$plist_dst"
+        fi
+        log_info "Preserved --live mode (marker exists)"
+    fi
+
     clear_pycache "$REPO_ROOT/cluster"
 
     if launchctl list com.storypool.dispatch &>/dev/null; then
@@ -175,7 +184,7 @@ install_dispatcher() {
     fi
     launchctl load "$plist_dst"
 
-    log_info "Dispatcher installed (15 min interval, shadow mode)"
+    log_info "Dispatcher installed (15 min interval)"
     log_info "PATH: $LAUNCHD_PATH"
 }
 
@@ -183,6 +192,7 @@ install_conductor() {
     log_header "Installing LLM Conductor"
 
     local log_dir="$HOME/.local/share/storypool/conductor"
+    local live_marker="$HOME/.config/storypool/live"
     mkdir -p "$log_dir"
     mkdir -p "$HOME/.local/share/storypool/verdicts"
 
@@ -201,6 +211,14 @@ install_conductor() {
         -e "s|__PATH__|$LAUNCHD_PATH|g" \
         "$plist_src" > "$plist_dst"
 
+    # Preserve --live if go-live was previously run
+    if [[ -f "$live_marker" ]]; then
+        if ! grep -q '<string>--live</string>' "$plist_dst"; then
+            sed -i '' 's|</array>|<string>--live</string>\n</array>|' "$plist_dst"
+        fi
+        log_info "Preserved --live mode (marker exists)"
+    fi
+
     clear_pycache "$REPO_ROOT/cluster"
 
     if launchctl list com.storypool.conductor &>/dev/null; then
@@ -208,7 +226,7 @@ install_conductor() {
     fi
     launchctl load "$plist_dst"
 
-    log_info "Conductor installed (hourly, shadow mode)"
+    log_info "Conductor installed (hourly)"
     log_info "PATH: $LAUNCHD_PATH"
 }
 
