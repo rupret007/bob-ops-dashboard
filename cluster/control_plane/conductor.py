@@ -788,8 +788,75 @@ class Conductor:
         except (subprocess.SubprocessError, json.JSONDecodeError):
             return True, "unknown"
     
-    def _record_ci_result(self, repo: str, passed: bool) -> None:
-        """Record CI result after merge, auto-pause if consecutive failures."""
+    def _create_revert_pr(self, repo: str, merge_sha: str, pr_number: int) -> Optional[str]:
+        """Create a revert PR for a failed merge.
+        
+        Returns the revert PR URL if created, None if failed.
+        NEVER force-pushes - only creates a revert commit as a new PR.
+        """
+        try:
+            result = subprocess.run(
+                ["gh", "api", f"/repos/{repo}/git/commits/{merge_sha}"],
+                capture_output=True, text=True, timeout=30,
+            )
+            if result.returncode != 0:
+                self._write_log({"action": "revert_failed", "reason": "could not fetch merge commit"})
+                return None
+            
+            commit_data = json.loads(result.stdout)
+            commit_message = commit_data.get("message", "")
+            
+            revert_branch = f"revert-{merge_sha[:8]}"
+            revert_title = f"Revert: {commit_message.split(chr(10))[0][:60]}"
+            revert_body = f"""## Auto-generated revert PR
+
+This PR reverts commit {merge_sha[:12]} which broke main CI.
+
+**Original PR:** #{pr_number}
+**Original commit message:**
+```
+{commit_message[:500]}
+```
+
+**Reason:** Main CI failed after merge - auto-pause triggered.
+
+---
+*This revert PR requires Karen gate review before merge.*
+"""
+            
+            create_result = subprocess.run(
+                ["gh", "pr", "create", "--repo", repo,
+                 "--title", revert_title,
+                 "--body", revert_body,
+                 "--head", revert_branch,
+                 "--base", "main",
+                 "--label", "needs-karen"],
+                capture_output=True, text=True, timeout=60,
+                input=f"git revert {merge_sha} --no-edit && git push origin HEAD:{revert_branch}\n",
+            )
+            
+            subprocess.run(
+                ["gh", "api", "--method", "POST",
+                 f"/repos/{repo}/git/refs",
+                 "-f", f"ref=refs/heads/{revert_branch}",
+                 "-f", f"sha={merge_sha}~1"],
+                capture_output=True, text=True, timeout=30,
+            )
+            
+            self._write_log({
+                "action": "revert_pr_created",
+                "repo": repo,
+                "merge_sha": merge_sha[:12],
+                "revert_branch": revert_branch,
+            })
+            
+            return create_result.stdout.strip() if create_result.returncode == 0 else None
+        except (subprocess.SubprocessError, json.JSONDecodeError) as e:
+            self._write_log({"action": "revert_failed", "reason": str(e)[:100]})
+            return None
+    
+    def _record_ci_result(self, repo: str, passed: bool, merge_sha: str = "", pr_number: int = 0) -> None:
+        """Record CI result after merge, auto-pause and create revert PR if failures."""
         state = self._load_merge_state()
         
         if passed:
@@ -801,10 +868,26 @@ class Conductor:
                 state["paused"] = True
                 state["pause_reason"] = "Auto-paused: {} consecutive merges broke main CI".format(
                     state["consecutive_ci_failures"])
+                
+                revert_url = None
+                if merge_sha and pr_number:
+                    revert_url = self._create_revert_pr(repo, merge_sha, pr_number)
+                
                 self._write_alert(state["pause_reason"], {
                     "repo": repo,
                     "consecutive_failures": state["consecutive_ci_failures"],
+                    "revert_pr": revert_url,
                 }, escalate=True)
+                
+                if revert_url:
+                    self._escalate_to_jeff(
+                        f"Main CI broken - revert PR created: {revert_url}",
+                        {
+                            "repo": repo,
+                            "action_needed": "Review and merge revert PR, or fix forward",
+                            "revert_pr": revert_url,
+                        }
+                    )
         
         self._save_merge_state(state)
     
@@ -1012,7 +1095,11 @@ class Conductor:
                 
                 time.sleep(10)
                 ci_ok, ci_status = self._check_main_ci_after_merge(action.repo)
-                self._record_ci_result(action.repo, ci_ok)
+                self._record_ci_result(
+                    action.repo, ci_ok,
+                    merge_sha=action.head_sha,
+                    pr_number=action.pr_number,
+                )
                 if not ci_ok:
                     validated.execution_result = "merged (CI: {})".format(ci_status)
                 
