@@ -188,6 +188,15 @@ install_conductor() {
         "$service_src" > "$SYSTEMD_DIR/storypool-conductor.service"
     cp "$timer_src" "$SYSTEMD_DIR/storypool-conductor.timer"
 
+    # Create drop-in for PATH to include ~/bin where codex lives
+    local dropin_dir="$SYSTEMD_DIR/storypool-conductor.service.d"
+    mkdir -p "$dropin_dir"
+    cat > "$dropin_dir/path.conf" << EOF
+[Service]
+Environment="PATH=$HOME/bin:$HOME/.local/bin:/usr/local/bin:/usr/bin:/bin"
+EOF
+    log_info "Created PATH drop-in for conductor (includes ~/bin for codex)"
+
     # Preserve --live if go-live was previously run
     if [[ -f "$live_marker" ]]; then
         sed -i '/^ExecStart=/{/--live/!s/$/ --live/}' "$SYSTEMD_DIR/storypool-conductor.service"
