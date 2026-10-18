@@ -106,7 +106,8 @@ Mini Codex remains disabled until every work entry point and quota is covered.
 | Pause/cancel/requeue/actions | Operator | Cluster idempotency key + target | GAP: controls need shared claims and durable action IDs, not only local audit. |
 | Metrics/scorecard | Event reducer | Cluster unique event/job/verdict IDs | GAP: aggregate observations can double count; canonical deduplicated events needed. |
 | Digests/NEEDS_JEFF | Conductor/monitor | Cluster date/alert fingerprint | GAP: local append can duplicate alerts; daily leader claim + deduplication needed. |
-| Ops doctor/Web Bob/website | Scheduler | Cluster task/branch | GAP: independent entry points must use claims before launching Codex. Web Bob remains draft-only. |
+| Ops doctor | Shared task claim; local supervisor | Cluster repository/repair branch | Implemented: stable task key excludes machine and head, exact base SHA pinned, heartbeat and command fences through draft PR publication. Contention/outage does not consume a paid attempt. Local daily counters and shared provider quota still need migration. |
+| Web Bob/website | Scheduler | Cluster task/branch | GAP: independent entry points must use claims before launching Codex. Web Bob remains draft-only. |
 
 ### Claims deployment and failure handling
 
@@ -161,3 +162,25 @@ This change intentionally extends the existing configuration requirement to
 Karen and conductor merges: both pause new work until the shared account and KV
 identity described above exist on both nodes. It does not enable Mini Codex or
 assert that the remaining global-state migrations are complete.
+
+### Ops doctor admission
+
+The hourly doctor may run local smoke/health checks independently. A paid repair
+first resolves the full remote base SHA, then atomically claims
+`task.<hash(repository#ops-doctor:branch)>` in the same shared bucket. Both nodes
+therefore contend even when they observed different base heads. The claim stores
+the real task name and full SHA; no invented PR number is used. The winning node
+reserves its local daily attempt only after acquiring and renewing the claim.
+Busy/missing/unreachable coordination defers normally, without a failed-service
+state, paid attempt, or repeated Jeff escalation.
+
+The worker checks out the pinned base and holds/renews ownership through Codex,
+tests, secret scanning, commit, branch push and draft PR publication. Every command
+uses the existing supervised process-group runner and checks the lease before and
+after execution. Ownership loss stops a running command and fences subsequent
+publication. Raw provider/test output is not appended to doctor diagnostics;
+shared structured logs retain safe failing test names and command timing. As with
+PR claims, TTL plus revision fencing allows recovery without deleting a successor.
+An already accepted remote GitHub request cannot be retracted. Global Codex quota,
+centralized daily counters, Web Bob scheduling and action deduplication remain
+open; this change does not authorize enabling Mini Codex.

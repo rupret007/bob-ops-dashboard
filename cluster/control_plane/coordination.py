@@ -90,7 +90,10 @@ class ClaimClient:
                 raise CoordinationError('Coordination bucket TTL mismatch; new work paused')
             if bootstrap:
                 return None
-            value = json.dumps({k: claim[k] for k in ('owner', 'repo', 'pr', 'sha', 'machine')}).encode()
+            fields = {k: claim[k] for k in ('owner', 'repo', 'pr', 'sha', 'machine')}
+            if 'task' in claim:
+                fields['task'] = claim['task']
+            value = json.dumps(fields).encode()
             if operation == 'acquire':
                 revision = await kv.create(claim['key'], value)
             elif operation == 'renew':
@@ -103,7 +106,7 @@ class ClaimClient:
             return {**claim, 'revision': revision}
         except KeyWrongLastSequenceError:
             error = ClaimBusy if operation == 'acquire' else ClaimLost
-            raise error('PR already claimed' if operation == 'acquire' else 'Cluster claim lost') from None
+            raise error('Work already claimed' if operation == 'acquire' else 'Cluster claim lost') from None
         except APIError as exc:
             if exc.err_code == 10071:
                 raise ClaimLost('Cluster claim lost') from None
@@ -131,6 +134,18 @@ class ClaimClient:
         key = 'pr.' + hashlib.sha256(f'{repo.lower()}#{pr}'.encode()).hexdigest()
         return self.call('acquire', {'key': key, 'owner': uuid.uuid4().hex,
             'repo': repo, 'pr': pr, 'sha': sha, 'machine': machine})
+
+    def acquire_task(self, repo, task, sha, machine):
+        """Claim non-PR work by stable task identity, independent of head/node."""
+        from cluster.never_touch import is_never_touch
+        if is_never_touch(repo) or not re.fullmatch(r'[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+', repo):
+            raise CoordinationError('Repository is not eligible for work')
+        if (not isinstance(task, str) or not re.fullmatch(r'[A-Za-z0-9_./:-]{1,200}', task)
+                or not isinstance(sha, str) or not re.fullmatch(r'[0-9a-f]{40}', sha)):
+            raise CoordinationError('Task claim requires a stable name and full head SHA')
+        key = 'task.' + hashlib.sha256(f'{repo.lower()}#{task}'.encode()).hexdigest()
+        return self.call('acquire', {'key': key, 'owner': uuid.uuid4().hex,
+            'repo': repo, 'pr': None, 'task': task, 'sha': sha, 'machine': machine})
 
 
 class Lease:
