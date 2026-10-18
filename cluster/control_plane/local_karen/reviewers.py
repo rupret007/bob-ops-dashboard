@@ -886,6 +886,11 @@ class MiniMaxReviewer(BaseReviewer):
     ) -> ReviewResult:
         """Only a complete, structured independent verdict is accepted."""
         try:
+            response = response.strip()
+            if response.startswith("```"):
+                response = response.split("\n", 1)[1] if "\n" in response else ""
+                if response.rstrip().endswith("```"):
+                    response = response.rstrip()[:-3]
             data = json.loads(response)
             if not isinstance(data, dict):
                 raise ValueError("review must be an object")
@@ -901,8 +906,23 @@ class MiniMaxReviewer(BaseReviewer):
                    any(not isinstance(item, str) or not item.strip() for item in findings[name])
                    for name in fields):
                 raise ValueError("invalid findings")
-            if data["verdict"] == "PASS" and any(findings[name] for name in fields if name != "risk_notes"):
-                raise ValueError("PASS contradicts reported issues")
+            blocking = [name for name in ("security_issues", "functional_issues") if findings.get(name)]
+            if data["verdict"] == "PASS" and blocking:
+                # A PASS that reports security/functional issues is not trusted:
+                # fail closed as BORDERLINE with a reason the fix loop can act on,
+                # instead of an ERROR that retries forever.
+                result = ReviewResult(
+                    reviewer=self.name, verdict=ReviewVerdict.BORDERLINE,
+                    reason="MiniMax PASS listed blocking issues ({}): {}".format(
+                        ", ".join(blocking),
+                        "; ".join(findings[blocking[0]])[:300]),
+                    tier=primary.tier, key_source=key_source,
+                    findings=ReviewFindings(**{n: list(findings.get(n, [])) for n in fields}),
+                )
+                result.duration_sec = duration
+                return result
+            # Non-blocking quality/test notes may accompany a PASS, the same as
+            # the primary reviewers' "PASS with findings".
             result = self._parse_structured_verdict(response, pr, primary.tier, key_source)
         except (TypeError, ValueError, AttributeError) as e:
             logger.warning("MiniMax review rejected as malformed: %s", str(e)[:120])
