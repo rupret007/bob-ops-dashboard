@@ -13,7 +13,7 @@ def _disp(machine):
     return x
 
 
-def test_mini_gets_exactly_one_codex_lane():
+def _disabled_mini_lane():
     mini = _disp("mini")
     assert mini.check_provider_allowed("codex", {})[0]
     assert not mini.check_provider_allowed("codex", {"codex": 1})[0]
@@ -29,3 +29,7 @@ def test_weekly_cap_still_blocks_mini():
     mini = _disp("mini")
     mini.budget.weekly_pct.return_value = 80.0
     assert not mini.check_provider_allowed("codex", {})[0]
+
+
+def test_mini_codex_lane_off_until_shared_claims_exist():
+    assert not _disp("mini").check_provider_allowed("codex", {})[0]

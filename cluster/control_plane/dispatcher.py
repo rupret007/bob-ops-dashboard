@@ -63,7 +63,7 @@ IMPLEMENTED_PROVIDERS = frozenset({"codex"})
 
 PROVIDER_RULES = {
     "codex": {
-        "machines": ["nucbox", "mini"],
+        "machines": ["nucbox"],  # Mini re-enabled once cross-machine PR claims exist
         "max_concurrent": 2,
         # The Mini also runs Karen; give it one fix lane, still behind its
         # load/swap/disk guards.
