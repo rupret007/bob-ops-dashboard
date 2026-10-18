@@ -1,4 +1,6 @@
 import copy
+import concurrent.futures
+import threading
 import unittest
 from unittest.mock import patch
 
@@ -10,8 +12,13 @@ class MemoryInbox:
     def __init__(self):
         self.rows = {}
         self.available = True
+        self.lock = threading.RLock()
 
     def call(self, operation, key=None, value=None, revision=None):
+        with self.lock:
+            return self._call(operation, key, value, revision)
+
+    def _call(self, operation, key, value, revision):
         if not self.available:
             raise CoordinationError('unavailable')
         if operation == 'create':
@@ -98,4 +105,57 @@ class OwnerInboxTests(unittest.TestCase):
                 'cluster.control_plane.owner_task_scheduler.time.time', return_value=1000):
             self.assertEqual(consume_pending(runtime, inbox=self.inbox, client=Mock(), machine='nucbox'), 1)
             self.assertEqual(consume_pending(runtime, inbox=self.inbox, client=Mock(), machine='mini'), 0)
+        runtime.assert_called_once()
+
+
+class OwnerInboxRaceTests(OwnerInboxTests):
+    def test_two_hosts_racing_identical_enqueue_create_exactly_one_row(self):
+        barrier = threading.Barrier(2)
+        def submit(_):
+            barrier.wait()
+            return stage_owner_draft_task(dict(self.request), inbox=self.inbox)
+        with concurrent.futures.ThreadPoolExecutor(2) as pool:
+            receipts = list(pool.map(submit, range(2)))
+        self.assertEqual(receipts[0], receipts[1])
+        self.assertEqual(len(self.inbox.rows), 1)
+        self.assertEqual(next(iter(self.inbox.rows.values()))[1], 1)
+
+    def test_conflicting_racing_enqueue_only_one_request_wins(self):
+        barrier = threading.Barrier(2)
+        def submit(description):
+            barrier.wait()
+            try:
+                stage_owner_draft_task(dict(self.request, description=description), inbox=self.inbox)
+                return 'recorded'
+            except CoordinationError:
+                return 'conflict'
+        with concurrent.futures.ThreadPoolExecutor(2) as pool:
+            answers = list(pool.map(submit, ['Task one', 'Task two']))
+        self.assertCountEqual(answers, ['recorded', 'conflict'])
+        self.assertEqual(len(self.inbox.rows), 1)
+
+    def test_create_timeout_after_commit_resolves_from_durable_row(self):
+        original = self.inbox.call
+        def ambiguous(operation, *args):
+            result = original(operation, *args)
+            if operation == 'create':
+                raise CoordinationError('reply lost after commit')
+            return result
+        with patch.object(self.inbox, 'call', side_effect=ambiguous):
+            receipt = stage_owner_draft_task(self.request, inbox=self.inbox)
+        self.assertEqual(receipt['state'], 'awaiting_admission')
+        self.assertEqual(len(self.inbox.rows), 1)
+
+    def test_lease_loss_after_runtime_receipt_cannot_mark_admitted(self):
+        from unittest.mock import Mock, MagicMock
+        stage_owner_draft_task(self.request, inbox=self.inbox)
+        runtime = Mock(return_value=dict(self.request, state='queued', receipt_id='owner-1',
+            codex_weekly_pct=20, admitted_at=1000, checks={k: True for k in CHECKS}))
+        task_lease, branch_lease = MagicMock(), MagicMock()
+        branch_lease.__enter__.return_value.renew.side_effect = CoordinationError('lease lost')
+        with patch('cluster.control_plane.owner_task_scheduler.Lease', side_effect=[task_lease, branch_lease]), patch(
+                'cluster.control_plane.owner_task_scheduler.time.time', return_value=1000):
+            with self.assertRaises(CoordinationError):
+                consume_pending(runtime, inbox=self.inbox, client=Mock(), machine='nucbox')
+        self.assertEqual(next(iter(self.inbox.rows.values()))[0]['state'], 'awaiting_admission')
         runtime.assert_called_once()
