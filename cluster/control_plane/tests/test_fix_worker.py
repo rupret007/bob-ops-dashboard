@@ -34,7 +34,7 @@ def test_fix_runs_tests_before_commit_push_and_label(tmp_path):
     assert calls[-1][-2:] == ['--add-label', 'needs-karen']
     codex_calls = [c for c in calls if c[0] == str(tmp_path / 'codex')]
     assert codex_calls == [[str(tmp_path / 'codex'), 'exec', '-s', 'workspace-write',
-                            '-c', 'model_reasoning_effort=low',
+                            '-c', 'model_reasoning_effort=xhigh',
                             '-c', 'sandbox_workspace_write.network_access=true', '-']]
     assert all('--full-auto' not in c for c in codex_calls)
     assert len(codex_inputs) == 1 and 'repair finding' in codex_inputs[0]
@@ -77,5 +77,5 @@ def test_codex_model_label_matches_argv(monkeypatch):
     from cluster.control_plane import fix_worker
     monkeypatch.setenv('STORYPOOL_CODEX_MODEL', 'gpt-5-codex')
     args = fix_worker.codex_args()
-    assert args[:3] == ['exec', '-m', 'gpt-5-codex'] and 'model_reasoning_effort=low' in args
-    assert fix_worker.model_label() == 'gpt-5-codex low'
+    assert args[:3] == ['exec', '-m', 'gpt-5-codex'] and 'model_reasoning_effort=xhigh' in args
+    assert fix_worker.model_label() == 'gpt-5-codex xhigh'

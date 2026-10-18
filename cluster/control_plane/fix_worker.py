@@ -16,7 +16,7 @@ from .local_karen.config import KarenConfig
 from .local_karen.verdict import load_verdict
 
 
-CODEX_EFFORT = 'low'
+CODEX_EFFORT = 'xhigh'
 
 
 def codex_model():

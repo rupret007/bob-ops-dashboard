@@ -26,7 +26,7 @@ def test_doctor_uses_supported_codex_argv_and_stdin(tmp_path):
 
     argv = execute.call_args.args[0]
     assert argv == [str(codex), 'exec', '-s', 'workspace-write',
-                    '-c', 'model_reasoning_effort=low',
+                    '-c', 'model_reasoning_effort=xhigh',
                     '-c', 'sandbox_workspace_write.network_access=true', '-']
     assert '--full-auto' not in argv
     assert 'Conductor freshness check failed' in execute.call_args.kwargs['input']

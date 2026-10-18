@@ -778,6 +778,14 @@ def main() -> int:
         collector=collector,
     )
     
+    # Mini only in practice: binds the Tailscale address when this host owns it,
+    # so the NucBox dispatcher can pull trusted local Karen verdicts.
+    try:
+        from ..local_karen.verdict_sync import start_share_thread
+        start_share_thread()
+    except Exception as exc:  # never let sharing break the dashboard
+        print(f"verdict share unavailable: {exc}")
+
     server.start()
     return 0
 

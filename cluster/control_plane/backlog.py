@@ -473,6 +473,27 @@ def undraft_green_prs(repos=None, dry_run=True, max_undrafts=None):
     return undrafted
 
 
+def _local_verdict_dir():
+    # type: () -> Optional[Path]
+    try:
+        from .local_karen.config import KarenConfig
+        path = KarenConfig.load().get_verdict_dir()
+    except Exception:
+        return None
+    return path if path.is_dir() else None
+
+
+def _has_verdict_for_head(verdict_dir, repo, pr):
+    # type: (Path, str, Dict) -> bool
+    sha = pr.get("headRefOid", "") or ""
+    if len(sha) < 12 or "/" not in repo:
+        return True  # cannot tell; keep the label decision
+    owner, name = repo.split("/", 1)
+    base = "{}_{}_{}_{}".format(owner, name, pr.get("number"), sha[:12])
+    return any((verdict_dir / "{}_{}.json".format(base, kind)).is_file()
+               for kind in ("KARENPASS", "KARENFAIL"))
+
+
 def label_queued_prs(repos=None, dry_run=True):
     # type: (Optional[List[str]], bool) -> List[Dict]
     """Label all queued PRs with needs-karen.
@@ -485,12 +506,18 @@ def label_queued_prs(repos=None, dry_run=True):
     
     labeled = []  # type: List[Dict]
     labels_ensured = set()  # type: set
+    verdict_dir = _local_verdict_dir()
     
     for repo in repos:
         prs = get_open_prs(repo)
         
         for pr in prs:
             state = get_pr_state(pr)
+            if state in ("passed", "failed") and verdict_dir is not None \
+                    and not _has_verdict_for_head(verdict_dir, repo, pr):
+                # A karen-pass/karen-fail label from an older commit must not
+                # stand in for a verdict at the current head: re-gate it.
+                state = "queued"
             if state != "queued":
                 continue
             

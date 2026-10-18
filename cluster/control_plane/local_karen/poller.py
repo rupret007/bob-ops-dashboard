@@ -519,6 +519,8 @@ def main() -> int:
         for r in results:
             if "error" in r:
                 print("X {repo}#{pr}: {error}".format(**r))
+            elif r.get("skipped"):
+                print("SKIP {repo}#{pr}: {reason}".format(**r))
             elif r.get("passed"):
                 print("PASS {repo}#{pr}@{sha}: {reason}".format(
                     **{**r, "reason": str(r.get("reason", ""))[:50]}))
