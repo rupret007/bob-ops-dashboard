@@ -48,6 +48,41 @@ def rows(path):
             continue
 
 
+def review_state(value):
+    """Normalize display state only; this is never a trusted merge verdict."""
+    if value.get('status', 'COMPLETE') != 'COMPLETE':
+        return 'ERROR'
+    passed = value.get('passed')
+    if passed is True or passed == 'True':
+        return 'PASS'
+    if passed is False or passed == 'False':
+        return 'FAIL'
+    return 'ERROR'
+
+
+def observed_reviews(directory):
+    """Count a synced LATEST copy and its result as one review attempt.
+
+    Different full heads and retry timestamps remain distinct. The collector
+    does not authenticate artifacts or grant merge approval.
+    """
+    unique = {}
+    rank = {'PASS': 0, 'ERROR': 1, 'FAIL': 2}
+    for path in list(directory.rglob('*.json'))[:2000]:
+        if path.is_symlink():
+            continue
+        value = read_json(path)
+        if not isinstance(value, dict) or not stamp(value.get('timestamp')):
+            continue
+        identity = (str(value.get('owner', '')), str(value.get('repo', '')),
+                    str(value.get('pr_number', value.get('pr', ''))),
+                    str(value.get('head_sha', value.get('sha', ''))), value['timestamp'])
+        previous = unique.get(identity)
+        if previous is None or rank[review_state(value)] > rank[review_state(previous)]:
+            unique[identity] = value
+    return list(unique.values())
+
+
 LLM_SERVICES = ('codex', 'claude', 'gemini', 'minimax', 'cursor', 'grok')
 PEER_FRESH_SEC = 900
 
@@ -149,21 +184,14 @@ class EngineCollector:
         completed = [j for j in latest if j.get('state') == 'done' and j.get('outcome_verified')]
         jobs_hour = sum(stamp(j.get('end_time')) >= hour for j in completed)
         running = sum(j.get('state') == 'running' and stamp(j.get('lease_expires')) > now.timestamp() for j in latest)
-        verdicts = []
         verdict_dir = self.karen_dir / 'verdicts'
         if not verdict_dir.is_dir():
             verdict_dir = self.data_dir / 'verdicts'
-        # Read real verdict files; LATEST symlinks must not double-count reviews.
-        for path in list(verdict_dir.rglob('*.json'))[:2000]:
-            if path.is_symlink():
-                continue
-            value = read_json(path)
-            if not isinstance(value, dict):
-                continue
-            verdicts.append(value)
+        verdicts = observed_reviews(verdict_dir)
+        for value in verdicts:
             events.append({'timestamp': value.get('timestamp', ''), 'text': 'Karen {} #{}: {}'.format(
-                value.get('repo', ''), value.get('pr', value.get('pr_number', '')), 'PASS' if value.get('passed') else 'FAIL')})
-        recent = [v for v in verdicts if stamp(v.get('timestamp')) >= hour]
+                value.get('repo', ''), value.get('pr', value.get('pr_number', '')), review_state(value))})
+        recent = [v for v in verdicts if stamp(v.get('timestamp')) >= hour and review_state(v) != 'ERROR']
         attempts = [j for j in latest if j.get('state') in ('done', 'failed', 'expired') and stamp(j.get('end_time')) >= hour]
         merge_state = read_json(self.data_dir / 'conductor' / 'merge-state.json')
         merge_rows = merge_state.get('merges', []) if isinstance(merge_state, dict) else []
@@ -223,7 +251,7 @@ class EngineCollector:
         return {'timestamp': now.isoformat(), 'engine': overall, 'machines': health,
                 'gauges': [gauge('Active lanes', running, capacity), gauge('Verified jobs / hour', jobs_hour),
                            gauge('Karen reviews / hour', len(recent)),
-                           gauge('PASS rate · last hour', round(100 * sum(bool(v.get('passed')) for v in recent) / len(recent), 1) if recent else None, 100, '%'),
+                           gauge('PASS rate · last hour', round(100 * sum(review_state(v) == 'PASS' for v in recent) / len(recent), 1) if recent else None, 100, '%'),
                            gauge('Merges today · UTC', merges if merge_state is not None else None, 30),
                            gauge('Fix success · last hour', round(100 * sum(j.get('state') == 'done' and bool(j.get('outcome_verified')) for j in attempts) / len(attempts), 1) if attempts else None, 100, '%'),
                            gauge('Backlog remaining', backlog_count)],
@@ -232,7 +260,7 @@ class EngineCollector:
                 'activity': sorted(events, key=lambda e: stamp(e['timestamp']), reverse=True)[:15],
                 'monitor': monitor[-1] if monitor else 'No monitor status yet',
                 'parity': next(iter(tail(self.data_dir / 'PARITY.md', 32768)), 'Parity audit unavailable'),
-                'notes': 'Local ledger tail (2 MiB); up to 2000 verdict files. Backlog is the last conductor snapshot. Unknown values display —. Rates use a rolling hour; merge day uses UTC (the gate enforces its cap over a rolling 24h).'}
+                'notes': 'Local ledger tail (2 MiB); up to 2000 verdict files, with synced copies counted once. Karen rates describe observed completed reviews; errors are retries, and these counts do not grant merge approval. Backlog is the last conductor snapshot. Unknown values display —. Rates use a rolling hour; merge day uses UTC (the gate enforces its cap over a rolling 24h).'}
 
     def _jobs_and_llm(self, latest, verdicts, have_verdicts, now, capacity):
         """Running jobs per machine plus per-LLM usage, from ledgers and verdicts only."""
