@@ -301,16 +301,27 @@ def _read_recent_errors(log_dir: Path, hours: int = 24) -> list[dict]:
 class CodexClient:
     """Client for Codex CLI (codex exec)."""
     
+    # Common locations to search for codex binary
+    CODEX_SEARCH_PATHS = [
+        Path.home() / "bin" / "codex",
+        Path.home() / ".local" / "bin" / "codex",
+        Path("/usr/local/bin/codex"),
+        Path("/usr/bin/codex"),
+    ]
+    
     def __init__(self, host: str = "nuc", effort: str = "low"):
         self.host = host
         self.effort = effort
         self.last_error = ""
+        self._codex_path = None  # type: Optional[Path]
     
-    def is_available(self) -> tuple:
-        """Check if Codex CLI is available.
+    def _find_codex(self) -> Optional[Path]:
+        """Find codex binary in PATH or common locations."""
+        # First check if already cached
+        if self._codex_path and self._codex_path.is_file():
+            return self._codex_path
         
-        Returns (available, reason).
-        """
+        # Check PATH first
         try:
             result = subprocess.run(
                 ["which", "codex"],
@@ -318,21 +329,64 @@ class CodexClient:
                 text=True,
                 timeout=5,
             )
-            if result.returncode != 0:
-                return False, "codex CLI not found in PATH"
-            return True, "ok"
+            if result.returncode == 0:
+                path = Path(result.stdout.strip())
+                if path.is_file():
+                    self._codex_path = path
+                    return path
         except (subprocess.SubprocessError, FileNotFoundError):
-            return False, "codex CLI not found"
+            pass
+        
+        # Check common locations
+        for path in self.CODEX_SEARCH_PATHS:
+            if path.is_file() and os.access(path, os.X_OK):
+                self._codex_path = path
+                return path
+        
+        return None
+    
+    def is_available(self) -> tuple:
+        """Check if Codex CLI is available.
+        
+        Returns (available, reason).
+        """
+        codex_path = self._find_codex()
+        if codex_path is None:
+            searched = ", ".join(str(p) for p in self.CODEX_SEARCH_PATHS)
+            return False, f"codex CLI not found in PATH or common locations ({searched})"
+        
+        # Verify it's executable
+        try:
+            result = subprocess.run(
+                [str(codex_path), "--version"],
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
+            if result.returncode != 0:
+                return False, f"codex --version failed (exit {result.returncode}): {result.stderr[:100]}"
+            return True, f"ok (found at {codex_path})"
+        except subprocess.TimeoutExpired:
+            return False, f"codex --version timed out"
+        except (subprocess.SubprocessError, FileNotFoundError) as e:
+            return False, f"codex check failed: {e}"
     
     def complete(self, prompt: str, high_effort: bool = False) -> Optional[str]:
-        """Run codex exec with the given prompt."""
+        """Run codex exec with the given prompt via stdin."""
+        codex_path = self._find_codex()
+        if codex_path is None:
+            self.last_error = "codex CLI not found"
+            return None
+        
         effort = "high" if high_effort else self.effort
         env = os.environ.copy()
         env["CODEX_HOST"] = self.host
         
+        # Use -c to set model_reasoning_effort, prompt via stdin
         try:
             result = subprocess.run(
-                ["codex", "exec", "--effort", effort, prompt],
+                [str(codex_path), "exec", "-c", f"model_reasoning_effort={effort}"],
+                input=prompt,
                 capture_output=True,
                 text=True,
                 timeout=300,
@@ -348,7 +402,7 @@ class CodexClient:
             self.last_error = "codex exec timed out after 300s"
             return None
         except FileNotFoundError:
-            self.last_error = "codex CLI not found in PATH"
+            self.last_error = f"codex CLI not found at {codex_path}"
             return None
         except subprocess.SubprocessError as e:
             self.last_error = "codex subprocess error: {}".format(e)
@@ -922,6 +976,8 @@ class Conductor:
         
         validated_actions = []
         
+        llm_unavailable_reason = ""
+        
         if proposals is None:
             codex_avail, codex_reason = self.codex.is_available()
             gemini_avail, gemini_reason = self.gemini.is_available()
@@ -947,9 +1003,9 @@ class Conductor:
             else:
                 reasons.append("Gemini: returned empty response")
             
-            reason_str = "; ".join(reasons)
+            llm_unavailable_reason = "; ".join(reasons)
             self._write_alert(
-                "LLM unavailable - pausing conductor: {}".format(reason_str),
+                "LLM unavailable - pausing conductor: {}".format(llm_unavailable_reason),
                 {
                     "codex_available": codex_avail,
                     "codex_reason": codex_reason if not codex_avail else codex_budget_reason,
@@ -962,7 +1018,7 @@ class Conductor:
             self._write_log({
                 "action": "fail_safe", 
                 "reason": "llm_unavailable",
-                "details": reason_str,
+                "details": llm_unavailable_reason,
             })
         else:
             for action_dict in proposals.get("proposed_actions", []):
@@ -1004,6 +1060,7 @@ class Conductor:
             "timestamp": _now_iso(),
             "live": live,
             "llm_available": proposals is not None,
+            "llm_unavailable_reason": llm_unavailable_reason if proposals is None else "",
             "proposals_count": len(proposals.get("proposed_actions", [])) if proposals else 0,
             "validated_count": sum(1 for va in validated_actions if va.validated),
             "rejected_count": sum(1 for va in validated_actions if not va.validated),
@@ -1068,6 +1125,8 @@ def main() -> int:
         llm_status = "✓" if summary["llm_available"] else "✗ PAUSED"
         print(f"[{mode}] Conductor run at {summary['timestamp']}")
         print(f"  LLM: {llm_status}")
+        if summary.get("llm_unavailable_reason"):
+            print(f"  Reason: {summary['llm_unavailable_reason']}")
         print(f"  Proposals: {summary['proposals_count']} ({summary['validated_count']} validated, {summary['rejected_count']} rejected)")
         print(f"  Executed: {summary['executed_count']}")
         if summary["anomalies"]:
