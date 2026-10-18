@@ -68,3 +68,18 @@ supplied chunk with no silent tail truncation. A failing chunk blocks approval;
 provider errors stay retryable ERROR. The final gate still rechecks the live head
 before persisting any verdict. Cross-file uncertainty must block with BORDERLINE;
 chunked review does not certify access to unchanged repository files.
+
+
+Fix workers now use the shared `service_logging` JSON contract: America/Chicago
+timestamp, service, machine, level, job, repository, exact SHA and correlation ID
+(the ledger job ID). Commands record start, exit code and duration. Failed pytest
+commands emit test node IDs without parameter values or assertion contents.
+Exceptions retain the complete frame chain and exception type, excluding source
+lines, locals and exception strings. Provider output, prompts and diffs are never
+logged. Ledger failures point to the structured log rather than including argv.
+Each supervised worker owns a separate log file to avoid multiprocess rotation
+races; files rotate at 5 MiB with seven backups and expire after seven days.
+`STORYPOOL_LOG_LEVEL` defaults to INFO; DEBUG is available. `STORYPOOL_LOG_DIR`
+overrides the default `STORYPOOL_DATA_DIR/logs`. The worker's existing job log also
+receives the JSON events on stderr. Other services and the dashboard Logs view
+still need migration to this shared contract; this does not claim that coverage.

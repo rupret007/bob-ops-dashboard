@@ -7,9 +7,12 @@ import re
 import subprocess
 import sys
 import tempfile
+import time
+import logging
 from pathlib import Path
 
 from ..never_touch import is_never_touch
+from .service_logging import event, bind_context, reset_context, failing_tests, failure_reason
 from .job_ledger import get_ledger
 from .fix_dispatcher import _find_codex, extract_findings_from_verdict
 from .local_karen.config import KarenConfig
@@ -53,8 +56,27 @@ TEST_OUTPUT_TAIL = 6000
 
 
 def run(args, cwd=None, **kwargs):
-    return subprocess.run(args, cwd=cwd, check=True, text=True,
-                          capture_output=True, timeout=1800, **kwargs).stdout.strip()
+    started = time.monotonic()
+    # Only executable/operation are logged. Arguments may contain credentials,
+    # PR content, URLs, or prompts; stdout/stderr are never persisted wholesale.
+    executable = Path(str(args[0])).name
+    operation = args[1] if len(args) > 1 and re.fullmatch(r'[a-z-]+', args[1]) else ''
+    event('fix-worker', 'command_started', executable=executable, operation=operation)
+    try:
+        result = subprocess.run(args, cwd=cwd, check=True, text=True,
+                                capture_output=True, timeout=1800, **kwargs)
+    except (subprocess.SubprocessError, OSError) as exc:
+        is_pytest = '-m' in args and 'pytest' in args
+        names = failing_tests(getattr(exc, 'stdout', '') or '') if is_pytest else []
+        event('fix-worker', 'command_failed', level=logging.ERROR, exc_info=True,
+              executable=executable, operation=operation, error_type=type(exc).__name__,
+              returncode=getattr(exc, 'returncode', None), failed_tests=names,
+              reason=failure_reason(exc),
+              duration_ms=round((time.monotonic() - started) * 1000))
+        raise
+    event('fix-worker', 'command_finished', executable=executable, operation=operation,
+          duration_ms=round((time.monotonic() - started) * 1000), returncode=result.returncode)
+    return result.stdout.strip()
 
 
 def test_command(tree):
@@ -123,7 +145,8 @@ def fix_pr(repo, pr_number, head_sha, findings):
                 if attempt >= MAX_FIX_ATTEMPTS:
                     raise
                 output = ((exc.stdout or '') + '\n' + (exc.stderr or ''))[-TEST_OUTPUT_TAIL:]
-                print(f'attempt {attempt} tests failed; retrying with test output', flush=True)
+                event('fix-worker', 'tests_retry', attempt=attempt,
+                      max_attempts=MAX_FIX_ATTEMPTS, failed_tests=failing_tests(exc.stdout or ''))
                 attempt_prompt = (prompt + f'\n\nAttempt {attempt} still fails the test command. '
                                   'Fix the code (never weaken or delete tests). Test output tail:\n'
                                   + output)
@@ -169,21 +192,29 @@ def execute(job_id):
     if is_draining(job.machine):
         ledger.fail_job(job_id, "maintenance-before-start; eligible for redispatch")
         return 0
+    context = bind_context(job_id=job_id, correlation_id=job_id, repo=job.repo,
+                           pr_number=job.pr_number, sha=job.head_sha)
+    started = time.monotonic()
     ledger.start_job(job_id, os.getpid(), model=model_label())
+    event('fix-worker', 'job_started', machine=job.machine, provider=job.provider)
     try:
         findings = findings_for_pr(job.repo, job.pr_number, job.head_sha)
         if not findings:
             raise RuntimeError('No Karen findings available for this PR')
         sha = fix_pr(job.repo, job.pr_number, job.head_sha, findings)
         ledger.complete_job(job_id, 'commit_pushed', sha, verified=True)
-        print(f'PUSHED {job_id} {sha}', flush=True)
+        event('fix-worker', 'job_pushed', sha=sha, verified=True,
+              duration_ms=round((time.monotonic() - started) * 1000))
         return 0
     except Exception as exc:
-        # Log command names and errors, never captured CLI output (may contain secrets).
-        message = f'{type(exc).__name__}: {exc}'
+        # Exception strings can contain secrets or provider argv; keep ledger errors bounded.
+        message = failure_reason(exc)
         ledger.fail_job(job_id, message)
-        print(f'FAILED {job_id}: {message}', flush=True)
+        event('fix-worker', 'job_failed', level=logging.ERROR, exc_info=True,
+              error_type=type(exc).__name__, reason=message, duration_ms=round((time.monotonic() - started) * 1000))
         return 1
+    finally:
+        reset_context(context)
 
 
 if __name__ == '__main__':
