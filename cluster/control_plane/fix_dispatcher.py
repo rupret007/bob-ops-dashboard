@@ -224,7 +224,10 @@ def should_attempt_fix(repo: str, pr_number: int, verdict: dict) -> tuple:
 
 def _find_codex() -> Optional[Path]:
     """Find codex binary in PATH or common locations."""
-    # Check PATH first
+    for path in CODEX_SEARCH_PATHS:
+        if path.is_file() and os.access(path, os.X_OK):
+            return path
+    # Check PATH next
     try:
         result = subprocess.run(
             ["which", "codex"],
@@ -290,40 +293,15 @@ def _run_codex_fix(
         searched = ", ".join(str(p) for p in CODEX_SEARCH_PATHS)
         return False, f"codex CLI not found in PATH or {searched}", None
     
-    prompt = f"""Fix the following Karen gate findings for PR #{pr_number}:
-
-{chr(10).join('- ' + f for f in findings)}
-
-Make minimal changes to address each finding. Commit the fix with a clear message.
-Do not change unrelated code. Push to the PR branch when done.
-"""
-    
-    env = os.environ.copy()
-    env["CODEX_HOST"] = CODEX_HOST_NUCBOX
-    
+    from .fix_worker import fix_pr
     try:
-        # Use -c to set model_reasoning_effort, prompt via stdin
-        result = subprocess.run(
-            [str(codex_path), "exec", "-c", "model_reasoning_effort=low"],
-            input=prompt,
-            capture_output=True,
-            text=True,
-            timeout=300,
-            env=env,
-        )
-        
-        if result.returncode == 0:
-            new_sha = _get_pr_head_sha(repo, pr_number)
-            return True, "codex fix completed", new_sha
-        else:
-            return False, f"codex failed: {result.stderr[:200]}", None
-            
-    except subprocess.TimeoutExpired:
-        return False, "codex timed out after 300s", None
-    except FileNotFoundError:
-        return False, f"codex CLI not found at {codex_path}", None
-    except subprocess.SubprocessError as e:
-        return False, f"codex error: {e}", None
+        sha = _get_pr_head_sha(repo, pr_number)
+        if not sha:
+            return False, "could not resolve PR head", None
+        new_sha = fix_pr(repo, pr_number, sha, findings)
+        return True, "codex fix pushed and requeued", new_sha
+    except Exception as exc:
+        return False, f"codex fix failed: {type(exc).__name__}", None
 
 
 def _get_pr_head_sha(repo: str, pr_number: int) -> Optional[str]:

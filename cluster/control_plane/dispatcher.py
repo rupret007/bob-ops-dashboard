@@ -30,11 +30,13 @@ import json
 import os
 import subprocess
 import time
+import sys
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
+from ..never_touch import is_never_touch
 from .budget_tracker import BudgetTracker
 from .guards import MachineGuards
 from .job_ledger import JobLedger, get_ledger, Job, JobState
@@ -55,6 +57,8 @@ REPOS = [
     "rupret007/bob-ops-dashboard",
     "rupret007/Cursor-OpenClaw-Integration",
 ]
+
+IMPLEMENTED_PROVIDERS = frozenset({"codex"})
 
 PROVIDER_RULES = {
     "codex": {
@@ -150,7 +154,9 @@ def _get_active_lanes(machine: str) -> dict[str, int]:
     In production this would read from NATS or a lease file.
     For now returns empty counts (shadow mode).
     """
-    return {p: 0 for p in PROVIDER_RULES}
+    jobs = get_ledger().get_running_jobs()
+    return {p: sum(j.provider == p and j.machine == machine for j in jobs)
+            for p in PROVIDER_RULES}
 
 
 def _has_codex_work_queued() -> bool:
@@ -179,59 +185,23 @@ def _spawn_worker(
     OUTCOME-VERIFIED: The worker must push a commit or post a verdict.
     Returns the PID of the spawned process.
     """
-    jobs_dir = Path("~/.local/share/storypool/jobs").expanduser()
+    from .job_ledger import JOBS_DIR
+    jobs_dir = JOBS_DIR
     jobs_dir.mkdir(parents=True, exist_ok=True)
     
     worker_log = jobs_dir / f"{job_id}.log"
     
-    if provider == "codex":
-        codex_path = None
-        for path in [
-            Path.home() / "bin" / "codex",
-            Path.home() / ".local" / "bin" / "codex",
-            Path("/usr/local/bin/codex"),
-        ]:
-            if path.is_file():
-                codex_path = path
-                break
-        
-        if not codex_path:
-            raise FileNotFoundError("codex CLI not found")
-        
-        prompt = f"""Review and fix PR #{pr_number} in {repo}.
-Current HEAD: {head_sha}
-
-1. Fetch the PR branch
-2. Review the changes
-3. Fix any issues found
-4. Push your fix to the PR branch
-5. Report what you did
-
-Be concise and focused. Only make necessary changes.
-"""
-        
-        env = os.environ.copy()
-        env["CODEX_HOST"] = "nuc" if machine == "nucbox" else "localhost"
-        
-        with open(worker_log, "w") as log_file:
-            process = subprocess.Popen(
-                [str(codex_path), "exec", "-c", "model_reasoning_effort=low"],
-                stdin=subprocess.PIPE,
-                stdout=log_file,
-                stderr=subprocess.STDOUT,
-                env=env,
-                start_new_session=True,
-            )
-            process.stdin.write(prompt.encode())
-            process.stdin.close()
-        
-        return process.pid
-    
-    elif provider == "cursor":
-        raise NotImplementedError("Cursor worker not yet implemented")
-    
-    else:
-        raise ValueError(f"Unknown provider: {provider}")
+    if provider not in IMPLEMENTED_PROVIDERS:
+        raise ValueError(f"Provider has no implemented worker: {provider}")
+    if is_never_touch(repo):
+        raise ValueError("never-touch repository")
+    with open(worker_log, "w") as log_file:
+        process = subprocess.Popen(
+            [sys.executable, "-m", "cluster.control_plane.fix_worker", job_id],
+            stdout=log_file, stderr=subprocess.STDOUT, start_new_session=True,
+            env={**os.environ, "STORYPOOL_JOBS_DIR": str(jobs_dir)},
+        )
+    return process.pid
 
 
 class Dispatcher:
@@ -307,6 +277,9 @@ class Dispatcher:
         if provider == "grok":
             return False, "grok is never used (target ~$0 spend)"
         
+        if provider not in IMPLEMENTED_PROVIDERS:
+            return False, f"{provider} worker not implemented"
+
         if self.machine not in rules["machines"]:
             return False, f"{provider} not allowed on {self.machine}"
         
@@ -392,19 +365,9 @@ class Dispatcher:
         pr: dict, 
         active_lanes: dict[str, int]
     ) -> Optional[str]:
-        """Select the best provider for a PR.
-        
-        Priority order:
-        1. Cursor (primary, fully used)
-        2. Codex (NucBox only, 75% weekly cap)
-        3. Claude (1 lane max)
-        4. MiniMax (1-2 cheap lanes)
-        5. Gemini (for judgment, not coding)
-        
-        Never returns grok.
-        """
-        provider_order = ["cursor", "codex", "claude", "minimax"]
-        
+        """Only select providers with an executable worker implementation."""
+        provider_order = ["codex"]
+
         for provider in provider_order:
             allowed, _ = self.check_provider_allowed(provider, active_lanes)
             if allowed:
@@ -441,6 +404,8 @@ class Dispatcher:
         
         candidates = []
         for repo in REPOS:
+            if is_never_touch(repo):
+                continue
             prs = _get_open_prs(repo)
             for pr in prs:
                 if pr.get("isDraft"):
@@ -512,7 +477,8 @@ class Dispatcher:
                         job_id=job.job_id,
                     )
                     
-                    self.ledger.start_job(job.job_id, pid)
+                    # Worker owns RUNNING and terminal transitions to avoid races.
+                    pass
                     
                 except FileNotFoundError as e:
                     spawn_error = f"worker not found: {e}"

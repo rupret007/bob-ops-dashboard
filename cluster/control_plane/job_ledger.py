@@ -169,7 +169,7 @@ class JobLedger:
             except BlockingIOError:
                 time.sleep(0.1)
         
-        return fn()
+        raise TimeoutError("job ledger lock unavailable")
     
     def has_active_lease(self, repo: str, pr_number: int) -> bool:
         """Check if PR already has an active (non-expired) lease.
@@ -215,7 +215,10 @@ class JobLedger:
         Returns the job if created, or raises if PR already has active lease.
         """
         def _create():
-            if self.has_active_lease(repo, pr_number):
+            if any(j.repo == repo and j.pr_number == pr_number
+                   and j.state in ("queued", "running")
+                   and (j.has_valid_lease() or j.is_process_running())
+                   for j in self._load_jobs()):
                 raise ValueError(f"PR {repo}#{pr_number} already has active lease")
             
             now = _now_iso()

@@ -170,7 +170,7 @@ class TestDispatcher(unittest.TestCase):
         active_lanes = {"claude": 1}
         allowed, reason = self.dispatcher.check_provider_allowed("claude", active_lanes)
         self.assertFalse(allowed)
-        self.assertIn("max concurrent", reason.lower())
+        self.assertIn("not implemented", reason.lower())
 
     def test_priority_score_draft_penalty(self):
         """Draft PRs get lower priority score."""
@@ -228,11 +228,17 @@ class TestDispatcher(unittest.TestCase):
 
         self.assertGreater(score_karen, score_no_label)
 
-    def test_select_provider_prefers_cursor(self):
-        """Provider selection prefers cursor first."""
+    def test_select_provider_never_selects_unimplemented_worker(self):
+        """Mini must wait; NucBox routes fixes only to implemented Codex."""
         pr = {"isDraft": False}
         provider = self.dispatcher.select_provider(pr, {})
-        self.assertEqual(provider, "cursor")
+        self.assertIsNone(provider)
+        self.dispatcher.machine = "nucbox"
+        with patch.object(self.dispatcher.budget, "weekly_pct", return_value=0), patch.object(self.dispatcher.budget, "can_use", return_value=(True, "ok")):
+            self.assertEqual(self.dispatcher.select_provider(pr, {}), "codex")
+            self.assertIsNone(self.dispatcher.select_provider(pr, {"codex": 2}))
+        for provider in ("cursor", "claude", "gemini", "minimax"):
+            self.assertFalse(self.dispatcher.check_provider_allowed(provider, {})[0])
 
     def test_select_provider_falls_back_when_cursor_exhausted(self):
         """Provider selection returns None when no providers available."""
