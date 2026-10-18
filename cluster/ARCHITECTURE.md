@@ -376,3 +376,16 @@ never changes claim, verdict authentication, exact-head approval or merge guards
 Watchdog records redacted `machines/<peer>/sync-status.json` on each successful
 or failed sync, retaining the last health snapshot. Dashboard badges show sync
 failure and its next action separately from the peer's last health evidence.
+
+### CI identity and peer evidence freshness
+
+Main-CI follow-up groups superseding attempts by app, check name and check-suite
+ID. Independent workflows with identical job names retain every red or pending
+result; absent suite identity retains each run. Karen requests workflow identity
+from GitHub and conservatively retains the worst duplicate status. List order is
+never evidence that an unrelated workflow has superseded a failing check.
+
+The dashboard preserves the last reported machine health separately from peer
+contact. A newer failed sync or a peer snapshot older than 15 minutes makes the
+peer badge yellow even when the last watchdog report was green. Fresh snapshots
+clear superseded sync failures. A real red watchdog result remains red.
