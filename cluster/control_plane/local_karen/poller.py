@@ -311,19 +311,25 @@ def run_poll_once(config=None, auto_discover=True, auto_label=True, auto_update=
     install_dir = Path(install_dir_env).expanduser() if install_dir_env else None
 
     if auto_update and BACKLOG_AVAILABLE:
-        logger.info("Attempting self-update...")
         try:
             update_result = self_update(machine=machine, install_dir=install_dir)
-            if update_result.get("updated"):
-                logger.info("Self-updated: %s -> %s (module_copied=%s, config_migrated=%s)", 
+            outcome = update_result.get("outcome", "UNKNOWN")
+            reason = update_result.get("reason", "no reason")
+            
+            if outcome == "UPDATED":
+                logger.info("Self-update UPDATED: %s -> %s (module_copied=%s, reinstalled=%s)", 
                            update_result.get("old_head", "?"),
                            update_result.get("new_head", "?"),
                            update_result.get("module_copied", False),
-                           update_result.get("config_migrated", False))
+                           update_result.get("reinstalled", False))
+            elif outcome == "SKIPPED":
+                logger.info("Self-update SKIPPED: %s", reason)
+            elif outcome == "FAILED":
+                logger.warning("Self-update FAILED: %s", reason)
             else:
-                logger.debug("No update needed: %s", update_result.get("reason", "unknown"))
+                logger.info("Self-update %s: %s", outcome, reason)
         except Exception as e:
-            logger.warning("Self-update failed: %s", e)
+            logger.warning("Self-update exception: %s", e)
 
     repos_env = os.environ.get("KAREN_REPOS", "")
     if repos_env:

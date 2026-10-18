@@ -37,6 +37,7 @@ NEEDS_JEFF_FILE = LOG_DIR / "conductor" / "NEEDS_JEFF.md"
 STUCK_THRESHOLD_MINUTES = 30
 MAX_TRACEBACKS_PER_HOUR = 5
 STALE_INSTALL_HOURS = 24
+HEAD_LAG_ALERT_MINUTES = 30
 
 REQUIRED_LABELS = ["needs-karen", "karen-pass", "karen-fail"]
 
@@ -349,6 +350,69 @@ def check_labels_exist(repo: str) -> HealthCheck:
         )
 
 
+def check_head_lag() -> HealthCheck:
+    """Check if HEAD lags behind origin by more than 30 minutes.
+    
+    This detects when self-update is failing silently.
+    """
+    try:
+        from .self_update import check_head_lag as _check_lag, UPDATE_LOG_FILE
+    except ImportError:
+        return HealthCheck(
+            name="head_lag",
+            passed=True,
+            message="self_update module not available",
+        )
+    
+    lag_info = _check_lag()
+    
+    if lag_info.get("error"):
+        return HealthCheck(
+            name="head_lag",
+            passed=True,
+            message=f"Could not check: {lag_info['error']}",
+        )
+    
+    if not lag_info.get("lagging"):
+        return HealthCheck(
+            name="head_lag",
+            passed=True,
+            message=f"HEAD {lag_info['local_head']} is current",
+        )
+    
+    commits_behind = lag_info.get("commits_behind", 0)
+    
+    last_update_time = None
+    if UPDATE_LOG_FILE.is_file():
+        try:
+            lines = UPDATE_LOG_FILE.read_text().strip().split("\n")
+            if lines:
+                last_entry = json.loads(lines[-1])
+                last_update_time = datetime.fromisoformat(
+                    last_entry.get("timestamp", "").replace("Z", "+00:00")
+                )
+        except (json.JSONDecodeError, ValueError, OSError):
+            pass
+    
+    lag_minutes = 0
+    if last_update_time:
+        lag_minutes = (datetime.now(timezone.utc) - last_update_time).total_seconds() / 60
+    
+    if commits_behind > 0 and lag_minutes > HEAD_LAG_ALERT_MINUTES:
+        return HealthCheck(
+            name="head_lag",
+            passed=False,
+            message=f"HEAD {lag_info['local_head']} is {commits_behind} commits behind origin/{lag_info['remote_head']} for {int(lag_minutes)}m",
+            can_repair=False,
+        )
+    
+    return HealthCheck(
+        name="head_lag",
+        passed=True,
+        message=f"HEAD {lag_info['local_head']} ({commits_behind} commits behind, last check {int(lag_minutes)}m ago)",
+    )
+
+
 def check_install_stale() -> HealthCheck:
     """Check if install is behind origin."""
     install_dir = Path(os.environ.get("STORYPOOL_INSTALL_DIR", "~/storypool-install")).expanduser()
@@ -499,6 +563,7 @@ def run_watchdog(machine: Optional[str] = None) -> WatchdogResult:
         result.checks.append(check_labels_exist(repo))
     
     result.checks.append(check_install_stale())
+    result.checks.append(check_head_lag())
     
     for check in result.checks:
         if not check.passed:
