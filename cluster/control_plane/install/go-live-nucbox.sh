@@ -172,8 +172,10 @@ enable_live_mode() {
     
     if [[ -f "$dispatch_service" ]]; then
         if ! grep -q -- '--live' "$dispatch_service"; then
-            sed -i 's|ExecStart=\(.*dispatcher[^-]*\)$|ExecStart=\1 --live|' "$dispatch_service"
-            sed -i 's|ExecStart=\(.*dispatcher.* --machine nucbox\)$|ExecStart=\1 --live|' "$dispatch_service"
+            # Match: ExecStart=... dispatcher ... (with or without --machine nucbox)
+            # The line ends with "dispatcher" or "dispatcher --machine nucbox"
+            # Append --live at the end of the ExecStart line
+            sed -i '/^ExecStart=.*dispatcher/ { /--live/! s/$/ --live/ }' "$dispatch_service"
             log_info "Added --live to dispatcher service"
         else
             log_info "Dispatcher already has --live flag"
@@ -186,7 +188,9 @@ enable_live_mode() {
     
     if [[ -f "$conductor_service" ]]; then
         if ! grep -q -- '--live' "$conductor_service"; then
-            sed -i 's|ExecStart=\(.*conductor\)$|ExecStart=\1 --live|' "$conductor_service"
+            # Match: ExecStart=... conductor (the line ends with "conductor")
+            # Append --live at the end of the ExecStart line
+            sed -i '/^ExecStart=.*conductor/ { /--live/! s/$/ --live/ }' "$conductor_service"
             log_info "Added --live to conductor service"
         else
             log_info "Conductor already has --live flag"
@@ -220,15 +224,32 @@ enable_live_mode() {
         FAILURES+=("conductor-timer-restart")
     fi
     
-    local dispatch_live=$(grep -o -- '--live' "$dispatch_service" 2>/dev/null || echo "")
-    local conductor_live=$(grep -o -- '--live' "$conductor_service" 2>/dev/null || echo "")
+    # VERIFY the --live flag actually landed
+    local dispatch_live=""
+    local conductor_live=""
+    
+    if grep -q -- '--live' "$dispatch_service" 2>/dev/null; then
+        dispatch_live="yes"
+    fi
+    if grep -q -- '--live' "$conductor_service" 2>/dev/null; then
+        conductor_live="yes"
+    fi
     
     if [[ -n "$dispatch_live" ]] && [[ -n "$conductor_live" ]]; then
         log_pass "Dispatcher and Conductor now in LIVE mode"
     else
-        log_warn "Live flag may not have been applied correctly"
-        log_info "Dispatch: $(grep ExecStart "$dispatch_service" 2>/dev/null || echo 'not found')"
-        log_info "Conductor: $(grep ExecStart "$conductor_service" 2>/dev/null || echo 'not found')"
+        log_fail "LIVE flag NOT applied correctly!"
+        if [[ -z "$dispatch_live" ]]; then
+            log_fail "Dispatcher missing --live:"
+            grep ExecStart "$dispatch_service" 2>/dev/null || echo "  (file not found)"
+        fi
+        if [[ -z "$conductor_live" ]]; then
+            log_fail "Conductor missing --live:"
+            grep ExecStart "$conductor_service" 2>/dev/null || echo "  (file not found)"
+        fi
+        ALL_PASS=false
+        FAILURES+=("live-flag-verification")
+        exit 1
     fi
 }
 
