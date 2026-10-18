@@ -34,9 +34,11 @@ Runs in shadow/dry-run mode by default; use --live to execute.
 from __future__ import annotations
 
 import json
+import math
 import os
 import re
 import subprocess
+import tempfile
 import time
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone, timedelta
@@ -761,18 +763,45 @@ class Conductor:
         return self.log_dir / "merge-state.json"
     
     def _load_merge_state(self) -> dict:
-        """Load merge tracking state."""
+        """Load safeguards; damaged history must never reset merge admission."""
         state_file = self._merge_state_file()
-        if not state_file.is_file():
-            return {"merges": [], "consecutive_ci_failures": 0, "paused": False, "pause_reason": ""}
+        empty = {"merges": [], "consecutive_ci_failures": 0,
+                 "paused": False, "pause_reason": ""}
         try:
-            return json.loads(state_file.read_text())
-        except (json.JSONDecodeError, IOError):
-            return {"merges": [], "consecutive_ci_failures": 0, "paused": False, "pause_reason": ""}
+            state = json.loads(state_file.read_text())
+            if (not isinstance(state, dict)
+                    or type(state.get("paused")) is not bool
+                    or not isinstance(state.get("pause_reason"), str)
+                    or type(state.get("consecutive_ci_failures")) is not int
+                    or state["consecutive_ci_failures"] < 0
+                    or not isinstance(state.get("merges"), list)):
+                raise ValueError("Invalid merge safeguards")
+            for merge in state["merges"]:
+                ts = merge.get("ts") if isinstance(merge, dict) else None
+                if (type(ts) not in (int, float) or not math.isfinite(ts) or ts < 0):
+                    raise ValueError("Invalid merge timestamp")
+            return state
+        except FileNotFoundError:
+            if not state_file.is_symlink():
+                return empty
+        except (OSError, ValueError, OverflowError):
+            pass
+        return {**empty, "paused": True, "_state_error": True,
+                "pause_reason": "Merge safety state unavailable; restore valid history before resuming"}
     
     def _save_merge_state(self, state: dict) -> None:
-        """Save merge tracking state."""
-        self._merge_state_file().write_text(json.dumps(state, indent=2))
+        """Atomically publish complete safeguards, preserving history on failure."""
+        if state.get("_state_error"):
+            raise ValueError("Merge safety state unavailable; refusing to overwrite history")
+        fd, temp = tempfile.mkstemp(dir=str(self.log_dir), prefix=".merge-state-", suffix=".tmp")
+        try:
+            with os.fdopen(fd, "w") as stream:
+                json.dump(state, stream, indent=2, allow_nan=False)
+                stream.flush()
+                os.fsync(stream.fileno())
+            os.replace(temp, str(self._merge_state_file()))
+        finally:
+            Path(temp).unlink(missing_ok=True)
     
     def _check_merge_rate_limit(self) -> tuple[bool, str]:
         """Check if we're within merge rate limits.

@@ -140,6 +140,16 @@ shared quota, distinct-PR work and the 24-hour duplicate audit are verified.
 
 ### Karen and merge admission
 
+Local conductor merge history preserves rate counts and operator/CI pauses with
+a flushed, file-synced temporary file and same-directory atomic replacement.
+Unreadable, malformed or structurally invalid history (including invalid numeric
+timestamps and dangling links) blocks merges instead of resetting limits. Resume
+cannot overwrite damaged history; an operator must restore valid history first.
+Only an absent file on first start initializes empty history. Failed writes retain
+the previous complete state and remove temporary files. This protects each local
+history file; shared merge counters and cross-process read/modify/write fencing
+remain part of the outstanding cluster-state migration above.
+
 Karen publishes each complete artifact with a same-directory atomic rename,
 then atomically replaces `LATEST` with a prepared relative symlink. Readers see
 the old or new complete marker without an unlink gap; failed writes/replacements
