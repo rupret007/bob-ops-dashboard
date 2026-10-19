@@ -16,7 +16,7 @@ from .node_control import is_draining
 from .service_logging import redact
 
 PERIODS = {'guardian': 120, 'watchdog': 600, 'peer': 120,
-           'shadow': 900, 'doctor': 3600, 'main_ci': 600, 'flow': 120}
+           'shadow': 900, 'doctor': 3600, 'main_ci': 120, 'flow': 120}
 TIMEOUTS = {'guardian': 90, 'watchdog': 180, 'peer': 15,
             'shadow': 600, 'doctor': 120, 'main_ci': 180, 'flow': 20}
 

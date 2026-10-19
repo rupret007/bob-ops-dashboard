@@ -27,7 +27,7 @@ def limited(result):
     return any(s in text for s in ('rate limit', 'rate_limit', 'secondary rate', 'abuse detection'))
 
 
-def run(args, timeout=30, resource=None):
+def run(args, timeout=30, resource=None, deadline=None):
     """Budget CLI operations; mixed commands reserve both API resources."""
     if resource:
         resources = (resource,)
@@ -39,6 +39,10 @@ def run(args, timeout=30, resource=None):
         resources = ('core', 'graphql')
     for name in resources:
         budget.reserve(name)
+    if deadline is not None:
+        timeout = min(timeout, deadline - time.monotonic())
+        if timeout <= 0:
+            raise subprocess.TimeoutExpired(['gh'] + args, 0)
     result = subprocess.run(['gh'] + args, capture_output=True, text=True, timeout=timeout)
     if result.returncode and limited(result):
         for name in resources:

@@ -14,6 +14,12 @@ HEAD = 'a' * 40
 REPO = 'owner/repo'
 
 
+@pytest.fixture(autouse=True)
+def isolated_budget_admission(monkeypatch):
+    """CI semantics are isolated; shared account admission has broker race tests."""
+    monkeypatch.setattr(m.github_reads.budget, 'reserve', lambda resource: None)
+
+
 def details():
     return dict(state='MERGED', mergeCommit={'oid': SHA}, headRefOid=HEAD, baseRefName='main')
 

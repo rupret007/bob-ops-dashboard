@@ -26,6 +26,12 @@ SNAPSHOT = 'github-api-budget.json'
 class GitHubDeferred(RuntimeError):
     """A warning/retry condition, never a review FAIL or permission to proceed."""
 
+    def __init__(self, message, *, code='other', retry_after=None):
+        super().__init__(message)
+        self.code = code if code == 'minute-exhausted' else 'other'
+        self.retry_after = (retry_after if type(retry_after) in (int, float)
+                            and math.isfinite(retry_after) and retry_after >= 0 else None)
+
 
 def _resource(value):
     value = str(value).lower()
@@ -141,7 +147,9 @@ def _mutate(state, operation, resource, headers, limited, now):
             if not reset or reset > now:
                 raise GitHubDeferred('GitHub API quota reserve reached; retry after reset')
         if len(state['requests']) >= MINUTE_LIMIT:
-            raise GitHubDeferred('GitHub shared API minute budget exhausted; retry later')
+            raise GitHubDeferred('GitHub shared API minute budget exhausted; retry later',
+                                 code='minute-exhausted',
+                                 retry_after=max(0, min(state['requests']) + 60 - now))
         if reset and reset <= now:
             quota.pop('remaining', None)
         if 'remaining' in quota:

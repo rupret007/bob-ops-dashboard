@@ -13,8 +13,12 @@ from pathlib import Path
 
 from cluster.never_touch import check_merge_allowed
 from .coordination import ClaimClient, CoordinationError, Lease
+from . import github_reads
+from .github_budget import GitHubDeferred
 
 _deadline = ContextVar('main_ci_deadline', default=None)
+RECEIPT_SECONDS = 600
+RENEW_AFTER_SECONDS = 480
 
 
 def command(argv, cwd=None):
@@ -22,6 +26,11 @@ def command(argv, cwd=None):
     timeout = 120 if deadline is None else min(120, deadline - time.monotonic())
     if timeout <= 0:
         raise subprocess.TimeoutExpired(argv, 0)
+    if argv[0] == 'gh':
+        resource = 'search' if argv[1:2] == ['search'] else None
+        result = github_reads.run(argv[1:], timeout=timeout, resource=resource, deadline=deadline)
+        result.check_returncode()
+        return result.stdout.strip()
     return subprocess.run(argv, cwd=cwd, capture_output=True, text=True,
                           check=True, timeout=timeout).stdout.strip()
 
@@ -55,6 +64,10 @@ def check_ci(repo, ref='main'):
         if states and all(s in ('success', 'neutral', 'skipped') for s in states):
             return True, 'success'
         return False, 'pending' if states else 'unknown'
+    except GitHubDeferred:
+        if _deadline.get() is not None:
+            raise  # The bounded batch can distinguish minute waits from primary/backoff.
+        return False, 'deferred'
     except (OSError, subprocess.SubprocessError, ValueError, KeyError, TypeError):
         return False, 'unknown'
 
@@ -143,6 +156,9 @@ def reconcile_one(client, pr):
                                os.environ.get('STORYPOOL_MACHINE', 'unknown'))
         with Lease(client, claim) as lease:
             status = observe(repo, number, details, lease)
+    except GitHubDeferred as exc:
+        return {'repo': repo, 'pr': number, 'main_ci': 'deferred',
+                'budget_code': exc.code, 'retry_after': exc.retry_after}
     except (CoordinationError, OSError, subprocess.SubprocessError, ValueError, KeyError):
         status = 'deferred'
     return {'repo': repo, 'pr': number, 'main_ci': status}
@@ -174,7 +190,15 @@ def reconcile_batch(root):
     token = _deadline.set(time.monotonic() + 120)
     try:
         client = ClaimClient.from_env()
-        prs = recent_prs()
+        while True:
+            try:
+                prs = recent_prs()
+                break
+            except GitHubDeferred as exc:
+                if _wait_for_minute(exc.code, exc.retry_after):
+                    continue
+                return dict(results=[], attempted=0, total=len(records),
+                            unconfirmed=max(1, len(records)), discovery_deferred=True)
         key = lambda pr: '{}#{}'.format(pr['repository']['nameWithOwner'], pr['number'])
         records = {key(pr): records.get(key(pr), {}) for pr in prs}
         def checked(pr):
@@ -183,28 +207,56 @@ def reconcile_batch(root):
             valid = (isinstance(row, dict) and row.get('repo') == pr['repository']['nameWithOwner']
                      and row.get('pr') == pr['number'] and row.get('main_ci') in
                      ('success', 'recovered', 'ineligible', 'failure', 'unknown', 'pending'))
-            return value if valid and number(value) and 0 <= time.time() - value <= 600 else 0
+            return value if valid and number(value) and 0 <= time.time() - value <= RECEIPT_SECONDS else 0
         def attempted_at(pr):
             row = records[key(pr)]
             value = row.get('attempted_at') if isinstance(row, dict) else None
             return value if number(value) and 0 <= value <= time.time() else 0
         # Least recently attempted first; a slow PR cannot monopolize each tick.
         due = sorted(prs, key=attempted_at)
-        attempted = 0
+        attempted = set()
+        stopped = False
         for pr in due:
-            if checked(pr):
+            previous_checked = checked(pr)
+            if previous_checked and time.time() - previous_checked < RENEW_AFTER_SECONDS:
                 continue
             if time.monotonic() >= _deadline.get():
                 break
-            result = reconcile_one(client, pr)
-            now = time.time()
-            records[key(pr)] = dict(result, attempted_at=now,
-                                    checked_at=now if result['main_ci'] != 'deferred' else 0)
-            attempted += 1
-            atomic_json(path, dict(records=records))
+            while time.monotonic() < _deadline.get():
+                result = reconcile_one(client, pr)
+                now = time.time()
+                attempted.add(key(pr))
+                if result['main_ci'] == 'deferred' and checked(pr):
+                    # An admission deferral supplies no replacement observation.
+                    # Preserve the old receipt only within its original 600s lifetime.
+                    records[key(pr)] = dict(records[key(pr)], last_deferred_at=now)
+                else:
+                    records[key(pr)] = dict(result, attempted_at=now,
+                                            checked_at=now if result['main_ci'] != 'deferred' else 0)
+                atomic_json(path, dict(records=records))
+                if result.get('budget_code'):
+                    if _wait_for_minute(result['budget_code'], result.get('retry_after')):
+                        continue  # reconcile_one already exited its PR lease.
+                    stopped = True
+                break
+            if stopped:
+                break
         results = [records[key(pr)] if checked(pr) else dict(repo=pr['repository']['nameWithOwner'],
                     pr=pr['number'], main_ci='deferred') for pr in prs]
-        return dict(results=results, attempted=attempted, total=len(prs),
+        return dict(results=results, attempted=len(attempted), total=len(prs),
                     unconfirmed=sum(r['main_ci'] in ('deferred', 'unknown', 'pending') for r in results))
     finally:
         _deadline.reset(token)
+
+
+def _wait_for_minute(code, retry_after):
+    """Only shared-minute exhaustion can wait, after the PR lease is released."""
+    deadline = _deadline.get()
+    if code != 'minute-exhausted' or deadline is None:
+        return False
+    remaining = deadline - time.monotonic()
+    if remaining <= 0:
+        return False
+    delay = retry_after if type(retry_after) in (int, float) and retry_after > 0 else 5
+    time.sleep(min(5, delay, remaining))
+    return time.monotonic() < deadline

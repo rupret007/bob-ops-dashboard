@@ -53,10 +53,10 @@ def test_slow_failed_first_item_cannot_starve_tail_next_tick(tmp_path):
 def test_commands_cannot_outlive_remaining_batch_budget():
     token = m._deadline.set(120)
     try:
-        with patch.object(m, 'time', Mock(monotonic=lambda: 119)), patch.object(m.subprocess, 'run') as run:
+        with patch.object(m, 'time', Mock(monotonic=lambda: 119)), patch.object(m.github_reads, 'run') as run:
             m.command(['gh', 'api', 'example'])
             assert run.call_args.kwargs['timeout'] == 1
-        with patch.object(m, 'time', Mock(monotonic=lambda: 120)), patch.object(m.subprocess, 'run') as run:
+        with patch.object(m, 'time', Mock(monotonic=lambda: 120)), patch.object(m.github_reads, 'run') as run:
             with pytest.raises(subprocess.TimeoutExpired):
                 m.command(['gh', 'api', 'example'])
             run.assert_not_called()
