@@ -9,6 +9,7 @@ import logging
 import os
 import plistlib
 import re
+import socket
 import subprocess
 import sys
 import time
@@ -36,6 +37,27 @@ def wait_dashboard():
         if dashboard_responding():
             return True
         if attempt < 3:
+            time.sleep(0.5)
+    return False
+
+
+def dashboard_port_available():
+    """Match HTTPServer's bind options, without taking over an old listener."""
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
+        probe.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        try:
+            probe.bind(('127.0.0.1', 8790))
+        except OSError:
+            return False
+    return True
+
+
+def wait_dashboard_stopped():
+    # launchctl bootout can return before the old process releases its socket.
+    for attempt in range(61):
+        if dashboard_port_available():
+            return True
+        if attempt < 60:
             time.sleep(0.5)
     return False
 
@@ -114,12 +136,16 @@ def _reload_agent(path, defer_running=False):
     if stopped.returncode and command(['launchctl', 'print', target]).returncode == 0:
         event('guardian', 'bootout_failed', unit=label)
         return False
+    if label == 'com.storypool.dashboard' and not wait_dashboard_stopped():
+        event('guardian', 'dashboard_shutdown_timeout', level=logging.ERROR, unit=label)
+        return False
     loaded = command(['launchctl', 'bootstrap', domain, str(path)])
     verified = loaded.returncode == 0 and command(['launchctl', 'print', target]).returncode == 0
     if verified and label == 'com.storypool.dashboard':
         # Registration alone did not prevent the 15:48 outage. Verify serving.
-        started = command(['launchctl', 'kickstart', '-k', target]).returncode == 0
-        verified = wait_dashboard() and started
+        # RunAtLoad starts the service. Forcing kickstart -k here would kill the
+        # just-started process and recreate the same socket shutdown race.
+        verified = wait_dashboard()
     if verified:
         pending.unlink(missing_ok=True)
     event('guardian', 'agent_reloaded' if verified else 'reload_failed', unit=label)

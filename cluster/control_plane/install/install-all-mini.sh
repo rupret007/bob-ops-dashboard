@@ -468,6 +468,7 @@ run_self_check() {
     else
         echo ""
         log_warn "Some components failed — check errors above"
+        return 1
     fi
 }
 
@@ -517,6 +518,8 @@ main() {
 
     check_dependencies
     setup_config_dir
+    STORYPOOL_COLLECT_RELOAD_FAILURES=1
+    STORYPOOL_RELOAD_FAILURES=''
     install_guardian
     install_shadow
     install_dispatcher
@@ -526,7 +529,18 @@ main() {
     install_selfupdate
     install_dashboard
     install_karen_cli
-    run_self_check
+    local self_check_failed=0
+    run_self_check || self_check_failed=1
+
+    if [[ -n "$STORYPOOL_RELOAD_FAILURES" ]]; then
+        log_error "Installation incomplete; these agents failed reload verification:"
+        printf '%s' "$STORYPOOL_RELOAD_FAILURES"
+        return 1
+    fi
+    if [[ "$self_check_failed" == 1 ]]; then
+        log_error "Installation incomplete; self-check failed"
+        return 1
+    fi
 
     echo ""
     log_info "Installation complete!"
@@ -538,4 +552,6 @@ main() {
     echo "    karen-gate --dry-run --repo rupret007/webjam --pr 123"
 }
 
-main "$@"
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+    main "$@"
+fi

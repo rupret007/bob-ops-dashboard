@@ -8,12 +8,15 @@ import pytest
 from cluster.control_plane import guardian
 from cluster.control_plane.tests.test_guardian import agent, response
 
+PORT_AVAILABLE = guardian.dashboard_port_available
+
 
 @pytest.fixture(autouse=True)
 def isolated(monkeypatch, tmp_path):
     monkeypatch.setenv('STORYPOOL_DATA_DIR', str(tmp_path / 'state'))
     monkeypatch.setattr(guardian, 'event', Mock())
     monkeypatch.setattr(guardian.time, 'sleep', lambda _: None)
+    monkeypatch.setattr(guardian, 'dashboard_port_available', lambda: True)
 
 
 def test_probe_uses_loopback_root_without_proxy_or_redirect(monkeypatch):
@@ -88,7 +91,7 @@ def test_registered_dashboard_reload_requires_http(tmp_path, monkeypatch):
     monkeypatch.setattr(guardian, 'dashboard_responding', lambda: False)
     assert not guardian.reload_agent(path)
     assert any(c[1] == 'bootstrap' for c in calls)
-    assert any(c[1] == 'kickstart' for c in calls)
+    assert not any(c[1] == 'kickstart' for c in calls)
 
 
 def test_every_guardian_cycle_probes_and_persists_http_status(tmp_path, monkeypatch):
@@ -165,3 +168,136 @@ def test_pending_reinstall_still_requires_passing_gate(tmp_path, monkeypatch):
     assert updater.self_update('mini', tmp_path)['outcome'] == 'FAILED'
     installer.assert_not_called()
     assert (tmp_path / '.storypool-reinstall-pending').exists()
+
+
+def test_dashboard_reload_waits_for_old_listener_before_bootstrap(tmp_path, monkeypatch):
+    path = agent(tmp_path, 'dashboard')
+    calls = []
+    monkeypatch.setattr(guardian, 'command', lambda argv: calls.append(argv[1]) or response())
+    monkeypatch.setattr(guardian, 'wait_dashboard_stopped',
+                        lambda: calls.append('port-free') or True, raising=False)
+    monkeypatch.setattr(guardian, 'dashboard_responding', lambda: True)
+    assert guardian.reload_agent(path)
+    assert calls.index('bootout') < calls.index('port-free') < calls.index('bootstrap')
+    # Bootstrap starts RunAtLoad; a second forced kickstart recreates the port race.
+    assert 'kickstart' not in calls
+
+
+def test_dashboard_reload_refuses_busy_port(tmp_path, monkeypatch):
+    path = agent(tmp_path, 'dashboard')
+    calls = []
+    monkeypatch.setattr(guardian, 'command', lambda argv: calls.append(argv[1]) or response())
+    monkeypatch.setattr(guardian, 'wait_dashboard_stopped', lambda: False, raising=False)
+    monkeypatch.setattr(guardian, 'dashboard_responding', lambda: True)
+    assert not guardian.reload_agent(path)
+    assert 'bootstrap' not in calls
+
+
+def test_dashboard_shutdown_wait_is_bounded_and_checks_port(monkeypatch):
+    checks = iter([False, False, True])
+    probe = Mock(side_effect=lambda: next(checks))
+    monkeypatch.setattr(guardian, 'dashboard_port_available', probe, raising=False)
+    assert guardian.wait_dashboard_stopped()
+    assert probe.call_count == 3
+    probe = Mock(return_value=False)
+    monkeypatch.setattr(guardian, 'dashboard_port_available', probe)
+    assert not guardian.wait_dashboard_stopped()
+    assert probe.call_count <= 61
+
+
+@pytest.mark.parametrize('busy', [False, True])
+def test_dashboard_port_probe_closes_socket_and_rejects_busy_listener(monkeypatch, busy):
+    connection = Mock()
+    if busy:
+        connection.bind.side_effect = OSError('address in use')
+    factory = Mock()
+    factory.return_value.__enter__ = Mock(return_value=connection)
+    factory.return_value.__exit__ = Mock(return_value=False)
+    monkeypatch.setattr(guardian.socket, 'socket', factory)
+    assert PORT_AVAILABLE() is not busy
+    connection.bind.assert_called_once_with(('127.0.0.1', 8790))
+    factory.return_value.__exit__.assert_called_once()
+
+
+def test_failed_installer_logs_sanitized_stdout_and_stderr(tmp_path, monkeypatch):
+    import subprocess
+    from cluster.control_plane import self_update as updater
+    script = tmp_path / 'cluster/control_plane/install/install-all-mini.sh'
+    script.parent.mkdir(parents=True)
+    script.touch()
+    log = tmp_path / 'self-update.log'
+    monkeypatch.setattr(updater, 'UPDATE_LOG_FILE', log)
+    monkeypatch.setattr(updater.subprocess, 'run', lambda *a, **kw: subprocess.CompletedProcess(
+        a[0], 1, 'Dashboard reload_failed\napi_key=fixture-private-value\n',
+        'OSError: [Errno 48] Address already in use\nAuthorization: Bearer fixture-bearer-value\n'))
+    assert not updater.reinstall(tmp_path, 'mini')
+    text = log.read_text()
+    assert 'Dashboard reload_failed' in text
+    assert 'Address already in use' in text
+    assert 'fixture-private-value' not in text
+    assert 'fixture-bearer-value' not in text
+
+
+def test_installer_timeout_preserves_sanitized_partial_output(tmp_path, monkeypatch):
+    import subprocess
+    from cluster.control_plane import self_update as updater
+    script = tmp_path / 'cluster/control_plane/install/install-all-mini.sh'
+    script.parent.mkdir(parents=True)
+    script.touch()
+    log = tmp_path / 'self-update.log'
+    monkeypatch.setattr(updater, 'UPDATE_LOG_FILE', log)
+    def timeout(*args, **kwargs):
+        raise subprocess.TimeoutExpired(args[0], 300,
+                                        output=b'Karen attempted\nsecret=fixture-private-value',
+                                        stderr=b'Address already in use')
+    monkeypatch.setattr(updater.subprocess, 'run', timeout)
+    assert not updater.reinstall(tmp_path, 'mini')
+    text = log.read_text()
+    assert 'TimeoutExpired' in text
+    assert 'Karen attempted' in text
+    assert 'Address already in use' in text
+    assert 'fixture-private-value' not in text
+
+
+def test_mini_installer_continues_after_reload_failures_and_exits_failed(tmp_path):
+    import os
+    import subprocess
+    from pathlib import Path
+    install = Path(guardian.__file__).parent / 'install/install-all-mini.sh'
+    shell = '''
+source "$1"
+uname() { echo Darwin; }
+check_dependencies() { :; }
+setup_config_dir() { :; }
+for name in install_guardian install_shadow install_dispatcher install_conductor install_watchdog install_ops_doctor install_selfupdate; do
+    eval "$name() { :; }"
+done
+python3() { return 1; }
+install_dashboard() { storypool_reload_agent /fixture/dashboard.plist; }
+install_karen_cli() { echo KAREN_ATTEMPTED; storypool_reload_agent /fixture/karen.plist; }
+run_self_check() { :; }
+main
+'''
+    result = subprocess.run(['bash', '-c', shell, 'test', str(install)],
+                            capture_output=True, text=True, timeout=10,
+                            env={**os.environ, 'HOME': str(tmp_path)})
+    assert result.returncode != 0
+    assert 'KAREN_ATTEMPTED' in result.stdout
+    assert '/fixture/dashboard.plist' in result.stdout + result.stderr
+    assert '/fixture/karen.plist' in result.stdout + result.stderr
+
+
+def test_standalone_reload_failure_still_exits_nonzero(tmp_path):
+    import subprocess
+    from pathlib import Path
+    helper = Path(guardian.__file__).parent / 'install/launchd-reload.sh'
+    result = subprocess.run(['bash', '-c', '''
+set -euo pipefail
+REPO_ROOT="$2"
+source "$1"
+python3() { return 1; }
+storypool_reload_agent /fixture/dashboard.plist
+echo SHOULD_NOT_RUN
+''', 'test', str(helper), str(tmp_path)], capture_output=True, text=True, timeout=10)
+    assert result.returncode != 0
+    assert 'SHOULD_NOT_RUN' not in result.stdout

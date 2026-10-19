@@ -27,6 +27,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional, Tuple
 
+from cluster.control_plane.service_logging import redact
+
 logger = logging.getLogger(__name__)
 
 BRANCH = "cursor/storypool-all-in-one-47c7"
@@ -492,9 +494,26 @@ def reinstall(repo_dir: Path, machine: str) -> bool:
             text=True,
             timeout=300,
         )
+        _log_update_outcome("INSTALLER", {
+            "machine": machine, "installer": script,
+            "installer_exit_code": result.returncode,
+            "installer_stdout": redact(result.stdout or ''),
+            "installer_stderr": redact(result.stderr or ''),
+        })
         return result.returncode == 0
-    except (subprocess.SubprocessError, FileNotFoundError):
+    except (subprocess.SubprocessError, FileNotFoundError) as exc:
+        _log_update_outcome("INSTALLER FAILED", {
+            "machine": machine, "installer": script,
+            "installer_error": type(exc).__name__,
+            "installer_stdout": redact(_installer_text(getattr(exc, 'stdout', ''))),
+            "installer_stderr": redact(_installer_text(getattr(exc, 'stderr', ''))),
+        })
         return False
+
+
+def _installer_text(output):
+    # TimeoutExpired output may be bytes even when text=True.
+    return output.decode('utf-8', errors='replace') if isinstance(output, bytes) else output or ''
 
 
 def finish_install(repo_dir: Path, machine: str, result: dict) -> dict:
