@@ -6,7 +6,7 @@
 # - Lane dispatcher (every 15 min)
 # - LLM conductor (hourly)
 # - Karen gate CLI (karen-gate --dry-run)
-# - Karen poller is NOT loaded (shadow mode only)
+# - Karen poller registration is preserved only when already loaded or live
 #
 # NO SUDO REQUIRED - installs to user directories only
 # Does NOT touch: ~/bob-ops-dashboard (may have local edits)
@@ -379,15 +379,19 @@ CONFIG
             -e "s|__HOME__|$HOME|g" \
             -e "s|__PATH__|$LAUNCHD_PATH|g" \
             "$poller_plist_src" > "$poller_plist_dst"
-        if [[ -f "$HOME/.config/storypool/live" ]] || launchctl list com.storypool.karen-poller &>/dev/null; then
+        if [[ -f "$HOME/.config/storypool/live" ]]; then
             storypool_reload_agent "$poller_plist_dst"
+            log_info "Karen poller reload requested (live marker present; RunAtLoad disabled)"
+        elif launchctl list com.storypool.karen-poller &>/dev/null; then
+            storypool_reload_agent "$poller_plist_dst"
+            log_info "Karen poller reload requested (existing registration preserved; RunAtLoad disabled)"
+        else
+            log_info "Karen poller NOT loaded (shadow mode; no live marker or prior registration)"
         fi
-        log_info "Karen poller plist installed (shadow mode preserved)"
+        log_info "Karen poller plist installed"
         log_info "PATH: $LAUNCHD_PATH"
     fi
     
-    log_info "Karen poller NOT loaded (shadow mode — run karen-gate --dry-run manually)"
-
     if [[ ":$PATH:" != *":$bin_dir:"* ]]; then
         log_warn "Add $bin_dir to your PATH:"
         echo "    echo 'export PATH=\"\$HOME/.local/bin:\$PATH\"' >> ~/.zshrc"

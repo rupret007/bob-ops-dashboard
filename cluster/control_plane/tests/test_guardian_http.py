@@ -6,7 +6,7 @@ from unittest.mock import Mock
 import pytest
 
 from cluster.control_plane import guardian
-from cluster.control_plane.tests.test_guardian import agent, response
+from cluster.control_plane.tests.test_guardian import agent, response, lifecycle
 
 PORT_AVAILABLE = guardian.dashboard_port_available
 
@@ -87,7 +87,7 @@ def test_failed_restart_alerts_without_flooding(tmp_path, monkeypatch):
 def test_registered_dashboard_reload_requires_http(tmp_path, monkeypatch):
     path = agent(tmp_path, 'dashboard')
     calls = []
-    monkeypatch.setattr(guardian, 'command', lambda argv: calls.append(argv) or response())
+    monkeypatch.setattr(guardian, 'command', lifecycle(calls))
     monkeypatch.setattr(guardian, 'dashboard_responding', lambda: False)
     assert not guardian.reload_agent(path)
     assert any(c[1] == 'bootstrap' for c in calls)
@@ -173,7 +173,8 @@ def test_pending_reinstall_still_requires_passing_gate(tmp_path, monkeypatch):
 def test_dashboard_reload_waits_for_old_listener_before_bootstrap(tmp_path, monkeypatch):
     path = agent(tmp_path, 'dashboard')
     calls = []
-    monkeypatch.setattr(guardian, 'command', lambda argv: calls.append(argv[1]) or response())
+    run = lifecycle([])
+    monkeypatch.setattr(guardian, 'command', lambda argv: calls.append(argv[1]) or run(argv))
     monkeypatch.setattr(guardian, 'wait_dashboard_stopped',
                         lambda: calls.append('port-free') or True, raising=False)
     monkeypatch.setattr(guardian, 'dashboard_responding', lambda: True)
@@ -186,7 +187,8 @@ def test_dashboard_reload_waits_for_old_listener_before_bootstrap(tmp_path, monk
 def test_dashboard_reload_refuses_busy_port(tmp_path, monkeypatch):
     path = agent(tmp_path, 'dashboard')
     calls = []
-    monkeypatch.setattr(guardian, 'command', lambda argv: calls.append(argv[1]) or response())
+    run = lifecycle([])
+    monkeypatch.setattr(guardian, 'command', lambda argv: calls.append(argv[1]) or run(argv))
     monkeypatch.setattr(guardian, 'wait_dashboard_stopped', lambda: False, raising=False)
     monkeypatch.setattr(guardian, 'dashboard_responding', lambda: True)
     assert not guardian.reload_agent(path)

@@ -106,6 +106,25 @@ def command(argv):
         return subprocess.CompletedProcess(argv, 1, '', '')
 
 
+RELOAD_ATTEMPTS = 5
+
+
+def _launchctl_wait(argv, expected, label, stage, run=None):
+    """Retry asynchronous launchd transitions; never log command output."""
+    run = run or command
+    for attempt in range(1, RELOAD_ATTEMPTS + 1):
+        result = run(argv)
+        if result.returncode == expected:
+            return True
+        event('guardian', 'reload_stage_pending', unit=label, stage=stage,
+              attempt=attempt, exit_code=result.returncode)
+        if attempt < RELOAD_ATTEMPTS:
+            time.sleep(0.5)
+    event('guardian', 'reload_failed', level=logging.ERROR, unit=label,
+          stage=stage, exit_code=result.returncode)
+    return False
+
+
 @serialized_recovery
 def reload_agent(path, defer_running=False):
     # Installer and guardian must not boot out/bootstrap the same agent together.
@@ -135,17 +154,26 @@ def _reload_agent(path, defer_running=False):
             pending.touch()
             event('guardian', 'reload_deferred', unit=label)
             return True
-    if command(['launchctl', 'enable', target]).returncode:
+    enabled = command(['launchctl', 'enable', target])
+    if enabled.returncode:
+        event('guardian', 'reload_failed', level=logging.ERROR, unit=label,
+              stage='enable', exit_code=enabled.returncode)
         return False
     stopped = command(['launchctl', 'bootout', target])
-    if stopped.returncode and command(['launchctl', 'print', target]).returncode == 0:
-        event('guardian', 'bootout_failed', unit=label)
+    if stopped.returncode:
+        event('guardian', 'reload_stage_pending', unit=label, stage='bootout',
+              attempt=1, exit_code=stopped.returncode)
+    # bootout returns before launchd always finishes unregistering the service.
+    # 113 means no such service; other print failures do not prove absence.
+    if not _launchctl_wait(['launchctl', 'print', target], 113, label, 'unregister'):
         return False
     if label == 'com.storypool.dashboard' and not wait_dashboard_stopped():
         event('guardian', 'dashboard_shutdown_timeout', level=logging.ERROR, unit=label)
         return False
-    loaded = command(['launchctl', 'bootstrap', domain, str(path)])
-    verified = loaded.returncode == 0 and command(['launchctl', 'print', target]).returncode == 0
+    if not _launchctl_wait(['launchctl', 'bootstrap', domain, str(path)], 0, label, 'bootstrap'):
+        return False
+    # Once bootstrap succeeds, wait for registration without bootstrapping again.
+    verified = _launchctl_wait(['launchctl', 'print', target], 0, label, 'register')
     if verified and label == 'com.storypool.dashboard':
         # Registration alone did not prevent the 15:48 outage. Verify serving.
         # RunAtLoad starts the service. Forcing kickstart -k here would kill the

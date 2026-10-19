@@ -18,21 +18,39 @@ def agent(root, name='watchdog'):
 
 
 @pytest.fixture(autouse=True)
-def no_live_logging(monkeypatch):
+def no_live_logging(monkeypatch, tmp_path):
+    monkeypatch.setenv('STORYPOOL_DATA_DIR', str(tmp_path / 'state'))
     monkeypatch.setattr(guardian, 'event', lambda *a, **kw: None)
+    monkeypatch.setattr(guardian.time, 'sleep', lambda _: None)
 
 
 def response(code=0, output=''):
     return subprocess.CompletedProcess([], code, output, '')
 
 
+def lifecycle(calls, failed=None):
+    registered = False
+    def run(argv):
+        nonlocal registered
+        calls.append(argv)
+        action = argv[1]
+        if action == 'print':
+            return response((1 if failed == 'print' else 0) if registered else 113)
+        if action == failed:
+            return response(1)
+        if action == 'bootstrap':
+            registered = True
+        return response()
+    return run
+
+
 def test_reload_validates_then_boots_out_bootstraps_and_verifies(tmp_path, monkeypatch):
     path = agent(tmp_path)
     calls = []
-    monkeypatch.setattr(guardian, 'command', lambda argv: calls.append(argv) or response())
+    monkeypatch.setattr(guardian, 'command', lifecycle(calls))
     assert guardian.reload_agent(path)
-    assert [c[1] for c in calls] == ['enable', 'bootout', 'bootstrap', 'print']
-    assert calls[2][-1] == str(path)
+    assert [c[1] for c in calls] == ['enable', 'bootout', 'print', 'bootstrap', 'print']
+    assert calls[3][-1] == str(path)
     assert calls[1][-1].endswith('/com.storypool.watchdog')
 
 
@@ -49,8 +67,17 @@ def test_invalid_plist_never_unloads_existing_agent(tmp_path, monkeypatch):
 @pytest.mark.parametrize('failed', ['enable', 'bootstrap', 'print'])
 def test_failed_reload_cannot_report_success(tmp_path, monkeypatch, failed):
     path = agent(tmp_path)
-    monkeypatch.setattr(guardian, 'command', lambda argv: response(int(argv[1] == failed)))
+    pending = path.with_suffix('.reload-pending')
+    pending.touch()
+    calls = []
+    monkeypatch.setattr(guardian, 'command', lifecycle(calls, failed))
     assert not guardian.reload_agent(path)
+    assert pending.exists()
+    if failed == 'bootstrap':
+        assert sum(c[1] == 'bootstrap' for c in calls) == guardian.RELOAD_ATTEMPTS
+    if failed == 'print':
+        assert sum(c[1] == 'bootstrap' for c in calls) == 1
+        assert sum(c[1] == 'print' for c in calls) == guardian.RELOAD_ATTEMPTS + 1
 
 
 def test_failed_bootout_with_loaded_agent_does_not_bootstrap(tmp_path, monkeypatch):
@@ -79,7 +106,7 @@ def test_guardian_applies_pending_update_only_after_updater_exits(tmp_path, monk
     monkeypatch.setattr(guardian, 'command', lambda argv: response(output='pid = 42'))
     assert guardian.recover('mini', tmp_path) == []
     calls = []
-    monkeypatch.setattr(guardian, 'command', lambda argv: calls.append(argv) or response())
+    monkeypatch.setattr(guardian, 'command', lifecycle(calls))
     assert guardian.recover('mini', tmp_path) == [{'unit': path.stem, 'ok': True}]
     assert not path.with_suffix('.reload-pending').exists()
     assert any(c[1] == 'bootstrap' for c in calls)
@@ -165,7 +192,10 @@ def test_shell_reload_helper_runs_installed_module_with_quoted_paths(tmp_path):
     (binary / 'python3').symlink_to(sys.executable)
     calls = tmp_path / 'calls'
     launchctl = binary / 'launchctl'
-    launchctl.write_text('#!/bin/bash\nprintf "%s\\n" "$1" >> "$STORYPOOL_TEST_CALLS"\nexit 0\n')
+    launchctl.write_text('#!/bin/bash\nprintf "%s\\n" "$1" >> "$STORYPOOL_TEST_CALLS"\n'
+                         'if [ "$1" = bootstrap ]; then touch "$STORYPOOL_TEST_CALLS.registered"; fi\n'
+                         'if [ "$1" = print ] && [ ! -f "$STORYPOOL_TEST_CALLS.registered" ]; then exit 113; fi\n'
+                         'exit 0\n')
     launchctl.chmod(0o755)
     env = {**os.environ, 'PATH': str(binary) + os.pathsep + os.environ['PATH'],
            'REPO_ROOT': str(INSTALL.parents[2]), 'STORYPOOL_TEST_CALLS': str(calls),
@@ -174,4 +204,66 @@ def test_shell_reload_helper_runs_installed_module_with_quoted_paths(tmp_path):
                              'test', str(INSTALL / 'launchd-reload.sh'), str(path)],
                             env=env, capture_output=True, text=True, timeout=10)
     assert result.returncode == 0, result.stderr
-    assert calls.read_text().splitlines() == ['enable', 'bootout', 'bootstrap', 'print']
+    assert calls.read_text().splitlines() == ['enable', 'bootout', 'print', 'bootstrap', 'print']
+
+
+def test_async_removal_bootstrap_and_registration_are_bounded_and_private(tmp_path, monkeypatch):
+    path = agent(tmp_path)
+    pending = path.with_suffix('.reload-pending')
+    pending.touch()
+    codes = iter([0, 0, 0, 0, 113, 5, 5, 0, 113, 0])
+    calls, events, sleeps = [], [], []
+    def run(argv):
+        calls.append(argv[1])
+        return subprocess.CompletedProcess(argv, next(codes), 'private stdout', 'private stderr')
+    monkeypatch.setattr(guardian, 'command', run)
+    monkeypatch.setattr(guardian, 'event', lambda *a, **kw: events.append((a, kw)))
+    monkeypatch.setattr(guardian.time, 'sleep', sleeps.append)
+    assert guardian.reload_agent(path)
+    assert calls == ['enable', 'bootout', 'print', 'print', 'print',
+                     'bootstrap', 'bootstrap', 'bootstrap', 'print', 'print']
+    assert sleeps == [0.5] * 5
+    assert not pending.exists()
+    assert 'private' not in str(events)
+    assert {e[1]['stage'] for e in events if 'stage' in e[1]} == {'unregister', 'bootstrap', 'register'}
+    assert all(type(e[1]['exit_code']) is int for e in events if 'stage' in e[1])
+
+
+@pytest.mark.parametrize('print_code', [0, 1, 64])
+def test_unproven_removal_never_bootstraps_or_clears_pending(tmp_path, monkeypatch, print_code):
+    path = agent(tmp_path)
+    pending = path.with_suffix('.reload-pending')
+    pending.touch()
+    calls = []
+    def run(argv):
+        calls.append(argv[1])
+        return response(print_code if argv[1] == 'print' else 0)
+    monkeypatch.setattr(guardian, 'command', run)
+    assert not guardian.reload_agent(path)
+    assert calls == ['enable', 'bootout'] + ['print'] * guardian.RELOAD_ATTEMPTS
+    assert pending.exists()
+
+
+@pytest.mark.parametrize('live,registered,message', [(True, False, 'live marker present'),
+    (False, True, 'existing registration preserved'), (False, False, 'NOT loaded (shadow mode')])
+def test_installer_reports_poller_registration_without_changing_authority(tmp_path, live, registered, message):
+    import os
+    marker = tmp_path / '.config/storypool/live'
+    marker.parent.mkdir(parents=True)
+    if live:
+        marker.touch()
+    text = (INSTALL / 'install-all-mini.sh').read_text()
+    start = text.index('        if [[ -f "$HOME/.config/storypool/live" ]]')
+    end = text.index('        log_info "Karen poller plist installed"', start)
+    script = ('log_info() { echo "$*"; }\n'
+              'storypool_reload_agent() { echo RELOADED; }\n'
+              'launchctl() { return ' + ('0' if registered else '1') + '; }\n' + text[start:end])
+    result = subprocess.run(['bash', '-c', script], env={**os.environ, 'HOME': str(tmp_path)},
+                            capture_output=True, text=True, timeout=5)
+    assert result.returncode == 0
+    assert message in result.stdout
+    assert ('RELOADED' in result.stdout) is (live or registered)
+    assert marker.exists() is live
+    plist = plistlib.loads((INSTALL / 'com.storypool.karen-poller.plist').read_bytes())
+    assert plist['RunAtLoad'] is False
+    assert plist['StartInterval'] == 600
