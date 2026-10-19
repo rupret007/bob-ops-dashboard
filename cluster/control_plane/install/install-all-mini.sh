@@ -117,6 +117,7 @@ clear_pycache() {
 }
 
 install_guardian() {
+    if PYTHONPATH="$REPO_ROOT" python3 -m cluster.control_plane.health_install --is-authority; then return 0; fi
     mkdir -p "$HOME/.local/bin" "$HOME/.local/share/storypool" "$HOME/Library/LaunchAgents"
     sed -e "s|__REPO_PATH__|$REPO_ROOT|g" "$SCRIPT_DIR/storypool-guardian.sh" > "$HOME/.local/bin/storypool-guardian"
     chmod +x "$HOME/.local/bin/storypool-guardian"
@@ -126,6 +127,7 @@ install_guardian() {
 }
 
 install_shadow() {
+    if PYTHONPATH="$REPO_ROOT" python3 -m cluster.control_plane.health_install --is-authority; then return 0; fi
     log_header "Installing Shadow Runner"
 
     local log_dir="$HOME/.local/share/storypool/shadow"
@@ -233,6 +235,7 @@ install_conductor() {
 }
 
 install_watchdog() {
+    if PYTHONPATH="$REPO_ROOT" python3 -m cluster.control_plane.health_install --is-authority; then return 0; fi
     log_header "Installing Watchdog (self-healing)"
 
     local log_dir="$HOME/.local/share/storypool"
@@ -291,6 +294,7 @@ install_dashboard() {
 }
 
 install_ops_doctor() {
+    if PYTHONPATH="$REPO_ROOT" python3 -m cluster.control_plane.health_install --is-authority; then return 0; fi
     local dst="$HOME/Library/LaunchAgents/com.storypool.ops-doctor.plist"
     mkdir -p "$HOME/Library/LaunchAgents" "$HOME/.local/share/storypool/doctor"
     sed -e "s|__REPO_PATH__|$REPO_ROOT|g" -e "s|__HOME__|$HOME|g" -e "s|__PATH__|$LAUNCHD_PATH|g" \
@@ -395,7 +399,7 @@ run_self_check() {
 
     local all_pass=true
 
-    if launchctl list com.storypool.shadow &>/dev/null; then
+    if PYTHONPATH="$REPO_ROOT" python3 -m cluster.control_plane.health_install --is-authority || launchctl list com.storypool.shadow &>/dev/null; then
         log_pass "shadow runner: launchd loaded"
         RESULTS+=("shadow: PASS")
     else
@@ -529,6 +533,7 @@ main() {
     install_selfupdate
     install_dashboard
     install_karen_cli
+    PYTHONPATH="$REPO_ROOT" python3 -m cluster.control_plane.health_install --machine mini
     local self_check_failed=0
     run_self_check || self_check_failed=1
 

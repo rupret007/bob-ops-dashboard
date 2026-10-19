@@ -110,9 +110,6 @@ def main(argv=None):
     parser.add_argument('--findings-only', action='store_true',
                         help='Report health findings without starting repair jobs')
     args = parser.parse_args(argv)
-    from .health_state import authoritative
-    if authoritative() and args.findings_only:
-        return 0
     root = Path(__file__).resolve().parents[2]
     state_dir = Path(os.environ.get('STORYPOOL_DOCTOR_DIR', '~/.local/share/storypool/doctor')).expanduser()
     state_dir.mkdir(parents=True, exist_ok=True, mode=0o700)

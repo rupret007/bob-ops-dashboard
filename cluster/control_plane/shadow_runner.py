@@ -495,9 +495,6 @@ def main():
         help="Output summary as JSON",
     )
     args = parser.parse_args()
-    from .health_state import authoritative
-    if authoritative():
-        return 0
 
     runner = ShadowRunner(
         machine=args.machine,

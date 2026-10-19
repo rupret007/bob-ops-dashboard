@@ -105,6 +105,7 @@ clear_pycache() {
 }
 
 install_shadow() {
+    if PYTHONPATH="$REPO_ROOT" python3 -m cluster.control_plane.health_install --is-authority; then return 0; fi
     log_header "Installing Shadow Runner"
 
     local log_dir="$HOME/.local/share/storypool/shadow"
@@ -213,6 +214,7 @@ EOF
 }
 
 install_guardian() {
+    if PYTHONPATH="$REPO_ROOT" python3 -m cluster.control_plane.health_install --is-authority; then return 0; fi
     mkdir -p "$SYSTEMD_DIR" "$HOME/.local/share/storypool"
     sed -e "s|__REPO_PATH__|$REPO_ROOT|g" "$SCRIPT_DIR/storypool-guardian.service" > "$SYSTEMD_DIR/storypool-guardian.service"
     cp "$SCRIPT_DIR/storypool-guardian.timer" "$SYSTEMD_DIR/storypool-guardian.timer"
@@ -245,6 +247,7 @@ install_selfupdate() {
 }
 
 install_watchdog() {
+    if PYTHONPATH="$REPO_ROOT" python3 -m cluster.control_plane.health_install --is-authority; then return 0; fi
     log_header "Installing Watchdog (self-healing)"
 
     mkdir -p "$SYSTEMD_DIR"
@@ -269,6 +272,7 @@ install_watchdog() {
 }
 
 install_ops_doctor() {
+    if PYTHONPATH="$REPO_ROOT" python3 -m cluster.control_plane.health_install --is-authority; then return 0; fi
     mkdir -p "$SYSTEMD_DIR" "$HOME/.local/share/storypool/doctor"
     sed "s|__REPO_PATH__|$REPO_ROOT|g" "$SCRIPT_DIR/storypool-ops-doctor.service" > "$SYSTEMD_DIR/storypool-ops-doctor.service"
     cp "$SCRIPT_DIR/storypool-ops-doctor.timer" "$SYSTEMD_DIR/storypool-ops-doctor.timer"
@@ -372,7 +376,7 @@ run_self_check() {
 
     local all_pass=true
 
-    if systemctl --user is-active storypool-shadow.timer &>/dev/null; then
+    if PYTHONPATH="$REPO_ROOT" python3 -m cluster.control_plane.health_install --is-authority || systemctl --user is-active storypool-shadow.timer &>/dev/null; then
         log_pass "shadow runner: timer active"
         RESULTS+=("shadow: PASS")
     else
@@ -522,6 +526,7 @@ main() {
     install_ops_doctor
     install_dashboard
     install_karen_cli
+    PYTHONPATH="$REPO_ROOT" python3 -m cluster.control_plane.health_install --machine nucbox
     run_self_check
 
     echo ""

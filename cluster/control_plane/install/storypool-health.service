@@ -1,0 +1,20 @@
+[Unit]
+Description=StoryPool unified local health authority
+StartLimitIntervalSec=300
+StartLimitBurst=10
+
+[Service]
+Type=simple
+WorkingDirectory=__REPO_PATH__
+Environment="PYTHONPATH=__REPO_PATH__"
+Environment=STORYPOOL_MACHINE=nucbox
+Environment=STORYPOOL_INSTALL_DIR=__REPO_PATH__
+Environment="PATH=%h/bin:%h/.local/bin:/usr/local/bin:/usr/bin:/bin"
+ExecStart=/usr/bin/env python3 -m cluster.control_plane.health_service --machine nucbox
+Restart=on-failure
+RestartSec=15
+TimeoutStopSec=25
+UMask=0077
+
+[Install]
+WantedBy=default.target
