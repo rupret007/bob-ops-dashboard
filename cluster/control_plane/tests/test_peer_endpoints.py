@@ -14,9 +14,10 @@ def dns():
 
 @pytest.fixture(autouse=True)
 def configuration(tmp_path, monkeypatch):
-    for key in ('STORYPOOL_MINI_URL', 'STORYPOOL_NUCBOX_URL'):
+    for key in ('STORYPOOL_MINI_URL', 'STORYPOOL_NUCBOX_URL', 'STORYPOOL_TAILSCALE_SOCKET'):
         monkeypatch.delenv(key, raising=False)
     monkeypatch.setenv('STORYPOOL_PEERS_FILE', str(tmp_path / 'peers.json'))
+    monkeypatch.setenv('STORYPOOL_DISCOVERY_FILE', str(tmp_path / 'discovery.json'))
 
 
 def test_environment_override_does_not_invoke_discovery(monkeypatch):

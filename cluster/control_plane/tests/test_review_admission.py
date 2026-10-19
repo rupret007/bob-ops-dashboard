@@ -97,16 +97,24 @@ def test_ready_but_unlabelled_recovers_partial_attempt(runner, owned):
     assert [call.args[0][:2] for call in gh.call_args_list] == [['pr', 'edit']]
 
 
-def test_admission_runs_before_optional_model_and_merge(runner, owned):
+@pytest.mark.parametrize('evidence_error', [None, OSError('evidence storage unavailable')])
+def test_admission_runs_before_optional_model_and_merge(runner, owned, evidence_error):
     order = []
-    runner.build_state_snapshot = Mock(return_value=SimpleNamespace(recent_errors=[]))
+    snapshot = SimpleNamespace(recent_errors=[], open_prs=[])
+    runner.build_state_snapshot = Mock(return_value=snapshot)
     runner.deterministic_review_pass = Mock(side_effect=lambda *a, **kw: order.append('review') or [])
     runner.deterministic_merge_pass = Mock(side_effect=lambda *a, **kw: order.append('merge') or [])
     runner.get_llm_proposals = Mock(side_effect=lambda *a, **kw: order.append('llm') or {})
     runner.write_digest = Mock()
-    with patch('cluster.control_plane.node_control.is_draining', return_value=False):
+    with patch('cluster.control_plane.node_control.is_draining', return_value=False), \
+         patch('cluster.control_plane.improvement.refresh', side_effect=evidence_error,
+               return_value={'success': 'unproven'}) as evidence:
         runner.run(live=True)
     assert order == ['review', 'merge', 'llm']
+    evidence.assert_called_once_with(runner.log_dir.parent, snapshot.open_prs)
+    assert snapshot.improvement['success'] == 'unproven'
+    if evidence_error:
+        assert snapshot.improvement['coverage'] == 'unavailable'
 
 
 def test_bounded_admission_and_label_failure_are_retryable(runner, owned):
