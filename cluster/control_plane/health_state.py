@@ -9,6 +9,7 @@ import threading
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
+from functools import wraps
 
 _mutex = threading.RLock()
 _local = threading.local()
@@ -48,6 +49,14 @@ def read_status(root=None):
 
 def authoritative(root=None):
     return read_status(root).get('rollout', {}).get('phase') in ('active', 'canary')
+
+
+def serialized_recovery(function):
+    @wraps(function)
+    def wrapped(*args, **kwargs):
+        with recovery_lock():
+            return function(*args, **kwargs)
+    return wrapped
 
 
 @contextmanager

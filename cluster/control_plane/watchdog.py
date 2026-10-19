@@ -31,6 +31,7 @@ from typing import Optional, List, Dict, Any
 
 from .github_budget import GitHubDeferred
 from .github_reads import GitHubReadError
+from .health_state import authoritative, serialized_recovery
 
 LOG_DIR = Path(
     os.environ.get("STORYPOOL_LOG_DIR", "~/.local/share/storypool")
@@ -567,6 +568,7 @@ def check_install_stale() -> HealthCheck:
         )
 
 
+@serialized_recovery
 def repair_restart_service(service: str, machine: str) -> bool:
     """Restart a stuck service."""
     try:
@@ -575,27 +577,28 @@ def repair_restart_service(service: str, machine: str) -> bool:
             if service == "poller":
                 label = "com.storypool.karen-poller"
             
-            subprocess.run(
+            result = subprocess.run(
                 ["launchctl", "kickstart", "-k", f"gui/{os.getuid()}/{label}"],
                 capture_output=True,
                 timeout=30,
             )
             logger.info("Restarted %s via launchctl", service)
-            return True
+            return result.returncode == 0
         else:
             unit = f"storypool-{service}"
-            subprocess.run(
+            result = subprocess.run(
                 ["systemctl", "--user", "restart", f"{unit}.service"],
                 capture_output=True,
                 timeout=30,
             )
             logger.info("Restarted %s via systemctl", service)
-            return True
-    except subprocess.SubprocessError as e:
+            return result.returncode == 0
+    except (OSError, subprocess.SubprocessError) as e:
         logger.error("Failed to restart %s: %s", service, e)
         return False
 
 
+@serialized_recovery
 def repair_create_labels(repo: str) -> bool:
     """Create missing labels in a repo."""
     label_specs = {
@@ -623,6 +626,7 @@ def repair_create_labels(repo: str) -> bool:
     return created > 0
 
 
+@serialized_recovery
 def repair_self_update(machine: str) -> bool:
     """Trigger self-update."""
     try:
@@ -721,6 +725,8 @@ def main() -> int:
                         help="Report findings without repairs; execution errors still fail")
     
     args = parser.parse_args()
+    if authoritative() and not (args.check_only or args.findings_only):
+        return 0
     
     check_only = args.check_only or args.findings_only
     result = run_watchdog(machine=args.machine, check_only=check_only)

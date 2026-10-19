@@ -17,6 +17,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from cluster.control_plane.service_logging import event
+from .health_state import authoritative, serialized_recovery
 
 
 def dashboard_responding():
@@ -62,12 +63,15 @@ def wait_dashboard_stopped():
     return False
 
 
-def guard_dashboard(machine, root=None):
+@serialized_recovery
+def guard_dashboard(machine, root=None, observe_only=False, emit_alert=True):
     """A loaded agent can be dead; verify HTTP every cycle on both hosts."""
     if dashboard_responding():
         event('guardian', 'dashboard_http_verified', machine=machine)
         return {'ok': True, 'restarted': False}
     event('guardian', 'dashboard_http_failed', level=logging.WARNING, machine=machine)
+    if observe_only:
+        return {'ok': False, 'restarted': False}
     root = Path(root or Path.home())
     try:
         if machine == 'mini':
@@ -79,7 +83,7 @@ def guard_dashboard(machine, root=None):
         ok = False
     event('guardian', 'dashboard_restart_verified' if ok else 'dashboard_restart_failed',
           level=logging.INFO if ok else logging.ERROR, machine=machine)
-    if not ok:
+    if not ok and emit_alert:
         data = Path(os.environ.get('STORYPOOL_DATA_DIR', str(root / '.local/share/storypool')))
         data.mkdir(parents=True, exist_ok=True)
         alert = data / 'NEEDS_JEFF.md'
@@ -102,6 +106,7 @@ def command(argv):
         return subprocess.CompletedProcess(argv, 1, '', '')
 
 
+@serialized_recovery
 def reload_agent(path, defer_running=False):
     # Installer and guardian must not boot out/bootstrap the same agent together.
     path = Path(path)
@@ -152,14 +157,17 @@ def _reload_agent(path, defer_running=False):
     return verified
 
 
-def recover(machine, root=None):
+@serialized_recovery
+def recover(machine, root=None, observe_only=False):
     root = Path(root or Path.home())
     actions = []
     if machine == 'mini':
         domain = 'gui/{}'.format(os.getuid())
         for path in sorted((root / 'Library/LaunchAgents').glob('com.storypool.*.plist')):
             label = path.stem
-            if label == 'com.storypool.guardian':
+            if label in ('com.storypool.guardian', 'com.storypool.health'):
+                continue
+            if authoritative() and label in ('com.storypool.watchdog', 'com.storypool.ops-doctor', 'com.storypool.shadow'):
                 continue
             # Merely installing Karen in shadow mode never authorizes reviews.
             if label == 'com.storypool.karen-poller' and not (root / '.config/storypool/live').exists():
@@ -170,17 +178,20 @@ def recover(machine, root=None):
                 if pending and re.search(r'\bpid\s*=\s*\d+', current.stdout):
                     continue
                 try:
-                    ok = reload_agent(path)
+                    ok = False if observe_only else reload_agent(path)
                 except (OSError, ValueError, plistlib.InvalidFileException, KeyError):
                     ok = False
                 actions.append({'unit': label, 'ok': ok})
     else:
         for path in sorted((root / '.config/systemd/user').glob('storypool-*.timer')):
             unit = path.name
+            if authoritative() and unit in ('storypool-watchdog.timer', 'storypool-guardian.timer',
+                                             'storypool-ops-doctor.timer', 'storypool-shadow.timer'):
+                continue
             enabled = command(['systemctl', '--user', 'is-enabled', unit]).returncode == 0
             active = command(['systemctl', '--user', 'is-active', unit]).returncode == 0
             if not enabled or not active:
-                ok = command(['systemctl', '--user', 'enable', '--now', unit]).returncode == 0
+                ok = False if observe_only else command(['systemctl', '--user', 'enable', '--now', unit]).returncode == 0
                 actions.append({'unit': unit, 'ok': ok})
                 event('guardian', 'timer_reenabled' if ok else 'reload_failed', unit=unit)
     return actions
@@ -195,6 +206,8 @@ def main():
     args = parser.parse_args()
     if args.reload:
         return 0 if reload_agent(args.reload, args.defer_running) else 1
+    if authoritative():
+        return 0
     data = Path(os.environ.get('STORYPOOL_DATA_DIR', str(Path.home() / '.local/share/storypool')))
     data.mkdir(parents=True, exist_ok=True)
     with (data / '.guardian.lock').open('a') as lock:
