@@ -66,7 +66,7 @@ def normalize_repo(repo: str) -> str:
 def is_never_touch(repo: str) -> bool:
     """Check if a repository is on the never-touch list."""
     try:
-        return normalize_repo(repo) in NEVER_TOUCH_REPOS
+        return normalize_repo(repo) in {r.lower() for r in NEVER_TOUCH_REPOS}
     except ValueError:
         return False
 
@@ -90,7 +90,7 @@ def check_merge_allowed(repo: str) -> tuple[bool, str]:
     except ValueError:
         normalized = repo.lower()
     
-    if normalized in CONDUCTOR_NEVER_MERGE_REPOS:
+    if normalized in {r.lower() for r in CONDUCTOR_NEVER_MERGE_REPOS}:
         return False, f"repo {repo} is in NEVER_TOUCH_REPOS - requires human merge"
     return True, "ok"
 
@@ -108,7 +108,7 @@ def assert_not_never_touch(repo: str, operation: str) -> None:
         normalized = normalize_repo(repo)
     except ValueError as e:
         raise NeverTouchViolation(repo, operation, f"invalid repo: {e}") from e
-    if normalized in NEVER_TOUCH_REPOS:
+    if normalized in {r.lower() for r in NEVER_TOUCH_REPOS}:
         raise NeverTouchViolation(
             normalized,
             operation,
@@ -137,7 +137,7 @@ def check_gate_pass_at_sha(
         NeverTouchViolation: If the repo is never-touch and gate_pass is missing/invalid
     """
     normalized = normalize_repo(repo)
-    if normalized not in NEVER_TOUCH_REPOS:
+    if normalized not in {r.lower() for r in NEVER_TOUCH_REPOS}:
         return
 
     if gate_pass is None:

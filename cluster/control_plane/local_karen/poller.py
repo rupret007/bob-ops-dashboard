@@ -248,6 +248,7 @@ def poll_and_run(
                     pr_number=pr_number,
                     config=config,
                     post_comment=post_comment,
+                    expected_sha=pr_data.get("headRefOid", ""),
                 )
 
                 if result.error or not result.sha_verified or not result.verdict_path:

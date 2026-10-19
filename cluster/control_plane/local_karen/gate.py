@@ -7,6 +7,7 @@ Enforces all invariants: fail closed, never merge/push/sudo, SHA pinning.
 from __future__ import annotations
 
 import os
+import re
 import time
 from contextvars import ContextVar
 
@@ -70,6 +71,7 @@ class GateRunner:
         repo: str,
         pr_number: int,
         post_comment: bool = False,
+        expected_sha: Optional[str] = None,
     ) -> GateRunResult:
         """Run the gate on a PR.
 
@@ -98,6 +100,10 @@ class GateRunner:
             )
 
         pinned_sha = pr.head_sha
+        if expected_sha is not None and (not isinstance(expected_sha, str) or not re.fullmatch(r"[0-9a-f]{40}", expected_sha)
+                                         or pinned_sha != expected_sha):
+            return self._fail_closed(owner, repo, pr_number, pinned_sha,
+                                     "Requested review head changed; retry discovery")
 
         if self.config.is_blocked_repo(owner, repo):
             return self._fail_closed(owner, repo, pr_number, pinned_sha, "never-touch repository")
@@ -279,7 +285,8 @@ def run_gate(
     pr_number: int,
     config: Optional[KarenConfig] = None,
     post_comment: bool = False,
+    expected_sha: Optional[str] = None,
 ) -> GateRunResult:
     """Convenience function to run the gate on a PR."""
     runner = GateRunner(config)
-    return runner.run(owner, repo, pr_number, post_comment)
+    return runner.run(owner, repo, pr_number, post_comment, expected_sha=expected_sha)

@@ -46,10 +46,14 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, Optional
 
-from ..never_touch import check_merge_allowed, NEVER_TOUCH_REPOS
+from ..never_touch import check_merge_allowed, is_never_touch, NEVER_TOUCH_REPOS
 from .coordination import ClaimClient, CoordinationError, Lease
 from .budget_tracker import BudgetTracker
-from .dispatcher import _get_open_prs, _run_gh, REPOS
+from .dispatcher import REPOS
+from . import github_reads
+from .github_budget import GitHubDeferred
+from .backlog import (get_open_prs as _get_open_prs, _run_gh,
+                      ensure_label_exists, MANUAL_READINESS_REPOS, MAX_UNDRAFTS_PER_TICK)
 from .guards import MachineGuards, mini_guards_pass, nucbox_guards_pass
 from .metrics import MetricsTracker
 from .pr_ci import ci_status_from_pr as _ci_status_from_pr
@@ -938,7 +942,7 @@ class Conductor:
                               "--json", "nameWithOwner,isArchived"], default=[])
         repos = sorted(set(REPOS) | {r["nameWithOwner"] for r in discovered
                        if isinstance(r, dict) and r.get("nameWithOwner") and not r.get("isArchived")})
-        repos = [repo for repo in repos if check_merge_allowed(repo)[0]]
+        repos = [repo for repo in repos if not is_never_touch(repo)]
         for repo in repos:
             prs = _get_open_prs(repo)
             for pr in prs:
@@ -946,10 +950,9 @@ class Conductor:
                 pr["is_priority"] = _is_priority_repo(repo)
                 open_prs.append(pr)
                 
-                details = _get_pr_details(repo, pr.get("number"))
-                if details:
-                    ci = _ci_status_from_pr(details)
-                    ci_statuses[f"{repo}/{pr.get('number')}"] = ci
+                # Discovery is context only; use its rollup and reserve live
+                # uncached reads for admission and the exact-head merge gate.
+                ci_statuses[f"{repo}/{pr.get('number')}"] = _ci_status_from_pr(pr)
         
         open_prs = _sort_prs_by_priority(open_prs)
         
@@ -1406,6 +1409,82 @@ class Conductor:
         
         return stuck
     
+    def deterministic_review_pass(self, snapshot: StateSnapshot, live: bool = False) -> list:
+        """Feed green heads to Karen independently of model proposals/approval.
+
+        Readiness is not merge approval. Serialize it with fix/review/merge work,
+        recheck the full head and CI under the shared lease, and keep manual
+        Web Bob readiness parked. Karen independently pins the discovered head.
+        """
+        results = []
+        for pr in snapshot.open_prs:
+            if len(results) >= MAX_UNDRAFTS_PER_TICK:
+                break
+            repo, number, sha = pr.get("repo", ""), pr.get("number"), pr.get("headRefOid", "")
+            if (not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", repo)
+                    or is_never_touch(repo) or type(number) is not int or number < 1
+                    or not re.fullmatch(r"[0-9a-f]{40}", sha)
+                    or (pr.get("isDraft") and repo.lower() in MANUAL_READINESS_REPOS)):
+                continue
+            ci = _ci_status_from_pr(pr)
+            if not ci or any(state != "success" for state in ci.values()):
+                continue
+            if not pr.get("isDraft") and (_has_label(pr, "needs-karen")
+                    or _read_verdict(repo, number, sha, self.verdict_dir)):
+                continue
+            action = ProposedAction(ActionType.UNDRAFT_PR.value if pr.get("isDraft")
+                                    else ActionType.LABEL_NEEDS_KAREN.value,
+                                    repo=repo, pr_number=number, head_sha=sha,
+                                    reason="Deterministic CI-green exact-head Karen admission")
+            result = ValidatedAction(action, True, "Review admission; merge gate unchanged")
+            if not live:
+                result.execution_result = "shadow_mode"
+            else:
+                try:
+                    client = ClaimClient.from_env()
+                    claim = client.acquire(repo, number, sha,
+                                           os.environ.get("STORYPOOL_MACHINE", "nucbox"))
+                    with Lease(client, claim) as lease:
+                        def fresh_head():
+                            details = _get_pr_details(repo, number)
+                            ci = _ci_status_from_pr(details or {})
+                            if (not details or details.get("state") != "OPEN"
+                                    or type(details.get("isDraft")) is not bool
+                                    or details.get("headRefOid") != sha
+                                    or not ci or any(state != "success" for state in ci.values())):
+                                raise ValueError("Current head or green CI changed; review deferred")
+                            return details
+
+                        details = fresh_head()
+                        if details.get("isDraft"):
+                            if repo.lower() in MANUAL_READINESS_REPOS:
+                                raise ValueError("Manual Web Bob readiness awaits Jeff")
+                            lease.renew()
+                            ready = github_reads.run(["pr", "ready", str(number), "--repo", repo])
+                            if ready.returncode:
+                                raise ValueError("Undraft failed; review deferred")
+                            details = fresh_head()
+                            if details.get("isDraft", True):
+                                raise ValueError("PR is still a draft; review deferred")
+                        if not _has_label(details, "needs-karen"):
+                            ensure_label_exists(repo, "needs-karen", color="d4c5f9",
+                                                description="Ready for Karen gate review")
+                            lease.renew()
+                            label = github_reads.run(["pr", "edit", str(number), "--repo", repo,
+                                                      "--add-label", "needs-karen"])
+                            if label.returncode:
+                                raise ValueError("Karen label failed; retry admission next cycle")
+                        result.executed = True
+                        result.execution_result = "queued for Karen at " + sha
+                except (CoordinationError, GitHubDeferred, subprocess.SubprocessError,
+                        OSError, ValueError) as exc:
+                    result.execution_result = "deferred: " + str(exc)
+            self._write_log({"action": "deterministic_review", "proposal": action.to_dict(),
+                             "validated": result.validated, "executed": result.executed,
+                             "result": result.execution_result})
+            results.append(result)
+        return results
+
     def deterministic_merge_pass(self, snapshot: StateSnapshot, live: bool = False) -> list:
         """Evaluate every open PR independently of model availability/proposals."""
         results = []
@@ -1442,7 +1521,8 @@ class Conductor:
         
         snapshot = self.build_state_snapshot()
         
-        validated_actions = self.deterministic_merge_pass(snapshot, live=live)
+        validated_actions = self.deterministic_review_pass(snapshot, live=live)
+        validated_actions.extend(self.deterministic_merge_pass(snapshot, live=live))
         has_anomalies = len(snapshot.recent_errors) > 5
         proposals = self.get_llm_proposals(snapshot, high_effort=has_anomalies)
         
