@@ -55,6 +55,7 @@ from .github_budget import GitHubDeferred
 from .backlog import (get_open_prs as _get_open_prs, _run_gh,
                       ensure_label_exists, MANUAL_READINESS_REPOS, MAX_UNDRAFTS_PER_TICK)
 from .guards import MachineGuards, mini_guards_pass, nucbox_guards_pass
+from .reporting_telemetry import machine_guard_snapshot, lane_budget_snapshot, format_budget, format_machine
 from .metrics import MetricsTracker
 from .pr_ci import ci_status_from_pr as _ci_status_from_pr
 
@@ -186,19 +187,14 @@ class StateSnapshot:
         lines.extend([
             "",
             "## Machine Guards",
-            f"- Mini: load={self.machine_guards.get('mini', {}).get('load', '?')}, "
-            f"swap={self.machine_guards.get('mini', {}).get('swap', '?')}%, "
-            f"disk={self.machine_guards.get('mini', {}).get('disk', '?')}GB",
-            f"- NucBox: load={self.machine_guards.get('nucbox', {}).get('load', '?')}, "
-            f"lanes={self.machine_guards.get('nucbox', {}).get('lanes', '?')}/7",
+            format_machine('Mini', self.machine_guards.get('mini', {})),
+            format_machine('NucBox', self.machine_guards.get('nucbox', {})),
             "",
             "## Budget Summary",
         ])
         
         for provider, data in self.budget_summary.items():
-            pct = data.get("weekly_pct", 0)
-            cost = data.get("cost_usd", 0)
-            lines.append(f"- {provider}: ${cost:.2f} ({pct:.1f}% weekly)")
+            lines.append(format_budget(provider, data))
         
         lines.extend([
             "",
@@ -956,25 +952,9 @@ class Conductor:
         
         open_prs = _sort_prs_by_priority(open_prs)
         
-        mini_guards = MachineGuards("mini")
-        nucbox_guards = MachineGuards("nucbox")
-        
-        machine_guards = {
-            "mini": {
-                "load": mini_guards.check_load().value,
-                "swap": mini_guards.check_swap().value,
-                "disk": mini_guards.check_disk().value,
-                "passed": mini_guards.check_all().passed,
-            },
-            "nucbox": {
-                "load": nucbox_guards.check_load().value,
-                "lanes": nucbox_guards.check_lanes().value,
-                "passed": nucbox_guards.check_all().passed,
-            },
-        }
-        
-        budget_summary = self.budget.summary()
-        
+        machine_guards = machine_guard_snapshot(self.log_dir.parent)
+        budget_summary = lane_budget_snapshot(self.budget, self.log_dir.parent, self.verdict_dir)
+
         verdicts = _list_verdicts(self.verdict_dir)
         
         recent_errors = _read_recent_errors(self.log_dir)
@@ -1370,19 +1350,14 @@ class Conductor:
             "",
             "## System State",
             f"- Open PRs: {len(snapshot.open_prs)} ({len(priority_prs)} priority, {stuck_prs} stuck)",
-            f"- Mini: load={snapshot.machine_guards.get('mini', {}).get('load', '?')}, "
-            f"passed={snapshot.machine_guards.get('mini', {}).get('passed', '?')}",
-            f"- NucBox: load={snapshot.machine_guards.get('nucbox', {}).get('load', '?')}, "
-            f"passed={snapshot.machine_guards.get('nucbox', {}).get('passed', '?')}",
+            format_machine('Mini', snapshot.machine_guards.get('mini', {})),
+            format_machine('NucBox', snapshot.machine_guards.get('nucbox', {})),
             "",
             "## Budget",
         ])
         
         for provider, data in snapshot.budget_summary.items():
-            pct = data.get("weekly_pct", 0)
-            cost = data.get("cost_usd", 0)
-            cap = "⚠️" if pct > 70 else "✓"
-            lines.append(f"- {provider}: ${cost:.2f} ({pct:.1f}%) {cap}")
+            lines.append(format_budget(provider, data))
         
         lines.extend([
             "",
