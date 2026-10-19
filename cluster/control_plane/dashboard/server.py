@@ -653,7 +653,8 @@ class DashboardHandler(BaseHTTPRequestHandler):
         """Read-only delivery and dispatch evidence; no execution endpoint."""
         from ..local_karen.config import KarenConfig
         source = self.collector or DataCollector()
-        payload = {}
+        from ..local_karen.runtime_status import public_status
+        payload = {"runtime": public_status(KarenConfig.load())}
         for key, path in (("receipt", KarenConfig.load().get_verdict_dir() / "push-receipt.json"),
                           ("dispatch", source.data_dir / "dispatch" / "dispatch-status.json")):
             try:

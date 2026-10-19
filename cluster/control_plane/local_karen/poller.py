@@ -26,6 +26,7 @@ from typing import Optional, List, Any
 
 from .config import KarenConfig
 from .gate import run_gate
+from .runtime_status import record_runtime
 from .github_client import (
     list_prs_with_label,
     remove_label,
@@ -308,6 +309,7 @@ def _run_poll_once(config=None, auto_discover=True, auto_label=True, auto_update
     Reads repos from environment or config, or auto-discovers if enabled.
     Auto-discovery wins over single-repo config (repos=[] or 'auto' triggers discovery).
     """
+    record_runtime(config or KarenConfig.load())
     machine = os.environ.get("STORYPOOL_MACHINE", "mini")
     install_dir_env = os.environ.get("STORYPOOL_INSTALL_DIR")
     install_dir = Path(install_dir_env).expanduser() if install_dir_env else None

@@ -371,10 +371,14 @@ class EngineCollector:
                 overall = 'yellow'
         job_view, llm_local, llm = self._jobs_and_llm(latest, verdicts, verdict_dir.is_dir(), now.timestamp(), capacity)
         monitor = [line for line in tail(self.data_dir / 'MONITOR.md', 32768) if line.strip()]
+        from ..local_karen.runtime_status import public_status
+        from ..local_karen.config import KarenConfig
+        runtime = public_status(KarenConfig(state_dir=str(self.karen_dir)))
         def gauge(label, value, maximum=None, unit=''):
             return {'label': label, 'value': value, 'max': maximum, 'unit': unit}
         return {'timestamp': now.isoformat(), 'engine': overall, 'machines': health, 'admission': admission,
                 'review_evidence': review_evidence,
+                'karen_runtime': runtime,
                 'security_evidence': security_evidence,
                 'gauges': [gauge('Active lanes', running, capacity), gauge('Verified jobs / hour', jobs_hour),
                            gauge('Karen reviews / hour', len(recent)),

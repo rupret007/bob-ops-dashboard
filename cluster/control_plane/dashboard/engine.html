@@ -12,7 +12,7 @@
 <header><h2><span id="engine-light" class="engine-light"></span> StoryPool engine</h2><span id="engine-state">Connecting…</span><span id="engine-machines"></span></header>
 <p id="engine-admission" role="status"></p>
 <p id="engine-review-evidence" role="status"></p>
-<p id="engine-security-evidence" role="status"></p>
+<p id="engine-runtime" aria-live="polite">Karen loaded version is unverified.</p><p id="engine-security-evidence" role="status"></p>
 <div id="node-controls" aria-label="Node maintenance controls"></div><p id="control-result" role="status"></p><details><summary>Operator audit · America/Chicago</summary><pre id="control-audit"></pre></details><h3>Jobs running now</h3><div id="engine-machine-jobs"></div><h3>Fixes needing attention</h3><ul id="engine-blocked" aria-live="polite"></ul><h3>LLM usage · live</h3><div id="engine-llm"></div><div id="engine-gauges"></div><p id="engine-monitor" aria-live="polite">Loading monitor status…</p>
 <p id="engine-parity">Parity audit unavailable</p><h3>Live activity</h3><ol id="engine-activity" aria-live="polite"></ol><p id="engine-notes"></p>
 </section>
@@ -72,6 +72,8 @@
    document.getElementById('engine-admission').textContent=data.admission?.reason||'Work admission status unavailable.';
    document.getElementById('engine-review-evidence').textContent=data.review_evidence?.reason||'Karen verdict evidence is unavailable.';
    document.getElementById('engine-security-evidence').textContent=data.security_evidence?.reason||'Security scan evidence is unavailable.';
+   const runtime=data.karen_runtime;
+   document.getElementById('engine-runtime').textContent=runtime?.source_matches&&runtime?.loaded_head?'Karen loaded code '+runtime.loaded_head.slice(0,12)+' · receipt '+runtime.observed_at:'Karen loaded version is unverified; wait for a poller receipt.';
    const machines=document.getElementById('engine-machines');machines.replaceChildren();
    Object.entries(data.machines).forEach(([name,health])=>{const badge=document.createElement('span');badge.textContent=name+': '+health.detail+(health.sync_issue&&!health.detail.startsWith(health.sync_issue)?' · '+health.sync_issue:'')+(health.sync_issue&&health.peer_sync?.detail?' · '+health.peer_sync.detail:'')+(health.sync_age_seconds!=null?' · last peer contact '+Math.floor(health.sync_age_seconds/60)+'m ago':'')+(health.guardian?.dashboard?.ok===true?' · Dashboard HTTP verified':health.guardian?.dashboard?.ok===false?' · Dashboard HTTP failed':' · Dashboard HTTP not checked')+(health.guardian?.reloads!=null?' · guardian recoveries '+health.guardian.reloads:'')+'  ';badge.style.color=colors[health.state];badge.title=health.timestamp?'Last machine health report: '+health.timestamp:'No synced machine health report';machines.append(badge);});
    const controls=document.getElementById('node-controls');
