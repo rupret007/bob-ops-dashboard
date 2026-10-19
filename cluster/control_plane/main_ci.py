@@ -6,16 +6,24 @@ import os
 import re
 import subprocess
 import tempfile
+import time
+from contextvars import ContextVar
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from cluster.never_touch import check_merge_allowed
 from .coordination import ClaimClient, CoordinationError, Lease
 
+_deadline = ContextVar('main_ci_deadline', default=None)
+
 
 def command(argv, cwd=None):
+    deadline = _deadline.get()
+    timeout = 120 if deadline is None else min(120, deadline - time.monotonic())
+    if timeout <= 0:
+        raise subprocess.TimeoutExpired(argv, 0)
     return subprocess.run(argv, cwd=cwd, capture_output=True, text=True,
-                          check=True, timeout=120).stdout.strip()
+                          check=True, timeout=timeout).stdout.strip()
 
 
 def gh_json(*args):
@@ -120,24 +128,83 @@ def observe(repo, number, details, lease):
     return status
 
 
-def reconcile_recent():
-    """Every watchdog tick rechecks GitHub receipts, including after restarts."""
+def recent_prs():
     since = (datetime.now(timezone.utc) - timedelta(hours=48)).strftime('%Y-%m-%dT%H:%M:%SZ')
-    results = []
-    client = ClaimClient.from_env()  # No reads or mutations if coordination is absent.
     prs = gh_json('search', 'prs', '--owner', 'rupret007', '--merged',
                   '--merged-at', '>=' + since, '--limit', '100', '--json', 'number,repository')
-    for pr in prs:
-        repo, number = pr['repository']['nameWithOwner'], pr['number']
-        if not check_merge_allowed(repo)[0]:
-            continue
-        try:
-            details = merged_pr(repo, number)
-            claim = client.acquire(repo, number, details['headRefOid'],
-                                   os.environ.get('STORYPOOL_MACHINE', 'unknown'))
-            with Lease(client, claim) as lease:
-                status = observe(repo, number, details, lease)
-            results.append({'repo': repo, 'pr': number, 'main_ci': status})
-        except (CoordinationError, OSError, subprocess.SubprocessError, ValueError, KeyError):
-            results.append({'repo': repo, 'pr': number, 'main_ci': 'deferred'})
-    return results
+    return [pr for pr in prs if check_merge_allowed(pr['repository']['nameWithOwner'])[0]]
+
+
+def reconcile_one(client, pr):
+    repo, number = pr['repository']['nameWithOwner'], pr['number']
+    try:
+        details = merged_pr(repo, number)
+        claim = client.acquire(repo, number, details['headRefOid'],
+                               os.environ.get('STORYPOOL_MACHINE', 'unknown'))
+        with Lease(client, claim) as lease:
+            status = observe(repo, number, details, lease)
+    except (CoordinationError, OSError, subprocess.SubprocessError, ValueError, KeyError):
+        status = 'deferred'
+    return {'repo': repo, 'pr': number, 'main_ci': status}
+
+
+def reconcile_recent():
+    """Every watchdog tick rechecks GitHub receipts, including after restarts."""
+    client = ClaimClient.from_env()  # No reads or mutations if coordination is absent.
+    return [reconcile_one(client, pr) for pr in recent_prs()]
+
+
+def reconcile_batch(root):
+    """Bound probe work, persisting scheduling progress rather than approval.
+
+    Old or missing observations remain unconfirmed. Every attempted action
+    still re-fetches GitHub and acquires its exact-head cluster claim.
+    """
+    from .health_state import atomic_json
+    from .health_peer import number
+    path = Path(root) / 'main-ci-progress.json'
+    try:
+        saved = json.loads(path.read_text()) if path.stat().st_size <= 1024 * 1024 else {}
+        records = saved.get('records', {}) if isinstance(saved, dict) else {}
+        if not isinstance(records, dict):
+            records = {}
+    except (OSError, ValueError):
+        records = {}
+
+    token = _deadline.set(time.monotonic() + 120)
+    try:
+        client = ClaimClient.from_env()
+        prs = recent_prs()
+        key = lambda pr: '{}#{}'.format(pr['repository']['nameWithOwner'], pr['number'])
+        records = {key(pr): records.get(key(pr), {}) for pr in prs}
+        def checked(pr):
+            row = records[key(pr)]
+            value = row.get('checked_at') if isinstance(row, dict) else None
+            valid = (isinstance(row, dict) and row.get('repo') == pr['repository']['nameWithOwner']
+                     and row.get('pr') == pr['number'] and row.get('main_ci') in
+                     ('success', 'recovered', 'ineligible', 'failure', 'unknown', 'pending'))
+            return value if valid and number(value) and 0 <= time.time() - value <= 600 else 0
+        def attempted_at(pr):
+            row = records[key(pr)]
+            value = row.get('attempted_at') if isinstance(row, dict) else None
+            return value if number(value) and 0 <= value <= time.time() else 0
+        # Least recently attempted first; a slow PR cannot monopolize each tick.
+        due = sorted(prs, key=attempted_at)
+        attempted = 0
+        for pr in due:
+            if checked(pr):
+                continue
+            if time.monotonic() >= _deadline.get():
+                break
+            result = reconcile_one(client, pr)
+            now = time.time()
+            records[key(pr)] = dict(result, attempted_at=now,
+                                    checked_at=now if result['main_ci'] != 'deferred' else 0)
+            attempted += 1
+            atomic_json(path, dict(records=records))
+        results = [records[key(pr)] if checked(pr) else dict(repo=pr['repository']['nameWithOwner'],
+                    pr=pr['number'], main_ci='deferred') for pr in prs]
+        return dict(results=results, attempted=attempted, total=len(prs),
+                    unconfirmed=sum(r['main_ci'] in ('deferred', 'unknown', 'pending') for r in results))
+    finally:
+        _deadline.reset(token)

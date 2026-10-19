@@ -95,9 +95,13 @@ def collect(group, machine, live=False):
     if group == 'main_ci':
         if not live:
             return dict(checks=[check('main_ci_followup', True, 'Legacy owner retains main-CI followup during observation')], details={})
-        from .main_ci import reconcile_recent
-        details = reconcile_recent()
-        return dict(checks=[check('main_ci_followup', True, 'Reconciliation completed')], details=details)
+        from .main_ci import reconcile_batch
+        details = reconcile_batch(data_dir())
+        failed = any(r['main_ci'] == 'failure' for r in details['results'])
+        return dict(checks=[check('main_ci_followup', not failed and not details['unconfirmed'],
+                                 'Follow-up observed {} merges; {} unconfirmed'.format(
+                                     details['total'], details['unconfirmed']),
+                                 unknown=bool(details['unconfirmed']) and not failed)], details=details)
     if group == 'flow':
         from .dashboard.tachometer import EngineCollector
         from .dashboard.engine_flow import flow_reasons
