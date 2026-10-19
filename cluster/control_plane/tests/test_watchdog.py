@@ -74,6 +74,19 @@ class TestHealthChecks:
         assert "10" in result.message or "traceback" in result.message.lower()
         assert result.can_repair is True
 
+    @pytest.mark.parametrize("age_minutes,passed", [(61, True), (59, False), (-1, False)])
+    @pytest.mark.parametrize("use_directory", [False, True])
+    def test_traceback_recovery_requires_log_activity_this_hour(self, tmp_path, age_minutes, passed, use_directory):
+        import os
+        log_file = tmp_path / "dashboard.log"
+        log_file.write_text("Traceback (most recent call last):\n" * (watchdog.MAX_TRACEBACKS_PER_HOUR + 1))
+        modified = (datetime.now(timezone.utc) - timedelta(minutes=age_minutes)).timestamp()
+        os.utime(log_file, (modified, modified))
+        result = watchdog.check_tracebacks("dashboard", tmp_path if use_directory else log_file)
+        assert result.passed is passed
+        assert result.can_repair is (not passed)
+        assert result.repair_action == ("" if passed else "restart_service")
+
     @mock.patch("shutil.which", return_value="/usr/local/bin/gh")
     def test_check_gh_available(self, mock_which):
         """gh in PATH should pass."""

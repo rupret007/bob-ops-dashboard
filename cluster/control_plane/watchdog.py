@@ -312,6 +312,16 @@ def check_tracebacks(service: str, log_path: Path) -> HealthCheck:
         traceback_count = 0
         
         with open(log_path, "r") as f:
+            # Quiet services can retain historical, untimestamped stderr for days.
+            # An unchanged file cannot contain a new failure in this hour. Fresh
+            # or future-dated logs still use the existing conservative threshold.
+            if os.fstat(f.fileno()).st_mtime < cutoff.timestamp():
+                return HealthCheck(
+                    name=f"{service}_tracebacks",
+                    passed=True,
+                    message="0 new tracebacks: log unchanged for more than one hour",
+                    can_repair=False,
+                )
             lines = deque(f, maxlen=500)
             for line in lines:
                 if "Traceback" in line or "Error:" in line or "Exception:" in line:
