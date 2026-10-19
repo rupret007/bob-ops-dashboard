@@ -227,9 +227,11 @@ def _fix_pr(repo, pr_number, head_sha, findings):
                   'Do not weaken tests. Do not commit or push; the supervisor does that. '
                   'No sudo, force-push, main pushes, tags, releases, merges, secrets, or rad-dad-show-night.\n' +
                   ('Test command: ' + ' '.join(tests) if runtime is None else
-                   'Run every Git-tracked tests/test_*.py module in Git order, each in a fresh '
-                   f'{runtime.python} process with pytest FILE -v; stop on the first failure. '
-                   'The supervisor loads installed pytest in isolation before allowing project imports.'))
+                   'During implementation, run focused regression tests for the affected behavior '
+                   f'with {runtime.python} and iterate on any failures. '
+                   'The supervisor runs every Git-tracked tests/test_*.py module in Git order '
+                   'in fresh isolated processes before committing or pushing; '
+                   'leave that full-suite run to the supervisor.'))
         test_env = {**os.environ,
             'STORYPOOL_JOBS_DIR': str(Path(temp) / 'test-jobs'),
             'STORYPOOL_METRICS_DIR': str(Path(temp) / 'test-metrics'),
