@@ -38,6 +38,13 @@ def reviewed(verdict):
     reviews = verdict.review_results
     if not isinstance(reviews, list) or not reviews:
         return False
+    for review in reviews:
+        if not isinstance(review, dict):
+            return False
+        scope = review.get('scope') or {}
+        if (not isinstance(scope, dict) or review.get('requested_files')
+                or review.get('requested_source_files') or scope.get('context_incomplete')):
+            return False
     valid = [r for r in reviews if r.get('verdict') in ('PASS', 'FAIL', 'BORDERLINE')
              and isinstance(r.get('reason'), str) and len(r['reason'].strip()) >= 10
              and any(r.get('findings', {}).values())]
