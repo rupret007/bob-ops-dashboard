@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-10-18T21:05:49.484213-05:00",
-  "generated_at_display": "Sun Oct 18, 2026 \u00b7 9:05 PM CDT",
+  "generated_at": "2026-10-18T21:20:47.977489-05:00",
+  "generated_at_display": "Sun Oct 18, 2026 \u00b7 9:20 PM CDT",
   "timezone": "America/Chicago",
   "owner": "rupret007",
   "dashboard": "bob-ops-dashboard",
@@ -495,15 +495,15 @@
           "status": "yellow",
           "chip": "Yellow",
           "default_branch": "main",
-          "tip_sha": "84f184e",
-          "tip_date": "2026-10-19T01:50:59Z",
+          "tip_sha": "eaeebcc",
+          "tip_date": "2026-10-19T02:06:04Z",
           "open_prs": 7,
-          "open_pr_url": "https://github.com/rupret007/bob-ops-dashboard/pull/84",
-          "open_pr_number": 84,
+          "open_pr_url": "https://github.com/rupret007/bob-ops-dashboard/pull/85",
+          "open_pr_number": 85,
           "open_pr_draft": false,
           "open_pr_stack": [],
           "pr_listing_complete": true,
-          "agent_url": "https://cursor.com/agents/bc-4522847c-e01a-58c5-9fc7-ee9317e6b0db",
+          "agent_url": "https://cursor.com/agents/bc-2c8313e4-b404-5cf6-8df2-e2ed5f1b3b10",
           "ci": null,
           "release": null,
           "release_sha": null,
@@ -900,7 +900,7 @@
     "barker"
   ],
   "publish_notes": "Public board -- no secrets or customer paths. Private repositories stay high-level; AI Music Vault stays private-content-boundary only.",
-  "refresh_started_ms": 1792375509604,
+  "refresh_started_ms": 1792376410699,
   "agents_source": "file:stale->unknown",
   "agents": [
     {
@@ -948,6 +948,15 @@
   ],
   "cloud_agents": [
     {
+      "id": "bc-2c8313e4-b404-5cf6-8df2-e2ed5f1b3b10",
+      "name": "PR #85",
+      "state": "unknown",
+      "detail": "feat(cluster): fail-closed never-touch guard for rad-dad-show-night",
+      "url": "https://cursor.com/agents/bc-2c8313e4-b404-5cf6-8df2-e2ed5f1b3b10",
+      "pr_url": "https://github.com/rupret007/bob-ops-dashboard/pull/85",
+      "checked_at": null
+    },
+    {
       "id": "bc-4522847c-e01a-58c5-9fc7-ee9317e6b0db",
       "name": "PR #84",
       "state": "unknown",
@@ -963,15 +972,6 @@
       "detail": "feat: Local Karen ship gate for Mac mini/NucBox",
       "url": "https://cursor.com/agents/bc-3de82b4d-aab0-5122-a574-81ce16a2c612",
       "pr_url": "https://github.com/rupret007/bob-ops-dashboard/pull/86",
-      "checked_at": null
-    },
-    {
-      "id": "bc-8010dd7e-0b0b-5074-a351-0faafe9a47c7",
-      "name": "PR #88",
-      "state": "unknown",
-      "detail": "All-in-one install: merge PRs #84, #85, #86, #87 with unified installers",
-      "url": "https://cursor.com/agents/bc-8010dd7e-0b0b-5074-a351-0faafe9a47c7",
-      "pr_url": "https://github.com/rupret007/bob-ops-dashboard/pull/88",
       "checked_at": null
     }
   ],
@@ -1099,7 +1099,7 @@
     }
   ],
   "llm_work_now_freshness": {
-    "generated_at": "2026-10-18 21:05 CT",
+    "generated_at": "2026-10-18 21:20 CT",
     "warn_ttl_sec": 1200,
     "warnings": [],
     "ok": true
@@ -1130,7 +1130,7 @@
     ],
     "scorecards": {
       "v": "scorecards/v1",
-      "generated_at": "2026-10-19T02:05:50.859119+00:00",
+      "generated_at": "2026-10-19T02:20:49.442872+00:00",
       "windows": {
         "24h": {
           "providers": {
