@@ -9,6 +9,7 @@ import tempfile
 import time
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 os.environ.setdefault("BOB_BCRYPT_ROUNDS", "4")
 
@@ -23,6 +24,7 @@ from cluster.registry import (  # noqa: E402
 from cluster.routing import ROUTES, llm_argv, pick_capability, subject_for, validate_cap_spec  # noqa: E402
 from cluster.sandbox import sandbox_argv  # noqa: E402
 from cluster.spec import SpecError  # noqa: E402
+from cluster.tests.mesh_util import MeshNats  # noqa: E402
 
 URL = "nats://" + ".".join(["100", "64", "0", "1"]) + ":4222"  # built at runtime: repo bans tailnet literals
 
@@ -40,6 +42,15 @@ class Clock:
 
     def __call__(self):
         return self.t
+
+
+class MeshRequirementsTests(unittest.TestCase):
+    def test_missing_server_fails_instead_of_skipping_security_tests(self):
+        with patch("cluster.tests.mesh_util.find_nats_binary", return_value=None):
+            server = MeshNats()
+        with self.assertRaisesRegex(RuntimeError, "nats-server is required"):
+            server.start()
+        self.assertFalse(server.dir.exists())
 
 
 class CapabilityTests(unittest.TestCase):

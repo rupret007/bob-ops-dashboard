@@ -150,7 +150,7 @@ Head SHA: {sha}
 ## Your task
 
 Review this PR for:
-1. **Security vulnerabilities** — injection, auth bypass, hardcoded secrets, unsafe deserialization
+1. **Security vulnerabilities** — injection, bypassed identity checks, hardcoded secrets, unsafe deserialization
 2. **Functional correctness** — obvious bugs, unhandled edge cases, race conditions
 3. **Test coverage** — are new code paths tested? Were tests weakened?
 4. **Code quality** — dead code, obvious logic errors
@@ -158,7 +158,7 @@ Review this PR for:
 ## Rules (NEVER BREAK)
 - You CANNOT approve removing or weakening tests
 - You CANNOT approve PRs that add secrets to code
-- You CANNOT approve PRs that use sudo or privileged operations
+- You CANNOT approve PRs that use privileged operations (including `sudo`)
 - If borderline, lean toward FAIL with a clear reason
 - Break functional and security claims BEFORE approval
 

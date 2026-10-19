@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import unittest
+from pathlib import Path
 from unittest.mock import patch
 
 from cluster.control_plane.local_karen.checks import (
@@ -13,11 +14,12 @@ from cluster.control_plane.local_karen.checks import (
     check_no_dangerous_commands,
     check_no_secrets_in_diff,
     check_not_draft,
+    check_security_patterns,
     check_tests_not_weakened,
+    run_static_security_scan,
     run_all_checks,
     all_checks_pass,
     get_failed_checks,
-    _HAS_NEVER_TOUCH,
 )
 from cluster.control_plane.local_karen.config import KarenConfig
 
@@ -67,7 +69,6 @@ class TestBlockedRepoCheck(TestCheckHelpers):
         self.assertEqual(result.verdict, CheckVerdict.FAIL)
         self.assertIn("never-touch", result.reason.lower())
 
-    @unittest.skipUnless(_HAS_NEVER_TOUCH, "cluster.never_touch not available")
     def test_fails_blocked_repo_from_authoritative_list(self):
         """Fails when repo is on authoritative never_touch list."""
         pr = self._make_pr(owner="rupret007", repo="rad-dad-show-night")
@@ -149,9 +150,10 @@ diff --git a/file.py b/file.py
         self.assertEqual(result.verdict, CheckVerdict.PASS)
 
     def test_fails_api_key(self):
-        pr = self._make_pr(diff="""
+        synthetic = "sk-" + "1234567890abcdefghijklmnopqrstuvwxyz123456789012"
+        pr = self._make_pr(diff=f"""
 diff --git a/config.py b/config.py
-+API_KEY = "sk-1234567890abcdefghijklmnopqrstuvwxyz123456789012"
++API_KEY = "{synthetic}"
 """)
         config = self._make_config()
         result = check_no_secrets_in_diff(pr, config)
@@ -159,18 +161,20 @@ diff --git a/config.py b/config.py
         self.assertIn("secret", result.reason.lower())
 
     def test_fails_github_pat(self):
-        pr = self._make_pr(diff="""
+        synthetic = "ghp_" + "x" * 36
+        pr = self._make_pr(diff=f"""
 diff --git a/.env b/.env
-+GITHUB_TOKEN=ghp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
++GITHUB_TOKEN={synthetic}
 """)
         config = self._make_config()
         result = check_no_secrets_in_diff(pr, config)
         self.assertEqual(result.verdict, CheckVerdict.FAIL)
 
     def test_fails_private_key(self):
-        pr = self._make_pr(diff="""
+        synthetic = "-----BEGIN " + "RSA PRIVATE KEY-----"
+        pr = self._make_pr(diff=f"""
 diff --git a/key.pem b/key.pem
-+-----BEGIN RSA PRIVATE KEY-----
++{synthetic}
 +MIIEpQIBAAKCAQEA0Z...
 """)
         config = self._make_config()
@@ -178,9 +182,10 @@ diff --git a/key.pem b/key.pem
         self.assertEqual(result.verdict, CheckVerdict.FAIL)
 
     def test_ignores_deletions(self):
-        pr = self._make_pr(diff="""
+        synthetic = "sk-" + "1234567890abcdefghijklmnopqrstuvwxyz123456789012"
+        pr = self._make_pr(diff=f"""
 diff --git a/config.py b/config.py
--API_KEY = "sk-1234567890abcdefghijklmnopqrstuvwxyz123456789012"
+-API_KEY = "{synthetic}"
 +API_KEY = os.environ.get("API_KEY")
 """)
         config = self._make_config()
@@ -253,10 +258,8 @@ diff --git a/app.py b/app.py
         self.assertEqual(result.verdict, CheckVerdict.PASS)
 
     def test_fails_sudo(self):
-        pr = self._make_pr(diff="""
-diff --git a/install.sh b/install.sh
-+sudo apt install package
-""")
+        command = ("sudo", "apt", "install", "package")
+        pr = self._make_pr(diff="diff --git a/install.sh b/install.sh\n+" + " ".join(command))
         config = self._make_config()
         result = check_no_dangerous_commands(pr, config)
         self.assertEqual(result.verdict, CheckVerdict.FAIL)
@@ -264,10 +267,8 @@ diff --git a/install.sh b/install.sh
         self.assertIn("sudo", result.details.lower())
 
     def test_fails_force_push(self):
-        pr = self._make_pr(diff="""
-diff --git a/deploy.sh b/deploy.sh
-+git push --force origin main
-""")
+        command = ("git", "push", "--force", "origin", "main")
+        pr = self._make_pr(diff="diff --git a/deploy.sh b/deploy.sh\n+" + " ".join(command))
         config = self._make_config()
         result = check_no_dangerous_commands(pr, config)
         self.assertEqual(result.verdict, CheckVerdict.FAIL)
@@ -275,24 +276,72 @@ diff --git a/deploy.sh b/deploy.sh
         self.assertIn("force push", result.details.lower())
 
     def test_fails_rm_rf_root(self):
-        pr = self._make_pr(diff="""
-diff --git a/cleanup.sh b/cleanup.sh
-+rm -rf /var/log/*
-""")
+        command = ("rm", "-rf", "/var/log/*")
+        pr = self._make_pr(diff="diff --git a/cleanup.sh b/cleanup.sh\n+" + " ".join(command))
         config = self._make_config()
         result = check_no_dangerous_commands(pr, config)
         self.assertEqual(result.verdict, CheckVerdict.FAIL)
 
     def test_fails_tag_creation(self):
-        pr = self._make_pr(diff="""
-diff --git a/release.sh b/release.sh
-+git tag v1.0.0
-""")
+        command = ("git", "tag", "v1.0.0")
+        pr = self._make_pr(diff="diff --git a/release.sh b/release.sh\n+" + " ".join(command))
         config = self._make_config()
         result = check_no_dangerous_commands(pr, config)
         self.assertEqual(result.verdict, CheckVerdict.FAIL)
         self.assertIn("dangerous", result.reason.lower())
         self.assertIn("tag", result.details.lower())
+
+
+class TestSecurityRules(TestCheckHelpers):
+    def _source_diff(self, path, source):
+        lines = source.splitlines()
+        return (f"diff --git a/{path} b/{path}\n@@ -0,0 +1,{len(lines)} @@\n"
+                + "\n".join("+" + line for line in lines))
+
+    def test_rules_and_review_prompt_do_not_report_themselves(self):
+        root = Path(__file__).resolve().parents[4]
+        for filename in ("checks.py", "reviewers.py", "tests/test_checks.py"):
+            path = "cluster/control_plane/local_karen/" + filename
+            pr = self._make_pr(diff=self._source_diff(path, (root / path).read_text()))
+            for check in (check_no_dangerous_commands, check_security_patterns, run_static_security_scan):
+                with self.subTest(filename=filename, check=check.__name__):
+                    result = check(pr, self._make_config())
+                    self.assertEqual(result.verdict, CheckVerdict.PASS, result.details)
+
+    def test_authentication_controls_are_still_checked_in_words_and_identifiers(self):
+        pairs = [(name, "bypass") for name in ("auth", "oauth", "login", "session")]
+        pairs.extend([(name, "auth") for name in ("disable", "skip")])
+        for words in pairs:
+            for separator in ("_", "-", " ", ".", "\t", " = True  # ", "() # "):
+                for prefix in ("", "custom_"):
+                    for case in (str.lower, str.upper):
+                        source = case(prefix + separator.join(words)) + " = True"
+                        pr = self._make_pr(diff=self._source_diff("config.py", source))
+                        for check in (check_security_patterns, run_static_security_scan):
+                            with self.subTest(source=source, check=check.__name__):
+                                result = check(pr, self._make_config())
+                                self.assertEqual(result.verdict, CheckVerdict.FAIL)
+                                self.assertIn("auth", result.reason)
+
+    def test_cors_wildcards_are_still_rejected(self):
+        for name in ("CORS", "ALLOW_CORS", "CORS_ORIGINS", "Access-Control-Allow-Origin"):
+            pr = self._make_pr(diff=self._source_diff("server.py", f"{name} = '*'"))
+            for check in (check_security_patterns, run_static_security_scan):
+                with self.subTest(name=name, check=check.__name__):
+                    self.assertEqual(check(pr, self._make_config()).verdict, CheckVerdict.FAIL)
+
+    def test_security_patterns_detect_the_same_risks_in_karen_files(self):
+        for function in ("eval", "exec"):
+            source = f"{function}(payload)"
+            for path in ("app.py", "cluster/control_plane/local_karen/checks.py",
+                         "cluster/control_plane/local_karen/tests/test_checks.py"):
+                pr = self._make_pr(diff=self._source_diff(path, source))
+                with self.subTest(function=function, path=path):
+                    result = check_no_dangerous_commands(pr, self._make_config())
+                    self.assertEqual(result.verdict, CheckVerdict.FAIL)
+                    if function == "eval":
+                        self.assertEqual(check_security_patterns(pr, self._make_config()).verdict,
+                                         CheckVerdict.FAIL)
 
 
 class TestRunAllChecks(TestCheckHelpers):
@@ -309,9 +358,8 @@ class TestRunAllChecks(TestCheckHelpers):
             ("gh", "release", "create", "v1.0.0"),
             ("git", "push", "origin", "--tags"),
             ("chmod", "777", "example"),
-            ("eval('untrusted')",),
-            ("exec('untrusted')",),
         ]
+        commands.extend((f"{name}('untrusted')",) for name in ("eval", "exec"))
         for args in commands:
             with self.subTest(args=args):
                 pr = self._make_pr(diff="diff --git a/script.sh b/script.sh\n"

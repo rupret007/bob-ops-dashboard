@@ -7,7 +7,6 @@ import socket
 import subprocess
 import tempfile
 import time
-import unittest
 from pathlib import Path
 
 from cluster.tests.nats_test_util import find_nats_binary, free_port
@@ -29,7 +28,7 @@ class MeshNats:
     def start(self) -> None:
         if not self.bin:
             self.tmp.cleanup()
-            raise unittest.SkipTest("nats-server binary not found; run cluster/install-nats.sh")
+            raise RuntimeError("nats-server is required; run cluster/install-nats.sh")
         self.proc = subprocess.Popen([self.bin, "-c", str(self.conf)],
                                      stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         for _ in range(80):

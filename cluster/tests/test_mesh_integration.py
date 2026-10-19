@@ -17,12 +17,8 @@ from cluster.mesh_worker import Executor, MeshWorker, NodeConfig  # noqa: E402
 from cluster.registry import decode_join_code, inbox_prefix  # noqa: E402
 from cluster.tests.mesh_util import MeshNats  # noqa: E402
 
-try:
-    import nats  # noqa: F401
-    from nats.errors import NoServersError, TimeoutError as NatsTimeout  # noqa: F401
-    HAVE_NATS = True
-except ImportError:  # pragma: no cover
-    HAVE_NATS = False
+import nats  # noqa: E402, F401
+from nats.errors import NoServersError, TimeoutError as NatsTimeout  # noqa: E402, F401
 
 LEGACY = {"NUCBOX_TOKEN": "nucbox-test-token-aaaaaaaa", "DASHBOARD_TOKEN": "dash-test-token-bbbbbbbb",
           "MINI_TOKEN": "mini-test-token-cccccccc"}
@@ -68,7 +64,6 @@ async def perm_violation(nc, coro_fn) -> bool:
     return any("permissions violation" in e.lower() or "authorization" in e.lower() for e in errors)
 
 
-@unittest.skipUnless(HAVE_NATS, "nats-py not installed")
 class MeshIntegration(unittest.TestCase):
     def setUp(self):
         self.m = MeshNats()
