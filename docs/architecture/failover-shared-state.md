@@ -1,14 +1,18 @@
 # Shared state, failover, and service packaging
 
-**Status: design for Jeff's review; no implementation or deployment authorized by this document.**
+**Status: design only, ready for Jeff's review; implementation remains gated.**
 Research date: 2026-10-18 (America/Chicago). Repository inspection baseline:
-`8de4571a9ab6285fd95e886d42fcb64568d5914a`. File references describe that
+`8de4571a9ab6285fd95e886d42fcb64568d5914a` (runtime code), with prior design
+`5f5bcc240675fb25e5ff3f847ae95bc16117b21c` revised for Jeff's 19:27 container
+decision and 19:28 easy-deploy requirement. File references describe that
 checkout, not proof of installed behavior on either host. Jeff reports that NATS
 runs only on the NucBox today. This research does not claim a live failover test.
 
 Implementation remains behind the ARCHITECTURE QUEUE: first prove at least three
 trusted Karen PASSes at their exact installed/reviewed heads and one Karen-gated
-automatic merge with no revert; complete A through D in order, then implement E.
+automatic merge with no revert. Preserve the queue's stated order A, B, C, D, G,
+F, E; G/F may prepare packaging against the existing single authority, but only E
+enables replicated state and automatic standby takeover after its fault tests.
 This document can be reviewed while the Karen work continues. It does not change
 the current Mini lane restrictions, approval rules, or deployment configuration.
 
@@ -33,12 +37,16 @@ manual recovery, and describe that limitation in the dashboard. Do not call it
 automatic HA. This conclusion follows from JetStream's majority rule. [NATS
 cluster topology](https://docs.nats.io/learn/topologies/jetstream-in-a-cluster)
 
-Recommend a **hybrid runtime**: native NATS and host safety agents on both hosts;
-native services on the Mini initially; optional rootless Podman OCI packaging for
-pure control-plane services on Linux after failover is proven. Keep all
-Codex/Claude/Cursor workers and their authentication native. A later Mini container
-profile must pass measured VM/headroom tests first. Containers simplify packaging
-and rollback; they do not supply shared state, quorum, or fencing.
+Recommend Jeff's **decided hybrid runtime**: Karen poller, conductor, dispatcher,
+dashboard and NATS run in separate Podman containers from one manifest-built OCI
+image on both machines. Use Podman machine on the Mini and rootless Podman directly
+inside the NucBox's WSL distro. Native launchd/systemd supervise the host guardian,
+watchdog, updater, host diagnostics and authenticated CLI task runner. Keep all
+Codex/Claude/Cursor workers and their authentication native. Mini VM measurements
+are an acceptance gate for sizing, not permission to silently substitute a native
+control plane. If the measured budget fails, remain on the existing deployment
+and report the blocker. Docker Desktop is an optional friend fallback. Containers
+simplify packaging and rollback; they do not supply shared state, quorum or fencing.
 
 ## Current state and migration inventory
 
@@ -62,7 +70,7 @@ control-plane polling/snapshots and the older JetStream mesh queue.
 | Dashboard / scorecard / activity | Read-time aggregation of local ledger, verdicts, dispatch/conductor status, metrics, budget files, `MONITOR.md` and peer caches. `dashboard/data_collector.py`, `tachometer.py`; HTTP service on 8790. | Rebuildable local materialized views of canonical events and state; display cluster epoch, authority revision, source timestamp and age. Display counters do not grant permission to merge or spend quota. |
 | Health / peer sync / guardian | `machines/<peer>/engine.json`, `sync-status.json`, watchdog logs, `guardian-status.json`, native service state and local HTTP probes. `watchdog.py`, `guardian.py`, `peer_endpoints.py`. | Per-node health reporters publish fresh observations; one elected combined-health publisher produces the shared verdict (queue item C). Both dashboards render that same verdict. Native repair remains independent on each node. |
 | Config / deployment / updater | Git checkout, `~/.config/storypool/`, `~/.config/karen/config.json`, live marker, generated plists/user units, machine environment, self-update log. NATS config in `~/.config/bob-cluster/nats.conf`. Current installers are separate scripts/templates. | Item A's versioned, non-secret manifest generates both runtime profiles, ACLs, bucket/stream/consumer declarations, probes and expected inventory. Shared desired version/config hash; each node reports its own applied version and loaded fingerprint. Keys and private overrides remain external. |
-| NATS data / membership | `install-nats.sh` defaults JetStream storage to `~/.local/state/bob-cluster/js`; template has no cluster routes or server identity. `nats-up.sh` supervises one server. Installer currently selects a Linux amd64 binary. | Persistent local disk on each of three members, unique stable server identity, one cluster/account/domain and explicit routes; Darwin arm64 native packaging is a missing requirement. Never share the same live store directory between brokers. |
+| NATS data / membership | `install-nats.sh` defaults JetStream storage to `~/.local/state/bob-cluster/js`; template has no cluster routes or server identity. `nats-up.sh` supervises one server. Installer currently selects a Linux amd64 binary. | Persistent local disk on each of three members, unique stable server identity, one cluster/account/domain and explicit routes; the new image needs Linux arm64 and amd64 NATS binaries. Never share the same live store directory between brokers. |
 | Doctor / digests / alerts / logs | Doctor repair task claims are shared; some counters remain local. Conductor digests, root and conductor `NEEDS_JEFF.md`, monitor notes and per-service logs are local. `ops_doctor.py`, `conductor.py`, `service_logging.py`. | Durable deduplicated alert/digest IDs and repair outcomes; markdown files are rendered projections. Local rotated redacted logs remain useful offline; replicate only approved redacted diagnostics/events. No automatic external send is authorized. |
 
 The existing [cluster authority audit](../../cluster/ARCHITECTURE.md) correctly
@@ -80,6 +88,29 @@ Repository evidence: [coordination](../../cluster/control_plane/coordination.py)
 [dashboard collector](../../cluster/control_plane/dashboard/data_collector.py),
 [budget tracker](../../cluster/control_plane/budget_tracker.py).
 
+### Gaps that must stay visible during migration
+
+The current coordination client accepts one configured server URL, with reconnect
+disabled for each short operation; merely starting a second broker leaves that
+client path pinned to the NucBox. Migrate every producer, worker, reviewer,
+dashboard, doctor and updater client to the same cluster identity and multiple
+reachable endpoints, including discovery advertisements that work through the
+Mini guest and WSL networking.
+
+The existing retry operation renews the claim and then writes a different KV key.
+That is not an atomic lease-and-record transaction. Retry-record CAS rejects an
+obsolete record revision; it does not itself prove the separate claim is still
+held when the write arrives. Test the pause between those operations. Durable
+attempt ownership, retry classification and effect state should share a bounded
+resource record where they form one invariant. Do not inherit stronger fencing
+claims from the older architecture audit without this proof.
+
+Today's broker template grants the dashboard only live metrics/results subscribe
+permissions; reconstructing a shared view needs narrowly generated read/request
+permissions and inbox subjects. Its old node-specific job filters, R1 defaults,
+local merge-rate counters and local quota estimates are additional cutover
+blockers. A second copy of each service alone fixes none of these.
+
 ## Storage options
 
 The comparisons are design judgments based on the cited product contracts.
@@ -95,8 +126,10 @@ when automatic promotion must survive either of two work hosts disappearing.
 
 rqlite needs three voters for one-node fault tolerance; non-voting read replicas
 do not fix quorum. Its synchronous API must be used for safety state rather than
-queued writes. [rqlite clustering](https://rqlite.io/docs/clustering/general-guidelines/),
-[rqlite FAQ](https://rqlite.io/docs/faq/)
+queued writes; use linearizable reads for admission rather than its default weak
+reads. [rqlite clustering](https://rqlite.io/docs/clustering/general-guidelines/),
+[rqlite read consistency](https://rqlite.io/docs/api/read-consistency/),
+[rqlite queued-write durability](https://rqlite.io/docs/api/queued-writes/)
 
 etcd provides conditional multi-operation transactions and TTL leases; its
 coordination advantages are real, but it still pauses without a majority.
@@ -117,12 +150,12 @@ uses replication protocols and application identities, not filesystem merging.
 ```mermaid
 flowchart TB
   subgraph Mini
-    MA[All service instances / native runner]
-    MN[NATS + persistent local disk]
+    MA[Podman control plane + native workers/safety]
+    MN[NATS container + guest-local persistent volume]
   end
   subgraph NucBox
-    NA[All service instances / native runner]
-    NN[NATS + persistent local disk]
+    NA[Rootless Podman control plane + native workers/safety]
+    NN[NATS container + WSL-local persistent volume]
   end
   subgraph Independent_host
     TN[NATS + persistent local disk / no LLM auth]
@@ -274,13 +307,28 @@ push to main, automatic release/tag or bypass of Karen is introduced.
 For arbitrary remote effects, strict rejection of every request after lease expiry
 requires the destination to enforce a generation or conditional operation. Neither
 a heartbeat thread nor a check immediately before a CLI call closes the pause
-between that check and the remote request. Therefore this design claims strong
-CAS fencing for shared records and semantic deduplication for a PR merge, while
-treating already submitted remote effects as unknown until reconciled. Branch
-publication must use a tested remote expected-reference operation and must not
-overwrite an advanced branch. An external operation without a usable conditional
-or idempotency contract stays blocked on ambiguity; automatic retry is not allowed
-to manufacture that guarantee. Proving these contracts is an implementation gate.
+between that check and the remote request. Resource-record CAS fences an old
+generation **after a successor has conditionally installed its generation in that
+same record**. It does not atomically validate another lease key, or make GitHub
+reject a generation. A successor must complete that takeover CAS before doing
+work; heartbeats cannot restore the old generation. Native runner checks and
+process cancellation reduce the remaining window, not eliminate it. Failover tests
+must distinguish stale record rejection from remote requests already in flight.
+
+For branch publication, use the remote's ordinary fast-forward protection and
+verify the resulting full SHA. A duplicate worker based on an obsolete head must
+not be allowed to overwrite an advanced branch. Do not introduce force-push or
+force-with-lease under this design. If an operation needs a stronger expected-ref
+contract than the permitted Git operation provides, stop and revise that operation
+before enabling failover. An external effect without a usable conditional or
+idempotency contract stays blocked on ambiguity; automatic retry cannot manufacture
+that guarantee. Proving these contracts is an implementation gate.
+
+Do not start a fresh logical review merely because leadership changed: first
+consult the shared full-SHA/policy/coverage index and existing attempt. Persist
+completed independent votes once and distinguish explicit re-review IDs from
+redelivery. The one scheduler owns task ordering; dispatchers execute admitted
+plans and native runners never invent an alternate queue.
 
 The same limitation applies to paid model calls: a provider may complete a call
 whose response was lost. Reuse a provider idempotency key where supported; persist
@@ -359,12 +407,19 @@ broker contain no LLM worker auth.
 
 The manifest names secret references and required capabilities, never values.
 Use macOS Keychain or restricted machine-local files and Linux protected
-credentials; inject only a service's required secret at runtime, preferably through
-a protected descriptor/file. Encrypted secret distribution, if adopted later,
+credentials; inject only a service's required secret through a read-only runtime
+mount or protected descriptor/file. Encrypted secret distribution, if adopted later,
 needs per-machine recipient keys and separate approval/provisioning; shared state
 does not become a secret distribution channel. TLS/tailnet transport encryption
 and disk encryption do not excuse storing plaintext secret payloads in NATS.
 [NATS transport/storage encryption](https://docs.nats.io/learn/security/encryption)
+
+Prefer separate NATS public-key identities for each node/service: brokers can
+share public NKeys and permissions while each private client seed stays on its
+machine. Broker TLS private keys are also node-specific. This avoids copying
+current password-bearing generated configs to the new broker hosts. Provision
+and rotate private material outside the shared state/image pipeline, and prove
+revocation on all reachable brokers. [NATS public-key authentication](https://docs.nats.io/learn/security/authentication-basics)
 
 Use separate signing keys with trusted public identities on both hosts, not a
 shared private signing file. Validate origin, full SHA, digest, review policy,
@@ -374,119 +429,252 @@ unavailable and pause affected work; a standby is not failover-ready simply
 because its process is running. Never log raw diff, provider reply or credential
 values while collecting drill evidence.
 
+Do not mistake a runtime secret mechanism for encrypted distribution: Podman
+supports secret mounts and defaults to its file driver; that is not a promise of
+encrypted storage. Verify the pinned driver's protection and use an appropriately
+protected per-machine credential source; audit guest
+backups/disk images and runtime stores as sensitive when they contain service
+credentials. Avoid persistent guest copies where an ephemeral mount can serve the
+same need, and exclude private credential sources from shared application exports.
+[Podman secret storage](https://docs.podman.io/en/latest/markdown/podman-secret-create.1.html)
+
 ## Containers versus native supervision
 
-Item A should describe service identity, command/role, platform support, local
+Jeff decided item F at 19:27: **hybrid on both machines**. The comparisons below
+explain that choice and its costs. They do not reopen it or recommend leaving
+NATS/the Mini control plane native by default. Item G adds a one-command install,
+upgrade and uninstall experience; both items wait for the Karen proof gate.
+
+### One manifest, one image, separate services
+
+Item A describes service identity, command/role, platform support, local
 dependencies, schedules, singleton key, bucket/subject access, resources, probes,
-drain behavior, secret references and state schema once. Generate launchd and
-systemd profiles plus optional OCI/Quadlet definitions from that same manifest.
-Use a semantic preflight to reject missing services, drifted hashes, missing ACL
-subjects/buckets, wrong replica counts, incompatible schemas or absent local
-capabilities. Platform-specific runtime details remain generated adapters.
+drain behavior, secret references and state schema once. Generate native host
+launchd/systemd definitions, guest/rootless Quadlets, non-secret runtime configs,
+NATS ACLs and bucket/stream/consumer declarations from that same manifest. Preflight
+must reject omitted services, drifted hashes, missing ACL subjects/buckets, wrong
+replica counts, incompatible schemas and absent local capabilities. A manifest
+hash alone does not prove the effective generated config matches its semantics.
 
-For OCI packaging, build one control-plane application image with per-service
-entry points from one source revision/locked dependency set, and pin a separately
-verified upstream NATS image if that profile is selected. Produce native-architecture
-`linux/amd64` and `linux/arm64` artifacts under an OCI image index; keep source,
-manifest and per-platform digest in release metadata. An image index is not a
-macOS executable. This is a proposed build contract, not an image built here.
+Build **one versioned multi-architecture StoryPool control-plane image** containing
+the locked application dependencies and a pinned, checksum-verified `nats-server`
+binary. Run five separate service containers from its same platform digest: Karen
+poller, conductor, dispatcher, dashboard and NATS, with role-specific commands and
+permissions. One image does not mean one process supervising all five. Keep NATS
+version/compatibility metadata separately visible even though it shares the image;
+a code update need not restart an unchanged broker. This follows Jeff's one-image
+requirement rather than introducing an independent floating upstream NATS image.
 
-| Packaging choice | Advantages | Costs and limitations | Recommendation |
+Produce `linux/amd64` and `linux/arm64` images under one OCI image index, recording
+the source, manifest, schema and per-platform digests in release metadata. Both
+nodes use one logical release; their platform digests differ. An image index is
+not a macOS executable. Build away from the Mini; scan image contents, dependency
+inventory and provenance before promotion. No image, Containerfile or pipeline is
+created by this research.
+
+| Packaging choice | Advantages | Costs / limitations | Assessment |
 | --- | --- | --- | --- |
-| Native launchd/systemd everywhere | No Linux VM on Mini; direct Keychain/CLI and host guard access; existing recovery tooling; NATS independent of guest runtime. | Interpreter/dependency drift; more platform-specific packaging and installer checks. Needs immutable native bundles/virtual environments and explicit rollback. | Default Mini profile and native safety layer on both. |
-| Rootless Podman OCI everywhere | Repeatable Linux userspace; digest-pinned releases; simpler friend install dependencies; Linux resource isolation and Quadlet supervision. | macOS needs Linux VM, guest disk and networking/boot lifecycle; VM can take all contained services down; host auth/worker bridge still required. Container health is not outcome health. | Attractive on Linux; defer default Mini adoption pending benchmarks. |
-| Hybrid | OCI for portable pure control-plane processes where cheap; native NATS, workers, guardian/watchdog and updater; one logical inventory/state contract. | Two runtime adapters to test; native runner protocol must be versioned and tightly scoped. | **Recommended** deployment policy. No Kubernetes required for two workers. |
+| Native launchd/systemd for every service | Avoids a Linux guest on Mini; direct host metrics, CLI and Keychain integration; uses today's supervision. | Python/CLI/library drift; platform-specific update and reload behavior; friend setup and rollback need native bundles and extensive OS checks. | Useful baseline and emergency compatible rollback; not the decided F target. |
+| Put every service and authenticated worker in containers | Common Linux userspace and dependency packaging; resource limits and image rollback. | macOS guest and storage/network lifecycle; broad host mounts defeat isolation; CLI login/browser/keychain flows become harder. Moving worker auth violates Jeff's boundary. | Reject the all-container worker model. |
+| **Hybrid: OCI control plane, native workers and safety** | Identical schedulers/dashboard/broker release on both hosts; immutable payload and repeatable friend installs; authenticated CLIs keep their supported host environment. | Native runner protocol plus guest/WSL lifecycle must be maintained; guest loss removes five local services; image rollback still cannot undo incompatible state. | **Recommend and implement F after its gate.** |
 
-Karen currently invokes reviewers, and conductor/doctor can invoke provider tools.
-Their container variants require separating scheduling from a **native local task
-runner** first. That runner owns CLI auth and process supervision, validates claims,
-policy, repo/branch and task schema, and returns redacted evidence. Do not achieve
-containerization by giving an image the entire home directory, host execution
-socket or unrestricted command RPC. A containerized dashboard uses shared views
-and narrow health/control APIs rather than reading arbitrary host files.
+| Service / capability | Mini | NucBox | Failure responsibility |
+| --- | --- | --- | --- |
+| Karen poller, conductor, dispatcher | Separate containers inside Podman machine | Separate rootless containers in existing WSL distro | Shared leader/PR claims; native task runner handles CLI work. |
+| Dashboard | Container, published to host loopback; existing tailnet HTTPS path | Rootless container, same approved access policy | Both serve shared projections and label stale data. No broad public bind. |
+| NATS | Container with dedicated guest-local persistent volume | Container with dedicated WSL Linux-filesystem volume | One member per machine, plus independent third storage member; R3/quorum still mandatory. |
+| Codex/Claude/Cursor reviewers, fix workers, authenticated provider CLI calls | Native macOS supervised processes | Native Linux processes/transient user units inside WSL | Native CLI auth never enters images or container mounts; claim-aware execution and guard enforcement. |
+| Watchdog, guardian, updater, host metrics and local emergency drain | Native launchd | Native systemd user services | Recover Podman/guest failures from outside the guest and keep local safety available without NATS. |
+| Ops doctor | Native local diagnostics/repair runner; optional container planning uses typed tasks | Same | Repair tasks take shared claims; local findings remain possible offline. |
+| Third NATS member | Independent host, preferably same verified image if Linux | Not another process on either work machine | Its credentials, disk and runtime are independent of both work hosts. |
 
-| Service | Proposed placement |
-| --- | --- |
-| Karen poller, conductor, dispatcher | Native on Mini initially; OCI eligible on NucBox after native-runner separation and equivalent tests. Singleton/PR claims identical in both profiles. |
-| Dashboard | First OCI candidate on Linux; native Mini initially. Bind host loopback and use the existing approved tailnet HTTPS path; container port publishing must not broaden exposure. |
-| NATS | Native, supervised on Mini/NucBox/third host initially to minimize common dependencies. OCI remains an alternative with durable local volumes and tested recovery; never two brokers opening one volume. |
-| Worker, watchdog, guardian, ops-doctor host actions, self-update | Native on both. Doctor's pure planning can be packaged later, while repairs stay native and claimed. Guardian must repair guest/runtime failures from outside them. |
-
-Podman requires a VM on macOS; Linux can run containers directly. Quadlet generates
-systemd-managed containers on Linux and inside a Podman guest; it does not replace
-host launchd or guest boot recovery. [Podman machine](https://docs.podman.io/en/stable/markdown/podman-machine.1.html),
+Podman needs a Linux VM on macOS. NucBox rootless Podman runs directly in its
+existing WSL Linux environment, avoiding another nested Podman VM. Quadlet provides
+systemd container supervision on Linux and inside the Mini guest; host launchd
+still owns guest startup/recovery. [Podman machine](https://docs.podman.io/en/stable/markdown/podman-machine.1.html),
+[Podman installation](https://podman.io/docs/installation),
 [Podman Quadlet](https://docs.podman.io/en/latest/markdown/podman-systemd.unit.5.html)
 
-### Mini VM tradeoffs and guards
+WSL's systemd support alone does not keep the distro alive. Verify the approved
+Windows startup/lifecycle mechanism, WSL shutdown/restart, user-session boot,
+systemd availability, rootless cgroups/user mappings and tailnet reachability as
+installation prerequisites. Requests needing Windows admin or sudo remain visible
+user actions; the join command must not silently elevate. Do not treat a successful
+interactive `podman run` as proof of unattended recovery. [Microsoft WSL systemd](https://learn.microsoft.com/en-us/windows/wsl/systemd),
+[WSL configuration](https://learn.microsoft.com/en-us/windows/wsl/wsl-config)
 
-No reliable RAM/CPU/idle-cost measurement for the Mini was taken in this design
-run. Treat vendor efficiency statements as hypotheses; establish a native baseline
-and measure on the actual installed macOS/hardware before selecting a guest runtime.
+### Native task and network boundaries
 
-| macOS option | Relevant documented behavior | StoryPool cost / decision |
+Karen currently invokes reviewers, and conductor/doctor can invoke provider tools.
+Separate scheduling from a **native local task runner** before moving those
+schedulers into containers. It accepts bounded typed tasks carrying task ID,
+resource generation, pinned SHA, policy version and deadline; checks the shared
+claim, never-touch rules, quotas and local guards itself; and returns redacted,
+signed evidence. It owns the installed CLI executable, native process supervision
+and authentication. Do not give a container the whole home directory, Docker/Podman
+socket, SSH agent, CLI auth directories or an arbitrary shell-execution RPC.
+
+Across the Mini guest/host boundary, use a small authenticated transport (for
+example, a host-only endpoint with mutually authenticated clients), scoped to
+this task schema. Do not assume a Unix socket on the host is automatically a safe
+or portable VM interface. Native runner and control-plane protocol versions must
+be included in the same release compatibility check. The dashboard reads canonical
+shared projections and narrow host-health/control APIs rather than arbitrary home
+files. Per-machine service secrets mount read-only for only their consumer;
+Codex/Claude/Cursor auth remains exclusively in the native runner's host context.
+
+Networking is part of preflight. Guest private addresses and WSL NAT addresses
+must not be advertised as cluster/client endpoints to the peer. Use stable host
+Tailscale names/addresses with explicit tested forwarding to the broker's client
+and route ports, and configure NATS client and route advertisements accordingly.
+Prefer host-loopback container publishes behind narrowly scoped tailnet ingress;
+if the selected Podman backend cannot provide that path, stop deployment until a
+bounded host forwarding adapter is tested. No public wildcard exposure as a fix.
+Application clients receive every member endpoint. NATS diagnostics stay private.
+Test DNS changes, macOS sleep/wake, WSL restart, route reconnect and DERP paths.
+
+Keep JetStream hot data in Linux-native persistent volumes, including inside the
+Mini guest, rather than shared macOS-home/Windows-directory mounts. Volumes survive
+container replacement and image rollback; a guest/disk loss counts as losing one
+replica. Storage, UID mappings, bind addresses and secret mounts are explicit
+manifest outputs. Run as non-root, read-only image root filesystem where supported,
+with bounded temporary space and only the required writable data volumes. Rootless
+is an isolation improvement, not proof that a compromised app cannot access its
+own granted service credential.
+
+### Mini VM tradeoffs, costs and guards
+
+No reliable hardware/RAM/idle-cost measurement for the Mini was taken in this
+research. Vendor efficiency claims do not establish StoryPool capacity. Measure
+on the installed macOS/hardware before setting the production guest budget.
+
+| macOS runtime | Documented behavior | Cost and decision |
 | --- | --- | --- |
-| Podman machine | Linux guest; configurable CPU, memory and disk; host/guest Podman versions must match supported combinations. | VM RAM, guest OS updates, disk image growth, forwarding and login/boot ordering. Preferred open runtime to trial if Mini OCI is needed. |
-| OrbStack | CPU and total memory limits; unused memory is released. Commercial/professional usage requires a license under its policy. | Potential convenience/idle savings must be measured; adds vendor/licensing dependency. A memory cap is not guaranteed host headroom. Optional trial only. |
-| Apple `container` | OCI-compatible Linux workloads in lightweight VMs; upstream requires Apple silicon and supports macOS 26. | Check Mini hardware/OS first; per-container VM overhead and runtime-specific supervision/networking need measurement. Not a free replacement for launchd or a conventional shared Linux guest. Defer default adoption. |
+| **Podman machine** | Linux guest; CPU, memory and disk budgets are configurable; supported host/guest Podman versions must match. | Guest RAM/CPU, OS maintenance, disk image/image cache, forwarding and boot recovery. **Default per F**, with pinned backend/version and measured acceptance. |
+| OrbStack | Resource controls include total memory and CPU; unused memory is released. Its licensing distinguishes personal from professional/commercial use. | Could improve convenience or observed idle behavior; needs separate benchmarks, compatibility adapter and any applicable license. Optional evaluated alternative, not a silent Podman replacement. |
+| Apple `container` | OCI-compatible Linux containers in lightweight VMs; upstream requires Apple silicon and supports macOS 26. | Separate container VMs change memory/network/supervision costs; verify Mini OS/CPU first. Does not provide Podman machine/Quadlet equivalence. Evaluate later, not default F implementation. |
+| Docker Desktop | Optional friend compatibility profile. | Adds another runtime/VM and lifecycle adapter; must pass the same state/auth/guard tests. Do not install it as the default or run two VM runtimes for StoryPool. |
 
 [Podman guest resources/versions](https://docs.podman.io/en/stable/markdown/podman-machine-init.1.html),
 [OrbStack resource settings](https://docs.orbstack.dev/settings),
-[OrbStack licensing](https://docs.orbstack.dev/licensing),
+[OrbStack licensing policy](https://docs.orbstack.dev/licensing),
 [Apple container requirements](https://github.com/apple/container),
 [Apple containerization architecture](https://github.com/apple/containerization)
 
-A future trial starts with one small guest (provisional cap: 2 vCPU, 2 GiB RAM),
-then proves it can actually run the intended services; these are experiment limits,
-not capacity claims. Compare native versus guest at idle, normal dispatch, review
-bursts, image pull/unpack, replay, update and peer failover. Record host/guest RSS,
-memory pressure, swap used/total, load, disk high-water, CPU, energy and p95 latency.
-Prefer native arm64 images on Apple silicon; do not use amd64 emulation as the
-baseline. Build elsewhere so Mini image builds do not consume worker headroom.
+Start the isolated sizing trial with **2 vCPU, 2 GiB guest RAM and a 16 GiB virtual
+disk ceiling**, subject to actual preflight headroom. These are experiment budgets,
+not a claim that all services fit. Budget guest OS, the current and previous image,
+stream/object/consumer replicas, bounded logs, unpack space and catch-up; the
+virtual-disk ceiling does not reserve physical free disk. Measure idle, normal
+review/dispatch, queue replay, image pull/unpack, update and peer takeover. Record
+host/guest RSS and CPU, memory pressure, physical disk high-water, swap trend,
+energy and p50/p95 service/claim latency. Use native arm64 images on Apple silicon;
+amd64 emulation is not the capacity baseline.
 
-The existing Mini guards remain load <10, swap <80%, and disk >=15 GB; NucBox
-stays within seven lanes with two reserved for Codex. Include guest memory/disk and
-image cache usage in host accounting. Add a proposed admission margin of at least
-2 GiB available host memory and no sustained upward swap trend; calibrate with
-measurements rather than interpreting an empty swap file as unlimited capacity.
-On breach, stop granting worker lanes and nonessential pulls/builds, preserve the
-broker/safety plane, and prefer takeover to adding VM memory. A VM allocation must
-not consume the headroom that failover relies on. Benchmark one surviving machine
-carrying all singleton roles, with reduced worker throughput if necessary.
+The Mini guards remain load <10, swap <80%, disk >=15 GB. Include guest and image
+cache usage in **host** accounting; guest-free RAM cannot establish host safety.
+Propose at least 2 GiB available host memory after warmup and no sustained upward
+swap trend as additional trial acceptance margins. Calibrate them against the
+native baseline and failover load. Keep NucBox within seven lanes with two reserved
+for Codex, and enforce the one shared 75% weekly quota stop independently of VM
+headroom. Build images elsewhere and schedule pulls away from resource peaks.
 
-Resource cost includes the guest OS, image cache plus previous release, persistent
-volumes, replication to three disks, third-host hosting/operations and any runtime
-license. Exact monetary costs need Jeff's chosen host and usage; no unverified
-price or idle-memory claim is used to justify the recommendation.
+On breach, drain/reduce native worker lanes and suspend nonessential pulls/builds;
+preserve NATS/host safety first. If the bounded VM cannot sustain the five services,
+keep the current deployment and report a measured blocker rather than raising
+memory into the swap guard. Single-survivor acceptance must include all singleton
+roles and a reduced but working native-worker capacity. Equal throughput is not
+required for safe failover.
 
-### Updates and rollback for friends
+Costs include one guest OS on the Mini, image cache plus rollback artifact,
+persistent disk on all three replicas, replication bandwidth, third-host hosting
+and runtime operations. No specific dollar estimate is defensible without the
+selected third host, measured retention/traffic and a licensing profile. No host,
+license or account is purchased by this design.
 
-Item B should publish an approved release descriptor tying source/manifest/schema
-versions to immutable image digests and equivalent native bundle hashes. Friends
-default to stable; Jeff remains edge. Promotion requires tests, exact-head Karen
-and a canary on one host. Registry tag movement is not authorization to deploy.
-No tag or release is cut without Jeff's OK.
+### Image updates, rollback and friends
 
-The native updater verifies provenance/digest and compatibility, prefetches within
-disk guards, drains one node, hands off leadership, and replaces only that node's
-service set. Persistent volumes and private config/keys stay outside image layers
-and native bundles. Start the candidate, verify port ownership and HTTP readiness,
-then test actual broker/claim/scheduler behavior before resuming work. Never
-upgrade two quorum members together. Keep a cached verified previous artifact so
-registry outage does not prevent rollback.
+Item B's release descriptor ties source/manifest/schema and native-runner protocol
+to immutable image digests and native host-agent bundle hashes. Jeff stays edge;
+friends default stable. Promotion requires tests, exact-head Karen and one-machine
+canary. A convenient version tag selects a verified descriptor; execution pins its
+digest. Tag movement alone does not authorize an update. No tag or release is cut
+without Jeff's OK.
 
-Podman auto-update can revert an image when its systemd restart fails; reliable
-readiness signaling matters, and a later unhealthy application needs additional
-health policy. It does not revert state schemas. Use the release controller's
-multi-service health/canary policy instead of enabling unconditional mutable-tag
-updates. [Podman rollback contract](https://docs.podman.io/en/latest/markdown/podman-auto-update.1.html)
+The native updater verifies artifact identity and compatibility, prefetches within
+disk guards, drains one node, hands off leadership, waits for running native tasks
+or records controlled requeue, then replaces that node's service containers. Update
+NATS only through a version-compatible, one-member-at-a-time procedure after all
+other replicas are current. Never roll both work machines or two quorum members
+together. Keep the previous verified digest and native bundle cached so registry
+outage cannot prevent rollback. Mounted keys, local overrides and persistent
+volumes live outside the image and survive the switch.
 
-This does not fix today's reported Mini dashboard reload bug: design acceptance
-must include waiting for the previous PID/listener to exit, bounded bind retry,
-checking the new loaded version, continuing independent installer steps while
-collecting failures, and retaining redacted installer stdout/stderr in
-`self-update.log`. A container restart can have the same port-ownership race.
-Its urgent implementation/regression test belongs to the active core repair work,
-not this design-only change.
+Readiness checks cover the effective loaded digest/manifest, listener ownership,
+HTTP, quorum/replication, a CAS claim round trip, native-runner compatibility and
+fresh health authority. Observe actual scheduler outcomes during a bounded canary;
+a green container process alone is insufficient. On candidate failure, drain it,
+fence/reconcile pending effects, restart the previous compatible digest, verify
+health, then resume. If neither version is healthy, remain drained and report the
+failed steps. Do not reset data/counters or repeatedly bounce the cluster.
+
+Podman auto-update can roll back when its systemd restart fails, and its docs
+explain why readiness notification matters. It does not supply this multi-service
+canary policy or reverse state migrations. Use a channel controller rather than
+unconditional mutable-tag auto-update. [Podman rollback contract](https://docs.podman.io/en/latest/markdown/podman-auto-update.1.html)
+
+Item G's intended interface is one `storypool join`/installer command that also
+upgrades an existing machine. It detects macOS/Linux/WSL and architecture,
+installs missing Podman only with any required sudo/admin confirmation, prompts
+for a short-lived one-use join token and the few selected key/capability references,
+verifies the release, runs preflight, starts the generated inventory and performs
+health/claim checks. It reports a ready node or a clear drained/blocking reason,
+never success with missing services. No manual config edits. First-join tokens
+are private input, omitted from shell history/logs and never included in shared
+state; exchange them for node-specific limited identities.
+
+Friends join initially as workers/standbys, not automatic JetStream voters. Adding
+a friend must not silently change quorum, copy Jeff's provider identity or grant
+merge authority. A participant lacking local CLI login may join as a restricted
+capability; the command explains which worker capabilities still need native login.
+Time the target **under ten minutes from a clean supported OS to healthy joined
+node**, recording download speed, package-manager/admin prompts and any reboot.
+A required reboot or unavailable credential is an explicit failed target/blocker,
+not hidden from the measurement. Keep the README short with install, status,
+upgrade, rollback and uninstall examples.
+
+`storypool uninstall` must drain/reconcile work, revoke the node identity, remove
+only StoryPool-generated services/forwarding and its owned containers/artifacts,
+and offer explicit removal/export of StoryPool-owned data and secrets. Refuse an
+uninstall that would remove a needed voting member until membership is safely
+changed and replicas are current; never leave an abandoned node credential. Do
+not delete a friend's unrelated Podman machine, other images or CLI login/config.
+The acceptance drill proves both complete StoryPool removal and unrelated-tool
+preservation. This is an interface design, not an implemented command.
+
+### Current Mini reload failure: required regression scenario
+
+The reported 8790 bind race remains an **active core repair outside this design**.
+Code inspection confirms `install-all-mini.sh` uses `set -euo pipefail`, delegates
+reload to guardian, and `reinstall()` captures installer stdout/stderr but returns
+only a Boolean. This explains how one failed dashboard reload can hide its reason
+and prevent later poller deployment; no live fix is claimed here.
+
+Both native and container installers need a bounded sequence: request old-service
+stop; wait for its supervisor/process and listener to release; start the candidate;
+retry transient bind/readiness failures with backoff; verify its loaded version.
+`SO_REUSEADDR` may help TCP reuse but does not replace waiting for a still-live
+listener or validating which process owns the port. A regression must hold the
+old listener past stop, then release it, and distinguish successful delayed startup
+from a permanently occupied port. Verify both outcomes within deadlines.
+
+Independent later install steps should still run after a component failure, with
+per-step results and a nonzero aggregate result; prerequisite-dependent steps stay
+blocked explicitly. Save redacted installer stdout/stderr, timeout/failure context
+and the final report in `self-update.log`. Test that Karen's independent redeploy
+is attempted after a dashboard failure and that a secret-like diagnostic is
+redacted. Port ownership and detailed output stay acceptance criteria even after
+image packaging; containers alone do not fix the race.
 
 ## Staged migration and rollback
 
@@ -495,14 +683,15 @@ test evidence; no stage grants permission to skip earlier architecture items.
 
 | Stage | Entry / work / exit evidence | Rollback boundary |
 | --- | --- | --- |
-| 0 — Review only, now | Inventory and sourced design; record Karen proof as not established by this document; Jeff reviews third-host and runtime choice. | Remove/revise documentation only; zero runtime impact. |
-| 1 — Gate, A–D prerequisites | Prove three exact-head PASSes and one unreverted automatic merge; implement/test A's manifest/preflight, B's channel/canary design and code, C's single health authority, D's change attribution in order. No release cutting without Jeff. | Revert each compatible software change; keep current single authority and Mini lane restrictions. |
-| 2 — Prepare E storage | Select third host, provision node-specific identities privately, pin tested cross-platform server/client versions; test R3 topology in isolation. Take secret-free application exports and broker-supported recovery snapshots. Measure baseline stream counts/digests, retry blocks, merges, pauses and quota reservations. | Production remains unchanged; discard isolated test cluster without touching production identity. |
-| 3 — Convert existing broker authority | Controlled admission pause and drain/reconcile existing work; allow claims to clear, record unknown effects. Add Mini and third member to the existing authority using a supported, rehearsed membership path; set every authoritative backing stream and consumer to R3. Verify all peers current before resuming the existing single scheduler. Do not start an independently writable Mini cluster. | Before resume, stop new members and restore the validated prior layout only through the rehearsed offline procedure. After resume, rollback must preserve all accepted R3 writes; never copy an old store over a running member or force membership down to one. |
-| 4 — Move durable state | Import signed verdicts, retries, ledger identities, merge receipts/limits/CI pauses, quota and maintenance. Backfill idempotent IDs with source provenance. Shadow shared readers against local state; during brief quiescence switch each resource class to one shared writer. Local outputs become projections. | Before cutover, stop shadow reader. After cutover, revert only to a version that reads shared authority; never reactivate stale local ledgers/counters as writers. |
-| 5 — Enable standby services | Both hosts install full manifest inventory. Standby validates credentials/capability, config hash and health; enable lease competition per service, then distinct-PR workers only after shared quota and duplicate-work gates. Keep no automatic failback preference. | Drain/fence standby; select one leader through the same shared authority. Preserve receipts, retry limits and pauses. |
-| 6 — Prove failover | Run the matrix below both directions with automatic recovery, then at least 24h duplicate audit and normal outcome verification. Demonstrate head/config equality, no stale verdict publication, one logical merge/receipt and continued queued work. | Shared global pause on safety violation, fence old owners, reconcile GitHub effects, restore last compatible application bundle; retain replicated data. |
-| 7 — Packaging canary | After state HA, trial Linux dashboard OCI, then pure schedulers behind native runner; separately benchmark optional Mini VM. Friends stay native/stable until profile passes identical tests. | Switch one drained node to previous digest/native bundle with the same state contract. No volume deletion, schema downgrade or auth movement. |
+| 0 — Review only, now | Inventory, sourced comparison and fault plan. Karen proof is not established by this document. Jeff reviews the third storage failure domain; hybrid F is already decided. | Revise documentation only; zero runtime impact. |
+| 1 — Gate and A–D | Prove three exact-head PASSes and one unreverted gated automatic merge. Implement/test manifest/preflight, release-channel design/code, one health authority and smaller attributable changes in order. No release cutting without Jeff. | Revert each compatible change; retain the existing single authority and Mini lane restrictions. |
+| 2 — G: easy-deploy preparation | Build join/upgrade/uninstall against an isolated inventory and the existing single authority. Test clean Linux VM/WSL/macOS profiles, no manual edits, bounded privilege prompts and under-ten-minute target. Final OCI profile acceptance repeats in F. Friends remain non-voting, with explicit capabilities. | Remove generated test resources/revoke test identities; production stays unchanged. |
+| 3 — F: hybrid packaging | Separate and test native runner; build one multi-architecture image; canary all five roles on NucBox, then bounded Mini Podman machine. Both install full inventory but keep current single-admitter policy; no E failover claim. Transfer the existing broker store offline into its owned volume through a tested version-compatible procedure; never two processes opening it. Prove port handoff, reboot, auth isolation and compatible image rollback. | Drain one node; return to prior verified digest or compatible native bundle with the current data. Before production writes on the new broker version, validate its reverse-compatibility or prohibit broker binary downgrade. Never replace a live store with a stale copy. |
+| 4 — E: storage preparation | Select/provision independent third storage host privately; pin tested server/client versions. Prove isolated R3 topology, endpoint forwarding and multi-endpoint clients. Take secret-free application exports and broker-supported snapshots; baseline stream counts/digests, retry blocks, merge/CI state, pauses and quotas. | Discard isolated test cluster without touching production identity; current single authority remains. |
+| 5 — E: one replicated broker authority | Controlled admission pause; drain/reconcile old attempts and unknown effects. Join Mini and third broker through a rehearsed supported membership path; convert every authoritative backing stream and durable consumer to R3. Verify all peers current, placement and accepted-message inventory before resuming the existing single scheduler. No independently writable fallback cluster. | Before resume, use rehearsed offline restoration if needed. After resume, preserve every accepted R3 write; use compatible application rollback or remain paused. Never force quorum down to one to make rollback work. |
+| 6 — E: durable application state | Import signed artifacts, ledger/attempt identities, retries, merge receipts/limits/CI pauses, quota and maintenance. Resolve contradictory imports by GitHub/signatures/provenance, not file mtime. Shadow shared readers; briefly quiesce each resource class and switch to one shared writer. Local outputs become projections. | Before cutover stop shadow reads. After cutover roll back only to a shared-authority-compatible reader/writer; stale local ledgers/counters never regain authority. |
+| 7 — E: standby activation | Both hosts prove credentials/capabilities, loaded digest/config and guard headroom. Enable lease competition one singleton at a time; enable distinct-PR workers only after shared quota/claim and duplicate-work prerequisites. No forced automatic failback. | Drain/fence standby and elect one leader through the same shared authority; retain receipts/retries/pauses and replication. |
+| 8 — E: failover proof | Run the matrix below in both directions, then at least a 24h duplicate audit and normal outcome verification. Prove fresh health, queue survival, no stale verdict publication, one logical merge/receipt and resource guards. Repeat friend install/rollback with final profile. | Shared pause on safety violation, fence owners, reconcile GitHub, restore last compatible image/native agents. Retain replicated state; a rollback is not permission to erase accepted work. |
 
 Schema changes use expand/contract: new readers accept the prior schema, writers
 are gated on compatible participants, and destructive cleanup waits through the
@@ -527,7 +716,7 @@ manifest; sanitize evidence before committing it to this public repository.
 | --- | --- |
 | Kill leader process | Kill each singleton leader after lease renewal and before/after admission. Record old/new generation and timeline; standby takes over <=120s p95, one owner per resource, no duplicate logical job/review/merge. Repeat with a paused process resumed after TTL. |
 | Kill either whole machine | Separately stop Mini and NucBox, including their brokers, while tasks are queued and working. Confirm surviving host plus third voter writes/reads and drains queue, no accepted-task loss, and <=360s orphan eligibility. Repeat with each broker hosting meta/stream/consumer leadership. |
-| Queue survives NucBox | Enqueue uniquely identified tasks and record publish ACKs; kill NucBox; verify Mini consumes all accepted tasks and records one outcome each. Include tasks formerly pinned to the dead node and ACK-lost redelivery. Broker presence alone is not a pass. |
+| Queue survives either host | Enqueue uniquely identified tasks and record publish ACKs; kill NucBox; verify Mini consumes all accepted tasks and records one outcome each. Repeat with Mini killed and NucBox consuming. Include tasks formerly pinned to the dead node and ACK-lost redelivery. Broker presence alone is not a pass. |
 | Third node failure / quorum loss | Lose third member alone: continue degraded. Then lose either remaining member: no admission, paid work or merge authorization. Recover without force-new-cluster. |
 | Partition and asymmetric path | Isolate one host from both peers, block client port separately from route port, allow only one-way traffic, add latency/loss and switch direct/DERP paths. Majority continues; isolated native runner fences even if GitHub stays reachable. Test both work hosts as isolated member. |
 | No majority | Split all three, including stale watch/cache reads and pending ACKs. Confirm no local fallback, no promotion from HTTP health, and clear read-only/stale UI. |
@@ -538,7 +727,8 @@ manifest; sanitize evidence before committing it to this public repository.
 | Lease / clock / restore | Inject long process pause, delayed ACK, clock step and host suspend. Monotonic deadlines stop effects; restored old generation is rejected by new incarnation. Exercise TTL deletion lag rather than assuming exact expiry. |
 | Shared counters / controls | Race two allocators for one quota unit and merge slot; preserve the 75% weekly stop. Race confirmed actions with same ID; one audit/action. Offline drain works, offline resume fails closed; maintenance survives reboot and failover. |
 | Health and dashboard | Kill combined-health leader and one dashboard independently. Both views show the same fresh authority or explicit stale state; two per-node URLs remain documented. Stale peer data is never current, and maintenance never causes watchdog repair. |
-| Native / OCI update rollback | Verify profile parity, image architecture/digest, credentials absent from image/build/logs, guest crash recovery by native guardian, previous-port shutdown before new bind, failed installer step visibility and later independent steps, compatible schema rollback and preserved keys/config. |
+| Native / OCI update rollback | Verify profile parity, image architecture/digest, credentials absent from image/build/logs, guest crash recovery by native guardian, previous-port shutdown before new bind, failed installer step visibility and later independent steps, compatible schema rollback and preserved keys/config. Refuse rollback across incompatible NATS storage versions. |
+| Friend install / upgrade / uninstall | From a clean supported Linux VM, WSL distro and macOS host, time join to healthy under ten minutes; record prompts, reboot and downloads. Upgrade with one bad digest/health check, prove automatic compatible rollback; uninstall only owned resources and revoke credentials. Joining a worker never changes broker voting membership. |
 | Capacity under takeover | Run at existing guards, then fail a node while pulling/updating/replaying. No Mini load/swap/disk breach; lane count falls before safety plane is starved. Compare native and guest benchmarks with fixed workload. |
 
 For each drill retain: source/full SHA and loaded fingerprints on both machines,
@@ -553,16 +743,24 @@ shared-state transitions, no new effects authorized after ownership loss, and
 reconciliation of already submitted unknown effects. Require zero loss of
 acknowledged safety state in the
 single-member-loss tests, and all existing safety/regression suites passing on
-macOS/Python 3.9 and Linux's supported Python. External unknown-effect handling
+native macOS/Python 3.9, Linux/Python 3.14 and both pinned Linux image architectures. External unknown-effect handling
 must be demonstrated rather than claimed away. Production evidence still needs
 the separate 24-hour duplicate audit and Jeff's six-hour STABLE criteria; unit
 tests, connected brokers and this design do not establish those outcomes.
 
 ## Decisions for Jeff's review
 
-Approve or revise the proposed independent third full-storage host (hosting,
-failure domain and cost), the R3 NATS choice, and the hybrid/native-Mini runtime
-default. If a third failure domain is unavailable, accept safe paused operation
-on loss of quorum and manual fenced recovery instead of automatic two-host HA.
-Implementation remains queued for E after Karen proof and A–D. Release/tag
-approval remains a separate future decision under B.
+The remaining infrastructure decision is the independent third full-storage host:
+its failure domain, access and cost. Review the proposed R3 NATS choice and
+resource budgets. F's hybrid placement is already decided: Podman control-plane
+containers on both, native authenticated workers/safety, optional Docker Desktop
+fallback for friends. No repeat approval for that placement is requested here.
+If a third failure domain is unavailable, accept safe pause plus manually fenced
+recovery instead of claiming automatic two-host HA. Implementation stays behind
+the Karen proof gate and the queue's A, B, C, D, G, F, E order. Cutting a tag/release
+remains a separate Jeff decision under B.
+
+Sources linked next to claims are primary project/vendor documentation, retrieved
+2026-10-18. Storage tradeoffs, sizing budgets, recovery times and migration
+sequencing are StoryPool design judgments, not vendor guarantees or measured
+production results. Recheck version-specific behavior when pinning implementation.
