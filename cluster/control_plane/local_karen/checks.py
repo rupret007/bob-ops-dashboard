@@ -474,6 +474,75 @@ def _literal_shell_display(filepath, line):
                         for token in tokens[1:]))
 
 
+def _python_test_fixture_source(diff):
+    """Mask proven inert fixture expressions in complete Python test source.
+
+    Calls, computed values, incomplete context and neighboring statements stay
+    visible. Secret scanners always receive the original source.
+    """
+    import ast
+
+    files, path, number = {}, '', 1
+    for line in diff.splitlines():
+        if line.startswith('diff --git '):
+            path = line.split(' b/', 1)[-1]
+        elif line.startswith('@@'):
+            match = re.search(r'\+(\d+)(?:,\d+)? @@', line)
+            number = int(match.group(1)) if match else 1
+        elif line.startswith((' ', '+')) and not line.startswith('+++'):
+            files.setdefault(path, {})[number] = line[1:]
+            number += 1
+    masked = {}
+    for path, lines in files.items():
+        if (not path.endswith('.py') or not _is_test_file(path)
+                or set(lines) != set(range(1, max(lines) + 1))):
+            continue
+        source = '\n'.join(lines[n] for n in range(1, max(lines) + 1))
+        try:
+            tree = ast.parse(source)
+        except SyntaxError:
+            continue
+        # A fixture referenced by an executable sink is not proven inert.
+        sinks = {'exec', 'eval', 'system', 'popen', 'run', 'call', 'Popen',
+                 'check_output', 'check_call'}
+        if any(isinstance(node, ast.Call) and
+               (getattr(node.func, 'id', '') in sinks
+                or getattr(node.func, 'attr', '') in sinks) for node in ast.walk(tree)):
+            continue
+        names, spans = set(), []
+
+        def literal(node):
+            return (isinstance(node, ast.Constant)
+                    or isinstance(node, ast.Name) and node.id in names
+                    or isinstance(node, ast.BinOp) and isinstance(node.op, ast.Add)
+                    and literal(node.left) and literal(node.right)
+                    or isinstance(node, (ast.List, ast.Tuple, ast.Set))
+                    and all(literal(item) for item in node.elts))
+
+        for node in tree.body:
+            if (isinstance(node, ast.Assign) and len(node.targets) == 1
+                    and isinstance(node.targets[0], ast.Name)
+                    and node.targets[0].id.isupper() and literal(node.value)):
+                names.add(node.targets[0].id)
+                spans.append(node)
+        for node in ast.walk(tree):
+            if isinstance(node, ast.For) and literal(node.iter):
+                spans.append(node.iter)
+            if (isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
+                    and ast.unparse(node.func) == 'pytest.mark.parametrize'):
+                spans.extend(arg for arg in node.args if literal(arg))
+        for node in spans:
+            for n in range(node.lineno, node.end_lineno + 1):
+                value = masked.get((path, n), lines[n])
+                # AST columns are UTF-8 byte offsets; Python slices use characters.
+                start = (len(lines[n].encode()[:node.col_offset].decode())
+                         if n == node.lineno else 0)
+                end = (len(lines[n].encode()[:node.end_col_offset].decode())
+                       if n == node.end_lineno else len(value))
+                masked[path, n] = value[:start] + ' ' * (end - start) + value[end:]
+    return masked
+
+
 def _inert_scanner_rules(diff):
     """Identify complete literal rule tables, never executable expressions.
 
@@ -691,6 +760,7 @@ def check_no_dangerous_commands(pr: PRInfo, config: KarenConfig) -> CheckResult:
 
     issues = []
     inert_rules = _inert_scanner_rules(pr.diff) | _inert_review_prompt(pr.diff)
+    fixture_source = _python_test_fixture_source(pr.diff)
     for current_file, number, added_line in _added_lines(pr.diff):
         if (_prose_or_comment(current_file, added_line)
                 or _literal_shell_display(current_file, added_line)
@@ -699,7 +769,7 @@ def check_no_dangerous_commands(pr: PRInfo, config: KarenConfig) -> CheckResult:
         # Only literal RegExp.exec is non-executing. Member calls such as
         # child_process.exec and window.eval must still fail.
         command_source = re.sub(r"/(?:\\.|[^/\\\n])+/[gimsuy]*\.exec\s*\(",
-                                "REGEXP_MATCH(", added_line)
+                                "REGEXP_MATCH(", fixture_source.get((current_file, number), added_line))
         for pattern, danger_type in dangerous_patterns:
             if re.search(pattern, command_source, re.IGNORECASE):
                 issues.append(f"{current_file}:{number}: {danger_type} (source redacted)")
@@ -752,6 +822,7 @@ def check_security_patterns(pr: PRInfo, config: KarenConfig) -> CheckResult:
     """
     findings = []  # type: list
     inert_rules = _inert_scanner_rules(pr.diff) | _inert_review_prompt(pr.diff)
+    fixture_source = _python_test_fixture_source(pr.diff)
     current_file = None
     line_num = 0
     in_diff_hunk = False
@@ -782,7 +853,7 @@ def check_security_patterns(pr: PRInfo, config: KarenConfig) -> CheckResult:
                     continue
 
                 for pattern, desc, category in SECURITY_PATTERNS:
-                    if re.search(pattern, added_line):
+                    if re.search(pattern, fixture_source.get((current_file, line_num), added_line)):
                         findings.append({
                             "file": current_file,
                             "line": line_num,

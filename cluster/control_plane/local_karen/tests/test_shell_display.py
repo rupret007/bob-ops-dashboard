@@ -5,8 +5,8 @@ from cluster.control_plane.local_karen import checks
 from cluster.control_plane.local_karen.config import KarenConfig
 
 
-COMMAND = 'rm -' + 'rf ~/.local/share/storypool'
-SUDO = 'su' + 'do whoami'
+COMMAND = 'rm -rf ~/.local/share/storypool'
+SUDO = 'sudo whoami'
 
 
 def candidate(line, path='cluster/control_plane/install/install-all-mini.sh'):
