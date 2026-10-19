@@ -272,10 +272,12 @@ def test_generated_observer_units_pass_native_systemd_parser(tmp_path):
     with patch.object(install,'command',return_value=Mock(returncode=0)):
         install.install('nucbox',repo,tmp_path)
     units=tmp_path/'.config/systemd/user'
+    runtime=tmp_path/'runtime';runtime.mkdir(mode=0o700)
+    environment=dict(os.environ,XDG_RUNTIME_DIR=str(runtime))
     result=subprocess.run(['systemd-analyze','--user','verify',
                            str(units/'storypool-codex-quota.service'),
                            str(units/'storypool-codex-quota.timer')],
-                          capture_output=True,text=True,timeout=15)
+                          capture_output=True,text=True,timeout=15,env=environment)
     assert result.returncode==0,result.stderr
 
 
