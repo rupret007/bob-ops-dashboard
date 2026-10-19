@@ -6,6 +6,7 @@ from pathlib import Path
 _test_state = tempfile.TemporaryDirectory(prefix='storypool-pytest-')
 for _name, _relative in {
     'STORYPOOL_DATA_DIR': 'data',
+    'STORYPOOL_STATE_DIR': 'state',
     'STORYPOOL_JOBS_DIR': 'jobs',
     'STORYPOOL_METRICS_DIR': 'metrics',
     'STORYPOOL_FIX_STATE_DIR': 'fixes',
