@@ -187,11 +187,18 @@ def classify_fix_difficulty(verdict: dict) -> str:
         return "high"
     
     for check in verdict.get("check_results", []):
+        if check.get('verdict') != 'FAIL':
+            continue
         reason = (check.get("reason") or "").lower()
         if any(word in reason for word in ("security", "auth", "secret", "credential", "injection")):
             return "security"
     
     for review in verdict.get("review_results", []):
+        if (review.get('verdict') != 'FAIL'
+                or (review.get('scope') or {}).get('context_incomplete')):
+            continue
+        if (review.get('findings') or {}).get('security_issues'):
+            return 'security'
         reason = (review.get("reason") or "").lower()
         if any(word in reason for word in ("security", "auth", "secret", "credential", "injection")):
             return "security"
