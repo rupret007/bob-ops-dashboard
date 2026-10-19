@@ -240,7 +240,8 @@ contact people or modify anything. Do not inherit another reviewer's or chunk's 
 Submit the review by calling submit_review exactly once. This sole function is
 a data-only verdict submission, not an action or executable tool. Its arguments
 must be one complete valid JSON object. No prose, Markdown, XML or reasoning
-may accompany the call or appear around its arguments. The object must contain:
+may appear around its arguments. The function arguments are the authoritative
+review submission; include all findings there. The object must contain:
 - verdict: one of "PASS", "FAIL", "BORDERLINE".
 - reason: a string of at least 20 characters explaining the decision.
 - confidence: a finite number between 0 and 1.
@@ -1044,8 +1045,10 @@ class MiniMaxReviewer(BaseReviewer):
                 return invalid("unexpected_calls")
             logger.info("MiniMax verdict transport: mode=content")
             return content, dict(self._response_metadata(content), failure_stage="content")
-        if content is not None and not (isinstance(content, str) and not content.strip()):
-            return invalid("mixed_content")
+        # The documented tool protocol permits sibling text with a function
+        # call. Only arguments submit a verdict; never parse or retain that text.
+        if content is not None and not isinstance(content, str):
+            return invalid("content_type")
         if not isinstance(calls, list) or len(calls) != 1:
             return invalid("call_count")
         call = calls[0]

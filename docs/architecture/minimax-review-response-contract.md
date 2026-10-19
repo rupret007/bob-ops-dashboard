@@ -38,11 +38,26 @@ turn. The specification documents `finish_reason: tool_calls` for completed
 function submissions, and its Tool Use example contains empty content and string
 JSON arguments. Karen requires exactly one function call with the literal name,
 documented shape and complete JSON arguments, then passes those arguments to
-the unchanged verdict parser. Nonempty accompanying content, extra choices/calls,
+the unchanged verdict parser. Non-string accompanying content, extra choices/calls,
 unknown functions, legacy `function_call`, malformed arguments, and mismatched
 finish modes fail closed. `length`, `content_filter` and unknown finish reasons
 remain terminal errors. A `stop` response without calls may still supply valid
 JSON content through the existing strict parser. [Official response schema and Tool Use example](https://platform.minimax.io/docs/api-reference/text/api/openapi-chat-openai.json).
+
+Sibling text is permitted by the official protocol. The current Tool Use guide's
+first OpenAI response combines `finish_reason: tool_calls`, a function call, and
+`content: "I'll check that for you."`. Requiring empty content was an added
+transport invariant unsupported by that documented example. Karen now treats
+only the function arguments as the authoritative data-only review: sibling text
+is neither interpreted, retained nor allowed to supply or override a verdict.
+This corrects the transport invariant; it does not change the verdict validator,
+function/finish checks, retry bound, context limits or mandatory independent
+MiniMax PASS. Arbitrary prose without valid function arguments remains an error.
+Even contradictory sibling prose cannot override the function's verdict: a
+structured PASS and sibling FAIL text are evaluated as the structured PASS.
+The guide example uses M3.1-Flash on the common endpoint; it does not prove that
+the observed M2.7 calls otherwise contained valid arguments.
+[Official Tool Use guide, OpenAI first-response example](https://platform.minimax.io/docs/guides/text-m3-function-call).
 
 No `tool_choice` or undocumented forced/strict mode is requested. The M2 tool
 guide demonstrates automatic function selection, while the hosted endpoint

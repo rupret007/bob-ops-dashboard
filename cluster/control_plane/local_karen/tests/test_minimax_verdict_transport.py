@@ -75,9 +75,10 @@ def test_complete_single_function_vote_uses_unchanged_parser_and_is_terminal(pr,
     assert 'private-reasoning-value' not in caplog.text + json.dumps(result.to_dict())
 
 
-def test_structured_context_requests_survive_function_transport_without_approval(pr):
+@pytest.mark.parametrize('content', [None, 'private-sibling-context-note'])
+def test_structured_context_requests_survive_function_transport_without_approval(pr, content):
     arguments = verdict('BORDERLINE', requested_files=['file.py'], requested_source_files=['impl.py'])
-    result, request, checkpoint = review(pr, [tool_response(arguments)])
+    result, request, checkpoint = review(pr, [tool_response(arguments, content)])
     assert result.verdict == r.ReviewVerdict.BORDERLINE and not result.passed
     assert result.requested_files == ['file.py'] and result.requested_source_files == ['impl.py']
     assert request.call_count == 1
@@ -102,8 +103,9 @@ BAD_CALLS = [
 
 
 @pytest.mark.parametrize('calls', BAD_CALLS)
-def test_malformed_or_ambiguous_function_response_never_rescues_a_verdict(pr, caplog, calls):
-    bad = response(None, 'tool_calls', tool_calls=deepcopy(calls), reasoning_content=verdict())
+@pytest.mark.parametrize('content', [None, 'private-untrusted-sibling-text'])
+def test_malformed_or_ambiguous_function_response_never_rescues_a_verdict(pr, caplog, calls, content):
+    bad = response(content, 'tool_calls', tool_calls=deepcopy(calls), reasoning_content=verdict())
     result, request, checkpoint = review(pr, [bad, bad, tool_response()])
     assert result.verdict == r.ReviewVerdict.ERROR and request.call_count == 2
     checkpoint.assert_called_once_with()
@@ -113,13 +115,46 @@ def test_malformed_or_ambiguous_function_response_never_rescues_a_verdict(pr, ca
     assert request.call_args_list[0].args[0].data == request.call_args_list[1].args[0].data
 
 
-@pytest.mark.parametrize('content', ['private-prose-value', verdict(), '<think>private-prose-value</think>',
-                                   {}, [], 1])
-def test_nonempty_content_with_function_call_is_ambiguous_and_rejected(pr, caplog, content):
+@pytest.mark.parametrize('content', [{}, [], 1, False])
+def test_nonstring_content_with_function_call_is_malformed_and_rejected(pr, caplog, content):
     result, request, _ = review(pr, [tool_response(content=content)] * 3)
     assert result.verdict == r.ReviewVerdict.ERROR and request.call_count == 2
-    assert result.scope['transport_code'] == 'mixed_content'
+    assert result.scope['transport_code'] == 'content_type'
     assert 'private-' not in caplog.text + json.dumps(result.to_dict())
+
+
+@pytest.mark.parametrize('vote', ['PASS', 'FAIL', 'BORDERLINE'])
+def test_documented_nonempty_text_plus_single_function_submits_only_arguments(pr, caplog, vote):
+    arguments = verdict(vote, requested_files=[], requested_source_files=[])
+    result, request, checkpoint = review(pr, [tool_response(arguments, "I'll check that for you."),
+                                            tool_response()])
+    assert result.verdict == r.ReviewVerdict[vote] and request.call_count == 1
+    assert result.raw_response == arguments
+    assert "I'll check that for you." not in caplog.text + json.dumps(result.to_dict())
+    checkpoint.assert_not_called()
+
+
+@pytest.mark.parametrize('vote,sibling', [
+    ('FAIL', 'PASS: private-untrusted-sibling-text'),
+    ('PASS', 'FAIL: private-untrusted-sibling-text'),
+    ('BORDERLINE', verdict()),
+    ('PASS', '<think>private-untrusted-sibling-text</think>'),
+])
+def test_sibling_text_never_overrides_or_supplies_the_structured_function_verdict(pr, caplog, vote, sibling):
+    arguments = verdict(vote)
+    result, request, checkpoint = review(pr, [tool_response(arguments, sibling), tool_response()])
+    assert result.verdict == r.ReviewVerdict[vote] and request.call_count == 1
+    assert result.raw_response == arguments
+    assert 'private-untrusted-sibling-text' not in caplog.text + json.dumps(result.to_dict())
+    checkpoint.assert_not_called()
+
+
+def test_arbitrary_plain_prose_without_function_arguments_stays_error(pr, caplog):
+    result, request, checkpoint = review(pr, [response('private-unstructured-prose-value')] * 3)
+    assert result.verdict == r.ReviewVerdict.ERROR and request.call_count == 2
+    assert result.raw_response == '' and result.findings is None
+    assert 'private-unstructured-prose-value' not in caplog.text + json.dumps(result.to_dict())
+    checkpoint.assert_called_once_with()
 
 
 @pytest.mark.parametrize('finish', [None, '', 'private-unknown-finish', 'function_call', 'length', 'content_filter'])
