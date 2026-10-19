@@ -33,6 +33,7 @@ from .repo_scan import RepoScan, RepoScanError
 from ..github_budget import GitHubDeferred
 from ..github_reads import GitHubReadError
 from .gate import run_gate
+from .context_diagnostics import sanitize_context_diagnostics
 from .github_client import (
     list_prs_with_label,
     remove_label,
@@ -295,6 +296,7 @@ def poll_and_run(
         attempted += 1
         logger.info(f"Running gate on {owner}/{repo}#{pr_number}")
 
+        diagnostics = []
         try:
             result = run_gate(
                 owner=owner,
@@ -306,7 +308,8 @@ def poll_and_run(
             )
 
             if result.error or not result.sha_verified or not result.verdict_path:
-                raise RuntimeError(result.error or "Review did not produce a verified artifact")
+                diagnostics = sanitize_context_diagnostics(getattr(result, 'context_diagnostics', None))
+                raise RuntimeError("Review did not produce a verified artifact")
 
             results.append({
                 "repo": f"{owner}/{repo}",
@@ -351,11 +354,14 @@ def poll_and_run(
             raise
         except Exception as e:
             logger.error(f"Failed to run gate on {owner}/{repo}#{pr_number}: {e}")
-            results.append({
+            error_record = {
                 "repo": f"{owner}/{repo}",
                 "pr": pr_number,
                 "error": str(e),
-            })
+            }
+            if diagnostics:
+                error_record['context_diagnostics'] = diagnostics
+            results.append(error_record)
 
     return results
 

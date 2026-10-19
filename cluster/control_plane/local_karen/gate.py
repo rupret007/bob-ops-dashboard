@@ -11,7 +11,7 @@ import re
 import time
 from contextvars import ContextVar
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Optional
 
 from ..coordination import ClaimClient, CoordinationError, Lease
@@ -26,6 +26,7 @@ from .reviewers import (
 )
 from .verdict import Verdict, create_verdict, save_verdict
 from .github_client import fetch_pr_info, verify_sha_current, GitHubError
+from .context_diagnostics import collect_context_diagnostics
 
 try:
     from ..metrics import MetricsTracker
@@ -53,6 +54,7 @@ class GateRunResult:
     verdict_path: Optional[str]
     sha_verified: bool
     error: Optional[str] = None
+    context_diagnostics: list[dict] = field(default_factory=list)
 
 
 class GateRunner:
@@ -165,8 +167,10 @@ class GateRunner:
 
         if (review_result.verdict == ReviewVerdict.ERROR or
                 (review_result.scope or {}).get("context_incomplete")):
-            return self._fail_closed(owner, repo, pr_number, pinned_sha,
-                                     "Review error: " + review_result.reason, check_results)
+            result = self._fail_closed(owner, repo, pr_number, pinned_sha,
+                                       "Review error: " + review_result.reason, check_results)
+            result.context_diagnostics = collect_context_diagnostics(all_reviews)
+            return result
 
         final_passed = review_result.verdict == ReviewVerdict.PASS and not failed
 
