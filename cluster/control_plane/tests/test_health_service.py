@@ -1,5 +1,9 @@
 """Fake-clock scheduling and durable per-group recovery damping."""
 from concurrent.futures import Future
+from unittest.mock import Mock
+import json
+
+import pytest
 
 from cluster.control_plane import health_service as service
 from cluster.control_plane.health_adapters import PERIODS
@@ -90,3 +94,72 @@ def test_failed_canary_retries_only_after_code_changes_and_needs_new_checks(tmp_
     assert changed.status['rollout']['phase'] == 'observe'
     assert changed.status['rollout']['previous_rollback'] == saved['rollout']
     assert changed.status['groups'] == {}
+
+
+def failed_transition(tmp_path):
+    saved = {'machine': 'mini', 'loaded_head': 'a' * 40,
+             'groups': {'guardian': {'finished_at': 100, 'checks': [{'passed': True}]}},
+             'rollout': {'phase': 'transition-failed', 'error': 'RuntimeError',
+                         'comparison': {'passed': True, 'head': 'a' * 40}}}
+    service.atomic_json(tmp_path / 'health-status.json', saved)
+    return saved
+
+
+def restored_manager(monkeypatch):
+    from cluster.control_plane import health_rollout as rollout
+    manager = Mock()
+    manager.snapshot.return_value = {name: dict(installed=True, enabled=True, active=True)
+                                     for name in rollout.RETIRED}
+    monkeypatch.setattr(rollout, 'Manager', lambda machine: manager)
+    return manager
+
+
+def test_new_revision_recovers_only_to_observe_with_private_failure_archive(tmp_path, monkeypatch):
+    saved = failed_transition(tmp_path)
+    manager = restored_manager(monkeypatch)
+    scheduler = service.Scheduler(tmp_path, 'mini', 'b' * 40, Executor(), Executor())
+    assert scheduler.status['rollout']['phase'] == 'observe'
+    assert 'comparison' not in scheduler.status['rollout']
+    assert scheduler.status['groups'] == {}
+    archive = json.loads((tmp_path / ('health-transition-failed-' + 'a' * 40 + '.json')).read_text())
+    assert archive['rollout'] == saved['rollout']
+    assert archive['verified_units'] == manager.snapshot.return_value
+    assert (tmp_path / ('health-transition-failed-' + 'a' * 40 + '.json')).stat().st_mode & 0o777 == 0o600
+    assert manager.method_calls == [('snapshot', (), {})]
+    scheduler.rollout_tick(0, 1000)
+    assert scheduler.status['rollout']['phase'] == 'observe'
+    assert not scheduler.slow.calls  # Fresh complete groups must precede comparison.
+    assert not (tmp_path / '.health-authority').exists()
+    scheduler.status['groups'] = {name: dict(checks=[dict(name=name, passed=True)],
+        finished_at=1000, details={}) for name in PERIODS}
+    scheduler.rollout_tick(1, 1000)
+    assert scheduler.transition[0] == 'compare'
+    scheduler.transition[1].set_result(dict(passed=True, head='b' * 40))
+    scheduler.rollout_tick(2, 1001)
+    assert scheduler.transition is None  # A full comparison still needs the Nuc canary.
+    assert scheduler.status['rollout']['phase'] == 'observe'
+    assert len(scheduler.slow.calls) == 1
+
+
+@pytest.mark.parametrize('blocker', ['same-head', 'authority', 'missing', 'installed',
+                                    'enabled', 'active', 'unknown', 'nonboolean'])
+def test_failed_transition_stays_blocked_without_complete_positive_restoration(tmp_path, monkeypatch, blocker):
+    saved = failed_transition(tmp_path)
+    manager = restored_manager(monkeypatch)
+    head = 'b' * 40
+    if blocker == 'same-head':
+        head = 'a' * 40
+    elif blocker == 'authority':
+        (tmp_path / '.health-authority').touch()
+    elif blocker == 'missing':
+        del manager.snapshot.return_value['shadow']
+    elif blocker == 'unknown':
+        manager.snapshot.side_effect = RuntimeError('private detail')
+    elif blocker == 'nonboolean':
+        manager.snapshot.return_value['watchdog']['enabled'] = 1
+    else:
+        manager.snapshot.return_value['watchdog'][blocker] = False
+    scheduler = service.Scheduler(tmp_path, 'mini', head, Executor(), Executor())
+    assert scheduler.status['rollout'] == saved['rollout']
+    assert not list(tmp_path.glob('health-transition-failed-*.json'))
+    assert not any(call[0] in ('disable', 'restore') for call in manager.method_calls)

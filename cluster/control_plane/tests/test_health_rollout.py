@@ -1,5 +1,6 @@
 """Fail-closed comparison, ordered rollout and rollback of partial manager changes."""
 from unittest.mock import Mock, patch
+import subprocess
 
 import pytest
 
@@ -63,3 +64,63 @@ def test_missing_or_failed_group_blocks_comparison():
     value = candidate()
     value['groups']['doctor']['error'] = 'TimeoutExpired'
     assert not rollout.complete_cycle(value, 1001)
+
+
+def disabled_listing(value):
+    return 'disabled services = {\n' + '\n'.join(
+        '\t"com.storypool.{}" => {}'.format(name, value) for name in rollout.RETIRED) + '\n}\n'
+
+
+@pytest.mark.parametrize('value,enabled', [('enabled', True), ('disabled', False),
+                                         ('false', True), ('true', False)])
+def test_launchd_current_and_legacy_enable_states(value, enabled):
+    assert rollout.launchd_enable_states(disabled_listing(value)) == dict.fromkeys(rollout.RETIRED, enabled)
+
+
+@pytest.mark.parametrize('output', ['', '{}', 'disabled services = {}',
+    disabled_listing('unknown'), disabled_listing('true').replace('watchdog"', 'watchdog-extra"'),
+    disabled_listing('true').replace('true', 'true-extra', 1),
+    disabled_listing('true').replace('\n}', '\n"com.storypool.watchdog" => false\n}')])
+def test_unknown_missing_or_conflicting_enable_states_fail_closed(output):
+    with pytest.raises(RuntimeError):
+        rollout.launchd_enable_states(output)
+
+
+@pytest.mark.parametrize('value,loaded,expected', [('disabled', False, True), ('true', False, True),
+                                                ('enabled', False, False), ('disabled', True, False)])
+def test_verify_disabled_requires_disabled_and_unregistered(tmp_path, value, loaded, expected):
+    manager = rollout.Manager('mini', tmp_path)
+    manager.run = Mock(side_effect=lambda argv: subprocess.CompletedProcess(argv,
+        0 if argv[1] == 'print-disabled' or loaded else 113, disabled_listing(value), ''))
+    assert manager.verify_disabled() is expected
+
+
+def test_enable_listing_command_failure_does_not_become_disabled(tmp_path):
+    manager = rollout.Manager('mini', tmp_path)
+    manager.run = Mock(return_value=subprocess.CompletedProcess([], 1, disabled_listing('disabled'), 'private'))
+    with pytest.raises(RuntimeError):
+        manager.verify_disabled()
+
+
+def test_registration_error_is_unknown_not_absent(tmp_path):
+    manager = rollout.Manager('mini', tmp_path)
+    manager.run = Mock(side_effect=lambda argv: subprocess.CompletedProcess(argv,
+        0 if argv[1] == 'print-disabled' else 1, disabled_listing('disabled'), ''))
+    with pytest.raises(RuntimeError):
+        manager.verify_disabled()
+
+
+@pytest.mark.parametrize('prints,ok', [([0, 113], True), ([0] * 5, False), ([1] * 5, False)])
+def test_disable_waits_for_proven_unregistration_without_more_mutations(tmp_path, monkeypatch, prints, ok):
+    manager = rollout.Manager('mini', tmp_path)
+    manager.snapshot = Mock(return_value={'watchdog': {'installed': True}})
+    codes = iter([0, 0] + prints)
+    manager.run = Mock(side_effect=lambda argv: subprocess.CompletedProcess(argv, next(codes), '', ''))
+    monkeypatch.setattr(rollout.guardian.time, 'sleep', lambda _: None)
+    monkeypatch.setattr(rollout.guardian, 'event', lambda *a, **kw: None)
+    if ok:
+        manager.disable()
+    else:
+        with pytest.raises(RuntimeError):
+            manager.disable()
+    assert [c.args[0][1] for c in manager.run.call_args_list] == ['disable', 'bootout'] + ['print'] * len(prints)

@@ -14,6 +14,25 @@ from .health_state import atomic_json, recovery_lock
 RETIRED = ('watchdog', 'guardian', 'ops-doctor', 'shadow')
 
 
+def launchd_enable_states(output):
+    """Require an explicit, understood override for each owned legacy unit."""
+    listing = re.fullmatch(r'\s*disabled services\s*=\s*\{(.*)\}\s*', output, re.S)
+    if not listing:
+        raise RuntimeError('Unknown agent enable-state format')
+    states = {}
+    for line in listing[1].splitlines():
+        if not line.strip():
+            continue
+        entry = re.fullmatch(r'\s*"([^"\n]+)"\s*=>\s*(true|false|enabled|disabled)\s*', line)
+        if not entry or entry[1] in states:
+            raise RuntimeError('Unknown agent enable-state entry')
+        states[entry[1]] = entry[2] in ('false', 'enabled')
+    labels = {'com.storypool.' + name for name in RETIRED}
+    if not labels.issubset(states):
+        raise RuntimeError('Missing agent enable-state entry')
+    return {name: states['com.storypool.' + name] for name in RETIRED}
+
+
 def same_checks(old, new):
     keys = ('passed', 'execution_error', 'can_repair', 'repair_action')
     def normalize(checks):
@@ -99,14 +118,16 @@ class Manager:
             listing = self.run(['launchctl', 'print-disabled', self.domain])
             if listing.returncode:
                 raise RuntimeError('Unable to inspect agent enable state')
-            disabled = listing.stdout
+            disabled = launchd_enable_states(listing.stdout)
         for name in RETIRED:
             if self.machine == 'mini':
                 target = self.domain + '/com.storypool.' + name
                 installed = (self.root / 'Library/LaunchAgents' / ('com.storypool.' + name + '.plist')).exists()
-                enabled = not re.search(r'"com\.storypool\.' + re.escape(name) + r'"\s*=>\s*true', disabled)
-                result[name] = dict(installed=installed, enabled=enabled,
-                                    active=self.run(['launchctl', 'print', target]).returncode == 0)
+                enabled = disabled[name]
+                registered = self.run(['launchctl', 'print', target])
+                if registered.returncode not in (0, 113):
+                    raise RuntimeError('Unable to inspect agent registration')
+                result[name] = dict(installed=installed, enabled=enabled, active=registered.returncode == 0)
             else:
                 unit = 'storypool-' + name + '.timer'
                 installed = (self.root / '.config/systemd/user' / unit).exists()
@@ -124,6 +145,9 @@ class Manager:
                 if self.run(['launchctl', 'disable', target]).returncode:
                     raise RuntimeError('Unable to disable legacy agent')
                 self.run(['launchctl', 'bootout', target])
+                if not guardian._launchctl_wait(['launchctl', 'print', target], 113,
+                                                'com.storypool.' + name, 'unregister', self.run):
+                    raise RuntimeError('Unable to unregister legacy agent')
             else:
                 unit = 'storypool-' + name
                 if self.run(['systemctl', '--user', 'disable', '--now', unit + '.timer']).returncode:
@@ -156,6 +180,32 @@ class Manager:
                                          ('start', value['active'])]:
                     if selected and self.run(['systemctl', '--user', action, unit]).returncode:
                         raise RuntimeError('Unable to restore legacy timer')
+
+
+def recover_transition(root, status, manager, head, now):
+    """A new binary may observe again only after proving legacy ownership."""
+    old_head = status.get('loaded_head', '')
+    if (status.get('rollout', {}).get('phase') != 'transition-failed'
+            or not isinstance(old_head, str) or not isinstance(head, str)
+            or not re.fullmatch(r'[0-9a-f]{40}', old_head)
+            or not re.fullmatch(r'[0-9a-f]{40}', head) or old_head == head):
+        return None
+    root = Path(root)
+    with recovery_lock(root):
+        if (root / '.health-authority').exists():
+            return None
+        try:
+            units = manager.snapshot()
+            if set(units) != set(RETIRED) or not all(
+                    isinstance(v, dict) and all(v.get(k) is True for k in ('installed', 'enabled', 'active'))
+                    for v in units.values()):
+                return None
+            atomic_json(root / ('health-transition-failed-' + old_head + '.json'),
+                        dict(loaded_head=old_head, rollout=status['rollout'],
+                             verified_units=units, recovered_at=now))
+        except (OSError, RuntimeError, ValueError, TypeError):
+            return None
+    return dict(phase='observe', started_at=now, recovered_transition_head=old_head)
 
 
 def activate(root, status, manager, now):

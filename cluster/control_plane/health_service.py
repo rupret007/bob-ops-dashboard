@@ -55,6 +55,11 @@ class Scheduler:
         if self.status.get('machine') != machine:
             self.status = {}
         changed = self.status.get('loaded_head') not in (None, head)
+        if changed and self.status.get('rollout', {}).get('phase') == 'transition-failed':
+            from .health_rollout import Manager, recover_transition
+            recovered = recover_transition(root, self.status, Manager(machine), head, time.time())
+            if recovered:
+                self.status['rollout'] = recovered
         self.status.update(schema=1, machine=machine, loaded_head=head,
                            expected_groups=list(PERIODS))
         self.status.setdefault('groups', {})
