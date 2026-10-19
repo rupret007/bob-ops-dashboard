@@ -24,6 +24,10 @@ def sanitize_context_diagnostics(records):
             if key in record:
                 value = record[key]
                 item[key] = value if type(value) is str and value in allowed else 'unknown'
+        detail = record.get('source_metadata_reason')
+        if (item.get('source_context_error') == 'source_metadata' and type(detail) is str
+                and detail in SourceUnavailable.METADATA_REASONS):
+            item['source_metadata_reason'] = detail
         for key, low, high in (('chunk', 1, 4096), ('changed_requests', 0, 4),
                                ('source_requests', 0, 4)):
             value = record.get(key)
@@ -45,7 +49,7 @@ def collect_context_diagnostics(reviews):
         if type(scope) is not dict:
             continue
         record = {'reviewer': getattr(review, 'reviewer', None)}
-        for key in ('chunk', 'source_context_error'):
+        for key in ('chunk', 'source_context_error', 'source_metadata_reason'):
             if key in scope:
                 record[key] = scope[key]
         resolution = scope.get('context_resolution')

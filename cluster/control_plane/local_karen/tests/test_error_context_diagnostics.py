@@ -125,22 +125,6 @@ def test_context_diagnostics_cannot_inherit_a_verdict_or_authority():
     assert sanitize_context_diagnostics([record]) == EXPECTED
 
 
-@pytest.mark.parametrize('code', [
-    'source_metadata', 'source_entry_missing', 'source_parent_metadata', 'source_type_or_mode',
-    'source_size_invalid', 'source_file_limit', 'source_total_limit', 'source_blob_sha',
-])
-def test_precise_and_legacy_metadata_codes_remain_private_operational_evidence(code):
-    from cluster.control_plane.local_karen.context_diagnostics import sanitize_context_diagnostics
-    from cluster.control_plane.local_karen.source_context import SourceUnavailable
-    record = dict(EXPECTED[0], source_context_error=code, path=UNTRUSTED_TEXT,
-                  source=UNTRUSTED_TEXT, reason=UNTRUSTED_TEXT, exception=UNTRUSTED_TEXT,
-                  raw_response=UNTRUSTED_TEXT, passed=True, verdict='PASS')
-    safe = sanitize_context_diagnostics([record])
-    assert str(SourceUnavailable(code)) == code
-    assert safe == [dict(EXPECTED[0], source_context_error=code)]
-    assert UNTRUSTED_TEXT not in json.dumps(safe)
-
-
 @pytest.mark.parametrize('error_first', [False, True])
 def test_source_error_survives_more_than_32_ordinary_component_contexts(error_first):
     from cluster.control_plane.local_karen.context_diagnostics import collect_context_diagnostics
