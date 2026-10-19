@@ -450,6 +450,30 @@ def _prose_or_comment(filepath, line):
             or line.lstrip().startswith(("#", "//")))
 
 
+def _literal_shell_display(filepath, line):
+    """Recognize one display command with no execution or output redirection.
+
+    Installer help may print uninstall commands. Expansion, command chaining,
+    pipes and redirected script contents must retain their normal checks.
+    """
+    import shlex
+
+    if not filepath.lower().endswith((".sh", ".bash", ".zsh", ".command")):
+        return False
+    if any(char in line for char in ("$", "`", "\n", "\r")):
+        return False
+    try:
+        lexer = shlex.shlex(line, posix=True, punctuation_chars=True)
+        lexer.whitespace_split = True
+        lexer.commenters = ''
+        tokens = list(lexer)
+    except ValueError:
+        return False
+    return (bool(tokens) and tokens[0] in ('echo', 'printf')
+            and not any(token and all(char in '();<>|&' for char in token)
+                        for token in tokens[1:]))
+
+
 def _inert_scanner_rules(diff):
     """Identify complete literal rule tables, never executable expressions.
 
@@ -668,7 +692,9 @@ def check_no_dangerous_commands(pr: PRInfo, config: KarenConfig) -> CheckResult:
     issues = []
     inert_rules = _inert_scanner_rules(pr.diff) | _inert_review_prompt(pr.diff)
     for current_file, number, added_line in _added_lines(pr.diff):
-        if _prose_or_comment(current_file, added_line) or (current_file, number) in inert_rules:
+        if (_prose_or_comment(current_file, added_line)
+                or _literal_shell_display(current_file, added_line)
+                or (current_file, number) in inert_rules):
             continue
         # Only literal RegExp.exec is non-executing. Member calls such as
         # child_process.exec and window.eval must still fail.
