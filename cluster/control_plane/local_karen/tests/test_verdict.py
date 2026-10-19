@@ -3,9 +3,12 @@
 from __future__ import annotations
 
 import json
+import os
 import tempfile
 import unittest
+from dataclasses import replace
 from pathlib import Path
+from unittest.mock import patch
 
 from cluster.control_plane.local_karen.checks import CheckResult, CheckVerdict, PRInfo
 from cluster.control_plane.local_karen.config import KarenConfig
@@ -120,7 +123,7 @@ class TestVerdictStorage(unittest.TestCase):
             reviewer="codex", tier="low", confidence=1.0,
             check_results=[], review_results=[],
         )
-        save_verdict(v1, self.config)
+        first_path = save_verdict(v1, self.config)
 
         v2 = Verdict(
             owner="rupret007", repo="webjam", pr_number=123, head_sha="sha222222222",
@@ -128,12 +131,89 @@ class TestVerdictStorage(unittest.TestCase):
             reviewer="codex", tier="low", confidence=1.0,
             check_results=[], review_results=[],
         )
-        save_verdict(v2, self.config)
+        second_path = save_verdict(v2, self.config)
+        # WSL/shared filesystems can give consecutive writes identical mtimes.
+        os.utime(first_path, (100, 100))
+        os.utime(second_path, (100, 100))
 
         latest = load_latest_verdict("rupret007", "webjam", 123, self.config)
         self.assertIsNotNone(latest)
         self.assertEqual(latest.head_sha, "sha222222222")
         self.assertTrue(latest.passed)
+
+    def _stored(self, sha="a" * 40, **overrides):
+        value = Verdict("rupret007", "webjam", 123, sha, False, "Needs repair",
+                        "2024-01-01T00:00:00Z", "codex", "low", 1.0, [], [])
+        value = replace(value, **overrides)
+        return value, save_verdict(value, self.config)
+
+    def test_latest_compares_actual_time_instead_of_lexical_order_or_mtime(self):
+        _, old_path = self._stored(timestamp="2024-01-01T01:00:00+02:00")
+        newer, new_path = self._stored("b" * 40, timestamp="2023-12-31T23:30:00Z")
+        os.utime(old_path, (200, 200))
+        os.utime(new_path, (100, 100))
+        self.assertEqual(load_latest_verdict("rupret007", "webjam", 123, self.config), newer)
+        # An any-head reporting lookup never changes exact-head lookup identity.
+        self.assertIsNone(load_verdict("rupret007", "webjam", 123, "c" * 40, self.config))
+
+    def test_unpublished_pass_cannot_override_retained_fail_marker(self):
+        old, _ = self._stored()
+        new = replace(old, passed=True, timestamp="2024-01-02T00:00:00Z")
+        with patch.object(Path, "symlink_to", side_effect=OSError("injected failure")):
+            with self.assertRaises(OSError):
+                save_verdict(new, self.config)
+        self.assertEqual(load_latest_verdict("rupret007", "webjam", 123, self.config), old)
+
+    def test_newer_fail_blocks_when_marker_update_fails(self):
+        old, _ = self._stored(passed=True)
+        new = replace(old, passed=False, timestamp="2024-01-02T00:00:00Z")
+        with patch.object(Path, "symlink_to", side_effect=OSError("injected failure")):
+            with self.assertRaises(OSError):
+                save_verdict(new, self.config)
+        self.assertEqual(load_latest_verdict("rupret007", "webjam", 123, self.config), new)
+
+    def test_equal_observation_times_choose_blocking_verdict(self):
+        failed, _ = self._stored()
+        self._stored("b" * 40, passed=True)
+        self.assertEqual(load_latest_verdict("rupret007", "webjam", 123, self.config), failed)
+
+    def test_latest_ignores_wrong_identity_incomplete_and_malformed_records(self):
+        value, _ = self._stored()
+        marker = next(Path(self.tmpdir).glob("*_LATEST.json"))
+        marker.unlink()
+        for bad in (replace(value, owner="another"), replace(value, repo="another"),
+                    replace(value, pr_number=124), replace(value, head_sha="b" * 40),
+                    replace(value, status="ERROR"), replace(value, timestamp="invalid"),
+                    replace(value, timestamp="2024-01-01T00:00:00"),
+                    replace(value, passed="true")):
+            with self.subTest(bad=bad.to_dict()):
+                marker.write_text(bad.to_json())
+                self.assertIsNone(load_latest_verdict("rupret007", "webjam", 123, self.config))
+        marker.write_text("{incomplete")
+        self.assertIsNone(load_latest_verdict("rupret007", "webjam", 123, self.config))
+
+    def test_latest_accepts_authenticated_copy_marker_without_symlink(self):
+        value, path = self._stored()
+        marker = next(Path(self.tmpdir).glob("*_LATEST.json"))
+        marker.unlink()
+        marker.write_text(path.read_text())
+        self.assertEqual(load_latest_verdict("rupret007", "webjam", 123, self.config), value)
+
+    def test_unpublished_artifact_without_marker_is_not_latest(self):
+        self._stored(passed=True)
+        next(Path(self.tmpdir).glob("*_LATEST.json")).unlink()
+        self.assertIsNone(load_latest_verdict("rupret007", "webjam", 123, self.config))
+
+    def test_marker_cannot_read_record_outside_verdict_directory(self):
+        self._stored()
+        marker = next(Path(self.tmpdir).glob("*_LATEST.json"))
+        marker.unlink()
+        with tempfile.TemporaryDirectory() as outside:
+            target = Path(outside) / "outside.json"
+            target.write_text("Do not read this unrelated file")
+            marker.symlink_to(target)
+            with patch.object(Path, "read_text", side_effect=AssertionError("No outside reads")):
+                self.assertIsNone(load_latest_verdict("rupret007", "webjam", 123, self.config))
 
 
 class TestVerdictStaleness(unittest.TestCase):

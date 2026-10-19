@@ -154,35 +154,48 @@ def load_latest_verdict(
     pr_number: int,
     config: KarenConfig,
 ) -> Optional[Verdict]:
-    """Load the most recent verdict for a PR (any SHA).
+    """Load the most recent published verdict for a PR (any SHA).
 
-    Returns None if no verdict exists.
+    Embedded observation times survive copied files and coarse filesystem clocks.
+    This reporting lookup never substitutes for an exact-head authority check.
     """
     verdict_dir = config.get_verdict_dir()
     base_pattern = f"{owner.replace('/', '_')}_{repo.replace('/', '_')}_{pr_number}_"
 
-    latest_path = None
-    latest_time = 0.0
-
-    if verdict_dir.is_dir():
-        for path in verdict_dir.glob(f"{base_pattern}*_KAREN*.json"):
-            if path.name.endswith("_LATEST.json"):
-                continue
-            try:
-                mtime = path.stat().st_mtime
-                if mtime > latest_time:
-                    latest_time = mtime
-                    latest_path = path
-            except OSError:
-                pass
-
-    if latest_path:
+    def read(path):
         try:
-            return Verdict.from_json(latest_path.read_text())
-        except (json.JSONDecodeError, TypeError, KeyError):
-            pass
+            if path.resolve(strict=True).parent != verdict_dir.resolve():
+                return None
+            value = Verdict.from_json(path.read_text())
+            if (value.owner != owner or value.repo != repo or value.pr_number != pr_number
+                    or value.status != "COMPLETE" or type(value.passed) is not bool
+                    or not isinstance(value.head_sha, str) or not value.head_sha
+                    or not isinstance(value.timestamp, str)):
+                return None
+            base = _verdict_filename(owner, repo, pr_number, value.head_sha)
+            if path.name not in (base + '_LATEST.json', base + '_KARENFAIL.json'):
+                return None
+            if path.is_symlink() and path.resolve().name != base + '_' + value.verdict_type + '.json':
+                return None
+            stamp = datetime.fromisoformat(value.timestamp.replace('Z', '+00:00'))
+            return (stamp, value) if stamp.tzinfo is not None else None
+        except (OSError, ValueError, TypeError, KeyError, RuntimeError):
+            return None
 
-    return None
+    candidates = []
+    for marker in verdict_dir.glob(f"{base_pattern}*_LATEST.json"):
+        published = read(marker)
+        if published is None:
+            continue
+        candidates.append(published)
+        # A failed pointer update cannot hide a newer blocking artifact, nor
+        # can an unpublished PASS sibling supersede the published decision.
+        failed = read(marker.with_name(marker.name.replace('_LATEST.json', '_KARENFAIL.json')))
+        if (failed and failed[1].head_sha == published[1].head_sha
+                and not failed[1].passed and failed[0] >= published[0]):
+            candidates.append(failed)
+    return max(candidates, key=lambda item: (item[0], not item[1].passed,
+                                           item[1].head_sha))[1] if candidates else None
 
 
 def is_verdict_stale(verdict: Verdict, current_sha: str) -> bool:
