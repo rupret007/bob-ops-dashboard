@@ -494,7 +494,12 @@ def _python_test_fixture_source(diff):
             number += 1
     masked = {}
     for path, lines in files.items():
-        if (not path.endswith('.py') or not _is_test_file(path)
+        approved_modules = {
+            'cluster/control_plane/local_karen/tests/test_shell_display.py',
+            'cluster/control_plane/local_karen/tests/test_python_fixture_source.py',
+            'cluster/control_plane/tests/test_fix_difficulty.py',
+        }
+        if (path not in approved_modules
                 or set(lines) != set(range(1, max(lines) + 1))):
             continue
         source = '\n'.join(lines[n] for n in range(1, max(lines) + 1))
@@ -502,12 +507,33 @@ def _python_test_fixture_source(diff):
             tree = ast.parse(source)
         except SyntaxError:
             continue
-        # A fixture referenced by an executable sink is not proven inert.
-        sinks = {'exec', 'eval', 'system', 'popen', 'run', 'call', 'Popen',
-                 'check_output', 'check_call'}
-        if any(isinstance(node, ast.Call) and
-               (getattr(node.func, 'id', '') in sinks
-                or getattr(node.func, 'attr', '') in sinks) for node in ast.walk(tree)):
+        # These regression harnesses only build PRInfo and invoke pure checks.
+        # Any unknown import, alias or callable invalidates that proof.
+        imports = {
+            ('', 'pytest'),
+            ('cluster.control_plane.local_karen', 'checks'),
+            ('cluster.control_plane.local_karen.config', 'KarenConfig'),
+            ('cluster.control_plane.fix_dispatcher', 'classify_fix_difficulty'),
+        }
+        safe_calls = {'candidate', 'scanner', 'len', 'KarenConfig', 'classify_fix_difficulty',
+                      'pytest.mark.parametrize', 'checks.PRInfo',
+                      'checks.check_no_dangerous_commands', 'checks.check_no_secrets_in_diff',
+                      'checks.check_security_patterns', 'checks.run_static_security_scan',
+                      'source.splitlines', 'pr.diff.replace'}
+        invalid = False
+        for node in ast.walk(tree):
+            if isinstance(node, (ast.Import, ast.ImportFrom)):
+                module = getattr(node, 'module', '') or ''
+                if any(alias.asname or (module, alias.name) not in imports for alias in node.names):
+                    invalid = True
+            elif isinstance(node, ast.Call):
+                literal_format = (isinstance(node.func, ast.Attribute)
+                                  and node.func.attr in ('format', 'join')
+                                  and isinstance(node.func.value, ast.Constant)
+                                  and isinstance(node.func.value.value, str))
+                if not literal_format and ast.unparse(node.func) not in safe_calls:
+                    invalid = True
+        if invalid:
             continue
         names, spans = set(), []
 

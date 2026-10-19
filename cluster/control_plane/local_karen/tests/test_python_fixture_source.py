@@ -8,7 +8,7 @@ from cluster.control_plane.local_karen.config import KarenConfig
 COMMAND_FIXTURE = 'COMMAND = "sudo whoami"'
 
 
-def candidate(source, path='tests/test_commands.py'):
+def candidate(source, path='cluster/control_plane/local_karen/tests/test_shell_display.py'):
     diff = 'diff --git a/{0} b/{0}\n@@ -0,0 +1,{1} @@\n'.format(path, len(source.splitlines()))
     diff += '\n'.join('+' + line for line in source.splitlines()) + '\n'
     return checks.PRInfo('owner', 'repo', 1, 'a' * 40, '', '', False, diff, {}, [path], [])
@@ -36,6 +36,17 @@ def test_complete_literal_fixture_inputs_pass(source):
 def test_executed_computed_or_neighboring_source_still_fails(source):
     assert checks.check_no_dangerous_commands(candidate(source), KarenConfig()).failed
     assert checks.run_static_security_scan(candidate(source), KarenConfig()).failed
+
+
+@pytest.mark.parametrize('source', [
+    'from subprocess import run as launch\nCMD = "sudo whoami"\nlaunch(CMD)',
+    'from builtins import exec as launch\nCMD = "sudo whoami"\nlaunch(CMD)',
+    'import os as operating\nCMD = "sudo whoami"\noperating.system(CMD)',
+    'CMD = "sudo whoami"\nlaunch(CMD)',
+    'import pytest\nCMD = "sudo whoami"\npytest.unknown_wrapper(CMD)',
+])
+def test_aliases_and_unknown_execution_wrappers_disable_masking(source):
+    assert checks.check_no_dangerous_commands(candidate(source), KarenConfig()).failed
 
 
 def test_incomplete_context_and_production_sources_fail_closed():
