@@ -15,12 +15,18 @@ from cluster.control_plane import github_budget as budget, health_adapters, main
     (['gh', 'search', 'prs', '--owner', 'owner'], 'search', True),
     (['gh', 'pr', 'create', '--repo', 'owner/repo'], None, False),
 ])
-def test_every_github_command_uses_shared_admission(argv, resource, background):
+@pytest.mark.parametrize('scheduled', [False, True])
+def test_every_github_command_uses_shared_admission(argv, resource, background, scheduled):
+    token = m._deadline.set(220 if scheduled else None)
     with patch.object(m.github_reads, 'run', return_value=subprocess.CompletedProcess(argv, 0, 'value')) as run, \
-         patch.object(m.subprocess, 'run') as raw:
-        assert m.command(argv) == 'value'
-    run.assert_called_once_with(argv[1:], timeout=120, resource=resource, deadline=None,
-                                background=background)
+         patch.object(m.subprocess, 'run') as raw, patch.object(m.time, 'monotonic', return_value=100):
+        try:
+            assert m.command(argv) == 'value'
+        finally:
+            m._deadline.reset(token)
+    run.assert_called_once_with(argv[1:], timeout=120, resource=resource,
+                                deadline=220 if scheduled else None,
+                                background=background and scheduled)
     raw.assert_not_called()
 
 

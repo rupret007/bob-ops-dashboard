@@ -158,11 +158,16 @@ def test_background_priority_applies_to_every_resource_of_a_mixed_cli_command(mo
     (['api', '-XPOST', 'repos/owner/repo/issues'], False),
     (['api', 'repos/owner/repo/issues', '-f', 'title=fixture'], False),
 ])
-def test_only_main_ci_reads_receive_lower_priority(monkeypatch, args, background):
+@pytest.mark.parametrize('scheduled', [False, True])
+def test_only_scheduled_main_ci_reads_receive_lower_priority(monkeypatch, args, background, scheduled):
     command = Mock(return_value=subprocess.CompletedProcess([], 0, '{}', ''))
     monkeypatch.setattr(main_ci.github_reads, 'run', command)
-    assert main_ci.command(['gh'] + args) == '{}'
-    assert command.call_args.kwargs['background'] is background
+    token = main_ci._deadline.set(main_ci.time.monotonic()+120 if scheduled else None)
+    try:
+        assert main_ci.command(['gh'] + args) == '{}'
+    finally:
+        main_ci._deadline.reset(token)
+    assert command.call_args.kwargs['background'] is (background and scheduled)
 
 
 def test_new_deferral_is_typed_bounded_and_background_batch_does_not_wait_or_claim_green():

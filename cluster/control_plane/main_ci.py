@@ -31,8 +31,10 @@ def command(argv, cwd=None):
         api_read = (argv[1:2] == ['api'] and len(argv) > 2
                     and all(arg in ('--paginate', '--slurp') or arg.startswith('repos/')
                             for arg in argv[2:]))
-        background = (api_read
-                      or argv[1:3] in (['pr', 'view'], ['pr', 'list'], ['search', 'prs']))
+        # This module also serves immediate merge validation. Only scheduled
+        # sweeps carry a batch deadline and use the background allowance.
+        background = (deadline is not None and (api_read
+                      or argv[1:3] in (['pr', 'view'], ['pr', 'list'], ['search', 'prs'])))
         result = github_reads.run(argv[1:], timeout=timeout, resource=resource, deadline=deadline,
                                   background=background)
         result.check_returncode()
