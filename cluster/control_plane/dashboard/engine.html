@@ -11,6 +11,7 @@
 <section id="engine-panel" aria-label="Live StoryPool tachometer">
 <header><h2><span id="engine-light" class="engine-light"></span> StoryPool engine</h2><span id="engine-state">Connecting…</span><span id="engine-machines"></span></header>
 <p id="engine-admission" role="status"></p>
+<p id="engine-reason" role="status"></p>
 <p id="engine-review-evidence" role="status"></p>
 <p id="engine-github" role="status">GitHub API quota unverified.</p>
 <p id="engine-runtime" aria-live="polite">Karen loaded version is unverified.</p><p id="engine-security-evidence" role="status"></p>
@@ -71,6 +72,7 @@
    document.getElementById('engine-light').style.background=colors[data.engine];
    document.getElementById('engine-state').textContent=data.engine.toUpperCase()+' · '+new Date(data.timestamp).toLocaleTimeString();
    document.getElementById('engine-admission').textContent=data.admission?.reason||'Work admission status unavailable.';
+   document.getElementById('engine-reason').textContent=data.engine_reason||'Work-flow evidence unavailable.';
    document.getElementById('engine-review-evidence').textContent=data.review_evidence?.reason||'Karen verdict evidence is unavailable.';
    document.getElementById('engine-security-evidence').textContent=data.security_evidence?.reason||'Security scan evidence is unavailable.';
    const api=data.github_api;

@@ -17,6 +17,15 @@ remote health from the current machine's load. `MONITOR.md` and activity strings
 are rendered as text, never HTML. Dashboard assets ship with self-update's
 existing package copy on both machines.
 
+The engine turns green only with a completed, full-SHA Karen verdict and a
+verified successful job in the last 60 minutes, and no stale active NEEDS_JEFF
+entries. Errors, unknown heads, unverified jobs and future dates cannot prove
+flow. Dated active entries in the root and conductor NEEDS_JEFF files become
+stale after 60 minutes; resolved archives and explicitly resolved lines are
+excluded. Fresh peer-local evidence is synced without echoing cluster totals;
+missing peer flow evidence is yellow. The reason is rendered as plain text.
+Existing red service failures remain red and machine badges stay independent.
+
 A failed latest peer sync or a snapshot older than 15 minutes turns an otherwise
 green remote badge yellow. Its detail preserves the last reported green health,
 so a sync outage is not described as a dead machine. A newer snapshot supersedes

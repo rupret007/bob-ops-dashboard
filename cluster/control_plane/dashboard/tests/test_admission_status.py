@@ -17,6 +17,17 @@ def snapshot(tmp_path, decision, minutes=0):
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(dict(timestamp=(now-timedelta(minutes=minutes)).isoformat(),
                                     summary=dict(decisions=[decision]))))
+    # Admission tests assume the independent work-flow prerequisites are met.
+    for name, value in {
+        'jobs/ledger.jsonl': dict(job_id='success', state='done', outcome_verified=True,
+                                 machine='nucbox', end_time=now.isoformat()),
+        'verdicts/review.json': dict(timestamp=now.isoformat(), head_sha='a' * 40, passed=True),
+        'machines/mini/engine.json': dict(synced_at=now.isoformat(), peer_timestamp=now.isoformat(),
+            flow_local=dict(machine='mini', last_verdict_at=None, last_success_at=None, stale_alerts=0)),
+    }.items():
+        path = tmp_path / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(value))
     return EngineCollector(tmp_path, tmp_path, 'nucbox').collect()
 
 

@@ -370,6 +370,30 @@ class EngineCollector:
             if paused and overall == 'green':
                 overall = 'yellow'
         job_view, llm_local, llm = self._jobs_and_llm(latest, verdicts, verdict_dir.is_dir(), now.timestamp(), capacity)
+        from .engine_flow import stale_alerts, flow_reasons
+        current = now.timestamp()
+        flow_local = dict(machine=self.machine,
+            last_verdict_at=max((stamp(v.get('timestamp')) for v in verdicts
+                if review_state(v) != 'ERROR'
+                and re.fullmatch(r'[0-9a-fA-F]{40}', str(v.get('head_sha', v.get('sha', ''))))
+                and 0 < stamp(v.get('timestamp')) <= current), default=None),
+            last_success_at=max((stamp(j.get('end_time')) for j in latest
+                if j.get('state') == 'done' and j.get('outcome_verified') is True
+                and 0 < stamp(j.get('end_time')) <= current), default=None),
+            stale_alerts=stale_alerts(self.data_dir, current, tail))
+        peers = {}
+        for name in health:
+            if name != self.machine:
+                peer = read_json(self.data_dir / 'machines' / name / 'engine.json') or {}
+                peers[name] = peer if (0 <= current - stamp(peer.get('synced_at')) < PEER_FRESH_SEC
+                    and 0 <= current - stamp(peer.get('peer_timestamp')) < PEER_FRESH_SEC) else {}
+        reasons = flow_reasons(flow_local, peers, current)
+        reasons += [name + ': ' + value['detail'] for name, value in health.items()
+                    if value['state'] not in ('green', 'maintenance')]
+        if admission['state'] == 'paused':
+            reasons.append(admission['reason'])
+        if reasons and overall == 'green':
+            overall = 'yellow'
         monitor = [line for line in tail(self.data_dir / 'MONITOR.md', 32768) if line.strip()]
         from ..local_karen.runtime_status import public_status
         from ..local_karen.config import KarenConfig
@@ -378,7 +402,9 @@ class EngineCollector:
             return {'label': label, 'value': value, 'max': maximum, 'unit': unit}
         from ..github_budget import snapshot as github_snapshot
         from ..reporting_telemetry import local_resources
-        return {'timestamp': now.isoformat(), 'engine': overall, 'github_api': github_snapshot(self.data_dir), 'machines': health, 'admission': admission,
+        return {'timestamp': now.isoformat(), 'engine': overall,
+                'engine_reason': '; '.join(reasons) if reasons else 'Work is flowing: recent Karen verdict and verified successful job; no stale NEEDS_JEFF.',
+                'flow_local': flow_local, 'github_api': github_snapshot(self.data_dir), 'machines': health, 'admission': admission,
                 'resources': local_resources(self.data_dir, self.machine, now.timestamp()),
                 'review_evidence': review_evidence,
                 'karen_runtime': runtime,

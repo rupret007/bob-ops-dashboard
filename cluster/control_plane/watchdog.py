@@ -178,6 +178,10 @@ def store_peer_engine(peer: str, data: dict) -> bool:
     if (isinstance(resources, dict) and resources.get("machine") == peer
             and resources.get("source") == "local"):
         snapshot["resources"] = resources
+    flow = data.get('flow_local')
+    if isinstance(flow, dict) and flow.get('machine') == peer:
+        snapshot['flow_local'] = {key: flow.get(key) for key in (
+            'machine', 'last_verdict_at', 'last_success_at', 'stale_alerts')}
     out = LOG_DIR / "machines" / peer / "engine.json"
     out.parent.mkdir(parents=True, exist_ok=True)
     tmp = out.with_suffix(".json.tmp")
