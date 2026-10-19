@@ -303,6 +303,21 @@ class DataCollector:
     def _collect_services(self) -> List[ServiceHealth]:
         """Collect service health status."""
         services = []
+        from ..health_state import authoritative, read_status
+        if authoritative(self.data_dir):
+            snapshot = read_status(self.data_dir)
+            for name, group in snapshot.get('groups', {}).items():
+                completed = group.get('finished_at', 0)
+                age = datetime.now(timezone.utc).timestamp() - completed
+                checks = group.get('checks', [])
+                failed = sum(not c.get('passed') for c in checks)
+                services.append(ServiceHealth(
+                    name=name, status='unknown' if group.get('error') or age > group.get('period', 120) + 90
+                    else 'error' if failed else 'running',
+                    last_run=datetime.fromtimestamp(completed, timezone.utc).isoformat(),
+                    last_run_ago='{}s ago'.format(max(0, int(age))),
+                    error_count=failed, log_file=str(self.data_dir / 'health-status.json')))
+            return services
         
         service_dirs = {
             "shadow": self.data_dir / "shadow",
@@ -599,7 +614,13 @@ class DataCollector:
         events = []
         
         watchdog_log = self.data_dir / "watchdog.log"
-        entries = _parse_jsonl(watchdog_log, 20)
+        from ..health_state import authoritative, read_status
+        if authoritative(self.data_dir):
+            group = read_status(self.data_dir).get('groups', {}).get('watchdog', {})
+            entries = [dict(timestamp=datetime.fromtimestamp(group.get('finished_at', 0), timezone.utc).isoformat(),
+                            checks=group.get('checks', []))]
+        else:
+            entries = _parse_jsonl(watchdog_log, 20)
         
         for entry in entries:
             for check in entry.get("checks", []):
@@ -617,6 +638,14 @@ class DataCollector:
     def _collect_needs_jeff(self) -> List[NeedsJeffItem]:
         """Collect NEEDS_JEFF items."""
         items = []
+        from ..health_state import authoritative, read_status
+        if authoritative(self.data_dir):
+            for issue in read_status(self.data_dir).get('incidents', {}).values():
+                if issue.get('notify') and issue.get('state') == 'firing':
+                    items.append(NeedsJeffItem(
+                        timestamp=datetime.fromtimestamp(issue['first_seen'], timezone.utc).isoformat(),
+                        issue='Health: {} / {}'.format(issue['machine'], issue['name']),
+                        details='Inspect unified health details and health logs.'))
         
         needs_jeff = self.data_dir / "conductor" / "NEEDS_JEFF.md"
         if not needs_jeff.is_file():

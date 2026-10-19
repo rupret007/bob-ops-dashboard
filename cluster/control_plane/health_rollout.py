@@ -146,6 +146,7 @@ def activate(root, status, manager, now):
         # resurrect an intentionally retired unit while this transaction runs.
         status['rollout'].update(phase='switching', previous_units=previous)
         atomic_json(Path(root) / 'health-status.json', status)
+        (Path(root) / '.health-authority').touch(mode=0o600)
         try:
             manager.disable()
             if not manager.verify_disabled():
@@ -154,6 +155,7 @@ def activate(root, status, manager, now):
             manager.restore(previous)
             status['rollout'] = old
             atomic_json(Path(root) / 'health-status.json', status)
+            (Path(root) / '.health-authority').unlink(missing_ok=True)
             raise
         status['rollout'].update(phase='canary', activated_at=now,
                                   previous_units=previous, head=status['loaded_head'])
@@ -168,4 +170,5 @@ def rollback(root, status, manager):
         manager.restore(status['rollout']['previous_units'])
         status['rollout'].update(phase='rolled-back', rolled_back_at=time.time())
         atomic_json(Path(root) / 'health-status.json', status)
+        (Path(root) / '.health-authority').unlink(missing_ok=True)
     return status['rollout']

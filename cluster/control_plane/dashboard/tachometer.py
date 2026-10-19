@@ -298,7 +298,12 @@ class EngineCollector:
                 backlog_count = metrics.get('total_open_prs')
         health = {}
         capacity = None
+        from ..health_state import machine_health
+        unified = machine_health(self.data_dir, self.machine, now.timestamp())
         for machine in ('mini', 'nucbox'):
+            if unified is not None:
+                health[machine] = unified[machine]
+                continue
             # Remote health uses synced watchdog evidence, never local load under a remote name.
             path = self.data_dir / 'watchdog.log' if machine == self.machine else self.data_dir / 'machines' / machine / 'watchdog.log'
             evidence = list(rows(path))

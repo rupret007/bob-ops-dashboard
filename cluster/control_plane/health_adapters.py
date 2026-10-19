@@ -74,6 +74,7 @@ def collect(group, machine, live=False):
         details = ShadowRunner(machine=machine).run()
         return dict(checks=[check('shadow_evaluation', True, 'Observational simulation completed')], details=details)
     if group == 'peer':
+        watchdog.sync_peer_health(machine)
         return collect_peer(machine)
     if group == 'main_ci':
         if not live:

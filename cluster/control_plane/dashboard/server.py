@@ -640,6 +640,8 @@ class DashboardHandler(BaseHTTPRequestHandler):
             self._serve_dashboard()
         elif parsed.path == "/api/engine":
             self._serve_engine()
+        elif parsed.path == "/api/health":
+            self._serve_api_health()
         elif parsed.path == "/api/data":
             self._serve_api_data()
         elif parsed.path == "/api/karen/status":
@@ -794,6 +796,18 @@ class DashboardHandler(BaseHTTPRequestHandler):
         except Exception as e:
             self._serve_error(str(e))
     
+    def _serve_api_health(self) -> None:
+        from ..health_state import read_status
+        from ..health_service import public_snapshot
+        source = self.collector or DataCollector()
+        payload = json.dumps(public_snapshot(read_status(source.data_dir))).encode('utf-8')
+        self.send_response(200)
+        self.send_header('Content-Type', 'application/json')
+        self.send_header('Content-Length', str(len(payload)))
+        self.send_header('Cache-Control', 'no-store')
+        self.end_headers()
+        self.wfile.write(payload)
+
     def _serve_engine(self) -> None:
         try:
             collector = getattr(self.server, 'engine_collector', None)

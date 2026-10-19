@@ -48,7 +48,9 @@ def read_status(root=None):
 
 
 def authoritative(root=None):
-    return read_status(root).get('rollout', {}).get('phase') in ('active', 'canary', 'switching')
+    root = Path(root or data_dir())
+    return ((root / '.health-authority').exists()
+            or read_status(root).get('rollout', {}).get('phase') in ('active', 'canary', 'switching'))
 
 
 def serialized_recovery(function):
@@ -183,3 +185,23 @@ def verdict(status, machine, now):
                           'Unconfirmed: ' + ', '.join(warnings[:5]) if warnings else 'All health checks current'),
                   guardian=groups.get('guardian', {}).get('details', {}))
     return result
+
+
+def machine_health(root, machine, now):
+    if not authoritative(root):
+        return None
+    status = read_status(root)
+    peer = status.get('groups', {}).get('peer', {}).get('details', {})
+    health = {}
+    for name in ('mini', 'nucbox'):
+        value = status if name == machine else peer.get('health', {})
+        result = verdict(value, name, now)
+        timestamp = result.get('timestamp')
+        result['timestamp'] = (datetime.fromtimestamp(timestamp, timezone.utc).isoformat()
+                               if isinstance(timestamp, (int, float)) else None)
+        result['reported_state'] = result['state']
+        result['sync_age_seconds'] = max(0, int(now - peer.get('received_at', 0))) if name != machine else None
+        if name != machine and not 0 <= now - peer.get('received_at', 0) <= 390:
+            result.update(state='yellow', detail='peer sync stale; health unconfirmed')
+        health[name] = result
+    return health
