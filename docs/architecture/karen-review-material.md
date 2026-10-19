@@ -10,6 +10,7 @@ chunk plan, complete file manifest and coverage metadata. It is distinct from
 the original description. Coverage describes available material and does not
 constitute a reviewer vote. The current diff is explicitly named
 `chunk_under_review`, rather than misleadingly describing a chunk as Full Diff.
+A scoped vote covers that chunk and its required cross-file integration; the server independently reviews every chunk and aggregates every mandatory vote, so a chunk PASS is not whole-PR approval and cannot rely on another vote or context presence.
 
 `PRInfo.review_material` is a typed `ReviewMaterial` containing the validated
 cumulative supplemental packet and its phase. The existing exact-head provenance,
