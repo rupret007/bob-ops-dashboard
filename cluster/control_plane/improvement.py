@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from .health_state import atomic_json
-from .retry_policy import REASONS
+from .retry_policy import REASONS, FAILURE_REASONS
 
 
 def timestamp(value):
@@ -39,7 +39,7 @@ def measure(rows, prs, now):
                 r.get('outcome_verified') is True and r.get('outcome') == 'commit_pushed' and
                 re.fullmatch('[0-9a-f]{40}', str(r.get('outcome_sha', '')))]
     failures = Counter()
-    allowed = set(REASONS) | {'transient', 'stale-session', 'worker-died'}
+    allowed = set(REASONS) | set(FAILURE_REASONS) | {'transient', 'stale-session', 'worker-died', 'lease-expired'}
     for row in terminal:
         if row not in verified:
             code = row.get('failure_code')

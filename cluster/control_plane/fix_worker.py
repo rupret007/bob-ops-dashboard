@@ -16,7 +16,7 @@ from pathlib import Path
 from ..never_touch import is_never_touch
 from .service_logging import event, bind_context, reset_context, failing_tests, failure_reason
 from .job_ledger import get_ledger
-from .retry_policy import PreflightFailure, REASONS
+from .retry_policy import PreflightFailure, REASONS, STAGE_CODES, WorkerFailure, classify_failure
 from .fix_dispatcher import _find_codex, extract_findings_from_verdict
 from .local_karen.config import KarenConfig
 from .local_karen.verdict import load_verdict
@@ -25,7 +25,15 @@ from .local_karen.verdict import load_verdict
 CODEX_EFFORT = 'xhigh'
 _lease = ContextVar('cluster_lease', default=None)
 _job_deadline = ContextVar('worker_job_deadline', default=None)
+_failure_stage = ContextVar('worker_failure_stage', default='supervisor')
 JOB_SECONDS = 45 * 60
+
+
+def _stage(name):
+    """Only supervisor call sites choose the measurement stage."""
+    if not isinstance(name, str) or name not in STAGE_CODES:
+        raise ValueError('Unknown controlled worker stage')
+    _failure_stage.set(name)
 
 
 def codex_model():
@@ -106,7 +114,9 @@ def run(args, cwd=None, **kwargs):
     # PR content, URLs, or prompts; stdout/stderr are never persisted wholesale.
     executable = Path(str(args[0])).name
     operation = args[1] if len(args) > 1 and re.fullmatch(r'[a-z-]+', args[1]) else ''
-    event('fix-worker', 'command_started', executable=executable, operation=operation)
+    stage = _failure_stage.get()
+    event('fix-worker', 'command_started', executable=executable, operation=operation,
+          failure_stage=stage)
     try:
         if lease is None:
             result = subprocess.run(args, cwd=cwd, check=True, text=True,
@@ -121,11 +131,13 @@ def run(args, cwd=None, **kwargs):
         event('fix-worker', 'command_failed', level=logging.ERROR, exc_info=True,
               executable=executable, operation=operation, error_type=type(exc).__name__,
               returncode=getattr(exc, 'returncode', None), failed_tests=names,
-              reason=failure_reason(exc),
+              failure_code=classify_failure(exc, stage)[0], failure_stage=stage,
+              reason=failure_reason(exc, stage=stage),
               duration_ms=round((time.monotonic() - started) * 1000))
         raise
     event('fix-worker', 'command_finished', executable=executable, operation=operation,
-          duration_ms=round((time.monotonic() - started) * 1000), returncode=result.returncode)
+          duration_ms=round((time.monotonic() - started) * 1000), returncode=result.returncode,
+          failure_stage=stage)
     return result.stdout.strip()
 
 
@@ -152,9 +164,24 @@ def ensure_no_staged_secrets(tree):
 def fix_pr(repo, pr_number, head_sha, findings):
     if is_never_touch(repo):
         raise ValueError('never-touch repository')
+    token = _failure_stage.set('setup')
+    try:
+        return _fix_pr(repo, pr_number, head_sha, findings)
+    except (PreflightFailure, WorkerFailure):
+        raise
+    except Exception as exc:
+        code, stage = classify_failure(exc, _failure_stage.get())
+        raise WorkerFailure(code, stage) from None
+    finally:
+        _failure_stage.reset(token)
+
+
+def _fix_pr(repo, pr_number, head_sha, findings):
+    _stage('provider')
     codex = _find_codex()
     if not codex:
         raise RuntimeError('codex CLI not found (expected ~/bin/codex)')
+    _stage('git')
     pr = json.loads(run(['gh', 'pr', 'view', str(pr_number), '--repo', repo,
                          '--json', 'headRefName,headRefOid,isCrossRepository,state']))
     branch = pr['headRefName']
@@ -168,6 +195,7 @@ def fix_pr(repo, pr_number, head_sha, findings):
         run(['git', 'clone', '--no-checkout', '--single-branch', '--branch', branch,
              f'https://github.com/{repo}.git', str(checkout)])
         run(['git', 'worktree', 'add', '--detach', str(tree), head_sha], checkout)
+        _stage('test-setup')
         tests = test_command(tree)
         if tests[0] == 'npm':
             if not (tree / 'package-lock.json').is_file():
@@ -187,7 +215,9 @@ def fix_pr(repo, pr_number, head_sha, findings):
             'STORYPOOL_FIX_STATE_DIR': str(Path(temp) / 'test-fixes')}
         attempt_prompt = prompt
         for attempt in range(1, MAX_FIX_ATTEMPTS + 1):
+            _stage('provider')
             run([str(codex)] + codex_args(), tree, input=attempt_prompt)
+            _stage('tests')
             try:
                 run(tests, tree, env=test_env)
                 break
@@ -196,19 +226,26 @@ def fix_pr(repo, pr_number, head_sha, findings):
                     raise
                 output = ((exc.stdout or '') + '\n' + (exc.stderr or ''))[-TEST_OUTPUT_TAIL:]
                 event('fix-worker', 'tests_retry', attempt=attempt,
-                      max_attempts=MAX_FIX_ATTEMPTS, failed_tests=failing_tests(exc.stdout or ''))
+                      max_attempts=MAX_FIX_ATTEMPTS, failed_tests=failing_tests(exc.stdout or ''),
+                      failure_code='tests-failed', failure_stage='tests')
                 attempt_prompt = (prompt + f'\n\nAttempt {attempt} still fails the test command. '
                                   'Fix the code (never weaken or delete tests). Test output tail:\n'
                                   + output)
+        _stage('verification')
         if run(['git', 'rev-parse', 'HEAD'], tree) != head_sha:
             raise RuntimeError('Worker changed HEAD unexpectedly')
+        _stage('git')
         run(['git', 'add', '-A'], tree)
+        _stage('verification')
         if not run(['git', 'diff', '--cached', '--name-only'], tree):
-            raise RuntimeError('No fix produced')
+            raise WorkerFailure('no-change', 'verification')
         ensure_no_staged_secrets(tree)
+        _stage('git')
         run(['git', 'commit', '-m', f'fix: address Karen findings for PR #{pr_number}'], tree)
         sha = run(['git', 'rev-parse', 'HEAD'], tree)
+        _stage('push')
         run(['git', 'push', 'origin', f'HEAD:refs/heads/{branch}'], tree)
+        _stage('verification')
         remote = run(['git', 'ls-remote', 'origin', f'refs/heads/{branch}'], tree).split()[0]
         if remote != sha:
             raise RuntimeError('Pushed SHA could not be verified')
@@ -248,17 +285,22 @@ def execute(job_id):
     lease_token = None
     lease = None
     deadline_token = _job_deadline.set(started + JOB_SECONDS)
+    stage_token = _failure_stage.set('coordination')
     try:
         from .coordination import ClaimClient, Lease
         lease = Lease(ClaimClient.from_env(), job.cluster_claim)
         lease.__enter__()
         lease_token = _lease.set(lease)
+        _stage('setup')
         ledger.start_job(job_id, os.getpid(), model=model_label())
         event('fix-worker', 'job_started', machine=job.machine, provider=job.provider)
+        _stage('findings')
         findings = findings_for_pr(job.repo, job.pr_number, job.head_sha)
         if not findings:
             raise RuntimeError('No Karen findings available for this PR')
+        _stage('setup')
         sha = fix_pr(job.repo, job.pr_number, job.head_sha, findings)
+        _stage('verification')
         ledger.complete_job(job_id, 'commit_pushed', sha, verified=True)
         try:
             with lease.lock:
@@ -272,9 +314,10 @@ def execute(job_id):
         return 0
     except Exception as exc:
         # Exception strings can contain secrets or provider argv; keep ledger errors bounded.
-        code = exc.code if isinstance(exc, PreflightFailure) else 'transient'
-        message = REASONS[code] if code in REASONS else failure_reason(exc)
-        ledger.fail_job(job_id, message, failure_code=code, retryable=code not in REASONS)
+        code, stage = classify_failure(exc, _failure_stage.get())
+        message = failure_reason(exc, stage=stage)
+        ledger.fail_job(job_id, message, failure_code=code, retryable=code not in REASONS,
+                        failure_stage=stage)
         if lease is not None and lease_token is not None:
             try:
                 with lease.lock:
@@ -284,10 +327,13 @@ def execute(job_id):
             except Exception:
                 event('fix-worker', 'retry_state_unavailable', level=logging.ERROR, exc_info=True)
         event('fix-worker', 'job_failed', level=logging.ERROR, exc_info=True,
-              error_type=type(exc).__name__, reason=message, duration_ms=round((time.monotonic() - started) * 1000))
+              error_type=type(exc).__name__, reason=message,
+              failure_code=code, failure_stage=stage,
+              duration_ms=round((time.monotonic() - started) * 1000))
         return 1
     finally:
         _job_deadline.reset(deadline_token)
+        _failure_stage.reset(stage_token)
         if lease_token is not None:
             _lease.reset(lease_token)
             lease.__exit__(None, None, None)

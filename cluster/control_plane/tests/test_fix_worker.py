@@ -116,8 +116,10 @@ def test_node_worker_installs_locked_dependencies_and_generates_prisma(tmp_path)
         return ''
     with patch('cluster.control_plane.fix_worker._find_codex', return_value=tmp_path/'codex'), \
             patch('cluster.control_plane.fix_worker.run', side_effect=command):
-        with pytest.raises(RuntimeError, match='model boundary'):
+        from cluster.control_plane.retry_policy import WorkerFailure
+        with pytest.raises(WorkerFailure) as failure:
             fix_pr('owner/repo', 1, 'before', ['repair'])
+        assert failure.value.code == 'provider-failed' and failure.value.stage == 'provider'
     assert ['npm', 'ci', '--ignore-scripts', '--no-audit', '--no-fund'] in calls
     assert ['npm', 'exec', '--no', '--', 'prisma', 'generate'] in calls
     assert not any('-m' in c and 'pytest' in c for c in calls)
@@ -172,7 +174,9 @@ def test_tests_failing_every_attempt_never_commit(tmp_path):
             (tree / 'tests' / 'test_real.py').write_text('def test_real(): assert True\n')
         return ''
     with patch('cluster.control_plane.fix_worker._find_codex', return_value=tmp_path/'codex'), patch('cluster.control_plane.fix_worker.run', side_effect=command):
-        with pytest.raises(subprocess.CalledProcessError):
+        from cluster.control_plane.retry_policy import WorkerFailure
+        with pytest.raises(WorkerFailure) as failure:
             fix_pr('owner/repo', 1, 'before', ['repair finding'])
+        assert failure.value.code == 'tests-failed' and failure.value.stage == 'tests'
     assert not any(c[:2] in (['git', 'commit'], ['git', 'push']) for c in calls)
     assert sum(1 for c in calls if c[0] == str(tmp_path / 'codex')) == 3

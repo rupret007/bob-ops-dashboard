@@ -70,6 +70,7 @@ class Job:
     created_at: str = ""
     updated_at: str = ""
     cluster_claim: dict = field(default_factory=dict)
+    failure_stage: str = ""
     
     def to_dict(self) -> dict:
         return asdict(self)
@@ -335,7 +336,8 @@ class JobLedger:
         
         return self._with_lock(_complete)
     
-    def fail_job(self, job_id: str, error: str, failure_code: str = "", retryable: bool = True) -> Optional[Job]:
+    def fail_job(self, job_id: str, error: str, failure_code: str = "", retryable: bool = True,
+                 failure_stage: str = "") -> Optional[Job]:
         """Mark job as failed with error."""
         def _fail():
             jobs = self._load_jobs()
@@ -345,6 +347,7 @@ class JobLedger:
                     job.end_time = _now_iso()
                     job.error = error
                     job.failure_code = failure_code
+                    job.failure_stage = failure_stage
                     job.retryable = retryable
                     self._save_jobs(jobs)
                     return job
@@ -391,6 +394,10 @@ class JobLedger:
                                  else JobState.EXPIRED.value)
                     job.end_time = _now_iso()
                     job.error = reason
+                    # Classify this new terminal observation, never guess an
+                    # underlying provider/test failure or backfill old rows.
+                    job.failure_code = 'worker-died' if reason == 'worker-died' else 'lease-expired'
+                    job.failure_stage = 'supervisor' if reason == 'worker-died' else 'coordination'
                     expired.append(job)
                     changed = True
             

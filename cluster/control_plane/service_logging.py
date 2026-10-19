@@ -116,8 +116,12 @@ def failing_tests(output):
     return names[:50]
 
 
-def failure_reason(exc):
+def failure_reason(exc, *, stage=None):
     """An actionable summary without repr(exc), provider argv, or captured output."""
+    if stage is not None:
+        from .retry_policy import classify_failure, FAILURE_REASONS, REASONS
+        code, _ = classify_failure(exc, stage)
+        return REASONS[code] if code in REASONS else FAILURE_REASONS[code]
     import subprocess
     if isinstance(exc, FileNotFoundError):
         return 'Required executable or file is missing: ' + Path(exc.filename or 'unknown').name
