@@ -9,17 +9,18 @@ import pytest
 from cluster.control_plane import github_budget as budget, health_adapters, main_ci as m
 
 
-@pytest.mark.parametrize('argv,resource', [
-    (['gh', 'api', 'repos/owner/repo/commits/main/status'], None),
-    (['gh', 'pr', 'view', '1', '--repo', 'owner/repo'], None),
-    (['gh', 'search', 'prs', '--owner', 'owner'], 'search'),
-    (['gh', 'pr', 'create', '--repo', 'owner/repo'], None),
+@pytest.mark.parametrize('argv,resource,background', [
+    (['gh', 'api', 'repos/owner/repo/commits/main/status'], None, True),
+    (['gh', 'pr', 'view', '1', '--repo', 'owner/repo'], None, True),
+    (['gh', 'search', 'prs', '--owner', 'owner'], 'search', True),
+    (['gh', 'pr', 'create', '--repo', 'owner/repo'], None, False),
 ])
-def test_every_github_command_uses_shared_admission(argv, resource):
+def test_every_github_command_uses_shared_admission(argv, resource, background):
     with patch.object(m.github_reads, 'run', return_value=subprocess.CompletedProcess(argv, 0, 'value')) as run, \
          patch.object(m.subprocess, 'run') as raw:
         assert m.command(argv) == 'value'
-    run.assert_called_once_with(argv[1:], timeout=120, resource=resource, deadline=None)
+    run.assert_called_once_with(argv[1:], timeout=120, resource=resource, deadline=None,
+                                background=background)
     raw.assert_not_called()
 
 

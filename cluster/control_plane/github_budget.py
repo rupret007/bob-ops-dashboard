@@ -6,6 +6,7 @@ file is an allowlisted dashboard snapshot only; it never authorizes a request.
 from __future__ import annotations
 
 import asyncio
+from collections import Counter
 import json
 import math
 import os
@@ -19,6 +20,7 @@ from .coordination import ClaimClient
 
 KEY = 'github.account.v1'
 MINUTE_LIMIT = 40
+BACKGROUND_MINUTE_LIMIT = 24
 RESERVES = {'core': 100, 'graphql': 100, 'search': 1}
 SNAPSHOT = 'github-api-budget.json'
 
@@ -28,7 +30,7 @@ class GitHubDeferred(RuntimeError):
 
     def __init__(self, message, *, code='other', retry_after=None):
         super().__init__(message)
-        self.code = code if code == 'minute-exhausted' else 'other'
+        self.code = code if code in ('minute-exhausted', 'background-exhausted') else 'other'
         self.retry_after = (retry_after if type(retry_after) in (int, float)
                             and math.isfinite(retry_after) and retry_after >= 0 else None)
 
@@ -43,10 +45,13 @@ def _number(value):
 
 
 def _state(value):
-    if (not isinstance(value, dict) or value.get('version') != 1
+    if (not isinstance(value, dict) or type(value.get('version')) is not int or value['version'] != 1
             or not isinstance(value.get('requests'), list)
             or len(value['requests']) > MINUTE_LIMIT
             or not all(_number(t) for t in value['requests'])
+            or not isinstance(value.get('foreground_requests', []), list)
+            or len(value.get('foreground_requests', [])) > MINUTE_LIMIT
+            or not all(_number(t) for t in value.get('foreground_requests', []))
             or not isinstance(value.get('resources'), dict)):
         raise GitHubDeferred('GitHub shared API budget invalid; requests paused')
     for resource, quota in value['resources'].items():
@@ -61,7 +66,10 @@ def _state(value):
 
 def _public(state, now, status='ok', reason=''):
     return {'status': status, 'updated_at': now, 'minute_limit': MINUTE_LIMIT,
+            'background_minute_limit': BACKGROUND_MINUTE_LIMIT,
             'requests_last_minute': sum(t > now - 60 for t in state['requests']),
+            'background_requests_last_minute': (sum(t > now - 60 for t in state['requests'])
+                - sum(t > now - 60 for t in state.get('foreground_requests', []))),
             'resources': {resource: {key: value for key, value in quota.items()
                           if key != 'limited_count'}
                           for resource, quota in state['resources'].items()},
@@ -108,6 +116,10 @@ def snapshot(data_dir=None):
             'ok', 'unknown', 'deferred', 'unavailable') else 'unknown'
         count = value.get('requests_last_minute', 0)
         result['requests_last_minute'] = count if type(count) is int and 0 <= count <= MINUTE_LIMIT else 0
+        background = value.get('background_requests_last_minute', result['requests_last_minute'])
+        result['background_requests_last_minute'] = (
+            background if type(background) is int and 0 <= background <= result['requests_last_minute']
+            else result['requests_last_minute'])
         # Do not return arbitrary strings from a disk file on the dashboard.
         return result
     except (OSError, ValueError, KeyError, TypeError, GitHubDeferred):
@@ -136,8 +148,16 @@ def _delay(headers, now):
         return 0
 
 
-def _mutate(state, operation, resource, headers, limited, now):
+def _mutate(state, operation, resource, headers, limited, now, *, background=False):
+    if type(background) is not bool:
+        raise GitHubDeferred('GitHub request priority invalid; requests paused')
     state['requests'] = [t for t in state['requests'] if t > now - 60]
+    # Version-one writers preserve unknown fields but only prune requests.
+    # Expired auxiliary entries must be pruned before multiset validation.
+    foreground = [t for t in state.get('foreground_requests', []) if t > now - 60]
+    if Counter(foreground) - Counter(state['requests']):
+        raise GitHubDeferred('GitHub shared API budget invalid; requests paused')
+    state['foreground_requests'] = foreground
     quota = state['resources'].setdefault(resource, {})
     if operation == 'reserve':
         if quota.get('blocked_until', 0) > now:
@@ -150,11 +170,20 @@ def _mutate(state, operation, resource, headers, limited, now):
             raise GitHubDeferred('GitHub shared API minute budget exhausted; retry later',
                                  code='minute-exhausted',
                                  retry_after=max(0, min(state['requests']) + 60 - now))
+        # Unclassified reservations from legacy writers count conservatively
+        # as background. The original account-wide ledger remains authoritative.
+        background_requests = list((Counter(state['requests']) - Counter(foreground)).elements())
+        if background and len(background_requests) >= BACKGROUND_MINUTE_LIMIT:
+            raise GitHubDeferred('GitHub background minute allowance exhausted; foreground room reserved',
+                                 code='background-exhausted',
+                                 retry_after=min(60, max(0, min(background_requests) + 60 - now)))
         if reset and reset <= now:
             quota.pop('remaining', None)
         if 'remaining' in quota:
             quota['remaining'] = max(0, quota['remaining'] - 1)
         state['requests'].append(now)
+        if not background:
+            foreground.append(now)
         return
     reset = _integer(headers, 'x-ratelimit-reset')
     remaining = _integer(headers, 'x-ratelimit-remaining')
@@ -182,7 +211,7 @@ def _mutate(state, operation, resource, headers, limited, now):
         quota['limited_count'] = 0
 
 
-async def _operation(operation, resource, headers, limited):
+async def _operation(operation, resource, headers, limited, *, background=False):
     nc = None
     try:
         # Lazy import: dashboard snapshots work when NATS is unavailable/uninstalled.
@@ -205,7 +234,7 @@ async def _operation(operation, resource, headers, limited):
             except (KeyNotFoundError, KeyDeletedError):
                 state, revision = {'version': 1, 'requests': [], 'resources': {}}, 0
             try:
-                _mutate(state, operation, resource, headers, limited, now)
+                _mutate(state, operation, resource, headers, limited, now, background=background)
             except GitHubDeferred as exc:
                 _persist(_public(state, now, 'deferred', str(exc)))
                 raise
@@ -237,9 +266,11 @@ async def _operation(operation, resource, headers, limited):
                 pass
 
 
-def reserve(resource='core'):
+def reserve(resource='core', *, background=False):
     """Atomically admit one account request, or raise GitHubDeferred."""
-    return asyncio.run(_operation('reserve', _resource(resource), {}, False))
+    if type(background) is not bool:
+        raise GitHubDeferred('GitHub request priority invalid; requests paused')
+    return asyncio.run(_operation('reserve', _resource(resource), {}, False, background=background))
 
 
 def observe(headers=None, resource='core', limited=False):

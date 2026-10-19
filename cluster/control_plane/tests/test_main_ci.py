@@ -17,7 +17,7 @@ REPO = 'owner/repo'
 @pytest.fixture(autouse=True)
 def isolated_budget_admission(monkeypatch):
     """CI semantics are isolated; shared account admission has broker race tests."""
-    monkeypatch.setattr(m.github_reads.budget, 'reserve', lambda resource: None)
+    monkeypatch.setattr(m.github_reads.budget, 'reserve', lambda resource, **kwargs: None)
 
 
 def details():

@@ -27,8 +27,10 @@ def limited(result):
     return any(s in text for s in ('rate limit', 'rate_limit', 'secondary rate', 'abuse detection'))
 
 
-def run(args, timeout=30, resource=None, deadline=None):
+def run(args, timeout=30, resource=None, deadline=None, *, background=False):
     """Budget CLI operations; mixed commands reserve both API resources."""
+    if type(background) is not bool:
+        raise budget.GitHubDeferred('GitHub request priority invalid; requests paused')
     if resource:
         resources = (resource,)
     elif args[:1] in (['api'], ['label']):
@@ -38,7 +40,10 @@ def run(args, timeout=30, resource=None, deadline=None):
     else:
         resources = ('core', 'graphql')
     for name in resources:
-        budget.reserve(name)
+        if background:
+            budget.reserve(name, background=True)
+        else:
+            budget.reserve(name)
     if deadline is not None:
         timeout = min(timeout, deadline - time.monotonic())
         if timeout <= 0:
