@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import json
 import os
-import re
 import secrets
 import selectors
 import subprocess
@@ -12,12 +11,9 @@ import time
 from .codex_quota import (APP_SOURCE, SOURCE, MAX_AGE_SECONDS, _empty, _number,
                           _observation, _stamp, _unique_object)
 from .codex_quota_observer import ObservationError, stop_owned_process
+from .ssh_transport import SSHTransport, valid_host
 
 MAX_REPLY_BYTES = 8192
-
-
-def valid_host(host):
-    return isinstance(host, str) and re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_.@:-]{0,252}', host) is not None
 
 
 def validate_reply(value, nonce, elapsed):
@@ -49,7 +45,11 @@ def validate_reply(value, nonce, elapsed):
 
 def read_remote_codex_quota(host, *, timeout=10, executable='ssh'):
     """Read the target's installed file-only helper. Never fetch or infer here."""
-    if not valid_host(host) or not _number(timeout) or not 0 < timeout <= 10:
+    if not _number(timeout) or not 0 < timeout <= 10:
+        return _empty('malformed')
+    try:
+        transport = host if isinstance(host, SSHTransport) else SSHTransport(host)
+    except (ValueError, TypeError):
         return _empty('malformed')
     nonce = secrets.token_hex(16)
     remote = 'exec "$HOME/.local/bin/storypool-codex-quota-read" --nonce ' + nonce
@@ -58,8 +58,8 @@ def read_remote_codex_quota(host, *, timeout=10, executable='ssh'):
     process = None
     selector = selectors.DefaultSelector()
     try:
-        process = subprocess.Popen([executable, '-o', 'BatchMode=yes', '-o', 'ConnectTimeout=5',
-                                    host, remote], stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
+        process = subprocess.Popen(transport.argv(executable) + [remote],
+                                   stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
                                    stderr=subprocess.DEVNULL, start_new_session=True)
         selector.register(process.stdout, selectors.EVENT_READ)
         data = b''

@@ -29,7 +29,8 @@ from .config import KarenConfig
 from .deadline import remaining_timeout
 from .checks import PRInfo
 from ..codex_quota import read_codex_quota
-from ..codex_quota_remote import read_remote_codex_quota, valid_host
+from ..codex_quota_remote import read_remote_codex_quota
+from ..ssh_transport import SSHTransport
 
 
 logger = logging.getLogger(__name__)
@@ -453,10 +454,10 @@ class CodexReviewer(BaseReviewer):
         """Check if Codex CLI is available and within budget."""
         target = self._execution_target(config)
         if target is None:
-            return False, "SSH target unavailable and codex CLI not found locally"
+            return False, "SSH transport invalid or unavailable; no Codex execution target"
         if target == 'local' and not self._codex_available_locally():
             return False, "codex CLI not found in PATH"
-        usage_pct = self._get_weekly_usage_pct(replace(config, codex_host=target))
+        usage_pct = self._get_weekly_usage_pct(target)
         cap = min(75.0, config.codex_weekly_cap_pct)
         if usage_pct is None:
             return False, "Codex weekly plan quota unknown; fresh rate-limit observation required"
@@ -478,13 +479,15 @@ class CodexReviewer(BaseReviewer):
         except (subprocess.TimeoutExpired, FileNotFoundError):
             return False
 
-    def _can_ssh_to_host(self, host: str) -> bool:
+    def _can_ssh_to_host(self, host) -> bool:
         """Check if we can SSH to a remote host."""
-        if not valid_host(host):
+        try:
+            transport = host if isinstance(host, SSHTransport) else SSHTransport(host)
+        except (ValueError, TypeError):
             return False
         try:
             result = subprocess.run(
-                ["ssh", "-o", "ConnectTimeout=5", "-o", "BatchMode=yes", host,
+                transport.argv() + [
                  'PATH="$HOME/bin:$HOME/.local/bin:/usr/local/bin:/usr/bin:/bin" command -v codex >/dev/null'],
                 capture_output=True,
                 text=True,
@@ -497,18 +500,21 @@ class CodexReviewer(BaseReviewer):
     def _execution_target(self, config: KarenConfig):
         """Resolve the actual host before inspecting its account-specific quota."""
         if config.codex_host and config.codex_host != 'local':
-            if not valid_host(config.codex_host):
+            try:
+                transport = SSHTransport(config.codex_host, config.codex_ssh_user,
+                                         config.codex_ssh_port, config.codex_ssh_identity_file)
+            except (ValueError, TypeError):
                 return None
-            if self._can_ssh_to_host(config.codex_host):
-                return config.codex_host
+            if self._can_ssh_to_host(transport):
+                return transport
             return 'local' if self._codex_available_locally() else None
         return 'local'
 
-    def _get_weekly_usage_pct(self, config: KarenConfig) -> Optional[float]:
+    def _get_weekly_usage_pct(self, target) -> Optional[float]:
         """Read only the selected execution host's actual plan observation."""
-        if config.codex_host and config.codex_host != 'local':
-            return read_remote_codex_quota(config.codex_host, timeout=remaining_timeout(10))['weekly_pct']
-        return read_codex_quota()["weekly_pct"]
+        if isinstance(target, SSHTransport):
+            return read_remote_codex_quota(target, timeout=remaining_timeout(10))['weekly_pct']
+        return read_codex_quota()["weekly_pct"] if target == 'local' else None
 
     def _build_codex_args(self, effort: str) -> List[str]:
         """Use explicit model/effort, read-only execution, and stdin."""
@@ -542,10 +548,10 @@ class CodexReviewer(BaseReviewer):
         target = self._execution_target(config)
         if target is None:
             return ReviewResult(self.name, ReviewVerdict.ERROR,
-                                "SSH target unavailable and no local Codex; review not dispatched", tier=tier)
+                                "SSH transport invalid or unavailable; review not dispatched", tier=tier)
         # Availability checks cannot authorize a later fallback on another
         # account. Resolve again, then re-read that exact target immediately.
-        usage = self._get_weekly_usage_pct(replace(config, codex_host=target))
+        usage = self._get_weekly_usage_pct(target)
         if usage is None or usage >= min(75.0, config.codex_weekly_cap_pct):
             return ReviewResult(self.name, ReviewVerdict.ERROR,
                                 "Codex weekly quota unavailable or at cap; review not dispatched", tier=tier)
@@ -583,7 +589,7 @@ class CodexReviewer(BaseReviewer):
                     import shlex
                     remote = codex_args[:-1] + ["-"]
                     result = subprocess.run(
-                        ["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=30", target,
+                        target.argv() + [
                          'PATH="$HOME/bin:$HOME/.local/bin:/usr/local/bin:/usr/bin:/bin" '
                          + " ".join(shlex.quote(arg) for arg in remote)],
                         input=prompt, capture_output=True, text=True, timeout=remaining_timeout(900))
