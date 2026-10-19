@@ -25,6 +25,7 @@ from .reviewers import (
     classify_risk_tier,
 )
 from .verdict import Verdict, create_verdict, save_verdict
+from .review_diagnostics import review_error_diagnostics
 from .github_client import fetch_pr_info, verify_sha_current, GitHubError
 
 try:
@@ -166,7 +167,8 @@ class GateRunner:
         if (review_result.verdict == ReviewVerdict.ERROR or
                 (review_result.scope or {}).get("context_incomplete")):
             return self._fail_closed(owner, repo, pr_number, pinned_sha,
-                                     "Review error: " + review_result.reason, check_results)
+                                     "Review error: " + review_result.reason, check_results,
+                                     context_diagnostics=review_error_diagnostics(review_result, all_reviews))
 
         final_passed = review_result.verdict == ReviewVerdict.PASS and not failed
 
@@ -243,6 +245,7 @@ class GateRunner:
         sha: str,
         reason: str,
         check_results: Optional[list[CheckResult]] = None,
+        context_diagnostics: Optional[list[dict]] = None,
     ) -> GateRunResult:
         """Return a fail-closed diagnostic; errors never become durable verdicts."""
         verdict = Verdict(
@@ -266,6 +269,7 @@ class GateRunner:
                 for r in (check_results or [])
             ],
             review_results=[],
+            context_diagnostics=context_diagnostics,
         )
 
         from datetime import datetime, timezone
