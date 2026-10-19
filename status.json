@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-10-19T16:48:55.392108-05:00",
-  "generated_at_display": "Mon Oct 19, 2026 \u00b7 4:48 PM CDT",
+  "generated_at": "2026-10-19T17:04:04.070948-05:00",
+  "generated_at_display": "Mon Oct 19, 2026 \u00b7 5:04 PM CDT",
   "timezone": "America/Chicago",
   "owner": "rupret007",
   "dashboard": "bob-ops-dashboard",
@@ -298,9 +298,9 @@
           "default_branch": "main",
           "tip_sha": "76b7bc8",
           "tip_date": "2026-10-17T09:14:30Z",
-          "open_prs": 6,
-          "open_pr_url": "https://github.com/rupret007/Turdanoid/pull/73",
-          "open_pr_number": 73,
+          "open_prs": 7,
+          "open_pr_url": "https://github.com/rupret007/Turdanoid/pull/71",
+          "open_pr_number": 71,
           "open_pr_draft": false,
           "open_pr_stack": [],
           "pr_listing_complete": true,
@@ -495,15 +495,15 @@
           "status": "yellow",
           "chip": "Yellow",
           "default_branch": "main",
-          "tip_sha": "e8b58c4",
-          "tip_date": "2026-10-19T21:35:28Z",
+          "tip_sha": "b4b0085",
+          "tip_date": "2026-10-19T21:49:09Z",
           "open_prs": 12,
-          "open_pr_url": "https://github.com/rupret007/bob-ops-dashboard/pull/88",
-          "open_pr_number": 88,
+          "open_pr_url": "https://github.com/rupret007/bob-ops-dashboard/pull/84",
+          "open_pr_number": 84,
           "open_pr_draft": false,
           "open_pr_stack": [],
           "pr_listing_complete": true,
-          "agent_url": "https://cursor.com/agents/bc-8010dd7e-0b0b-5074-a351-0faafe9a47c7",
+          "agent_url": "https://cursor.com/agents/bc-4522847c-e01a-58c5-9fc7-ee9317e6b0db",
           "ci": null,
           "release": null,
           "release_sha": null,
@@ -900,7 +900,7 @@
     "barker"
   ],
   "publish_notes": "Public board -- no secrets or customer paths. Private repositories stay high-level; AI Music Vault stays private-content-boundary only.",
-  "refresh_started_ms": 1792446507095,
+  "refresh_started_ms": 1792447410433,
   "agents_source": "file:stale->unknown",
   "agents": [
     {
@@ -948,21 +948,21 @@
   ],
   "cloud_agents": [
     {
-      "id": "bc-8010dd7e-0b0b-5074-a351-0faafe9a47c7",
-      "name": "PR #88",
-      "state": "unknown",
-      "detail": "All-in-one install: merge PRs #84, #85, #86, #87 with unified installers",
-      "url": "https://cursor.com/agents/bc-8010dd7e-0b0b-5074-a351-0faafe9a47c7",
-      "pr_url": "https://github.com/rupret007/bob-ops-dashboard/pull/88",
-      "checked_at": null
-    },
-    {
       "id": "bc-4522847c-e01a-58c5-9fc7-ee9317e6b0db",
       "name": "PR #84",
       "state": "unknown",
       "detail": "feat: StoryPool control plane migration from Grok to deterministic scheduler",
       "url": "https://cursor.com/agents/bc-4522847c-e01a-58c5-9fc7-ee9317e6b0db",
       "pr_url": "https://github.com/rupret007/bob-ops-dashboard/pull/84",
+      "checked_at": null
+    },
+    {
+      "id": "bc-8010dd7e-0b0b-5074-a351-0faafe9a47c7",
+      "name": "PR #88",
+      "state": "unknown",
+      "detail": "All-in-one install: merge PRs #84, #85, #86, #87 with unified installers",
+      "url": "https://cursor.com/agents/bc-8010dd7e-0b0b-5074-a351-0faafe9a47c7",
+      "pr_url": "https://github.com/rupret007/bob-ops-dashboard/pull/88",
       "checked_at": null
     },
     {
@@ -1099,7 +1099,7 @@
     }
   ],
   "llm_work_now_freshness": {
-    "generated_at": "2026-10-19 16:48 CT",
+    "generated_at": "2026-10-19 17:04 CT",
     "warn_ttl_sec": 1200,
     "warnings": [],
     "ok": true
@@ -1130,7 +1130,7 @@
     ],
     "scorecards": {
       "v": "scorecards/v1",
-      "generated_at": "2026-10-19T21:48:56.483778+00:00",
+      "generated_at": "2026-10-19T22:04:05.445263+00:00",
       "windows": {
         "24h": {
           "providers": {
