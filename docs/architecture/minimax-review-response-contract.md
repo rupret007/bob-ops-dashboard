@@ -24,6 +24,21 @@ Natural-language final answers, reasoning containing JSON, truncated responses
 and malformed schemas still fail closed. FAIL/BORDERLINE remain terminal votes.
 Offline fixtures cover these boundaries without accepting guessed JSON.
 
+The documented `system` message role carries a static independent-review and
+JSON response contract. Every PR value, diff and requested context remains in
+the `user` message; none is interpolated into the system message. This promotes
+the existing contract without adding an undocumented JSON mode or treating
+another reviewer's PASS as evidence. It is a prompt-compliance measure, not a
+guarantee that the model emits JSON. [Supported message roles](https://platform.minimax.io/docs/api-reference/text-chat-openai).
+
+Malformed-response diagnostics retain only character count, controlled leading
+and prefix categories, a leading-BOM boolean, and a controlled failure stage
+(`envelope`, `content`, `json_decode`, `schema`, or `context`). These distinguish
+prose, markup, reasoning tags, BOM/format prefixes and non-object JSON without
+logging raw text, tag values, paths or arbitrary characters. Classification
+does not normalize the parser input or rescue a malformed verdict. The one
+identical format-error retry and all approval gates remain unchanged.
+
 The shared prompt requires security/functional issue arrays to contain only
 concrete unresolved defects with changed-file `file:line` evidence. With no such
 defects those arrays must be empty. Positive assurances and verified protections
