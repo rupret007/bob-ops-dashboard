@@ -162,7 +162,7 @@ class ClaimClient:
         import nats
         from nats.js.api import KeyValueConfig
         from nats.js.errors import KeyNotFoundError, KeyDeletedError
-        from .retry_policy import REASONS
+        from .retry_policy import FAILURE_REASONS, REASONS
         nc = None
         async def quiet_error(_):
             pass
@@ -190,7 +190,7 @@ class ClaimClient:
                     return None
                 if (not isinstance(value, dict) or type(value.get('attempts')) is not int
                         or value['attempts'] < 1 or type(value.get('retry_after')) not in (int, float)
-                        or value.get('code') not in ('transient', *REASONS)):
+                        or value.get('code') not in ('transient', *REASONS, *FAILURE_REASONS)):
                     raise CoordinationError('Invalid retry state; new fixes paused')
                 return value
             if operation == 'put':
