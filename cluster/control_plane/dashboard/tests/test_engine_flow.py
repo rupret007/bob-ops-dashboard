@@ -119,6 +119,12 @@ def test_truncated_alert_file_cannot_prove_green(tmp_path):
     assert EngineCollector(tmp_path, tmp_path, 'nucbox').collect()['engine'] == 'yellow'
 
 
+def test_root_alert_with_date_at_end_of_heading_is_not_missed(tmp_path):
+    snapshot(tmp_path)
+    (tmp_path / 'NEEDS_JEFF.md').write_text('## Review needed — 2020-01-01T00:00:00Z\n')
+    assert EngineCollector(tmp_path, tmp_path, 'nucbox').collect()['engine'] == 'yellow'
+
+
 def test_peer_sync_copies_only_local_flow_fields(tmp_path, monkeypatch):
     from cluster.control_plane import watchdog
     monkeypatch.setattr(watchdog, 'LOG_DIR', tmp_path)

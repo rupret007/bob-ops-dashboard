@@ -22,7 +22,8 @@ def stale_alerts(data_dir, now, tail):
             continue
         for line in tail(path, 262144):
             text = re.sub(r'^(?:## |[-*] )', '', line).strip()
-            match = re.match(r'(\d{4}-\d\d-\d\d(?:T\S+| \d\d:\d\d UTC))', text)
+            pattern = r'(\d{4}-\d\d-\d\d(?:T\S+| \d\d:\d\d UTC))'
+            match = re.search(pattern, text) if line.startswith('## ') else re.match(pattern, text)
             if not match:
                 continue
             value = match.group(1)
