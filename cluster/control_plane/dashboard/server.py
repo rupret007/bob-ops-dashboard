@@ -357,14 +357,14 @@ def _render_providers(data: DashboardData) -> str:
     """Render providers budget card."""
     rows = []
     for p in data.providers:
-        pct = min(100, (p.weekly_pct / max(p.cap_pct, 1)) * 100) if p.cap_pct > 0 else 0
-        pct_class = "ok" if p.status == "ok" else p.status
+        quota = f"{p.weekly_pct:.1f}%" if p.weekly_pct is not None else "unknown"
+        spend = f"${p.weekly_spend_usd:.2f}" if p.weekly_spend_usd is not None else "unknown"
         
         rows.append(f"""
             <tr>
                 <td>{_escape(p.name)}</td>
-                <td>{p.weekly_pct:.1f}%</td>
-                <td>${p.weekly_spend_usd:.2f}</td>
+                <td>{quota}</td>
+                <td>{spend}</td>
                 <td><span class="badge badge-{p.status}">{p.status}</span></td>
             </tr>
         """)

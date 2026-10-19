@@ -15,6 +15,8 @@ from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from typing import Optional, List, Dict, Any
 
+from ..codex_quota import read_codex_quota
+
 try:
     from ..job_ledger import JobLedger, Job, JobState
     LEDGER_AVAILABLE = True
@@ -197,9 +199,9 @@ class NeedsJeffItem:
 class ProviderBudget:
     """Budget usage for a provider."""
     name: str
-    weekly_pct: float
-    daily_spend_usd: float
-    weekly_spend_usd: float
+    weekly_pct: Optional[float]
+    daily_spend_usd: Optional[float]
+    weekly_spend_usd: Optional[float]
     cap_pct: float
     status: str  # "ok", "warning", "capped", "conserve"
 
@@ -696,11 +698,13 @@ class DataCollector:
         
         for name, config in provider_configs.items():
             pdata = data.get(name, {})
-            weekly_pct = pdata.get("weekly_pct", 0.0)
+            weekly_pct = read_codex_quota()['weekly_pct'] if name == 'codex' else pdata.get("weekly_pct", 0.0)
             
             status = config["status"]
             if name != "grok":
-                if weekly_pct >= config["cap_pct"]:
+                if weekly_pct is None:
+                    status = "unknown"
+                elif weekly_pct >= config["cap_pct"]:
                     status = "capped"
                 elif weekly_pct >= config["cap_pct"] * 0.9:
                     status = "warning"
@@ -708,8 +712,8 @@ class DataCollector:
             providers.append(ProviderBudget(
                 name=name,
                 weekly_pct=weekly_pct,
-                daily_spend_usd=pdata.get("daily_usd", 0.0),
-                weekly_spend_usd=pdata.get("weekly_usd", 0.0),
+                daily_spend_usd=None if name == 'codex' else pdata.get("daily_usd", 0.0),
+                weekly_spend_usd=None if name == 'codex' else pdata.get("weekly_usd", 0.0),
                 cap_pct=config["cap_pct"],
                 status=status,
             ))

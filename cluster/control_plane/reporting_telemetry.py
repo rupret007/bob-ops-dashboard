@@ -107,11 +107,12 @@ def lane_budget_snapshot(tracker, data_dir, verdict_dir, now=None):
     cutoff = now - 86400
     have_jobs = (Path(data_dir) / 'jobs' / 'ledger.jsonl').is_file()
     have_reviews = Path(verdict_dir).is_dir()
-    result = {p: dict(cost_usd=None, weekly_pct=None, jobs_24h=0 if have_jobs else None,
+    result = {p: dict(cost_usd=None, weekly_pct=v.get('weekly_pct') if p == 'codex' else None,
+                       quota=v.get('quota') if p == 'codex' else None, jobs_24h=0 if have_jobs else None,
                        reviews_24h=0 if have_reviews else None,
                        cost_source='unavailable', source='local ledger + observed Karen artifacts (24h)',
                        allowed=v.get('allowed'), reason=v.get('reason'),
-                       recorded_estimate_usd=v.get('cost_usd'), recorded_calls=v.get('calls'))
+                       recorded_estimate_usd=tracker.get_usage(p).cost_usd, recorded_calls=v.get('calls'))
               for p, v in tracker.summary().items()}
     for job in _jobs(data_dir):
         provider = job.get('provider')

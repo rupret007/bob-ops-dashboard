@@ -4,7 +4,7 @@ from http.server import HTTPServer
 from threading import Thread
 from urllib.request import urlopen
 
-from cluster.control_plane.dashboard.tachometer import EngineCollector
+from cluster.control_plane.dashboard.tachometer import EngineCollector, merge_llm
 from cluster.control_plane.dashboard.server import DashboardHandler, render_dashboard
 from cluster.control_plane.dashboard.data_collector import DataCollector, DashboardData
 
@@ -129,8 +129,10 @@ def test_old_failures_keep_their_actual_time_after_ledger_rewrite(tmp_path):
     assert snapshot['gauges'][5]['value'] is None
 
 
-def test_running_jobs_per_machine_and_llm_speedometers(tmp_path):
+def test_running_jobs_per_machine_and_llm_speedometers(tmp_path, monkeypatch):
     now = datetime.now(timezone.utc)
+    monkeypatch.setattr('cluster.control_plane.dashboard.tachometer.read_codex_quota',
+                        lambda **kw: {'weekly_pct': 12.0})
     iso = lambda d: (now + d).isoformat()
     data, karen = tmp_path / 'data', tmp_path / 'karen'
     ledger = data / 'jobs' / 'ledger.jsonl'
@@ -148,7 +150,9 @@ def test_running_jobs_per_machine_and_llm_speedometers(tmp_path):
                                                 review_results=[{'reviewer': 'codex'}]))
     write(karen / 'codex_weekly_usage.json', {'week_start': now.timestamp() - 86400, 'usage_pct': 12.0})
     write(tmp_path / 'budget.json', {'usage': {'codex': {'calls': 19}, 'grok': {'calls': 0}}})
-    peer = [{'service': 'codex', 'active': 1, 'calls_hour': 4, 'jobs_hour': 1, 'reviews_hour': 3, 'weekly_pct': 20.0}]
+    peer = [{'service': 'codex', 'active': 1, 'calls_hour': 4, 'jobs_hour': 1, 'reviews_hour': 3, 'weekly_pct': 20.0,
+             'quota': {'weekly_pct': 20.0, 'status': 'ok', 'source': 'codex_session_rate_limits',
+                       'observed_at': now.isoformat(), 'resets_at': int(now.timestamp()+86400)}}]
     write(data / 'machines' / 'mini' / 'engine.json', {'synced_at': now.isoformat(), 'llm_local': peer, 'jobs': {
         'source': 'local', 'count': 1, 'running': [dict(job_id='m', repo='o/m', pr_number=1, provider='gemini', model=None,
                                                         start_time=iso(timedelta(minutes=-2)), elapsed_sec=1)]}})
@@ -173,10 +177,37 @@ def test_running_jobs_per_machine_and_llm_speedometers(tmp_path):
     assert merged['codex']['machines'] == ['nucbox', 'mini']
 
 
-def test_llm_gauges_report_no_data_without_evidence(tmp_path):
+def test_llm_gauges_report_no_data_without_evidence(tmp_path, monkeypatch):
+    monkeypatch.setattr('cluster.control_plane.dashboard.tachometer.read_codex_quota',
+                        lambda **kw: {'weekly_pct': None})
+    write(tmp_path / 'codex_weekly_usage.json', {'week_start': datetime.now().timestamp(), 'usage_pct': 0.0})
     result = EngineCollector(tmp_path, tmp_path, 'mini', budget_file=tmp_path / 'none.json').collect()
     assert all(g['calls_hour'] is None and g['active'] is None and g['weekly_pct'] is None for g in result['llm'])
     assert result['jobs']['mini']['count'] is None and result['jobs']['nucbox']['source'] == 'unavailable'
+
+
+def test_codex_peer_quota_ignores_estimates_and_expired_windows():
+    now = datetime.now(timezone.utc)
+    local = [{'service': 'codex', 'weekly_pct': None}]
+    peer = {'service': 'codex', 'weekly_pct': 0.0}
+    assert merge_llm(local, [[peer]])[0]['weekly_pct'] is None
+    quota = {'source': 'codex_session_rate_limits', 'status': 'ok', 'weekly_pct': 21.0,
+             'observed_at': now.isoformat(), 'resets_at': int(now.timestamp()+86400)}
+    peer['quota'] = quota
+    assert merge_llm(local, [[peer]])[0]['weekly_pct'] == 21.0
+    for invalid in (dict(quota, resets_at=int(now.timestamp()-1)),
+                    dict(quota, observed_at=(now-timedelta(hours=2)).isoformat()),
+                    dict(quota, weekly_pct=True), dict(quota, status='stale')):
+        assert merge_llm(local, [[dict(peer, quota=invalid)]])[0]['weekly_pct'] is None
+
+
+def test_provider_quota_and_billing_render_unknown_without_crashing():
+    from cluster.control_plane.dashboard.data_collector import ProviderBudget
+    from cluster.control_plane.dashboard.server import _render_providers
+    data = DashboardData(timestamp='', machine='mini', live_mode=True,
+                         providers=[ProviderBudget('codex', None, None, None, 75.0, 'unknown')])
+    html = _render_providers(data)
+    assert 'unknown' in html and '$0.00' not in html and '>0.0%<' not in html
 
 
 def test_live_panel_has_jobs_and_speedometers():

@@ -8,6 +8,8 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 
+from ..codex_quota import read_codex_quota
+
 
 def tail(path, limit=262144):
     """Bound disk work even when append-only logs grow indefinitely."""
@@ -156,7 +158,19 @@ def merge_llm(local, peers):
             for key in ('active', 'calls_hour', 'jobs_hour', 'reviews_hour'):
                 if other.get(key) is not None:
                     out[key] = (out.get(key) or 0) + other[key]
-            if other.get('weekly_pct') is not None and (out.get('weekly_pct') is None or other['weekly_pct'] > out['weekly_pct']):
+            quota = other.get('quota')
+            if gauge['service'] == 'codex':
+                quota = quota if isinstance(quota, dict) else {}
+                pct = quota.get('weekly_pct')
+                observed = stamp(quota.get('observed_at'))
+                now = time.time()
+                if (quota.get('source') == 'codex_session_rate_limits' and quota.get('status') == 'ok'
+                        and type(pct) in (int, float) and 0 <= pct <= 100
+                        and type(quota.get('resets_at')) is int and quota['resets_at'] > now
+                        and 0 <= now - observed <= 3600
+                        and observed > stamp((out.get('quota') or {}).get('observed_at'))):
+                    out.update(weekly_pct=pct, quota=quota)
+            elif other.get('weekly_pct') is not None and (out.get('weekly_pct') is None or other['weekly_pct'] > out['weekly_pct']):
                 out['weekly_pct'] = other['weekly_pct']
             if out.get('max_concurrent') is None and other.get('max_concurrent') is not None:
                 out['max_concurrent'] = other['max_concurrent']
@@ -467,7 +481,7 @@ class EngineCollector:
         rules = provider_rules()
         budget = read_json(self.budget_file)
         usage = budget.get('usage', {}) if isinstance(budget, dict) else {}
-        weekly = read_json(self.karen_dir / 'codex_weekly_usage.json')
+        weekly = read_codex_quota(now=now)
         llm_local = []
         for service in LLM_SERVICES:
             rule = rules.get(service, {})
@@ -486,14 +500,14 @@ class EngineCollector:
             calls = None if jobs_hour is None and reviews_hour is None else (jobs_hour or 0) + (reviews_hour or 0)
             week = usage.get(service) if isinstance(usage, dict) else None
             pct = None
-            if service == 'codex' and isinstance(weekly, dict) and isinstance(weekly.get('usage_pct'), (int, float)) \
-                    and now - float(weekly.get('week_start') or 0) < 7 * 86400:
-                pct = round(float(weekly['usage_pct']), 1)
+            if service == 'codex':
+                pct = weekly['weekly_pct']
             llm_local.append({'service': service, 'machine': self.machine,
                               'active': sum(r['provider'] == service for r in counted) if have_ledger else None,
                               'max_concurrent': rule.get('max_concurrent'),
                               'calls_hour': calls, 'jobs_hour': jobs_hour, 'reviews_hour': reviews_hour,
                               'weekly_calls': week.get('calls') if isinstance(week, dict) else None,
                               'weekly_pct': pct, 'weekly_cap_pct': rule.get('weekly_cap_pct'),
+                              'quota': weekly if service == 'codex' else None,
                               'conserve': service == 'grok'})
         return view, llm_local, merge_llm(llm_local, peers)

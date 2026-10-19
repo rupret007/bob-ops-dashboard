@@ -50,7 +50,9 @@ def test_missing_stale_and_wrong_identity_never_get_local_load(tmp_path):
         assert machine_guard_snapshot(tmp_path, 'nucbox', NOW)['mini']['load'] is None
 
 
-def test_budget_unknown_even_when_legacy_cost_is_zero(tmp_path):
+def test_budget_unknown_even_when_legacy_cost_is_zero(tmp_path, monkeypatch):
+    monkeypatch.setattr('cluster.control_plane.budget_tracker.read_codex_quota',
+                        lambda: {'weekly_pct': None, 'status': 'unknown'})
     tracker = BudgetTracker(tmp_path / 'config')
     tracker.record('codex', cost_usd=0.02)
     jobs = tmp_path / 'jobs' / 'ledger.jsonl'
