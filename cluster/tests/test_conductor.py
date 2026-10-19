@@ -603,8 +603,19 @@ class TestConductorExecution(unittest.TestCase):
     @patch("subprocess.run")
     def test_execute_live_merge(self, mock_run, mock_budget, mock_validate, mock_client):
         """Merge action is executed in live mode."""
+        default_query = [
+            "gh", "api", "graphql", "-f",
+            "query=query($owner:String!,$name:String!){repository(owner:$owner,name:$name){\n"
+            "nameWithOwner defaultBranchRef{name target{... on Commit{oid}}}}}",
+            "-f", "owner=test", "-f", "name=repo",
+        ]
         def mock_run_side_effect(cmd, **kwargs):
             result = MagicMock(returncode=0)
+            if cmd == default_query:
+                result.stdout = json.dumps({"data": {"repository": {
+                    "nameWithOwner": "test/repo", "defaultBranchRef": {
+                        "name": "main", "target": {"oid": "c" * 40}}}}})
+                return result
             if "gh" in cmd and "api" in cmd:
                 if any("check-runs" in value for value in cmd):
                     result.stdout = '[{"check_runs":[{"id":1,"name":"tests","status":"completed","conclusion":"success"}]}]'
@@ -638,6 +649,17 @@ class TestConductorExecution(unittest.TestCase):
         mock_validate.assert_called_once()
         mock_budget.assert_any_call("graphql")
         mock_budget.assert_any_call("core")
+        api_calls = [c.args[0] for c in mock_run.call_args_list
+                     if c.args[0][:2] == ["gh", "api"]]
+        self.assertEqual(api_calls, [
+            default_query,
+            ["gh", "api", "--paginate", "--slurp",
+             "repos/test/repo/commits/" + "c" * 40 + "/check-runs?per_page=100"],
+            ["gh", "api", "repos/test/repo/commits/" + "c" * 40 + "/status"],
+            ["gh", "api", "--paginate", "--slurp",
+             "repos/test/repo/commits/" + "b" * 40 + "/check-runs?per_page=100"],
+            ["gh", "api", "repos/test/repo/commits/" + "b" * 40 + "/status"],
+        ])
 
     @patch("subprocess.run")
     def test_execute_handles_error(self, mock_run):
