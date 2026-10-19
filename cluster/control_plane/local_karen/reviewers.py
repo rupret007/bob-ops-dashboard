@@ -485,6 +485,25 @@ class CodexReviewer(BaseReviewer):
                 "-c", 'model_reasoning_effort="{}"'.format(effort),
                 "--sandbox", "read-only", "--skip-git-repo-check", "-"]
 
+    @staticmethod
+    def _failure_category(stderr: str) -> str:
+        """Return fixed diagnostic labels, never CLI output or PR contents."""
+        text = stderr.lower()
+        categories = (
+            ("runtime_initialization", ("failed to initialize in-process app-server",)),
+            ("arguments", ("unexpected argument", "unrecognized argument", "unknown option")),
+            ("authentication", ("not logged in", "login required", "unauthorized", "refresh token", "authentication")),
+            ("quota", ("rate limit", "usage limit", "quota exceeded", "too many requests")),
+            ("context_limit", ("context window", "context length", "maximum context", "input too large")),
+            ("configuration", ("error loading config", "invalid value", "unsupported value", "invalid schema")),
+            ("model_access", ("model not found", "model is not supported", "model does not exist")),
+            ("permissions", ("permission denied", "operation not permitted")),
+            ("transport", ("stream disconnected", "connection reset", "connection refused",
+                           "could not resolve hostname", "error sending request", "timed out")),
+        )
+        return next((name for name, phrases in categories if any(p in text for p in phrases)),
+                    "unclassified" if text.strip() else "empty_stderr")
+
     def review(self, pr: PRInfo, tier: ReviewTier, config: KarenConfig) -> ReviewResult:
         """Run Codex review via CLI."""
         start_time = time.time()
@@ -555,15 +574,19 @@ class CodexReviewer(BaseReviewer):
             duration = time.time() - start_time
 
             if result.returncode != 0:
+                category = self._failure_category(result.stderr or "")
                 return ReviewResult(
                     reviewer=self.name,
                     verdict=ReviewVerdict.ERROR,
-                    reason=("Codex runtime could not initialize; retry in service context"
-                            if "failed to initialize in-process app-server" in result.stderr
-                            else "Codex CLI failed (exit {}); no review produced".format(result.returncode)),
+                    reason="Codex CLI failed (exit {}; {}); no review produced".format(
+                        result.returncode, category),
                     tier=tier,
                     duration_sec=duration,
                     raw_response="",
+                    scope={"failure_category": category, "exit_code": result.returncode,
+                           "execution": "ssh" if use_ssh else "local",
+                           "stderr_characters": len(result.stderr or ""),
+                           "stdout_characters": len(result.stdout or "")},
                 )
 
             review_result = self._parse_structured_verdict(response, pr, tier)
@@ -836,36 +859,51 @@ class MiniMaxReviewer(BaseReviewer):
                 method="POST",
             )
 
-            with urllib.request.urlopen(req, timeout=240) as resp:
-                result = json.loads(resp.read().decode("utf-8"))
-
-            duration = time.time() - start_time
-
-            if result.get("base_resp", {}).get("status_code", 0) != 0:
-                raise ValueError("provider rejected request")
-            if result.get("choices", [{}])[0].get("finish_reason") != "stop":
-                raise ValueError("incomplete review")
-            response_text = result.get("choices", [{}])[0].get(
-                "message", {}
-            ).get("content", "")
-
-            if not response_text:
-                return ReviewResult(
-                    reviewer=self.name,
-                    verdict=ReviewVerdict.ERROR,
-                    reason="Empty response from MiniMax",
-                    tier=primary_result.tier,
-                    duration_sec=duration,
-                    key_source=key_source,
-                )
-
-            return self._parse_second_judge_verdict(
-                response_text, pr, primary_result, duration, key_source
-            )
+            for attempt in range(2):
+                with urllib.request.urlopen(req, timeout=240) as resp:
+                    raw = resp.read()
+                metadata = self._response_metadata(None)
+                try:
+                    result = json.loads(raw.decode("utf-8"))
+                except (UnicodeError, ValueError):
+                    result = None
+                    metadata = self._response_metadata(raw.decode("utf-8", errors="replace"))
+                duration = time.time() - start_time
+                error = "Malformed MiniMax response envelope"
+                if isinstance(result, dict) and isinstance(result.get("base_resp", {}), dict):
+                    if result.get("base_resp", {}).get("status_code", 0) != 0:
+                        raise ValueError("provider rejected request")
+                    choices = result.get("choices")
+                    if isinstance(choices, list) and choices and isinstance(choices[0], dict):
+                        choice = choices[0]
+                        # Truncated output is never parsed, retried as a vote or accepted.
+                        if choice.get("finish_reason") != "stop":
+                            raise ValueError("incomplete review")
+                        message = choice.get("message")
+                        content = message.get("content") if isinstance(message, dict) else None
+                        metadata = self._response_metadata(content)
+                        error = "Empty or malformed response from MiniMax"
+                        if isinstance(content, str) and content.strip():
+                            review = self._parse_second_judge_verdict(
+                                content, pr, primary_result, duration, key_source)
+                            error = None
+                if error:
+                    review = ReviewResult(self.name, ReviewVerdict.ERROR, error,
+                        tier=primary_result.tier, duration_sec=duration,
+                        key_source=key_source, scope=metadata)
+                    logger.warning("MiniMax response malformed/empty: characters=%s; leading_class=%s",
+                                   metadata['response_characters'], metadata['leading_class'])
+                # A real verdict (including FAIL/BORDERLINE) is terminal. Only
+                # operational format errors receive one fresh, identical request.
+                if review.verdict != ReviewVerdict.ERROR or attempt == 1:
+                    return review
+                logger.warning("MiniMax completed response malformed/empty; retrying once")
+                from .gate import review_checkpoint
+                review_checkpoint()
 
         except Exception as e:
-            # Log only the exception class/message (never the key or content).
-            logger.warning("MiniMax second judge failed: %s: %s", type(e).__name__, str(e)[:120])
+            # Exception messages may contain headers, credentials or response text.
+            logger.warning("MiniMax second judge failed: %s", type(e).__name__)
             return ReviewResult(
                 reviewer=self.name,
                 verdict=ReviewVerdict.ERROR,
@@ -874,6 +912,20 @@ class MiniMaxReviewer(BaseReviewer):
                 duration_sec=time.time() - start_time,
                 key_source=key_source,
             )
+
+    @staticmethod
+    def _response_metadata(response):
+        """Describe malformed output without exposing text, tokens or values."""
+        if response is None:
+            return {"response_characters": 0, "leading_class": "empty"}
+        if not isinstance(response, str):
+            return {"response_characters": None, "leading_class": "other"}
+        start = response.lstrip()
+        leading = ("empty" if not start else "json-object" if start.startswith('{') else
+                   "code-fence" if start.startswith('```') else
+                   "reasoning-tag" if start.lower().startswith(
+                       ('<think>', '<thinking>', '<analysis>', '<reasoning>')) else "other")
+        return {"response_characters": len(response), "leading_class": leading}
 
     def _parse_second_judge_verdict(
         self,
@@ -884,6 +936,7 @@ class MiniMaxReviewer(BaseReviewer):
         key_source: str = "",
     ) -> ReviewResult:
         """Only a complete, structured independent verdict is accepted."""
+        metadata = self._response_metadata(response)
         try:
             response = response.strip()
             if response.startswith("```"):
@@ -923,13 +976,19 @@ class MiniMaxReviewer(BaseReviewer):
             # Non-blocking quality/test notes may accompany a PASS, the same as
             # the primary reviewers' "PASS with findings".
             result = self._parse_structured_verdict(response, pr, primary.tier, key_source)
-        except (TypeError, ValueError, AttributeError) as e:
-            logger.warning("MiniMax review rejected as malformed: %s", str(e)[:120])
+        except (TypeError, ValueError, AttributeError):
             result = ReviewResult(
                 reviewer=self.name, verdict=ReviewVerdict.ERROR,
                 reason="Malformed MiniMax review", tier=primary.tier,
                 key_source=key_source,
             )
+        if result.verdict == ReviewVerdict.ERROR:
+            # An invalid verdict value can be echoed by the shared parser;
+            # retain only shape metadata for malformed MiniMax responses.
+            result = replace(result, reason="Malformed MiniMax review", raw_response="",
+                             findings=None, requested_files=[], scope=metadata)
+            logger.warning("MiniMax review malformed: characters=%s; leading_class=%s",
+                           metadata['response_characters'], metadata['leading_class'])
         result.duration_sec = duration
         return result
 
