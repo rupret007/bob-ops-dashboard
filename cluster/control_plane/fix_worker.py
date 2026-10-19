@@ -20,6 +20,7 @@ from .retry_policy import PreflightFailure, REASONS, STAGE_CODES, WorkerFailure,
 from .fix_dispatcher import _find_codex, extract_findings_from_verdict
 from .local_karen.config import KarenConfig
 from .local_karen.verdict import load_verdict
+from .worker_runtime import qualified_runtime, RuntimeUnqualified
 
 
 CODEX_EFFORT = 'xhigh'
@@ -141,14 +142,14 @@ def run(args, cwd=None, **kwargs):
     return result.stdout.strip()
 
 
-def test_command(tree):
+def test_command(tree, python=None):
     """Select a real test runner; unsupported repos need a human decision."""
     package = tree / 'package.json'
     if package.exists() and json.loads(package.read_text()).get('scripts', {}).get('test'):
         return ['npm', 'test']
     if ((tree / 'pytest.ini').exists() or list(tree.glob('test_*.py'))
             or list((tree / 'tests').glob('**/test_*.py'))):
-        return [sys.executable, '-m', 'pytest', '-q']
+        return [python or sys.executable, '-m', 'pytest', '-q']
     raise PreflightFailure('unsupported-tests')
 
 
@@ -196,7 +197,14 @@ def _fix_pr(repo, pr_number, head_sha, findings):
              f'https://github.com/{repo}.git', str(checkout)])
         run(['git', 'worktree', 'add', '--detach', str(tree), head_sha], checkout)
         _stage('test-setup')
-        tests = test_command(tree)
+        runtime = qualified_runtime(repo, head_sha, tree)
+        if runtime is not None:
+            if (run(['git', 'rev-parse', 'HEAD'], tree) != head_sha
+                    or run(['git', 'rev-parse', 'HEAD^{tree}'], tree) != runtime.head['tree_sha']):
+                raise RuntimeUnqualified()
+        tests = test_command(tree, runtime.python if runtime is not None else None)
+        if runtime is not None and tests != [runtime.python, '-m', 'pytest', '-q']:
+            raise RuntimeUnqualified()
         if tests[0] == 'npm':
             if not (tree / 'package-lock.json').is_file():
                 raise PreflightFailure('missing-lockfile')
@@ -212,11 +220,24 @@ def _fix_pr(repo, pr_number, head_sha, findings):
             'STORYPOOL_JOBS_DIR': str(Path(temp) / 'test-jobs'),
             'STORYPOOL_METRICS_DIR': str(Path(temp) / 'test-metrics'),
             'STORYPOOL_DATA_DIR': str(Path(temp) / 'test-data'),
+            'STORYPOOL_STATE_DIR': str(Path(temp) / 'test-state'),
             'STORYPOOL_FIX_STATE_DIR': str(Path(temp) / 'test-fixes')}
+        if runtime is not None:
+            state = Path(temp) / 'test-runtime'
+            for name in ('config', 'cache', 'data', 'state', 'xdg-runtime'):
+                (state / name).mkdir(parents=True, mode=0o700)
+            (state / 'config/empty-netrc').touch(mode=0o600)
+            test_env = runtime.environment(test_env, state)
         attempt_prompt = prompt
         for attempt in range(1, MAX_FIX_ATTEMPTS + 1):
             _stage('provider')
-            run([str(codex)] + codex_args(), tree, input=attempt_prompt)
+            run([str(codex)] + codex_args(), tree, input=attempt_prompt,
+                **({'env': test_env} if runtime is not None else {}))
+            if runtime is not None:
+                _stage('test-setup')
+                current = qualified_runtime(repo, head_sha, tree)
+                if current.receipt_sha256 != runtime.receipt_sha256:
+                    raise RuntimeUnqualified()
             _stage('tests')
             try:
                 run(tests, tree, env=test_env)

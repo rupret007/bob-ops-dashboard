@@ -44,6 +44,7 @@ from .guards import MachineGuards
 from .job_ledger import JobLedger, get_ledger, Job, JobState
 from .github_budget import GitHubDeferred
 from .github_reads import GitHubReadError
+from .worker_runtime import qualified_runtime, RuntimeUnqualified, REASON as RUNTIME_REASON
 
 DISPATCH_LOG_DIR = Path(
     os.environ.get("STORYPOOL_DISPATCH_LOG_DIR", "~/.local/share/storypool/dispatch")
@@ -548,6 +549,17 @@ class Dispatcher:
                         head_sha=head_sha, provider=provider,
                         extra={"reason_code": "missing-reviewed-findings"},
                     )
+                    self._write_decision(decision)
+                    decisions.append(decision)
+                    continue
+                try:
+                    qualified_runtime(repo, head_sha)
+                except RuntimeUnqualified:
+                    decision = DispatchDecision(
+                        timestamp=_now_iso(), action='skip', machine=self.machine, live=True,
+                        repo=repo, pr_number=pr_number, head_sha=head_sha, provider=provider,
+                        reason=RUNTIME_REASON,
+                        extra={'reason_code': 'test-runtime-unqualified'})
                     self._write_decision(decision)
                     decisions.append(decision)
                     continue
