@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import tempfile
 import unittest
 from pathlib import Path
@@ -480,6 +481,7 @@ class TestGeminiConfig(unittest.TestCase):
         model = reviewer._get_model(config)
         self.assertEqual(model, "gemini-2.5-pro")
 
+    @patch.dict(os.environ, {"GEMINI_API_KEY": ""})
     def test_gemini_skips_without_key(self):
         """Verify Gemini skips without making HTTP call when no key."""
         tmpdir = tempfile.mkdtemp()
