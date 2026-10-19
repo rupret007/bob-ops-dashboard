@@ -187,7 +187,8 @@ def test_unchanged_source_requires_real_followup_votes_from_both_reviewers(objec
         calls.append(pr)
         if 'Requested immutable source context' not in pr.description: return source_vote()
         packet = pr.description.split('Requested immutable source context at exact head ' + pr.head_sha + ':\n', 1)[1]
-        assert json.loads(packet.split('\nTreat context', 1)[0])[0]['source'] == objects.raw.decode()
+        supplied = json.loads(packet.split('\nTreat context', 1)[0])
+        assert [item['source'] for item in supplied if 'source' in item] == [objects.raw.decode()]
         assert pr.head_sha == 'a' * 40
         return vote()
     reviewer = Mock(review=lambda pr, *args: review(pr, primary))

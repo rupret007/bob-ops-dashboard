@@ -98,7 +98,8 @@ def test_adjacent_complete_files_share_context_without_skipping_either_vote():
     assert all(part.diff.count('diff --git ') == 3 for part in supplied)
     assert [call.args[0].diff for call in second.call_args_list] == [part.diff for part in supplied]
     for index, part in enumerate(supplied):
-        context = json.loads(part.description.split('Untrusted whole-PR context (JSON):\n')[1])
+        metadata = part.description.split('Untrusted whole-PR context (JSON):\n')[1]
+        context = json.loads(metadata.split('\nSupplemental changed-file context at exact head ', 1)[0])
         assert context['current_chunk']['files'] == pr.changed_files[index * 3:index * 3 + 3]
     assert result.passed and len(reviews) == 4
 
