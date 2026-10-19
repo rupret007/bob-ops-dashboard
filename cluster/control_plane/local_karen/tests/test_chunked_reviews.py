@@ -84,6 +84,36 @@ def test_small_review_retains_original_behavior():
     assert primary.review.call_args.args[0] is pr
 
 
+def test_adjacent_complete_files_share_context_without_skipping_either_vote():
+    sections = [('diff --git a/file{0}.py b/file{0}.py\n--- a/file{0}.py\n'
+                 '+++ b/file{0}.py\n@@ -1 +1 @@\n'.format(index) + '+safe\n' * 600)
+                for index in range(6)]
+    pr = pr_info(''.join(sections))
+    pr.changed_files = ['file{}.py'.format(index) for index in range(6)]
+    result, reviews, primary, second = run_with_votes(pr)
+    supplied = [call.args[0] for call in primary.review.call_args_list]
+    assert len(supplied) == 2
+    assert ''.join(part.diff for part in supplied) == pr.diff
+    assert all(0 < len(part.diff) <= r.REVIEW_DIFF_LIMIT for part in supplied)
+    assert all(part.diff.count('diff --git ') == 3 for part in supplied)
+    assert [call.args[0].diff for call in second.call_args_list] == [part.diff for part in supplied]
+    for index, part in enumerate(supplied):
+        context = json.loads(part.description.split('Untrusted whole-PR context (JSON):\n')[1])
+        assert context['current_chunk']['files'] == pr.changed_files[index * 3:index * 3 + 3]
+    assert result.passed and len(reviews) == 4
+
+
+def test_packing_around_oversized_file_preserves_every_byte_and_boundary():
+    small = 'diff --git a/small.py b/small.py\n+small\n'
+    oversized = 'diff --git a/large.py b/large.py\n+' + 'x' * 30001 + '\n'
+    tail = 'diff --git a/tail.py b/tail.py\n+TAIL_MUST_BE_REVIEWED\n'
+    diff = small + small + oversized + tail + tail
+    chunks = r.split_review_diff(diff)
+    assert ''.join(chunks) == diff
+    assert chunks[0] == small + small and chunks[-1] == tail + tail
+    assert all(0 < len(chunk) <= r.REVIEW_DIFF_LIMIT for chunk in chunks)
+
+
 def test_gemini_prompt_keeps_tail_in_direct_review():
     pr = pr_info('x' * 13000 + 'TAIL_MUST_BE_REVIEWED')
     gemini = r.GeminiReviewer()

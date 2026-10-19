@@ -1279,7 +1279,22 @@ def split_review_diff(diff: str, limit: int = REVIEW_DIFF_LIMIT) -> List[str]:
     if limit <= 0:
         raise ValueError("Review chunk limit must be positive")
     chunks = []
+    packed = ""
     for section in re.split(r"(?m)(?=^diff --git )", diff):
+        if not section:
+            continue
+        if len(section) <= limit:
+            # Keep adjacent complete files together when they fit. Reviewing a
+            # tiny screenshot header alone discards readily available code/test
+            # context and spends two provider calls on a few metadata lines.
+            if packed and len(packed) + len(section) > limit:
+                chunks.append(packed)
+                packed = ""
+            packed += section
+            continue
+        if packed:
+            chunks.append(packed)
+            packed = ""
         chunk = ""
         for line in section.splitlines(keepends=True):
             if chunk and len(chunk) + len(line) > limit:
@@ -1291,6 +1306,8 @@ def split_review_diff(diff: str, limit: int = REVIEW_DIFF_LIMIT) -> List[str]:
             chunk += line
         if chunk:
             chunks.append(chunk)
+    if packed:
+        chunks.append(packed)
     return chunks
 
 
