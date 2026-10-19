@@ -535,7 +535,7 @@ def label_queued_prs(repos=None, dry_run=True):
                     and isinstance(head, str) and re.fullmatch(r'[0-9a-f]{40}', head)
                     and _has_verdict_for_head(verdict_dir, repo, pr)):
                 continue
-            
+
             if not pr_num:
                 continue
             
