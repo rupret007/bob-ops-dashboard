@@ -17,7 +17,6 @@ from cluster.control_plane.local_karen.checks import (
     run_all_checks,
     all_checks_pass,
     get_failed_checks,
-    _HAS_NEVER_TOUCH,
 )
 from cluster.control_plane.local_karen.config import KarenConfig
 
@@ -67,7 +66,6 @@ class TestBlockedRepoCheck(TestCheckHelpers):
         self.assertEqual(result.verdict, CheckVerdict.FAIL)
         self.assertIn("never-touch", result.reason.lower())
 
-    @unittest.skipUnless(_HAS_NEVER_TOUCH, "cluster.never_touch not available")
     def test_fails_blocked_repo_from_authoritative_list(self):
         """Fails when repo is on authoritative never_touch list."""
         pr = self._make_pr(owner="rupret007", repo="rad-dad-show-night")
