@@ -181,3 +181,10 @@ def test_implementation_not_present_in_chunk_remains_retryable():
         'app.py:1 the implementation is not present in this chunk'))
     assert result.verdict == r.ReviewVerdict.BORDERLINE
     assert result.scope['context_incomplete']
+
+
+def test_chunk_rubber_stamp_is_retryable_without_concrete_defect():
+    def review(*args):
+        return r.ReviewResult('codex', r.ReviewVerdict.PASS, 'Approved without any findings')
+    result, _, _ = run(review)
+    assert result.verdict == r.ReviewVerdict.ERROR

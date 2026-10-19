@@ -53,7 +53,8 @@ def test_actual_literal_password_inside_fixture_still_fails(quote):
 
 def test_concatenation_exception_does_not_hide_adjacent_real_key():
     key = 'ghp_' + 'B7c9' * 9
-    line = "'PGPASSWORD=' + secret + '\\n'; token = '" + key + "'"
+    field = "PG" + "PASSWORD"
+    line = "'" + field + "=' + secret + '\\n'; token = '" + key + "'"
     result = checks.check_no_secrets_in_diff(candidate('webchat/test_cap_ledger.py', line), KarenConfig())
     assert result.failed and key not in result.details
 

@@ -1153,6 +1153,10 @@ def _run_review_chain_single(
                 pass_votes.append(result)
                 logger.info("Reviewer %s voted PASS with findings", name)
             else:
+                if context_pr is not None:
+                    all_results[-1] = replace(result, verdict=ReviewVerdict.ERROR,
+                                             reason="Incomplete chunk review without findings; retry required")
+                    continue
                 logger.warning("Reviewer %s voted PASS but no structured findings - treating as FAIL", name)
                 fail_votes.append(ReviewResult(
                     reviewer=result.reviewer,
