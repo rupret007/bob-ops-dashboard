@@ -104,8 +104,10 @@ class RequiredMiniMaxTests(unittest.TestCase):
                 result = MiniMaxReviewer().review_as_second_judge(self.pr, self.vote(ReviewVerdict.PASS), self.config)
                 self.assertEqual(result.passed, passed)
                 request = urlopen.call_args.args[0]
-                self.assertEqual(request.full_url, 'https://api.minimax.io/v1/text/chatcompletion_v2')
+                self.assertEqual(request.full_url, 'https://api.minimax.io/v1/chat/completions')
                 payload = json.loads(request.data)
                 self.assertIn(self.pr.head_sha, payload['messages'][0]['content'])
                 self.assertIn(self.pr.diff, payload['messages'][0]['content'])
                 self.assertEqual(payload['model'], self.config.minimax_model)
+                self.assertIs(payload['reasoning_split'], True)
+                self.assertNotIn('response_format', payload)

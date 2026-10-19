@@ -24,9 +24,9 @@ def verdict(name='PASS', **changes):
     return json.dumps(data)
 
 
-def response(content, finish='stop', status=0):
+def response(content, finish='stop', status=0, **message_fields):
     raw = json.dumps({'base_resp': {'status_code': status}, 'choices': [
-        {'finish_reason': finish, 'message': {'content': content}}]}).encode()
+        {'finish_reason': finish, 'message': dict(content=content, **message_fields)}]}).encode()
     return raw_response(raw)
 
 
@@ -126,6 +126,71 @@ def test_pass_reporting_blocking_defect_is_not_retried_or_approved(pr):
     result, request, _ = review(pr, [response(verdict(findings=findings)), response(verdict())])
     assert result.verdict == r.ReviewVerdict.BORDERLINE
     assert request.call_count == 1
+
+
+@pytest.mark.parametrize('field', ['reasoning_content', 'reasoning_details'])
+@pytest.mark.parametrize('vote', ['PASS', 'FAIL', 'BORDERLINE'])
+def test_separated_reasoning_never_changes_the_final_content_vote(pr, caplog, field, vote):
+    thoughts = ('private-reasoning-value' if field == 'reasoning_content' else
+                [dict(type='reasoning.text', text='private-reasoning-value')])
+    result, request, checkpoint = review(pr, [response(verdict(vote), **{field: thoughts})])
+    assert result.verdict == r.ReviewVerdict[vote]
+    assert request.call_count == 1
+    checkpoint.assert_not_called()
+    payload = json.loads(request.call_args.args[0].data)
+    assert request.call_args.args[0].full_url == 'https://api.minimax.io/v1/chat/completions'
+    assert payload['reasoning_split'] is True and 'response_format' not in payload
+    assert payload['max_completion_tokens'] == 16384 and payload['temperature'] == 0.1
+    assert 'private-reasoning-value' not in caplog.text + json.dumps(result.to_dict())
+
+
+@pytest.mark.parametrize('content', [None, '', 'private-natural-language-answer ' * 90,
+                                   'Explanation before JSON: ' + verdict()])
+def test_reasoning_json_cannot_rescue_missing_or_non_json_final_content(pr, caplog, content):
+    fixture = response(content, reasoning_content=verdict(),
+                       reasoning_details=[dict(text=verdict())])
+    result, request, checkpoint = review(pr, [fixture] * 3)
+    assert result.verdict == r.ReviewVerdict.ERROR and request.call_count == 2
+    checkpoint.assert_called_once_with()
+    assert 'private-natural-language-answer' not in caplog.text + json.dumps(result.to_dict())
+
+
+@pytest.mark.parametrize('field,note', [
+    ('security_issues', 'No injection vectors found'),
+    ('security_issues', 'No secrets were added'),
+    ('functional_issues', 'Event listeners properly cleaned up'),
+    ('functional_issues', 'No issues'),
+    ('security_issues', 'None'),
+])
+def test_positive_assurance_in_blocker_array_remains_blocking_and_terminal(pr, field, note):
+    findings = r.ReviewFindings(**{field: [note]}).to_dict()
+    result, request, checkpoint = review(pr, [response(verdict(findings=findings)), response(verdict())])
+    assert result.verdict == r.ReviewVerdict.BORDERLINE and not result.passed
+    assert request.call_count == 1
+    checkpoint.assert_not_called()
+    assert getattr(result.findings, field) == [note]
+
+
+def test_verified_protections_in_risk_notes_allow_pass_without_blocking_issues(pr):
+    notes = ['Inspected file.py:1; no injection vectors found',
+             'Verified file.py:2; event listeners properly cleaned up']
+    findings = r.ReviewFindings(risk_notes=notes).to_dict()
+    result, request, _ = review(pr, [response(verdict(findings=findings))])
+    assert result.passed and request.call_count == 1
+    assert result.findings.security_issues == result.findings.functional_issues == []
+    assert result.findings.risk_notes == notes
+
+
+def test_sent_review_contract_distinguishes_actual_defects_from_verified_protections(pr):
+    _, request, _ = review(pr, [response(verdict())])
+    prompt = json.loads(request.call_args.args[0].data)['messages'][0]['content']
+    assert 'unresolved defects with a changed-file path and actual line number (file:line)' in prompt
+    assert 'If no such defects were found, these arrays MUST be []' in prompt
+    assert 'Positive assurances and verified protections belong ONLY in findings.risk_notes' in prompt
+    assert 'Never put placeholders or "no issues" strings in any issues array' in prompt
+    assert 'For PASS verdicts, describe the actual checks performed in findings.risk_notes' in prompt
+    for field in ('security_issues', 'functional_issues', 'test_coverage_issues', 'code_quality_issues'):
+        assert '"' + field + '": []' in prompt
 
 
 @pytest.mark.parametrize('finish,status', [('length', 0), ('stop', 1004)])
