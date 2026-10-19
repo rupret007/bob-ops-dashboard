@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-10-19T09:07:17.008612-05:00",
-  "generated_at_display": "Mon Oct 19, 2026 \u00b7 9:07 AM CDT",
+  "generated_at": "2026-10-19T09:22:31.764829-05:00",
+  "generated_at_display": "Mon Oct 19, 2026 \u00b7 9:22 AM CDT",
   "timezone": "America/Chicago",
   "owner": "rupret007",
   "dashboard": "bob-ops-dashboard",
@@ -495,8 +495,8 @@
           "status": "yellow",
           "chip": "Yellow",
           "default_branch": "main",
-          "tip_sha": "4784c73",
-          "tip_date": "2026-10-19T13:52:28Z",
+          "tip_sha": "7fe6774",
+          "tip_date": "2026-10-19T14:07:31Z",
           "open_prs": 13,
           "open_pr_url": "https://github.com/rupret007/bob-ops-dashboard/pull/97",
           "open_pr_number": 97,
@@ -676,8 +676,8 @@
           "url": "https://github.com/rupret007/Andrea_NanoBot",
           "repo_url": "https://github.com/rupret007/Andrea_NanoBot",
           "private": false,
-          "status": "yellow",
-          "chip": "Yellow",
+          "status": "red",
+          "chip": "Red",
           "default_branch": "main",
           "tip_sha": "3e83ed2",
           "tip_date": "2026-10-17T08:20:08Z",
@@ -689,12 +689,12 @@
           "pr_listing_complete": true,
           "agent_url": null,
           "ci": {
-            "name": "AGI Layer CI",
-            "conclusion": "success",
+            "name": "Security",
+            "conclusion": "failure",
             "branch": "main",
             "sha": "3e83ed2",
-            "created": "2026-10-17T08:20:11Z",
-            "html_url": "https://github.com/rupret007/Andrea_NanoBot/actions/runs/39016972662"
+            "created": "2026-10-19T14:14:17Z",
+            "html_url": "https://github.com/rupret007/Andrea_NanoBot/actions/runs/39267132686"
           },
           "release": null,
           "release_sha": null,
@@ -900,7 +900,7 @@
     "barker"
   ],
   "publish_notes": "Public board -- no secrets or customer paths. Private repositories stay high-level; AI Music Vault stays private-content-boundary only.",
-  "refresh_started_ms": 1792418806473,
+  "refresh_started_ms": 1792419709731,
   "agents_source": "file:stale->unknown",
   "agents": [
     {
@@ -1099,7 +1099,7 @@
     }
   ],
   "llm_work_now_freshness": {
-    "generated_at": "2026-10-19 09:07 CT",
+    "generated_at": "2026-10-19 09:22 CT",
     "warn_ttl_sec": 1200,
     "warnings": [],
     "ok": true
@@ -1130,7 +1130,7 @@
     ],
     "scorecards": {
       "v": "scorecards/v1",
-      "generated_at": "2026-10-19T14:07:18.034205+00:00",
+      "generated_at": "2026-10-19T14:22:34.208691+00:00",
       "windows": {
         "24h": {
           "providers": {
