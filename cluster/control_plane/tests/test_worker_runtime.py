@@ -32,6 +32,8 @@ def qualified(tmp_path, monkeypatch):
     for relative in ('venv/bin', 'native', 'receipts', 'config', 'cache', 'data', 'state', 'xdg-runtime'):
         (root / relative).mkdir(parents=True, mode=0o700)
     (root / 'config/empty-netrc').touch(mode=0o600)
+    (root / 'config/alsa.conf').write_bytes(runtimes.ALSA_CONFIG)
+    (root / 'config/alsa.conf').chmod(0o600)
     binary = root / 'python-real'
     binary.write_bytes(b'hermetic interpreter identity; probe is mocked')
     binary.chmod(0o700)
@@ -41,7 +43,8 @@ def qualified(tmp_path, monkeypatch):
     (tree / '.github/workflows').mkdir(parents=True)
     (tree / 'requirements.txt').write_bytes(b'PySide6==6.11.1\n')
     (tree / '.github/workflows/ci.yml').write_bytes(b'python-version: "3.11"\n')
-    (tree / 'test_project.py').write_text('def test_project(): assert 2 + 2 == 4\n')
+    (tree / 'tests').mkdir()
+    (tree / 'tests/test_project.py').write_text('def test_project(): assert 2 + 2 == 4\n')
     git_env = dict(os.environ, GIT_CONFIG_NOSYSTEM='1', GIT_CONFIG_GLOBAL=os.devnull,
                    GIT_CONFIG_COUNT='0', GIT_TEMPLATE_DIR=str(tmp_path / 'empty-template'))
     (tmp_path / 'empty-template').mkdir()
@@ -55,16 +58,35 @@ def qualified(tmp_path, monkeypatch):
     head = dict(head_sha=git('rev-parse', 'HEAD'), tree_sha=git('rev-parse', 'HEAD^{tree}'),
                 requirements_sha256=sha((tree / 'requirements.txt').read_bytes()),
                 ci_sha256=sha((tree / '.github/workflows/ci.yml').read_bytes()),
+                test_files_sha256=sha(git('ls-files', '-z', '--', 'tests/test_*.py').encode()),
+                test_file_count=1,
                 collection=dict(returncode=0, count=1))
     artifact = dict(filename='fixture.whl', sha256='c' * 64, bytes=123)
     wheels = dict(schema=1, requirements_sha256=head['requirements_sha256'], artifacts=[artifact])
     native = dict(schema=1, signature_verified=True, index_sha256='d' * 64,
-                  artifacts=[dict(artifact, filename='fixture.deb', package='libfixture', version='1')])
+                  artifacts=[dict(artifact, filename='fixture_1~native.deb', package='libfixture', version='1'),
+                             dict(artifact, filename='fonts-liberation.deb', package='fonts-liberation', version='1')],
+                  headless_audio=dict(backend='alsa-null', configuration='config/alsa.conf',
+                    configuration_sha256=runtimes.ALSA_SHA256, includes=False,
+                    hardware_audio=False, audio_server=False))
+    font_dir = root / 'native' / runtimes.FONT_DIRECTORY
+    font_dir.mkdir(parents=True, mode=0o700)
+    font_files = []
+    for index in range(12):
+        path = font_dir / ('Fixture' + str(index) + '.ttf')
+        path.write_bytes(b'controlled-font-fixture')
+        font_files.append(dict(filename=path.name, sha256=sha(path.read_bytes()), bytes=path.stat().st_size))
+    font_files.sort(key=lambda item: item['filename'])
+    native['font_closure'] = dict(directory=runtimes.FONT_DIRECTORY,
+        package_sha256=artifact['sha256'], files=font_files,
+        sha256=sha(json.dumps(font_files, sort_keys=True, separators=(',', ':')).encode()))
+    (root / 'data/fonts').symlink_to(font_dir)
     for name, data in (('wheels', wheels), ('native', native)):
         (root / ('receipts/' + name + '.json')).write_text(json.dumps(data))
     receipt = dict(schema=1, repo=runtimes.WEBJAM, machine='nucbox', platform='linux-x86_64',
         python=str(root / 'venv/bin/python'), python_realpath=str(binary), python_sha256=sha(binary.read_bytes()),
         python_version='3.11.17', native_prefix=str(root / 'native'),
+        test_recipe=runtimes.TEST_RECIPE, headless_audio_config_sha256=runtimes.ALSA_SHA256,
         wheel_manifest_sha256=sha((root / 'receipts/wheels.json').read_bytes()),
         native_manifest_sha256=sha((root / 'receipts/native.json').read_bytes()),
         imports=dict(modules=list(runtimes.IMPORTS), returncode=0), qualified_heads=[head])
@@ -93,6 +115,7 @@ def test_exact_source_fixture_and_fixed_probe_are_qualified(qualified):
     assert args == [runtime.python, '-I', '-c', runtimes._PROBE]
     assert kwargs['timeout'] == 15 and kwargs['capture_output'] is True
     assert kwargs['env']['QT_QPA_PLATFORM'] == 'offscreen'
+    assert kwargs['env']['ALSA_CONFIG_PATH'] == str(qualified.root / 'config/alsa.conf')
     assert kwargs['env']['HOME'] == os.environ['HOME']
 
 
@@ -102,7 +125,9 @@ def test_exact_source_fixture_and_fixed_probe_are_qualified(qualified):
     'arbitrary-native', 'binary-drift', 'manifest-drift', 'requirements-drift', 'ci-drift',
     'receipt-mode', 'parent-mode', 'receipt-link', 'native-link', 'source-link',
     'missing-receipt', 'malformed-json', 'duplicate-json-key', 'system-packages',
-    'unverified-native', 'empty-wheels',
+    'unverified-native', 'empty-wheels', 'alsa-tamper', 'alsa-link', 'alsa-mode',
+    'alsa-receipt', 'alsa-manifest', 'recipe', 'file-count', 'file-hash',
+    'font-tamper', 'font-link', 'font-redirect', 'font-manifest',
 ])
 def test_invalid_evidence_fails_closed_without_raw_values(qualified, mutation):
     q = qualified
@@ -125,12 +150,27 @@ def test_invalid_evidence_fails_closed_without_raw_values(qualified, mutation):
     elif mutation == 'requirements-drift': (q.tree / 'requirements.txt').write_text('changed')
     elif mutation == 'ci-drift': (q.tree / '.github/workflows/ci.yml').write_text('changed')
     elif mutation == 'system-packages': (q.root / 'venv/pyvenv.cfg').write_text('include-system-site-packages = true\n')
-    elif mutation in ('unverified-native', 'empty-wheels'):
-        name = 'native' if mutation == 'unverified-native' else 'wheels'
+    elif mutation == 'alsa-tamper': (q.root / 'config/alsa.conf').write_bytes(b'pcm.!default { type hw }\n')
+    elif mutation == 'alsa-receipt': value['headless_audio_config_sha256'] = '0' * 64
+    elif mutation == 'recipe': value['test_recipe'] = 'unqualified-combined-process'
+    elif mutation == 'file-count': selected['test_file_count'] = 0
+    elif mutation == 'file-hash': selected['test_files_sha256'] = 'not-a-hash'
+    elif mutation == 'font-tamper': (q.root / 'native' / runtimes.FONT_DIRECTORY / 'Fixture0.ttf').write_bytes(b'changed')
+    elif mutation == 'font-link':
+        path = q.root / 'native' / runtimes.FONT_DIRECTORY / 'Fixture0.ttf'
+        path.unlink()
+        path.symlink_to('/missing-font')
+    elif mutation == 'font-redirect':
+        (q.root / 'data/fonts').unlink()
+        (q.root / 'data/fonts').symlink_to('/unqualified-font-directory')
+    elif mutation in ('unverified-native', 'empty-wheels', 'alsa-manifest', 'font-manifest'):
+        name = 'wheels' if mutation == 'empty-wheels' else 'native'
         path = q.root / ('receipts/' + name + '.json')
         data = json.loads(path.read_text())
         if mutation == 'unverified-native': data['signature_verified'] = False
-        else: data['artifacts'] = []
+        elif mutation == 'empty-wheels': data['artifacts'] = []
+        elif mutation == 'alsa-manifest': data['headless_audio']['configuration_sha256'] = '0' * 64
+        else: data['font_closure']['sha256'] = '0' * 64
         path.write_text(json.dumps(data))
         value['native_manifest_sha256' if name == 'native' else 'wheel_manifest_sha256'] = sha(path.read_bytes())
     q.save()
@@ -140,6 +180,11 @@ def test_invalid_evidence_fails_closed_without_raw_values(qualified, mutation):
     elif mutation == 'missing-receipt': path.unlink()
     elif mutation == 'malformed-json': path.write_text('private-sensitive-value')
     elif mutation == 'duplicate-json-key': path.write_text('{"schema":1,"schema":1}')
+    elif mutation == 'alsa-mode': (q.root / 'config/alsa.conf').chmod(0o644)
+    elif mutation == 'alsa-link':
+        audio = q.root / 'config/alsa.conf'
+        audio.rename(audio.with_name('alsa-original.conf'))
+        audio.symlink_to(audio.with_name('alsa-original.conf'))
     elif mutation in ('receipt-link', 'native-link', 'source-link'):
         link = path if mutation == 'receipt-link' else q.root / 'native' if mutation == 'native-link' else q.tree / 'requirements.txt'
         target = link.with_name(link.name + '-original')
@@ -183,10 +228,10 @@ def test_actual_child_gets_scrubbed_environment_without_changing_home(qualified,
     runtime = runtimes.qualified_runtime(runtimes.WEBJAM, qualified.head)
     inherited = dict(os.environ, PYTHONPATH='private-sensitive', PYTHONHOME='private-sensitive',
                      LD_LIBRARY_PATH='private-sensitive', LD_PRELOAD='private-sensitive',
-                     QT_PLUGIN_PATH='private-sensitive')
+                     QT_PLUGIN_PATH='private-sensitive', FONTCONFIG_FILE='private-sensitive')
     env = runtime.environment(inherited, tmp_path)
     keys = ('HOME', 'QT_QPA_PLATFORM', 'PATH', 'LD_LIBRARY_PATH', 'XDG_DATA_HOME', 'NETRC',
-            'PYTHONPATH', 'PYTHONHOME', 'LD_PRELOAD', 'QT_PLUGIN_PATH')
+            'ALSA_CONFIG_PATH', 'PYTHONPATH', 'PYTHONHOME', 'LD_PRELOAD', 'QT_PLUGIN_PATH', 'FONTCONFIG_FILE')
     script = 'import json,os;print(json.dumps({k:os.environ[k] for k in ' + repr(keys) + ' if k in os.environ}))'
     child = subprocess.run([sys.executable, '-I', '-c', script], env=env,
                            text=True, capture_output=True, check=True, timeout=10)
@@ -199,7 +244,8 @@ def test_actual_child_gets_scrubbed_environment_without_changing_home(qualified,
                   'usr/lib/x86_64-linux-gnu/pulseaudio'))
     assert observed['XDG_DATA_HOME'] == str(tmp_path / 'data')
     assert observed['NETRC'] == str(tmp_path / 'config/empty-netrc')
-    assert not any(key in observed for key in ('PYTHONPATH', 'PYTHONHOME', 'LD_PRELOAD', 'QT_PLUGIN_PATH'))
+    assert observed['ALSA_CONFIG_PATH'] == str(tmp_path / 'config/alsa.conf')
+    assert not any(key in observed for key in ('PYTHONPATH', 'PYTHONHOME', 'LD_PRELOAD', 'QT_PLUGIN_PATH', 'FONTCONFIG_FILE'))
     assert 'private-sensitive' not in json.dumps(observed)
 
 
@@ -268,7 +314,8 @@ def test_qualification_does_not_override_existing_retry_limit(qualified, tmp_pat
     assert ledger._load_jobs() == []
 
 
-@pytest.mark.parametrize('drift', ['none', 'missing-before', 'requirements', 'receipt', 'tree'])
+@pytest.mark.parametrize('drift', ['none', 'missing-before', 'requirements', 'receipt', 'tree',
+                                    'drop-module', 'new-module', 'alsa-job'])
 def test_worker_uses_identical_env_and_rechecks_before_testing(qualified, drift):
     import shutil
     q = qualified
@@ -282,38 +329,53 @@ def test_worker_uses_identical_env_and_rechecks_before_testing(qualified, drift)
         if args[:3] == ['git', 'worktree', 'add']:
             shutil.copytree(q.tree, args[-2])
         if args[0] == '/fixture/codex':
+            audio = Path(kwargs['env']['ALSA_CONFIG_PATH'])
+            assert audio.read_bytes() == runtimes.ALSA_CONFIG
+            assert audio.stat().st_mode & 0o777 == 0o600
+            assert audio != q.root / 'config/alsa.conf'
+            font_link = Path(kwargs['env']['XDG_DATA_HOME']) / 'fonts'
+            assert font_link.is_symlink()
+            assert os.readlink(font_link) == str(q.root / 'native' / runtimes.FONT_DIRECTORY)
             if drift == 'requirements': (Path(cwd) / 'requirements.txt').write_text('changed by provider')
             if drift == 'receipt':
                 q.receipt['operator_note'] = 'private-sensitive-drift'
                 q.save()
+            if drift == 'alsa-job': audio.write_bytes(b'pcm.!default { type hw }\n')
         if args[:3] == ['git', 'rev-parse', 'HEAD']:
             return pushed if any(c[:2] == ['git', 'commit'] for c, _ in calls) else q.head
         if args[:3] == ['git', 'rev-parse', 'HEAD^{tree}']:
             return 'e' * 40 if drift == 'tree' else q.receipt['qualified_heads'][0]['tree_sha']
+        if args[:2] == ['git', 'ls-files']:
+            if '--others' in args and drift == 'drop-module': return 'tests/test_other.py\0'
+            return 'tests/test_project.py\0' + ('tests/test_added.py\0'
+                                               if '--others' in args and drift == 'new-module' else '')
         if args[:3] == ['git', 'diff', '--cached']: return 'changed.py'
         if args[:2] == ['git', 'ls-remote']: return pushed + ' refs/heads/fix/fixture'
         return ''
     with patch.object(fix_worker, '_find_codex', return_value=Path('/fixture/codex')), \
          patch.object(fix_worker, 'run', side_effect=command):
-        if drift == 'none':
+        if drift in ('none', 'new-module'):
             assert fix_worker.fix_pr(runtimes.WEBJAM, 395, q.head, ['repair']) == pushed
         else:
             with pytest.raises(WorkerFailure) as error:
                 fix_worker.fix_pr(runtimes.WEBJAM, 395, q.head, ['repair'])
             assert (error.value.code, error.value.stage) == ('test-setup-failed', 'test-setup')
     providers = [(args, kw) for args, kw in calls if args[0] == '/fixture/codex']
-    tests = [(args, kw) for args, kw in calls if '-m' in args and 'pytest' in args]
-    if drift == 'none':
-        assert tests[0][0] == [q.receipt['python'], '-m', 'pytest', '-q']
+    tests = [(args, kw) for args, kw in calls if runtimes.MODULE_RUNNER in args]
+    if drift in ('none', 'new-module'):
+        expected_files = ['tests/test_added.py', 'tests/test_project.py'] if drift == 'new-module' else ['tests/test_project.py']
+        assert tests[0][0] == [q.receipt['python'], '-I', '-c', runtimes.MODULE_RUNNER, *expected_files]
         assert providers[0][1]['env'] == tests[0][1]['env']
         assert providers[0][1]['env']['HOME'] == os.environ['HOME']
         assert Path(providers[0][1]['env']['STORYPOOL_STATE_DIR']).name == 'test-state'
         assert providers[0][1]['env']['STORYPOOL_STATE_DIR'] != os.environ.get('STORYPOOL_STATE_DIR')
         assert len(q.calls) == 2
         assert Path(providers[0][1]['env']['XDG_DATA_HOME']).name == 'data'
+        audio_path = Path(providers[0][1]['env']['ALSA_CONFIG_PATH'])
+        assert audio_path.name == 'alsa.conf' and audio_path.parent.name == 'config'
     else:
         assert not tests
-        assert len(providers) == (1 if drift in ('requirements', 'receipt') else 0)
+        assert len(providers) == (1 if drift in ('requirements', 'receipt', 'drop-module', 'alsa-job') else 0)
         assert not any(args[:2] in (['git', 'commit'], ['git', 'push']) for args, _ in calls)
 
 
@@ -350,3 +412,61 @@ def test_runtime_race_after_reservation_keeps_exact_head_attempt_count(qualified
     assert (failed.failure_code, failed.failure_stage) == ('test-setup-failed', 'test-setup')
     assert lease.client.retry_state.call_args.args[1] == dict(previous, code='test-setup-failed')
     assert not any(args[0] == '/fixture/codex' for args in calls)
+
+
+@pytest.mark.parametrize('failure_index', [None, 1])
+def test_real_recipe_runs_complete_order_in_fresh_processes_and_stops_on_failure(tmp_path, failure_index):
+    import importlib.util
+    import venv
+    tree = tmp_path / 'project'
+    (tree / 'tests').mkdir(parents=True)
+    names = ['tests/test_01_first.py', 'tests/test_02 space.py', 'tests/test_03_last.py']
+    for index, name in enumerate(names):
+        (tree / name).write_text(
+            'import builtins,json,os\n'
+            'from pathlib import Path\n'
+            'def test_native_lifetime():\n'
+            ' assert not hasattr(builtins,"_webjam_native_lifetime")\n'
+            ' builtins._webjam_native_lifetime=True\n'
+            ' with Path("executed.jsonl").open("a") as stream:\n'
+            f'  stream.write(json.dumps({{"index":{index},"pid":os.getpid()}})+"\\n")\n'
+            f' assert {index != failure_index!r}\n')
+    child_venv = tmp_path / 'child-venv'
+    venv.EnvBuilder(with_pip=False, symlinks=True).create(child_venv)
+    child_site = child_venv / ('lib/python' + str(sys.version_info.major) + '.' + str(sys.version_info.minor) + '/site-packages')
+    # Reuse the already installed test dependency, without downloads or user-site discovery.
+    dependencies = set()
+    for module in ('pytest', 'pluggy', 'packaging', 'iniconfig', 'pygments',
+                   'exceptiongroup', 'tomli', 'typing_extensions'):
+        spec = importlib.util.find_spec(module)
+        if spec is not None and spec.origin:
+            path = Path(spec.origin).parent
+            dependencies.add(str(path.parent if spec.submodule_search_locations else path))
+    (child_site / 'pytest-fixture.pth').write_text('\n'.join(sorted(dependencies)) + '\n')
+    runtime = runtimes.QualifiedRuntime(str(child_venv / 'bin/python'), str(tmp_path / 'native'), 'a' * 64, {})
+    state = tmp_path / 'state'
+    runtime.prepare_state(state)
+    env = runtime.environment(dict(os.environ, PYTEST_DISABLE_PLUGIN_AUTOLOAD='1'), state)
+    command = runtime.test_command(runtimes.test_files('\0'.join(names) + '\0'))
+    result = subprocess.run(command, cwd=tree, env=env, capture_output=True, text=True, timeout=20)
+    assert result.returncode == (0 if failure_index is None else 1), result.stdout + result.stderr
+    executed = [json.loads(line) for line in (tree / 'executed.jsonl').read_text().splitlines()]
+    assert [entry['index'] for entry in executed] == ([0, 1, 2] if failure_index is None else [0, 1])
+    assert len({entry['pid'] for entry in executed}) == len(executed)
+    assert result.returncode == (0 if failure_index is None else 1)
+    assert not (tree / 'space.py').exists()
+
+
+@pytest.mark.parametrize('raw', ['', 'tests/test_ok.py', 'tests/../test_escape.py\0',
+    '/tests/test_absolute.py\0', 'tests/test_one.py\0tests/test_one.py\0'])
+def test_recipe_rejects_empty_unterminated_traversal_or_duplicate_path_data(raw):
+    with pytest.raises(runtimes.RuntimeUnqualified):
+        runtimes.test_files(raw)
+
+
+def test_recipe_file_list_is_bound_to_receipt_count_and_exact_nul_bytes(qualified):
+    runtime = runtimes.qualified_runtime(runtimes.WEBJAM, qualified.head)
+    assert runtime.validate_test_files('tests/test_project.py\0') == ['tests/test_project.py']
+    for raw in ('tests/test_other.py\0', 'tests/test_project.py\0tests/test_added.py\0'):
+        with pytest.raises(runtimes.RuntimeUnqualified):
+            runtime.validate_test_files(raw)

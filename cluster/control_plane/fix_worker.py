@@ -20,7 +20,7 @@ from .retry_policy import PreflightFailure, REASONS, STAGE_CODES, WorkerFailure,
 from .fix_dispatcher import _find_codex, extract_findings_from_verdict
 from .local_karen.config import KarenConfig
 from .local_karen.verdict import load_verdict
-from .worker_runtime import qualified_runtime, RuntimeUnqualified
+from .worker_runtime import qualified_runtime, RuntimeUnqualified, MODULE_RUNNER, test_files
 
 
 CODEX_EFFORT = 'xhigh'
@@ -127,7 +127,7 @@ def run(args, cwd=None, **kwargs):
         if lease is not None:
             lease.renew()
     except (subprocess.SubprocessError, OSError) as exc:
-        is_pytest = '-m' in args and 'pytest' in args
+        is_pytest = ('-m' in args and 'pytest' in args) or MODULE_RUNNER in args
         names = failing_tests(getattr(exc, 'stdout', '') or '') if is_pytest else []
         event('fix-worker', 'command_failed', level=logging.ERROR, exc_info=True,
               executable=executable, operation=operation, error_type=type(exc).__name__,
@@ -205,6 +205,11 @@ def _fix_pr(repo, pr_number, head_sha, findings):
         tests = test_command(tree, runtime.python if runtime is not None else None)
         if runtime is not None and tests != [runtime.python, '-m', 'pytest', '-q']:
             raise RuntimeUnqualified()
+        original_files = []
+        if runtime is not None:
+            original_files = runtime.validate_test_files(run(
+                ['git', 'ls-files', '-z', '--', 'tests/test_*.py'], tree))
+            tests = runtime.test_command(original_files)
         if tests[0] == 'npm':
             if not (tree / 'package-lock.json').is_file():
                 raise PreflightFailure('missing-lockfile')
@@ -214,8 +219,10 @@ def _fix_pr(repo, pr_number, head_sha, findings):
         prompt = (f'Apply these Karen findings for {repo} PR #{pr_number}:\n' +
                   '\n'.join(findings) + '\nMake focused code fixes and run the tests. '
                   'Do not weaken tests. Do not commit or push; the supervisor does that. '
-                  'No sudo, force-push, main pushes, tags, releases, merges, secrets, or rad-dad-show-night.\n'
-                  f'Test command: {" ".join(tests)}')
+                  'No sudo, force-push, main pushes, tags, releases, merges, secrets, or rad-dad-show-night.\n' +
+                  ('Test command: ' + ' '.join(tests) if runtime is None else
+                   'Run every Git-tracked tests/test_*.py module in Git order, each in a fresh '
+                   f'{runtime.python} -m pytest FILE -v process; stop on the first failure.'))
         test_env = {**os.environ,
             'STORYPOOL_JOBS_DIR': str(Path(temp) / 'test-jobs'),
             'STORYPOOL_METRICS_DIR': str(Path(temp) / 'test-metrics'),
@@ -224,9 +231,7 @@ def _fix_pr(repo, pr_number, head_sha, findings):
             'STORYPOOL_FIX_STATE_DIR': str(Path(temp) / 'test-fixes')}
         if runtime is not None:
             state = Path(temp) / 'test-runtime'
-            for name in ('config', 'cache', 'data', 'state', 'xdg-runtime'):
-                (state / name).mkdir(parents=True, mode=0o700)
-            (state / 'config/empty-netrc').touch(mode=0o600)
+            runtime.prepare_state(state)
             test_env = runtime.environment(test_env, state)
         attempt_prompt = prompt
         for attempt in range(1, MAX_FIX_ATTEMPTS + 1):
@@ -238,6 +243,12 @@ def _fix_pr(repo, pr_number, head_sha, findings):
                 current = qualified_runtime(repo, head_sha, tree)
                 if current.receipt_sha256 != runtime.receipt_sha256:
                     raise RuntimeUnqualified()
+                runtime.validate_state(state)
+                files = test_files(run(['git', 'ls-files', '-z', '--cached', '--others',
+                                       '--exclude-standard', '--', 'tests/test_*.py'], tree))
+                if not set(original_files).issubset(files):
+                    raise RuntimeUnqualified()
+                tests = runtime.test_command(sorted(files, key=lambda name: name.encode()))
             _stage('tests')
             try:
                 run(tests, tree, env=test_env)
