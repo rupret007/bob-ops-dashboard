@@ -52,10 +52,13 @@ class Scheduler:
         self.status = read_status(root)
         if self.status.get('machine') != machine:
             self.status = {}
+        changed = self.status.get('loaded_head') not in (None, head)
         self.status.update(schema=1, machine=machine, loaded_head=head,
                            expected_groups=list(PERIODS))
         self.status.setdefault('groups', {})
         self.status.setdefault('rollout', {'phase': 'observe', 'started_at': time.time()})
+        if changed and self.status['rollout']['phase'] in ('active', 'canary'):
+            self.status['rollout'].update(phase='canary', activated_at=time.time(), head=head)
         self.status.setdefault('repair_after', {})
         self.transition = None
         self.retry_rollout_at = 0
@@ -71,6 +74,8 @@ class Scheduler:
                 result = future.result()
                 if kind == 'compare':
                     rollout['comparison'] = result
+                    if result.get('passed'):
+                        self.retry_rollout_at = 0
                 else:
                     self.status['rollout'] = rollout = result
                     if kind == 'activate':

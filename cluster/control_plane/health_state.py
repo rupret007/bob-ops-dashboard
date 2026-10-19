@@ -61,6 +61,31 @@ def serialized_recovery(function):
     return wrapped
 
 
+def repair_once(target, function, now=None):
+    """The lock inode also journals cooldowns; it is never a health authority."""
+    import time
+    now = time.time() if now is None else now
+    with recovery_lock():
+        if os.environ.get('STORYPOOL_HEALTH_WORKER') == '1':
+            from .node_control import is_draining
+            if not authoritative() or is_draining():
+                return False, False
+        path = data_dir() / '.health-recovery.lock'
+        try:
+            history = json.loads(path.read_text() or '{}')
+        except ValueError:
+            history = {}
+        if now < history.get(target, 0):
+            return False, False
+        history[target] = now + 300
+        # Never replace a lock inode: concurrent processes must share this lock.
+        with path.open('w') as stream:
+            json.dump(history, stream)
+            stream.flush()
+            os.fsync(stream.fileno())
+        return True, function()
+
+
 @contextmanager
 def recovery_lock(root=None, blocking=True):
     """Reentrant within a thread; serialized across threads and processes."""
@@ -113,7 +138,7 @@ def observe(status, machine, group, checks, now):
                                         first_seen=now, failures=0, state='pending')
         old.update(last_seen=now, failures=old['failures'] + 1)
         transient = check['name'].startswith('labels_') and check.get('execution_error')
-        old['notify'] = old['failures'] >= (3 if transient else 1)
+        old['notify'] = old['state'] == 'firing' or old['failures'] >= (3 if transient else 1)
         old['state'] = 'firing' if old['notify'] else 'pending'
 
 
@@ -123,6 +148,8 @@ def render_alerts(root, status):
     root.mkdir(parents=True, exist_ok=True)
     with (root / '.needs-jeff.lock').open('a') as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)
+        from .health_legacy import resolve_legacy
+        resolve_legacy(root, status)
         path = root / 'NEEDS_JEFF.md'
         existing = path.read_text() if path.exists() else '# NEEDS_JEFF\n'
         start, end = existing.find(BEGIN), existing.find(END)

@@ -67,3 +67,13 @@ def test_public_snapshot_cannot_echo_peer_snapshots(tmp_path):
     snapshot = service.public_snapshot(nested)
     assert 'recursive' not in str(snapshot)
     assert snapshot['groups']['guardian'] == nested['groups']['guardian']
+
+
+def test_new_revision_reproves_canary_without_resurrecting_legacy(tmp_path):
+    service.atomic_json(tmp_path / 'health-status.json', {
+        'machine': 'nucbox', 'loaded_head': 'a' * 40, 'groups': {},
+        'rollout': {'phase': 'active', 'head': 'a' * 40, 'previous_units': {'saved': True}}})
+    scheduler = service.Scheduler(tmp_path, 'nucbox', 'b' * 40, Executor(), Executor())
+    assert scheduler.status['rollout']['phase'] == 'canary'
+    assert scheduler.status['rollout']['head'] == 'b' * 40
+    assert scheduler.status['rollout']['previous_units'] == {'saved': True}
