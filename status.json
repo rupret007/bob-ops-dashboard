@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-10-19T05:21:43.421152-05:00",
-  "generated_at_display": "Mon Oct 19, 2026 \u00b7 5:21 AM CDT",
+  "generated_at": "2026-10-19T05:36:51.081445-05:00",
+  "generated_at_display": "Mon Oct 19, 2026 \u00b7 5:36 AM CDT",
   "timezone": "America/Chicago",
   "owner": "rupret007",
   "dashboard": "bob-ops-dashboard",
@@ -52,8 +52,8 @@
           "tip_sha": "5effbc5",
           "tip_date": "2026-10-17T08:54:56Z",
           "open_prs": 6,
-          "open_pr_url": "https://github.com/rupret007/webjam/pull/372",
-          "open_pr_number": 372,
+          "open_pr_url": "https://github.com/rupret007/webjam/pull/396",
+          "open_pr_number": 396,
           "open_pr_draft": false,
           "open_pr_stack": [],
           "pr_listing_complete": true,
@@ -495,8 +495,8 @@
           "status": "yellow",
           "chip": "Yellow",
           "default_branch": "main",
-          "tip_sha": "e1c28cd",
-          "tip_date": "2026-10-19T10:06:57Z",
+          "tip_sha": "a0f9273",
+          "tip_date": "2026-10-19T10:21:57Z",
           "open_prs": 10,
           "open_pr_url": "https://github.com/rupret007/bob-ops-dashboard/pull/94",
           "open_pr_number": 94,
@@ -900,7 +900,7 @@
     "barker"
   ],
   "publish_notes": "Public board -- no secrets or customer paths. Private repositories stay high-level; AI Music Vault stays private-content-boundary only.",
-  "refresh_started_ms": 1792405273738,
+  "refresh_started_ms": 1792406177987,
   "agents_source": "file:stale->unknown",
   "agents": [
     {
@@ -1099,7 +1099,7 @@
     }
   ],
   "llm_work_now_freshness": {
-    "generated_at": "2026-10-19 05:21 CT",
+    "generated_at": "2026-10-19 05:36 CT",
     "warn_ttl_sec": 1200,
     "warnings": [],
     "ok": true
@@ -1130,7 +1130,7 @@
     ],
     "scorecards": {
       "v": "scorecards/v1",
-      "generated_at": "2026-10-19T10:21:44.476607+00:00",
+      "generated_at": "2026-10-19T10:36:52.462431+00:00",
       "windows": {
         "24h": {
           "providers": {
