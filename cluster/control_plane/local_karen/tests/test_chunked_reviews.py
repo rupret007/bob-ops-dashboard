@@ -11,7 +11,8 @@ from cluster.control_plane.local_karen.config import KarenConfig
 
 def pr_info(diff):
     return PRInfo('owner', 'repo', 1, 'a' * 40, 'Refactor', 'author', False,
-                  diff, {'tests': 'success'}, ['first.py', 'last.py'], [])
+                  diff, {'tests': 'success'}, ['first.py', 'last.py'], [],
+                  description='Original refactor scope and validation details.')
 
 
 def large_diff():
@@ -42,6 +43,7 @@ def test_complete_large_diff_is_reviewed_by_both_models_at_same_sha():
     assert ''.join(p.diff for p in supplied) == pr.diff
     assert all(len(p.diff) <= 12000 for p in supplied)
     assert all(p.head_sha == pr.head_sha and p.changed_files == pr.changed_files for p in supplied)
+    assert all(p.description == pr.description for p in supplied)
     assert all(c.args[1] == r.classify_risk_tier(pr) for c in primary.review.call_args_list)
     assert [c.args[0].diff for c in second.call_args_list] == [p.diff for p in supplied]
     assert result.passed
@@ -98,8 +100,8 @@ def test_adjacent_complete_files_share_context_without_skipping_either_vote():
     assert all(part.diff.count('diff --git ') == 3 for part in supplied)
     assert [call.args[0].diff for call in second.call_args_list] == [part.diff for part in supplied]
     for index, part in enumerate(supplied):
-        metadata = part.description.split('Untrusted whole-PR context (JSON):\n')[1]
-        context = json.loads(metadata.split('\nSupplemental changed-file context at exact head ', 1)[0])
+        assert part.description == pr.description
+        context = part.review_scope.data
         assert context['current_chunk']['files'] == pr.changed_files[index * 3:index * 3 + 3]
     assert result.passed and len(reviews) == 4
 

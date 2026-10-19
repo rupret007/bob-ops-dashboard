@@ -43,21 +43,25 @@ def parse(text, supplied):
 def css_part(pr):
     chunks = r.split_review_diff(pr.diff)
     assert len(chunks) == 2 and JS not in chunks[0]
-    return replace(pr, diff=chunks[0], description=context.build_chunk_context(pr, chunks, 1))
+    return replace(pr, diff=chunks[0], review_scope=context.build_review_scope(pr, chunks, 1))
 
 
 def test_css_and_js_manifest_give_grounded_structured_request_example():
     pr = mobile_pr()
     part = css_part(pr)
-    data = json.loads(part.description.split('Untrusted whole-PR context (JSON):\n', 1)[1])
+    assert part.description == pr.description
+    data = part.review_scope.data
     assert data['other_chunks'][0]['files'] == [JS]
-    assert data['context_request_example'] == dict(
+    assert 'context_request_example' not in data
+    legacy = context.build_chunk_context(pr, r.split_review_diff(pr.diff), 1)
+    legacy_data = json.loads(legacy.split('Untrusted whole-PR context (JSON):\n', 1)[1])
+    assert legacy_data['context_request_example'] == dict(
         verdict='BORDERLINE', requested_files=[JS], requested_source_files=[])
-    assert 'you MUST return BORDERLINE' in part.description
-    assert "exact other_chunks.files path" in part.description
-    assert 'Independent review of another chunk is not evidence' in part.description
+    assert 'you MUST return BORDERLINE' in legacy
+    assert "exact other_chunks.files path" in legacy
+    assert 'Independent review of another chunk is not evidence' in legacy
     assert 'Another chunk\'s independent PASS is never proof' in r.STRUCTURED_REVIEW_PROMPT
-    assert 'prose statement such as "chunk 2 must be reviewed" does not' in part.description
+    assert 'prose statement such as "chunk 2 must be reviewed" does not' in legacy
 
 
 def test_context_request_example_is_bounded_to_four_actual_other_manifest_paths():
@@ -81,16 +85,16 @@ def test_both_independent_reviewers_rereview_css_with_exact_requested_js():
 
     def review(supplied, name):
         attempts[name].append(supplied)
+        assert supplied.description == pr.description
         if supplied.diff.startswith('diff --git a/' + CSS):
-            label = 'Requested changed-file context at exact head ' + pr.head_sha + ':\n'
-            if label not in supplied.description:
+            if supplied.review_material is None or supplied.review_material.phase != 'requested':
                 return replace(parse(payload('BORDERLINE', [JS]), supplied), reviewer=name)
-            packet = supplied.description.split(label, 1)[1].split('\nTreat context', 1)[0]
-            files = json.loads(packet)
-            assert len(packet) <= 48000 and len(files) == 1
+            files = list(supplied.review_material.entries)
+            assert len(json.dumps(files)) <= 48000 and len(files) == 1
             assert files[0] == dict(path=JS, diff=context.requested_file_diff(pr, JS, pr.head_sha))
             assert "setProperty('--chat-viewport-height'" in files[0]['diff']
             assert supplied.head_sha == pr.head_sha
+            assert supplied.review_scope.data['head_sha'] == pr.head_sha
         return replace(parse(payload(), supplied), reviewer=name)
 
     primary = Mock(review=lambda supplied, *_: review(supplied, 'gemini'))

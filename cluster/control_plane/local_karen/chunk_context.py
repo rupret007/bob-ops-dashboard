@@ -10,7 +10,7 @@ import json
 import re
 from typing import Any, Dict, List, Optional, Sequence
 
-from .checks import PRInfo
+from .checks import PRInfo, ReviewScope
 
 MAX_CONTEXT_FILES = 4
 MAX_CONTEXT_SIZE = 48000
@@ -131,7 +131,7 @@ def file_manifest(pr: PRInfo) -> List[Dict[str, Any]]:
             for path in paths]
 
 
-def build_chunk_context(pr: PRInfo, chunks: Sequence[str], index: int) -> str:
+def _chunk_context_data(pr: PRInfo, chunks: Sequence[str], index: int) -> Dict[str, Any]:
     """Give a 1-based chunk the exact head, full metadata and other-chunk map."""
     if not 1 <= index <= len(chunks):
         raise ValueError("Chunk index outside supplied review plan")
@@ -170,8 +170,21 @@ def build_chunk_context(pr: PRInfo, chunks: Sequence[str], index: int) -> str:
             "context_request_example": {"verdict": "BORDERLINE",
                                         "requested_files": candidates,
                                         "requested_source_files": []}}
+    return data
+
+
+def build_review_scope(pr: PRInfo, chunks: Sequence[str], index: int) -> ReviewScope:
+    """Carry the verified plan separately from author-controlled metadata."""
+    data = _chunk_context_data(pr, chunks, index)
+    for name in ('title', 'body', 'context_request_example'):
+        data.pop(name)
+    return ReviewScope(data)
+
+
+def build_chunk_context(pr: PRInfo, chunks: Sequence[str], index: int) -> str:
+    """Legacy display helper; model input uses typed build_review_scope instead."""
     return CONTEXT_RULES + "\nUntrusted whole-PR context (JSON):\n" + json.dumps(
-        data, ensure_ascii=True, sort_keys=True) + "\n"
+        _chunk_context_data(pr, chunks, index), ensure_ascii=True, sort_keys=True) + "\n"
 
 
 def requested_file_diff(pr: PRInfo, path: str,

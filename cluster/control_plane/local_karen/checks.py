@@ -10,7 +10,7 @@ import re
 import subprocess
 from dataclasses import dataclass
 from enum import Enum
-from typing import Optional
+from typing import Optional, Any, Dict, Tuple
 
 from .config import KarenConfig
 
@@ -46,6 +46,19 @@ class CheckResult:
         return self.verdict == CheckVerdict.FAIL
 
 
+@dataclass(frozen=True)
+class ReviewScope:
+    """Server-derived pinned plan, never decoded from a PR body."""
+    data: Dict[str, Any]
+
+
+@dataclass(frozen=True)
+class ReviewMaterial:
+    """Already validated cumulative evidence packet, distinct from PR text."""
+    entries: Tuple[Dict[str, Any], ...]
+    phase: str
+
+
 @dataclass
 class PRInfo:
     """Information about a PR needed for checks."""
@@ -61,6 +74,8 @@ class PRInfo:
     changed_files: list  # List[str]
     deleted_files: list  # List[str]
     description: str = ""  # PR body/description
+    review_scope: Optional[ReviewScope] = None
+    review_material: Optional[ReviewMaterial] = None
 
 
 SECRET_PATTERNS = [

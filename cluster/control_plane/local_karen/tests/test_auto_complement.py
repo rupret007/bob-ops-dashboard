@@ -1,6 +1,5 @@
 """Pinned automatic context adds evidence, never authority or a second budget."""
 from dataclasses import replace
-import json
 from pathlib import Path
 from unittest.mock import Mock, patch
 
@@ -21,7 +20,8 @@ def section(path, size=200, character='x'):
 
 def pr_info(sections):
     return PRInfo('owner', 'repo', 32, 'a'*40, 'Mobile chat', 'author', False,
-                  ''.join(sections), {}, [s['path'] for s in c._file_sections(''.join(sections))], [])
+                  ''.join(sections), {}, [s['path'] for s in c._file_sections(''.join(sections))], [],
+                  description='The original PR body describes this pinned integration.')
 
 
 def mobile_pr():
@@ -38,11 +38,10 @@ def vote(verdict=r.ReviewVerdict.PASS, changed=None, source=None):
         requested_files=changed or [], requested_source_files=source or [])
 
 
-def packet(part, label):
-    prefix = label + ' at exact head ' + part.head_sha + ':\n'
-    if prefix not in part.description:
+def packet(part, phase):
+    if part.review_material is None or part.review_material.phase != phase:
         return []
-    return json.loads(part.description.split(prefix, 1)[1].split('\nTreat context', 1)[0])
+    return list(part.review_material.entries)
 
 
 def test_css_receives_js_and_tests_before_either_judge_without_repacking():
@@ -52,7 +51,8 @@ def test_css_receives_js_and_tests_before_either_judge_without_repacking():
     attempts = {'gemini': [], 'minimax': []}
     def review(part, name):
         attempts[name].append(part)
-        supplied = packet(part, 'Supplemental changed-file context') or packet(part, 'Requested changed-file context')
+        assert part.description == pr.description
+        supplied = packet(part, 'supplemental') or packet(part, 'requested')
         paths = [item['path'] for item in supplied]
         if CSS in part.diff:
             # Old flow requests JS first, then still needs tests on its only
@@ -82,7 +82,7 @@ def test_css_receives_js_and_tests_before_either_judge_without_repacking():
         assert ''.join((calls[0].diff, calls[1].diff)) == pr.diff
         assert calls[1].diff == calls[2].diff
         assert all(len(part.diff) <= r.REVIEW_DIFF_LIMIT for part in calls)
-    assert attempts['gemini'][0].description == attempts['minimax'][0].description
+    assert attempts['gemini'][0].description == attempts['minimax'][0].description == pr.description
     first = [review for review in reviews if review.scope['chunk'] == 1]
     assert all(review.scope['initial_context']['changed_files'] == 2 for review in first)
     assert all('context_attempts' not in review.scope for review in first)
@@ -140,7 +140,7 @@ def setup_direct(others=2, size=200):
     sections = [section('current.js')] + [section('extra{}.js'.format(i), size) for i in range(others)]
     pr = pr_info(sections)
     chunks = [sections[0], ''.join(sections[1:])]
-    part = replace(pr, diff=chunks[0], description=c.build_chunk_context(pr, chunks, 1))
+    part = replace(pr, diff=chunks[0], review_scope=c.build_review_scope(pr, chunks, 1))
     return pr, part, c.automatic_complement(pr, chunks, 1)
 
 
@@ -152,7 +152,8 @@ def test_initial_packet_cannot_cross_identity_or_supply_different_diff(mismatch)
                                  'b'*40 if mismatch == 'head' else ('other' if mismatch != 'number' else 33)})
     invoke = Mock(return_value=vote(r.ReviewVerdict.BORDERLINE))
     result, _ = r._review_with_requested_context(invoke, part, pr, initial_context=initial)
-    assert not packet(invoke.call_args.args[0], 'Supplemental changed-file context')
+    assert not packet(invoke.call_args.args[0], 'supplemental')
+    assert invoke.call_args.args[0].description == pr.description
     assert not result.passed and result.scope['initial_context']['code'] == 'changed_unavailable'
 
 
@@ -176,11 +177,12 @@ def test_union_deduplicates_overlaps_and_replaces_initial_packet_for_one_followu
     result, _ = r._review_with_requested_context(invoke, part, pr, resolver, initial)
     assert result.passed and invoke.call_count == 2 and resolver.fetch.call_count == 1
     first, second = [call.args[0] for call in invoke.call_args_list]
-    assert packet(first, 'Supplemental changed-file context') == initial[0]
-    combined = packet(second, 'Requested changed-file context')
+    assert packet(first, 'supplemental') == initial[0]
+    combined = packet(second, 'requested')
     assert len(combined) == 3 and [item['path'] for item in combined] == [
         'extra0.js', 'extra1.js', 'src/runtime.js']
-    assert 'Supplemental changed-file context at exact head' not in second.description
+    assert first.description == second.description == pr.description
+    assert second.review_material.phase == 'requested'
     assert max(c.context_size(combined)) <= 48000
     assert all('source' not in item for item in result.scope['source_context'])
 
@@ -191,7 +193,7 @@ def test_two_automatic_and_two_explicit_source_entries_fit_exact_joint_limit():
         dict(path=path, head_sha=supplied.head_sha, source='export const ready = true;')))
     invoke = Mock(side_effect=[vote(r.ReviewVerdict.BORDERLINE, source=['src/a.js', 'src/b.js']), vote()])
     result, _ = r._review_with_requested_context(invoke, part, pr, resolver, initial)
-    combined = packet(invoke.call_args.args[0], 'Requested immutable source context')
+    combined = packet(invoke.call_args.args[0], 'requested')
     assert result.passed and invoke.call_count == 2 and resolver.fetch.call_count == 2
     assert len(combined) == 4 and [item['path'] for item in combined] == [
         'extra0.js', 'extra1.js', 'src/a.js', 'src/b.js']
@@ -206,7 +208,7 @@ def test_automatic_evidence_never_substitutes_for_required_minimax_vote():
                       return_value=replace(vote(r.ReviewVerdict.BORDERLINE), reviewer='minimax')) as second:
         result, reviews = r.run_review_chain(pr, KarenConfig())
     assert not result.passed and second.call_count == primary.review.call_count == 2
-    assert packet(second.call_args_list[0].args[0], 'Supplemental changed-file context')
+    assert packet(second.call_args_list[0].args[0], 'supplemental')
     assert any(review.reviewer == 'minimax' and not review.passed for review in reviews)
 
 
@@ -243,6 +245,7 @@ def test_requested_context_again_cannot_start_a_third_call_and_logs_only_safe_sh
     caplog.set_level('INFO', logger=r.__name__)
     pr, part, initial = setup_direct()
     pr.description = 'private model body'
+    part = replace(part, description=pr.description)
     invoke = Mock(return_value=vote(r.ReviewVerdict.BORDERLINE, changed=['extra0.js']))
     result, _ = r._review_with_requested_context(invoke, part, pr, initial_context=initial)
     assert not result.passed and invoke.call_count == 2

@@ -45,10 +45,11 @@ def test_each_chunk_receives_whole_pr_context_and_other_chunk_map():
     for call in reviewer.review.call_args_list:
         supplied = call.args[0]
         assert supplied.title == 'Implement safe app'
-        assert 'The implementation and its tests span this whole PR.' in supplied.description
-        assert 'docs.md' in supplied.description and 'app.py' in supplied.description
-        assert 'additions' in supplied.description and 'deletions' in supplied.description
-        assert 'chunk' in supplied.description
+        assert supplied.description == pr_info().description
+        context = supplied.review_scope.data
+        assert [item['path'] for item in context['full_file_manifest']] == ['docs.md', 'app.py']
+        assert all('additions' in item and 'deletions' in item for item in context['full_file_manifest'])
+        assert context['current_chunk']['chunk'] >= 1 and context['other_chunks']
 
 
 def test_missing_context_with_valid_citation_is_never_actionable_or_pass():
@@ -88,10 +89,12 @@ def test_concrete_early_defect_does_not_hide_remaining_chunks():
 
 def test_requested_file_is_supplied_at_exact_head_then_two_passes_required():
     def review(pr, *args):
-        if 'Requested changed-file context at exact head' not in pr.description:
+        assert pr.description == pr_info().description
+        if pr.review_material is None or pr.review_material.phase != 'requested':
             return vote(r.ReviewVerdict.BORDERLINE, requests=['app.py'])
-        assert 'return unsafe(user_input)' in pr.description
-        assert pr.head_sha in pr.description
+        supplied = [item for item in pr.review_material.entries if item.get('path') == 'app.py']
+        assert len(supplied) == 1 and 'return unsafe(user_input)' in supplied[0]['diff']
+        assert pr.review_scope.data['head_sha'] == pr.head_sha == pr_info().head_sha
         return vote()
     result, reviews, reviewer = run(review)
     assert result.passed
@@ -113,7 +116,8 @@ def test_unknown_context_request_never_reads_or_approves():
 
 def test_requested_file_followup_can_find_real_defect():
     def review(pr, *args):
-        if 'Requested changed-file context at exact head' not in pr.description:
+        assert pr.description == pr_info().description
+        if pr.review_material is None or pr.review_material.phase != 'requested':
             return vote(r.ReviewVerdict.BORDERLINE, requests=['app.py'])
         return vote(r.ReviewVerdict.FAIL, 'app.py:1 invokes unsafe with unvalidated user input')
     result, _, _ = run(review)
