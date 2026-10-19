@@ -231,10 +231,9 @@ def automatic_complement(pr: PRInfo, chunks: Sequence[str], index: int):
     manifest = file_manifest(pr)
     if any(not item['diff_available'] for item in manifest) or any(not s['path'] for s in sections):
         return [], 'changed_unavailable'
-    if any(s['start'] < end and s['end'] > start and
-           not (start <= s['start'] and s['end'] <= end) for s in sections):
-        return [], 'partial_file'
     # Repeated sections for one path must all be present before it is complete.
+    # A split current file needs its complete pinned diff too. A partial chunk
+    # is not a reason to discard otherwise bounded, available evidence.
     missing = [item['path'] for item in manifest if any(
         s['path'] == item['path'] and not (start <= s['start'] and s['end'] <= end)
         for s in sections)]

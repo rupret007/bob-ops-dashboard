@@ -89,11 +89,13 @@ def test_css_receives_js_and_tests_before_either_judge_without_repacking():
     assert all(review.scope['head_sha'] == pr.head_sha for review in reviews)
 
 
-def test_partial_file_chunks_defer_to_normal_requests_and_keep_original_plan():
+def test_partial_file_chunks_receive_complete_pinned_files_and_keep_original_plan():
     pr = pr_info([section('large.js', 20000), section('tail.js')])
     chunks = r.split_review_diff(pr.diff)
     initial, code = c.automatic_complement(pr, chunks, 1)
-    assert code == 'partial_file' and initial == []
+    assert code == 'supplied'
+    assert initial == [dict(path=path, diff=c.requested_file_diff(pr, path, pr.head_sha))
+                       for path in ['large.js', 'tail.js']]
     assert len(c.requested_file_diff(pr, 'large.js', pr.head_sha)) == 20000
     assert ''.join(chunks) == pr.diff and all(len(chunk) <= 12000 for chunk in chunks)
 

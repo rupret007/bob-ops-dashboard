@@ -217,6 +217,19 @@ base objects. Diffs over the review context budget remain ERROR/manual work.
 PASS still requires the independent MiniMax review. Comments are opt-in with
 `--comment`; artifacts and normal result labels are the default output.
 
+Review normally uses lossless 12,000-character chunks, with at most four complete
+pinned changed-file diffs in one 48,000-unit supplemental packet. A split current
+file receives its complete diff when that packet fits. If a complete file exceeds
+that packet limit, a PR with at most four available, safe manifest paths may use
+one whole-change review instead: the rendered shared prompt, including metadata,
+JSON escaping and MiniMax's system contract, must fit 96,000 UTF-8 bytes. Both
+reviewers then see every changed byte together at the same exact head; neither
+reviewer's vote substitutes for the other. Larger packets retain the normal
+chunk plan and bounded requests, with unresolved context remaining unresolved.
+Unchanged-source limits, privacy checks, request counts and review deadlines are
+unchanged. In logs, `changed_files`/`raw_size` describe only supplemental material;
+`chunk_characters` and `pr_changed_files` separately show the primary input.
+
 The Mini pushes completed artifacts to the NucBox dashboard at
 `POST /api/karen/verdicts`. RSA-SHA256 signatures cover the complete request,
 purpose and issue time. The pinned verification key is `mini-verdict-public.pem`;

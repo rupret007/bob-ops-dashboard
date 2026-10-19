@@ -1437,6 +1437,37 @@ def _run_review_chain_single(
 
 
 REVIEW_DIFF_LIMIT = 12000
+# A few-file PR containing a file too large for the 48k supplemental packet
+# can be reviewed once in full. Bound the rendered input, including metadata,
+# escaping and the independent judge's system contract, rather than silently
+# dropping context or repeating the whole change alongside every 12k chunk.
+COMPLETE_CHANGE_PROMPT_BYTES = 96000
+
+
+def _review_prompt_bytes(part):
+    return (len(build_review_prompt(part).encode('utf-8')) +
+            len(MINIMAX_SYSTEM_CONTRACT.encode('utf-8')))
+
+
+def _bounded_complete_change(pr):
+    from .chunk_context import (MAX_CONTEXT_FILES, MAX_CONTEXT_SIZE,
+                                build_review_scope, context_size, file_manifest,
+                                requested_file_diff)
+    if len(pr.diff) > COMPLETE_CHANGE_PROMPT_BYTES:
+        return False
+    manifest = file_manifest(pr)
+    if not 1 <= len(manifest) <= MAX_CONTEXT_FILES:
+        return False
+    entries = []
+    for item in manifest:
+        diff = requested_file_diff(pr, item['path'], pr.head_sha)
+        if not item['diff_available'] or diff is None:
+            return False
+        entries.append(dict(path=item['path'], diff=diff))
+    if not any(max(context_size([item])) > MAX_CONTEXT_SIZE for item in entries):
+        return False
+    part = replace(pr, review_scope=build_review_scope(pr, [pr.diff], 1))
+    return _review_prompt_bytes(part) <= COMPLETE_CHANGE_PROMPT_BYTES
 
 
 def split_review_diff(diff: str, limit: int = REVIEW_DIFF_LIMIT) -> List[str]:
@@ -1596,9 +1627,13 @@ def _review_with_requested_context(invoke, part, original_pr, source_context=Non
         context, automatic_code = [], 'context_budget'
     raw, serialized = context_size(context)
     automatic = dict(code=automatic_code, changed_files=len(context),
-                     raw_size=raw, serialized_size=serialized)
-    logger.info('Initial review context: code=%s; changed_files=%s; raw_size=%s; serialized_size=%s',
-                automatic_code, len(context), raw, serialized)
+                     raw_size=raw, serialized_size=serialized,
+                     chunk_characters=len(part.diff),
+                     pr_changed_files=len((original_pr or part).changed_files))
+    logger.info('Initial review context: code=%s; changed_files=%s; raw_size=%s; serialized_size=%s; '
+                'chunk_characters=%s; pr_changed_files=%s',
+                automatic_code, len(context), raw, serialized,
+                automatic['chunk_characters'], automatic['pr_changed_files'])
     supplied_part = _context_part(part, context, 'Supplemental changed-file context') if context else part
     result = _validate_chunk_result(invoke(supplied_part), original_pr)
     result = replace(result, scope=dict(result.scope or {}, initial_context=automatic))
@@ -1688,6 +1723,13 @@ def _review_with_requested_context(invoke, part, original_pr, source_context=Non
     # Build from the base description, replacing rather than appending the
     # initial packet. Every invocation has one cumulative bounded packet.
     followup = _context_part(part, context, label)
+    # Only the bounded whole-change plan produces a part larger than the normal
+    # chunk limit. Its requested evidence must fit the same rendered-input cap
+    # as its first vote; the separate supplemental limit is not extra capacity.
+    if (len(part.diff) > REVIEW_DIFF_LIMIT and
+            _review_prompt_bytes(followup) > COMPLETE_CHANGE_PROMPT_BYTES):
+        result = _context_resolution(result, 'context_budget', counts)
+        return result, [result]
     initial = _context_resolution(initial, 'context_supplied', counts)
     from .gate import review_checkpoint
     review_checkpoint()
@@ -1717,7 +1759,7 @@ def run_review_chain(pr, config, require_two_pass=True):
     if len(pr.diff) <= REVIEW_DIFF_LIMIT:
         return _run_review_chain_single(pr, config, require_two_pass, source_context=source_context)
 
-    chunks = split_review_diff(pr.diff)
+    chunks = [pr.diff] if _bounded_complete_change(pr) else split_review_diff(pr.diff)
     tier = classify_risk_tier(pr)
     all_reviews = []
     outcomes = []
