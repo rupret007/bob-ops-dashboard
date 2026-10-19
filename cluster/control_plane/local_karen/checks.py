@@ -64,8 +64,8 @@ class PRInfo:
 
 
 SECRET_PATTERNS = [
-    (r"(?i)(api[_-]?key|apikey)\s*[=:]\s*['\"][^'\"]{20,}['\"]", "API key"),
-    (r"(?i)(secret|password|passwd|pwd)\s*[=:]\s*['\"][^'\"]{8,}['\"]", "Secret/password"),
+    (r"(?i)(api[_-]?key|apikey)\s*[=:]\s*(['\"])[^'\"]{20,}\2", "API key"),
+    (r"(?i)(secret|password|passwd|pwd)\s*[=:]\s*(['\"])[^'\"]{8,}\2", "Secret/password"),
     (r"(?i)bearer\s+[a-zA-Z0-9_\-\.]{20,}", "Bearer token"),
     (r"ghp_[a-zA-Z0-9]{36,}", "GitHub PAT"),
     (r"gho_[a-zA-Z0-9]{36,}", "GitHub OAuth token"),
@@ -279,6 +279,23 @@ def _literal_equivalent_line(before, after):
     return before != after and tokens(before) is not None and tokens(before) == tokens(after)
 
 
+def _new_test_source_files(diff):
+    """Only complete newly introduced files can contain no old tests to skip."""
+    added = set()
+    for block in diff.split("diff --git ")[1:]:
+        lines = block.splitlines()
+        path = lines[0].split(" b/", 1)[-1]
+        if not _is_test_file(path):
+            continue
+        if ("new file mode 100644" in lines or "new file mode 100755" in lines):
+            hunks = [line for line in lines if line.startswith("@@")]
+            if ("--- /dev/null" in lines and hunks
+                    and all(re.match(r"@@ -0,0 \+\d+(?:,\d+)? @@", hunk) for hunk in hunks)
+                    and not any(line.startswith("-") and line != "--- /dev/null" for line in lines)):
+                added.add(path)
+    return added
+
+
 def check_tests_not_weakened(pr: PRInfo, config: KarenConfig) -> CheckResult:
     """Check that tests are not deleted or weakened in the diff.
 
@@ -346,8 +363,16 @@ def check_tests_not_weakened(pr: PRInfo, config: KarenConfig) -> CheckResult:
                 issues.append(f"Removed test decorator in {filepath}:{number} (removed source; value redacted)")
                 break
 
+    new_test_files = _new_test_source_files(pr.diff)
     for filepath, number, line in _added_lines(pr.diff):
-        if _is_test_file(filepath) and re.search(
+        # A known optional-import guard may accompany a wholly new test file.
+        # The same decorator applied to any existing file must remain a FAIL:
+        # it could otherwise disable old assertions without deleting them.
+        optional_import_guard = (
+            filepath in new_test_files
+            and line.strip() == '@unittest.skipUnless(_HAS_NEVER_TOUCH, "cluster.never_touch not available")'
+        )
+        if _is_test_file(filepath) and not optional_import_guard and re.search(
                 r"^\s*(?:@(?:pytest\.mark\.(?:skip|xfail)|unittest\.skip)|(?:it|test|describe)\.(?:skip|todo)\s*\()", line):
             issues.append(f"Added test skip/xfail in {filepath}:{number} (source redacted)")
 
@@ -521,6 +546,26 @@ def _inert_review_prompt(diff):
     return safe
 
 
+def _crosses_fixture_string_tokens(line, match, filepath):
+    """Do not invent a credential from quote/concatenation syntax in tests.
+
+    A match contained inside one literal still fails. Provider-key patterns
+    remain independent and are never suppressed by this lexical correction.
+    """
+    if not _is_test_file(filepath or "") or not filepath.endswith(".py"):
+        return False
+    import io
+    import tokenize
+    try:
+        for token in tokenize.generate_tokens(io.StringIO(line).readline):
+            if (token.type == tokenize.STRING and token.start[0] == token.end[0] == 1
+                    and token.start[1] < match.start() < token.end[1] < match.end()):
+                return True
+    except (tokenize.TokenError, IndentationError):
+        pass
+    return False
+
+
 def check_no_secrets_in_diff(pr: PRInfo, config: KarenConfig) -> CheckResult:
     """Check that no secrets are added in the diff.
 
@@ -578,7 +623,9 @@ def check_no_secrets_in_diff(pr: PRInfo, config: KarenConfig) -> CheckResult:
 
         for pattern, secret_type in SECRET_PATTERNS:
             for match in re.finditer(pattern, added_line):
-                if not _placeholder_secret(match, secret_type, current_file):
+                syntax_only = (secret_type in ("API key", "Secret/password")
+                               and _crosses_fixture_string_tokens(added_line, match, current_file))
+                if not syntax_only and not _placeholder_secret(match, secret_type, current_file):
                     issues.append(f"{location}: {secret_type} (value redacted)")
 
     if issues:
