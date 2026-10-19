@@ -513,3 +513,85 @@ def test_new_standard_test_names_outside_proven_ci_scope_are_distinct():
     assert runtimes.outside_standard_tests('tools/test_existing.py\0tests/test_added.py\0') == before
     for name in ('tests/extra_test.py', 'test_extra.py'):
         assert not runtimes.outside_standard_tests('tools/test_existing.py\0' + name + '\0').issubset(before)
+
+
+def _local_checkout_git_environment(tmp_path):
+    # Local fixtures never consult credential helpers, user Git config, or hooks.
+    env = {key: value for key, value in os.environ.items() if not key.startswith('GIT_')}
+    empty = tmp_path / 'empty-git-template'
+    empty.mkdir(exist_ok=True)
+    env.update(GIT_CONFIG_NOSYSTEM='1', GIT_CONFIG_GLOBAL=os.devnull,
+               GIT_CONFIG_COUNT='0', GIT_TEMPLATE_DIR=str(empty))
+    return env
+
+
+@pytest.mark.parametrize(('mask', 'expected_mode', 'accepted'), [
+    (0o002, 0o664, False), (0o077, 0o600, True),
+])
+def test_real_git_checkout_modes_keep_strict_recipe_validation(qualified, tmp_path, mask, expected_mode, accepted):
+    q = qualified
+    checkout, tree = tmp_path / 'local-clone', tmp_path / 'fresh-worktree'
+    env = _local_checkout_git_environment(tmp_path)
+    for args, cwd in [
+        (['clone', '--no-checkout', str(q.tree), str(checkout)], None),
+        (['worktree', 'add', '--detach', str(tree), q.head], checkout),
+    ]:
+        subprocess.run(['git', '-c', 'core.hooksPath=/dev/null', *args], cwd=cwd,
+                       env=env, umask=mask, check=True, capture_output=True, text=True)
+    recipes = [tree / 'requirements.txt', tree / '.github/workflows/ci.yml']
+    assert [path.stat().st_mode & 0o777 for path in recipes] == [expected_mode] * 2
+    assert [sha(path.read_bytes()) for path in recipes] == [
+        q.receipt['qualified_heads'][0]['requirements_sha256'],
+        q.receipt['qualified_heads'][0]['ci_sha256'],
+    ]
+    if accepted:
+        assert runtimes.qualified_runtime(runtimes.WEBJAM, q.head, tree).head['head_sha'] == q.head
+        assert len(q.calls) == 1
+    else:
+        with pytest.raises(runtimes.RuntimeUnqualified):
+            runtimes.qualified_runtime(runtimes.WEBJAM, q.head, tree)
+        assert not q.calls  # The real recipe guard refuses before even the fixture import probe.
+
+
+def test_worker_inherits_native_umask_but_creates_private_checkout_before_provider(qualified, tmp_path):
+    q = qualified
+    q.git('branch', 'fix/fixture')
+    env = _local_checkout_git_environment(tmp_path)
+    actual_run = fix_worker.run
+    observed_modes = []
+    providers = []
+
+    class ProviderReached(BaseException):
+        pass
+
+    def command(args, cwd=None, **kwargs):
+        if args[:3] == ['gh', 'pr', 'view']:
+            return json.dumps(dict(headRefName='fix/fixture', headRefOid=q.head,
+                                   state='OPEN', isCrossRepository=False))
+        if args[0] == '/fixture/codex':
+            providers.append(args)
+            raise ProviderReached()  # No model, tests, commit, push, or network executes.
+        assert args[0] == 'git'
+        local = list(args)
+        if local[:2] == ['git', 'clone']:
+            assert local[-2] == 'https://github.com/' + runtimes.WEBJAM + '.git'
+            local[-2] = str(q.tree)
+        result = actual_run(['git', '-c', 'core.hooksPath=/dev/null', *local[1:]],
+                            cwd, env=env, **kwargs)
+        if args[:3] == ['git', 'worktree', 'add']:
+            tree = Path(args[-2])
+            observed_modes.extend((tree / path).stat().st_mode & 0o777
+                                  for path in ('requirements.txt', '.github/workflows/ci.yml'))
+        return result
+
+    previous = os.umask(0o002)  # Exact native systemd UMask; restored even on baseline failure.
+    try:
+        with patch.object(fix_worker, '_find_codex', return_value=Path('/fixture/codex')), \
+             patch.object(fix_worker, 'run', side_effect=command):
+            with pytest.raises(ProviderReached):
+                fix_worker.fix_pr(runtimes.WEBJAM, 396, q.head, ['controlled fixture finding'])
+        assert os.umask(0o002) == 0o002
+    finally:
+        os.umask(previous)
+    assert observed_modes == [0o600, 0o600]
+    assert len(providers) == len(q.calls) == 1
