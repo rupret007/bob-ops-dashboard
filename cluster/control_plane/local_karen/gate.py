@@ -154,7 +154,8 @@ class GateRunner:
                 check_results=check_results,
             )
 
-        if review_result.verdict == ReviewVerdict.ERROR:
+        if (review_result.verdict == ReviewVerdict.ERROR or
+                (review_result.scope or {}).get("context_incomplete")):
             return self._fail_closed(owner, repo, pr_number, pinned_sha,
                                      "Review error: " + review_result.reason, check_results)
 
