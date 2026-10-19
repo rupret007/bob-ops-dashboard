@@ -14,6 +14,7 @@ import json
 import logging
 import os
 import ipaddress
+import sys
 import time
 from pathlib import Path
 from typing import Callable
@@ -221,6 +222,27 @@ async def serve(hub: Hub, url: str, password: str, reload_delay: float = 1.0,
         await nc.drain()
 
 
+def process_executable(pid: int) -> Path:
+    """Read the kernel's executable path; argv/process titles are not identity."""
+    if sys.platform.startswith("linux"):
+        return Path(os.readlink(f"/proc/{pid}/exe"))
+    if sys.platform == "darwin":
+        import ctypes
+
+        # Darwin has no /proc. proc_pidpath returns zero on lookup failure.
+        # Apple's libproc API permits at most PROC_PIDPATHINFO_MAXSIZE (4096).
+        libproc = ctypes.CDLL("/usr/lib/libproc.dylib", use_errno=True)
+        lookup = libproc.proc_pidpath
+        lookup.argtypes = (ctypes.c_int, ctypes.c_void_p, ctypes.c_uint32)
+        lookup.restype = ctypes.c_int
+        buf = ctypes.create_string_buffer(4096)
+        size = lookup(pid, buf, len(buf))
+        if size <= 0 or size >= len(buf) or not buf.value.startswith(b"/"):
+            raise OSError(ctypes.get_errno(), "process executable lookup failed")
+        return Path(os.fsdecode(buf.value))
+    raise RuntimeError("process executable lookup unsupported on this platform")
+
+
 def signal_reload_from_pidfile(pidfile: Path, http: str = "127.0.0.1:8232",
                                conf_out: Path | None = None, timeout: float = 5.0) -> Callable[[], None]:
     def _reload() -> None:
@@ -232,7 +254,7 @@ def signal_reload_from_pidfile(pidfile: Path, http: str = "127.0.0.1:8232",
             pid = int(Path(pidfile).read_text().strip())
             if pid <= 1:
                 raise ValueError("invalid server PID")
-            if Path(os.readlink(f"/proc/{pid}/exe")).name != "nats-server":
+            if process_executable(pid).name != "nats-server":
                 raise RuntimeError("PID executable is not nats-server")
             before = monitor_json(http, "varz")
             # nats-server /varz exposes no PID; the target is bound by its config

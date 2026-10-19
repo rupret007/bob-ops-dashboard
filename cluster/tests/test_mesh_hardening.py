@@ -135,7 +135,7 @@ class RevokeHardening(unittest.TestCase):
         with patch.object(joind, 'Registry', return_value=reg), patch.object(joind.Hub, 'render'), \
                 patch.object(joind, 'monitor_json', side_effect=samples), \
                 patch.object(joind.os, 'kill', side_effect=kill_error) as kill, \
-                patch.object(joind.os, 'readlink', return_value='/usr/bin/nats-server'), \
+                patch.object(joind, 'process_executable', return_value=Path('/usr/bin/nats-server')), \
                 patch('subprocess.run', return_value=SimpleNamespace(stdout=f'nats-server -c {self.conf}')), \
                 patch.object(joind.time, 'monotonic', side_effect=[0, 0, 6]), \
                 patch.object(joind.time, 'sleep'), \
@@ -178,10 +178,31 @@ class RevokeHardening(unittest.TestCase):
 
     def test_wrong_config_never_signalled(self):
         with patch.object(joind, 'monitor_json', return_value=self.before), patch.object(joind.os, 'kill') as kill, \
+                patch.object(joind, 'process_executable', return_value=Path('/usr/bin/nats-server')), \
                 patch('subprocess.run', return_value=SimpleNamespace(stdout='nats-server -c /tmp/other.conf')):
             with self.assertRaises(RuntimeError):
                 joind.signal_reload_from_pidfile(self.pidfile, conf_out=self.conf)()
             kill.assert_not_called()
+
+    def test_unreadable_executable_never_signalled(self):
+        with patch.object(joind, 'process_executable', side_effect=OSError('unavailable')), \
+                patch.object(joind.os, 'kill') as kill, patch.object(joind, 'monitor_json') as monitor:
+            with self.assertRaises(RuntimeError):
+                joind.signal_reload_from_pidfile(self.pidfile, conf_out=self.conf)()
+            kill.assert_not_called()
+            monitor.assert_not_called()
+
+    def test_kernel_executable_lookup_identifies_real_executable(self):
+        proc = subprocess.Popen(['/bin/sleep', '30'])
+        try:
+            self.assertEqual(joind.process_executable(proc.pid).resolve(), Path('/bin/sleep').resolve())
+        finally:
+            proc.terminate()
+            proc.wait(timeout=5)
+
+    def test_nonexistent_process_lookup_fails(self):
+        with self.assertRaises(OSError):
+            joind.process_executable(2147483647)
 
 
 class SourceLimitHardening(unittest.TestCase):
