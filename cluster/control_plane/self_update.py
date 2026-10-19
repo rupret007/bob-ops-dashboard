@@ -18,11 +18,15 @@ OUTCOME-VERIFIED: Every self-update call logs a concrete outcome:
 from __future__ import annotations
 
 import json
+import fcntl
 import logging
 import os
+import re
 import shutil
 import subprocess
 import sys
+import time
+from contextlib import ExitStack
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional, Tuple
@@ -217,14 +221,14 @@ def fetch_branch(repo_dir: Path) -> bool:
         return False
 
 
-def can_fast_forward(repo_dir: Path) -> Tuple[bool, str]:
+def can_fast_forward(repo_dir: Path, target_sha: Optional[str] = None) -> Tuple[bool, str]:
     """Check if we can fast-forward to origin/BRANCH.
     
     Returns (can_ff, remote_sha).
     """
     try:
         result = subprocess.run(
-            ["git", "rev-parse", "origin/{}".format(BRANCH)],
+            ["git", "rev-parse", target_sha or "origin/{}".format(BRANCH)],
             cwd=repo_dir,
             capture_output=True,
             text=True,
@@ -235,7 +239,7 @@ def can_fast_forward(repo_dir: Path) -> Tuple[bool, str]:
         remote_sha = result.stdout.strip()
         
         result = subprocess.run(
-            ["git", "merge-base", "--is-ancestor", "HEAD", "origin/{}".format(BRANCH)],
+            ["git", "merge-base", "--is-ancestor", "HEAD", remote_sha],
             cwd=repo_dir,
             capture_output=True,
             timeout=10,
@@ -245,7 +249,7 @@ def can_fast_forward(repo_dir: Path) -> Tuple[bool, str]:
         return False, ""
 
 
-def fast_forward(repo_dir: Path) -> Tuple[bool, str]:
+def fast_forward(repo_dir: Path, target_sha: Optional[str] = None) -> Tuple[bool, str]:
     """Fast-forward to origin/BRANCH.
     
     Returns (success, old_head_for_rollback).
@@ -265,7 +269,7 @@ def fast_forward(repo_dir: Path) -> Tuple[bool, str]:
             return False, old_head or ""
 
         result = subprocess.run(
-            ["git", "merge", "--ff-only", "origin/{}".format(BRANCH)],
+            ["git", "merge", "--ff-only", target_sha or "origin/{}".format(BRANCH)],
             cwd=repo_dir,
             capture_output=True,
             text=True,
@@ -323,6 +327,7 @@ def run_tests(repo_dir: Path) -> bool:
              "cluster/control_plane/tests/test_update_imports.py",
              "cluster/control_plane/tests/test_guardian.py",
              "cluster/control_plane/tests/test_guardian_http.py",
+             "cluster/control_plane/tests/test_update_coordination.py",
              "cluster/control_plane/tests/test_health_state.py",
              "cluster/control_plane/tests/test_health_service.py",
              "cluster/control_plane/tests/test_health_rollout.py",
@@ -541,7 +546,84 @@ def finish_install(repo_dir: Path, machine: str, result: dict) -> dict:
     return result
 
 
-def self_update(machine: str = "mini", install_dir: Optional[Path] = None) -> dict:
+def _deferred(repo_dir, reason):
+    result = dict(updated=False, reinstalled=False, outcome='SKIPPED', reason=reason,
+                  repo_dir=str(repo_dir))
+    _log_update_outcome('SKIPPED: ' + reason, result)
+    return result
+
+
+def target_canary_ready(machine, target_sha):
+    """A direct clock-proven Nuc canary must precede Mini deployment."""
+    if machine == 'nucbox':
+        return True
+    try:
+        from .health_adapters import collect_peer
+        from .health_rollout import peer_canary_ok
+        details = collect_peer('mini')['details']
+        peer = details['health']
+        # Legacy/cached health is insufficient for a new deployment admission.
+        return (isinstance(details.get('clock_observation'), dict)
+                and peer.get('loaded_head') == target_sha
+                and peer_canary_ok(dict(loaded_head=target_sha), peer, time.time(), details))
+    except Exception:
+        return False
+
+
+def self_update(machine: str = "mini", install_dir: Optional[Path] = None, *,
+                operator: bool = False, expected_head: Optional[str] = None) -> dict:
+    """Serialize all callers; an explicit operator invocation retains every gate."""
+    repo_dir = install_dir or INSTALL_DIR
+    if (machine not in ('mini', 'nucbox') or
+            (expected_head is not None and (not isinstance(expected_head, str)
+             or not re.fullmatch(r'[0-9a-f]{40}', expected_head))) or
+            (operator and expected_head is None)):
+        return dict(updated=False, reinstalled=False, outcome='FAILED',
+                    reason='invalid machine or expected full head for operator update')
+    root = Path(os.environ.get('STORYPOOL_DATA_DIR', '~/.local/share/storypool')).expanduser()
+    try:
+        root.mkdir(parents=True, exist_ok=True)
+        with ExitStack() as stack:
+            # Stable inodes; never reuse recovery ownership across installer children.
+            mutex = stack.enter_context((root / '.self-update.lock').open('a'))
+            try:
+                fcntl.flock(mutex, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except BlockingIOError:
+                return _deferred(repo_dir, 'another updater owns this host')
+            if not operator:
+                admission = stack.enter_context((root / 'overseer.lock').open('a'))
+                try:
+                    fcntl.flock(admission, fcntl.LOCK_SH | fcntl.LOCK_NB)
+                except BlockingIOError:
+                    return _deferred(repo_dir, 'overseer owns automatic update admission')
+            return _self_update(machine, repo_dir, expected_head)
+    except OSError as exc:
+        return dict(updated=False, reinstalled=False, outcome='FAILED',
+                    reason='update coordination unavailable: ' + type(exc).__name__)
+
+
+def _prepare_and_finish(repo_dir, machine, result, target_sha):
+    # Preserve retry even when code is current but peer admission expires in tests.
+    (repo_dir / '.storypool-reinstall-pending').touch()
+    if get_current_head(repo_dir) != target_sha:
+        result.update(outcome='FAILED', reason='HEAD changed before installation')
+    elif not target_canary_ready(machine, target_sha):
+        result.update(outcome='SKIPPED', reason='awaiting matching Nuc canary before installation')
+    else:
+        result['pycache_cleared'] = clear_pycache(repo_dir / 'cluster') + clear_pycache(KAREN_MODULE_DIR)
+        result['module_copied'] = copy_karen_module(repo_dir)
+        result['config_migrated'] = migrate_config()
+        if get_current_head(repo_dir) != target_sha:
+            result.update(outcome='FAILED', reason='HEAD changed during installation preparation')
+        elif not target_canary_ready(machine, target_sha):
+            result.update(outcome='SKIPPED', reason='awaiting matching Nuc canary before installer')
+        else:
+            return finish_install(repo_dir, machine, result)
+    _log_update_outcome(result['outcome'] + ': ' + result['reason'], result)
+    return result
+
+
+def _self_update(machine: str, repo_dir: Path, expected_head: Optional[str]) -> dict:
     """Attempt self-update if safe.
     
     OUTCOME-VERIFIED: Always logs one of:
@@ -559,8 +641,6 @@ def self_update(machine: str = "mini", install_dir: Optional[Path] = None) -> di
     
     Returns dict with update status.
     """
-    repo_dir = install_dir or INSTALL_DIR
-    
     result = {
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "repo_dir": str(repo_dir),
@@ -615,6 +695,11 @@ def self_update(machine: str = "mini", install_dir: Optional[Path] = None) -> di
         _log_update_outcome("FAILED: could not get remote HEAD", result)
         return result
     result["remote_head"] = remote_sha[:12]
+    if (not re.fullmatch(r'[0-9a-f]{40}', remote_sha) or
+            (expected_head is not None and remote_sha != expected_head)):
+        result.update(outcome='FAILED', reason='fetched head does not match expected full head')
+        _log_update_outcome('FAILED: ' + result['reason'], result)
+        return result
     
     if remote_sha == old_head:
         if (repo_dir / '.storypool-reinstall-pending').exists():
@@ -623,20 +708,23 @@ def self_update(machine: str = "mini", install_dir: Optional[Path] = None) -> di
                 result['reason'] = 'pending reinstall gate tests failed; retry retained'
                 _log_update_outcome('FAILED: ' + result['reason'], result)
                 return result
-            return finish_install(repo_dir, machine, result)
+            return _prepare_and_finish(repo_dir, machine, result, remote_sha)
         result["reason"] = "already at latest: {}".format(old_head[:12])
         result["outcome"] = "SKIPPED"
         _log_update_outcome("SKIPPED: already at latest {}".format(old_head[:12]), result)
         return result
     
-    can_ff, _ = can_fast_forward(repo_dir)
-    if not can_ff:
+    if not target_canary_ready(machine, remote_sha):
+        return _deferred(repo_dir, 'awaiting matching Nuc canary before fast-forward')
+
+    can_ff, proved_sha = can_fast_forward(repo_dir, remote_sha)
+    if not can_ff or proved_sha != remote_sha:
         result["reason"] = "cannot fast-forward (HEAD diverged from origin)"
         result["outcome"] = "SKIPPED"
         _log_update_outcome("SKIPPED: cannot fast-forward, HEAD diverged", result)
         return result
     
-    ff_success, rollback_sha = fast_forward(repo_dir)
+    ff_success, rollback_sha = fast_forward(repo_dir, remote_sha)
     if not ff_success:
         result["reason"] = "fast-forward merge failed"
         result["outcome"] = "FAILED"
@@ -661,26 +749,19 @@ def self_update(machine: str = "mini", install_dir: Optional[Path] = None) -> di
         return result
     
     result["updated"] = True
-    result["pycache_cleared"] = clear_pycache(repo_dir / "cluster")
-    result["pycache_cleared"] += clear_pycache(KAREN_MODULE_DIR)
-    
-    if copy_karen_module(repo_dir):
-        result["module_copied"] = True
-    
-    if migrate_config():
-        result["config_migrated"] = True
-    
-    return finish_install(repo_dir, machine, result)
+    return _prepare_and_finish(repo_dir, machine, result, remote_sha)
 
 
 def main():
     import argparse
     parser = argparse.ArgumentParser(description="Fast-forward and reinstall StoryPool")
     parser.add_argument('--machine', choices=['mini', 'nucbox'], default=os.environ.get('STORYPOOL_MACHINE', 'mini'))
+    parser.add_argument('--operator', action='store_true', help='Explicit authorized normal update while overseer owns admission')
+    parser.add_argument('--expected-head', help='Require this exact full fetched commit SHA')
     args = parser.parse_args()
     logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s')
     try:
-        result = self_update(machine=args.machine)
+        result = self_update(machine=args.machine, operator=args.operator, expected_head=args.expected_head)
     except Exception as exc:
         _log_update_outcome('FAILED: ' + type(exc).__name__, {'reason': type(exc).__name__})
         return 1

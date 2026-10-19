@@ -146,6 +146,9 @@ def test_failed_reinstall_is_failed_and_same_head_retries(tmp_path, monkeypatch)
     monkeypatch.setattr(updater, 'is_working_tree_dirty', lambda _: False)
     monkeypatch.setattr(updater, 'fetch_branch', lambda _: True)
     monkeypatch.setattr(updater, 'run_tests', lambda _: True)
+    monkeypatch.setattr(updater, 'target_canary_ready', lambda *a: True)
+    for name in ('clear_pycache', 'copy_karen_module', 'migrate_config'):
+        monkeypatch.setattr(updater, name, Mock(return_value=False))
     result = updater.self_update('mini', tmp_path)
     assert result['outcome'] == 'UPDATED'
     assert result['reinstalled']

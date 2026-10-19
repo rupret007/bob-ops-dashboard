@@ -53,21 +53,30 @@ def complete_cycle(status, now, since=0):
 
 
 def peer_canary_ok(status, peer, now, observation=None):
+    from .health_peer import observation_time, number
+    if not isinstance(peer, dict) or not isinstance(peer.get('rollout'), dict):
+        return False
     if observation is not None:
-        from .health_peer import observation_time, number
         try:
             now = observation_time(observation, now)
-        except ValueError:
-            return False
-        served = observation.get('clock_observation', {}).get('served_at', now)
-        confirmed = peer.get('rollout', {}).get('last_confirmed_at', peer.get('rollout', {}).get('canary_passed_at', 0))
-        if not number(confirmed) or confirmed > served:
+        except (ValueError, TypeError, AttributeError):
             return False
     receipt = peer.get('rollout', {})
+    served = observation.get('clock_observation', {}).get('served_at', now) if observation else now
+    confirmed = receipt.get('last_confirmed_at', receipt.get('canary_passed_at', 0))
+    since = receipt.get('activated_at')
+    if (not all(number(value) for value in (now, served, confirmed, since, peer.get('timestamp')))
+            or not 0 < since <= confirmed <= served):
+        return False
+    try:
+        complete = complete_cycle(peer, now, since)
+    except (TypeError, KeyError, AttributeError):
+        return False
     return (peer.get('machine') == 'nucbox' and receipt.get('phase') == 'active'
             and receipt.get('head') == status.get('loaded_head')
+            and peer.get('loaded_head') == status.get('loaded_head') and complete
             and 0 <= now - peer.get('timestamp', 0) < 900
-            and 0 <= now - receipt.get('last_confirmed_at', receipt.get('canary_passed_at', 0)) < 900)
+            and 0 <= now - confirmed < 900)
 
 
 def compare_cycle(status):

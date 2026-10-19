@@ -168,6 +168,12 @@ class Scheduler:
                 self.transition = ('rollback', self.slow.submit(rollback, self.root,
                                    copy.deepcopy(self.status), Manager(self.machine)))
             elif complete_cycle(self.status, now, since):
+                if self.machine == 'mini':
+                    observation = self.status['groups']['peer'].get('details', {})
+                    peer = observation.get('health', {})
+                    if (peer.get('loaded_head') != self.status['loaded_head']
+                            or not peer_canary_ok(self.status, peer, now, observation)):
+                        return
                 rollout.update(phase='active', canary_passed_at=now,
                                last_confirmed_at=now, head=self.status['loaded_head'])
         elif rollout['phase'] == 'active' and complete_cycle(self.status, now):

@@ -83,6 +83,24 @@ def test_new_revision_reproves_canary_without_resurrecting_legacy(tmp_path):
     assert scheduler.status['rollout']['previous_units'] == {'saved': True}
 
 
+@pytest.mark.parametrize('change', ['ready', 'missing', 'loaded-head', 'receipt-head', 'canary', 'stale'])
+def test_active_mini_new_head_cannot_promote_before_matching_nuc_canary(tmp_path, change):
+    from cluster.control_plane.tests.test_update_coordination import observed, TARGET, OLD
+    scheduler = service.Scheduler(tmp_path, 'mini', TARGET, Executor(), Executor())
+    scheduler.status['rollout'] = dict(phase='canary', activated_at=1000, head=TARGET)
+    scheduler.status['groups'] = {name: dict(started_at=1000, finished_at=1000,
+        checks=[dict(name=name, passed=True)], details={}) for name in PERIODS}
+    details = observed()
+    if change == 'loaded-head': details['health']['loaded_head'] = OLD
+    if change == 'receipt-head': details['health']['rollout']['head'] = OLD
+    if change == 'canary': details['health']['rollout']['phase'] = 'canary'
+    if change == 'stale': details['received_at'] = 1
+    if change != 'missing': scheduler.status['groups']['peer']['details'] = details
+    scheduler.rollout_tick(0, 1001)
+    assert scheduler.status['rollout']['phase'] == ('active' if change == 'ready' else 'canary')
+    assert not scheduler.slow.calls
+
+
 def test_failed_canary_retries_only_after_code_changes_and_needs_new_checks(tmp_path):
     saved = {'machine': 'nucbox', 'loaded_head': 'a' * 40,
              'groups': {'guardian': {'finished_at': 100, 'checks': [{'passed': True}]}},

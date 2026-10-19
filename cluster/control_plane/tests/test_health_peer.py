@@ -13,14 +13,17 @@ from cluster.control_plane import health_adapters as adapters, health_peer, heal
 from cluster.control_plane.dashboard.data_collector import DataCollector
 from cluster.control_plane.dashboard.server import DashboardHandler
 from cluster.control_plane.health_rollout import peer_canary_ok
+from cluster.control_plane.health_adapters import PERIODS
 
 
 def report(served=1000):
-    return dict(schema=1, machine='nucbox', timestamp=served - 5,
+    return dict(schema=1, machine='nucbox', loaded_head='b' * 40, timestamp=served - 5,
                 observation=dict(nonce='a' * 32, served_at=served),
-                rollout=dict(phase='active', head='b' * 40, last_confirmed_at=served - 5),
-                groups=dict(guardian=dict(finished_at=served - 10, period=120,
-                                         checks=[dict(name='http', passed=True)])))
+                rollout=dict(phase='active', head='b' * 40, activated_at=served - 30,
+                             last_confirmed_at=served - 5),
+                groups={name: dict(started_at=served - 15, finished_at=served - 10,
+                                   period=period, checks=[dict(name=name, passed=True)])
+                        for name, period in PERIODS.items()})
 
 
 @pytest.mark.parametrize('offset', [-3600, -7.2, 7.2, 3600])

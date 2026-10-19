@@ -176,7 +176,8 @@ class TestSelfUpdate(unittest.TestCase):
         mock_rollback.return_value = True
         
         with tempfile.TemporaryDirectory() as tmpdir:
-            result = self_update(install_dir=Path(tmpdir))
+            with patch('cluster.control_plane.self_update.target_canary_ready', return_value=True):
+                result = self_update(install_dir=Path(tmpdir))
         
         self.assertFalse(result["updated"])
         self.assertIn("tests failed", result["reason"])

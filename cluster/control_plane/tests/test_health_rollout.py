@@ -27,7 +27,7 @@ def test_mini_requires_fresh_matching_nucbox_canary():
     value = candidate('mini')
     assert not rollout.peer_canary_ok(value, {}, 1001)
     peer = candidate()
-    peer['rollout'] = dict(phase='active', canary_passed_at=1000, head='a' * 40)
+    peer['rollout'] = dict(phase='active', activated_at=990, canary_passed_at=1000, head='a' * 40)
     assert rollout.peer_canary_ok(value, peer, 1001)
     assert not rollout.peer_canary_ok(value, peer, 2000)
     peer['rollout']['head'] = 'b' * 40
