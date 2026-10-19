@@ -140,6 +140,8 @@ def run(args, cwd=None, **kwargs):
     event('fix-worker', 'command_finished', executable=executable, operation=operation,
           duration_ms=round((time.monotonic() - started) * 1000), returncode=result.returncode,
           failure_stage=stage)
+    if tuple(args[:2]) == ('git', 'ls-files') and '-z' in args:
+        return result.stdout  # NUL-delimited filenames are literal data, including leading whitespace.
     return result.stdout.strip()
 
 

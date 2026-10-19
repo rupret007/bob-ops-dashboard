@@ -318,13 +318,15 @@ def test_qualification_does_not_override_existing_retry_limit(qualified, tmp_pat
 
 
 @pytest.mark.parametrize('drift', ['none', 'missing-before', 'requirements', 'receipt', 'tree',
-                                    'drop-module', 'new-module', 'outside-module', 'alsa-job'])
+                                    'drop-module', 'new-module', 'outside-module', 'outside-leading-space', 'alsa-job'])
 def test_worker_uses_identical_env_and_rechecks_before_testing(qualified, drift):
     import shutil
     q = qualified
     if drift == 'missing-before': (q.root / 'qualification.json').unlink()
     calls = []
     pushed = 'b' * 40
+    actual_run = fix_worker.run
+    git_env = dict(os.environ, GIT_CONFIG_NOSYSTEM='1', GIT_CONFIG_GLOBAL=os.devnull, GIT_CONFIG_COUNT='0')
     def command(args, cwd=None, **kwargs):
         calls.append((args, kwargs))
         if args[:3] == ['gh', 'pr', 'view']:
@@ -347,15 +349,17 @@ def test_worker_uses_identical_env_and_rechecks_before_testing(qualified, drift)
             if drift in ('new-module', 'outside-module'):
                 name = 'test_added.py' if drift == 'new-module' else 'extra_test.py'
                 (Path(cwd) / 'tests' / name).write_text('def test_added(): assert False\n')
+            if drift == 'outside-leading-space':
+                (Path(cwd) / ' tests').mkdir()
+                (Path(cwd) / ' tests/test_added.py').write_text('def test_added(): assert False\n')
+                actual_run(['git', 'add', '--', ' tests/test_added.py'], cwd, env=git_env)
         if args[:3] == ['git', 'rev-parse', 'HEAD']:
             return pushed if any(c[:2] == ['git', 'commit'] for c, _ in calls) else q.head
         if args[:3] == ['git', 'rev-parse', 'HEAD^{tree}']:
             return 'e' * 40 if drift == 'tree' else q.receipt['qualified_heads'][0]['tree_sha']
         if args[:2] == ['git', 'ls-files']:
             if '--others' in args and drift == 'drop-module': return 'tests/test_other.py\0'
-            return subprocess.check_output(args, cwd=cwd, text=True,
-                env=dict(os.environ, GIT_CONFIG_NOSYSTEM='1', GIT_CONFIG_GLOBAL=os.devnull,
-                         GIT_CONFIG_COUNT='0'))
+            return actual_run(args, cwd, env=git_env)
         if args[:3] == ['git', 'diff', '--cached']: return 'changed.py'
         if args[:2] == ['git', 'ls-remote']: return pushed + ' refs/heads/fix/fixture'
         return ''
@@ -383,7 +387,7 @@ def test_worker_uses_identical_env_and_rechecks_before_testing(qualified, drift)
     else:
         assert not tests
         assert len(providers) == (1 if drift in ('requirements', 'receipt', 'drop-module',
-                                                'outside-module', 'alsa-job') else 0)
+                                                'outside-module', 'outside-leading-space', 'alsa-job') else 0)
         assert not any(args[:2] in (['git', 'commit'], ['git', 'push']) for args, _ in calls)
 
 
