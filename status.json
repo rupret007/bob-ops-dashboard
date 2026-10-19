@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-10-19T15:08:15.313440-05:00",
-  "generated_at_display": "Mon Oct 19, 2026 \u00b7 3:08 PM CDT",
+  "generated_at": "2026-10-19T15:23:22.938492-05:00",
+  "generated_at_display": "Mon Oct 19, 2026 \u00b7 3:23 PM CDT",
   "timezone": "America/Chicago",
   "owner": "rupret007",
   "dashboard": "bob-ops-dashboard",
@@ -59,12 +59,12 @@
           "pr_listing_complete": true,
           "agent_url": "https://cursor.com/agents/bc-2df62653-9354-58fd-96fb-4038fc7c812a",
           "ci": {
-            "name": "WebJam CI",
-            "conclusion": "in_progress",
+            "name": "Web Join browser tests",
+            "conclusion": "success",
             "branch": "master",
             "sha": "5606106",
             "created": "2026-10-19T19:49:06Z",
-            "html_url": "https://github.com/rupret007/webjam/actions/runs/39314124182"
+            "html_url": "https://github.com/rupret007/webjam/actions/runs/39314124291"
           },
           "release": "v0.29.0",
           "release_sha": "7aa74be",
@@ -495,8 +495,8 @@
           "status": "yellow",
           "chip": "Yellow",
           "default_branch": "main",
-          "tip_sha": "8ecc6fa",
-          "tip_date": "2026-10-19T19:53:28Z",
+          "tip_sha": "c6c5a7f",
+          "tip_date": "2026-10-19T20:08:28Z",
           "open_prs": 13,
           "open_pr_url": "https://github.com/rupret007/bob-ops-dashboard/pull/100",
           "open_pr_number": 100,
@@ -900,7 +900,7 @@
     "barker"
   ],
   "publish_notes": "Public board -- no secrets or customer paths. Private repositories stay high-level; AI Music Vault stays private-content-boundary only.",
-  "refresh_started_ms": 1792440459745,
+  "refresh_started_ms": 1792441363092,
   "agents_source": "file:stale->unknown",
   "agents": [
     {
@@ -1099,7 +1099,7 @@
     }
   ],
   "llm_work_now_freshness": {
-    "generated_at": "2026-10-19 15:08 CT",
+    "generated_at": "2026-10-19 15:23 CT",
     "warn_ttl_sec": 1200,
     "warnings": [],
     "ok": true
@@ -1130,7 +1130,7 @@
     ],
     "scorecards": {
       "v": "scorecards/v1",
-      "generated_at": "2026-10-19T20:08:16.657631+00:00",
+      "generated_at": "2026-10-19T20:23:24.460322+00:00",
       "windows": {
         "24h": {
           "providers": {
