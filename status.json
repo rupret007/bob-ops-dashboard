@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-10-19T17:34:09.543778-05:00",
-  "generated_at_display": "Mon Oct 19, 2026 \u00b7 5:34 PM CDT",
+  "generated_at": "2026-10-19T17:49:07.727393-05:00",
+  "generated_at_display": "Mon Oct 19, 2026 \u00b7 5:49 PM CDT",
   "timezone": "America/Chicago",
   "owner": "rupret007",
   "dashboard": "bob-ops-dashboard",
@@ -52,8 +52,8 @@
           "tip_sha": "5606106",
           "tip_date": "2026-10-19T19:49:03Z",
           "open_prs": 6,
-          "open_pr_url": "https://github.com/rupret007/webjam/pull/396",
-          "open_pr_number": 396,
+          "open_pr_url": "https://github.com/rupret007/webjam/pull/372",
+          "open_pr_number": 372,
           "open_pr_draft": false,
           "open_pr_stack": [],
           "pr_listing_complete": true,
@@ -495,11 +495,11 @@
           "status": "yellow",
           "chip": "Yellow",
           "default_branch": "main",
-          "tip_sha": "80f992e",
-          "tip_date": "2026-10-19T22:19:12Z",
+          "tip_sha": "e385c5d",
+          "tip_date": "2026-10-19T22:34:24Z",
           "open_prs": 14,
-          "open_pr_url": "https://github.com/rupret007/bob-ops-dashboard/pull/105",
-          "open_pr_number": 105,
+          "open_pr_url": "https://github.com/rupret007/bob-ops-dashboard/pull/104",
+          "open_pr_number": 104,
           "open_pr_draft": false,
           "open_pr_stack": [],
           "pr_listing_complete": true,
@@ -900,7 +900,7 @@
     "barker"
   ],
   "publish_notes": "Public board -- no secrets or customer paths. Private repositories stay high-level; AI Music Vault stays private-content-boundary only.",
-  "refresh_started_ms": 1792449216664,
+  "refresh_started_ms": 1792450114659,
   "agents_source": "file:stale->unknown",
   "agents": [
     {
@@ -1099,7 +1099,7 @@
     }
   ],
   "llm_work_now_freshness": {
-    "generated_at": "2026-10-19 17:34 CT",
+    "generated_at": "2026-10-19 17:49 CT",
     "warn_ttl_sec": 1200,
     "warnings": [],
     "ok": true
@@ -1130,7 +1130,7 @@
     ],
     "scorecards": {
       "v": "scorecards/v1",
-      "generated_at": "2026-10-19T22:34:10.654571+00:00",
+      "generated_at": "2026-10-19T22:49:08.949418+00:00",
       "windows": {
         "24h": {
           "providers": {
