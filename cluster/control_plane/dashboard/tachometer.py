@@ -376,7 +376,8 @@ class EngineCollector:
         runtime = public_status(KarenConfig(state_dir=str(self.karen_dir)))
         def gauge(label, value, maximum=None, unit=''):
             return {'label': label, 'value': value, 'max': maximum, 'unit': unit}
-        return {'timestamp': now.isoformat(), 'engine': overall, 'machines': health, 'admission': admission,
+        from ..github_budget import snapshot as github_snapshot
+        return {'timestamp': now.isoformat(), 'engine': overall, 'github_api': github_snapshot(self.data_dir), 'machines': health, 'admission': admission,
                 'review_evidence': review_evidence,
                 'karen_runtime': runtime,
                 'security_evidence': security_evidence,

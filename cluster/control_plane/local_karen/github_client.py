@@ -15,6 +15,8 @@ from dataclasses import dataclass
 from typing import Optional
 
 from .checks import PRInfo
+from ..github_reads import run as budgeted_gh
+from ..github_budget import GitHubDeferred
 
 
 class GitHubError(Exception):
@@ -28,18 +30,14 @@ def _run_gh(args: list[str], timeout: int = 30, allowed_codes=(0,)) -> str:
     Raises GitHubError on failure.
     """
     try:
-        result = subprocess.run(
-            ["gh"] + args,
-            capture_output=True,
-            text=True,
-            timeout=timeout,
-        )
-
+        result = budgeted_gh(args, timeout=timeout)
         if result.returncode not in allowed_codes:
             raise GitHubError(f"gh {' '.join(args)} failed: {result.stderr}")
 
         return result.stdout
 
+    except GitHubDeferred as exc:
+        raise GitHubError(str(exc)) from None
     except subprocess.TimeoutExpired:
         raise GitHubError(f"gh {' '.join(args)} timed out after {timeout}s")
     except FileNotFoundError:
@@ -220,15 +218,24 @@ def list_prs_with_label(owner: str, repo: str, label: str) -> list[dict]:
 
     Returns list of PR metadata dicts.
     """
-    result = _run_gh([
-        "pr", "list",
-        "--repo", f"{owner}/{repo}",
-        "--label", label,
-        "--state", "open",
-        "--json", "number,title,author,headRefOid,isDraft",
-    ])
+    from ..github_reads import rest_json, GitHubReadError
+    values = []
+    try:
+        for page in range(1, 11):
+            batch = rest_json(f"repos/{owner}/{repo}/pulls?state=open&per_page=100&page={page}", ttl=15)
+            if not isinstance(batch, list):
+                raise GitHubReadError("Invalid open-PR response")
+            for pr in batch:
+                if any(item.get("name") == label for item in pr.get("labels", [])):
+                    values.append({"number": pr["number"], "title": pr.get("title", ""),
+                                   "author": pr.get("user", {}), "headRefOid": pr.get("head", {}).get("sha", ""),
+                                   "isDraft": pr.get("draft", False)})
+            if len(batch) < 100:
+                return values
+        raise GitHubReadError("Open-PR list exceeds page budget")
+    except GitHubReadError as exc:
+        raise GitHubError(str(exc)) from None
 
-    return json.loads(result)
 
 
 def remove_label(owner: str, repo: str, pr_number: int, label: str) -> None:

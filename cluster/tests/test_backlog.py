@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import pytest
+
 import json
 import os
 import subprocess
@@ -622,3 +624,12 @@ class TestFormatBacklogMdWithUndrafted(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+@pytest.fixture(autouse=True)
+def isolated_github_admission(tmp_path, monkeypatch):
+    """Mock admission separately from CLI/label semantics; budget has race tests."""
+    from cluster.control_plane import github_budget
+    monkeypatch.setenv('STORYPOOL_DATA_DIR', str(tmp_path))
+    monkeypatch.setattr(github_budget, 'reserve', lambda resource='core': None)
+    monkeypatch.setattr(github_budget, 'observe', lambda *args, **kwargs: None)

@@ -503,3 +503,33 @@ gaps and executable suffixes receive no exception. Secret scans still inspect
 prompt text. Model reviewers still review policy changes at the exact head.
 The dashboard shows counts for the latest observed PR results, replacing old
 heads and counting synced copies once; observations never grant approval.
+
+
+### GitHub polling budget and conditional discovery
+
+Karen, backlog housekeeping and watchdog label reads share one account budget
+in the existing durable claims/retries KV (`github.account.v1`); no additional
+bucket or credential is needed. CAS serializes admission across processes and
+both machines. Coordination outage, quota reserve or rate limiting defers new
+requests. Rate-limit deferrals are warnings/retries, never Karen FAILs or repair
+authority. Real missing labels and CLI/authentication failures still fail their
+checks. Cached observations never authorize a merge, and exact-head/CI reads
+remain live. The poller prioritizes already-queued reviews before housekeeping.
+
+The budget caps **logical API admissions** at 40/minute account-wide; opaque
+`gh` commands can issue multiple HTTP requests. Mixed CLI operations reserve
+both REST and GraphQL; response quota headers and a five-minute account quota
+refresh complement this conservative cap. Standalone dispatcher/conductor and
+worker CLI paths still need migration to this helper; they are not covered by
+this first focused polling repair. Do not infer complete account metering.
+
+REST open-PR search replaces per-tick scans of every repository. Search results
+expire in two minutes; labels cache for one hour, PR scheduling lists for fifteen
+seconds. Expired entries refresh with ETags, never fall back to stale data on
+rate/error, and paginated/incomplete results are bounded. Cache files remain
+private runtime state. Dashboard `/api/engine` reads only a safe numeric budget
+snapshot, distinguishing quota observation age from admission activity and
+showing stale/unverified quotas without contacting GitHub or NATS.
+
+References: [GitHub REST best practices](https://docs.github.com/en/rest/using-the-rest-api/best-practices-for-using-the-rest-api)
+and [REST rate limits](https://docs.github.com/en/rest/using-the-rest-api/rate-limits-for-the-rest-api).

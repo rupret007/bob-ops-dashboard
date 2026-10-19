@@ -14,6 +14,9 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import List, Dict, Optional, Any
 
+from . import github_reads
+from .github_budget import GitHubDeferred
+
 logger = logging.getLogger(__name__)
 
 EXCLUDED_REPOS = frozenset([
@@ -38,17 +41,15 @@ def _run_gh(args, default=None):
     # type: (List[str], Any) -> Any
     """Run gh CLI and return parsed JSON."""
     try:
-        result = subprocess.run(
-            ["gh"] + args,
-            capture_output=True,
-            text=True,
-            timeout=60,
-        )
+        if args[:2] == ["repo", "list"]:
+            return github_reads.active_repos(args[2])
+        result = github_reads.run(args, timeout=60)
         if result.returncode != 0:
             logger.warning("gh %s failed: %s", " ".join(args[:3]), result.stderr[:100])
             return default
         return json.loads(result.stdout)
-    except (subprocess.SubprocessError, json.JSONDecodeError, FileNotFoundError) as e:
+    except (subprocess.SubprocessError, json.JSONDecodeError, FileNotFoundError,
+            GitHubDeferred, github_reads.GitHubReadError) as e:
         logger.warning("gh command error: %s", e)
         return default
 
@@ -334,34 +335,25 @@ def ensure_label_exists(repo, label, color="d4c5f9", description=""):
     Returns True if label was created, False if it already existed or failed.
     """
     try:
-        result = subprocess.run(
-            ["gh", "label", "list", "--repo", repo, "--json", "name"],
-            capture_output=True,
-            text=True,
-            timeout=30,
-        )
-        if result.returncode == 0:
-            labels = json.loads(result.stdout)
-            if any(l.get("name", "").lower() == label.lower() for l in labels):
-                return False
-    except (subprocess.SubprocessError, json.JSONDecodeError):
-        pass
-    
+        labels = github_reads.labels(repo)
+        if any(l.get("name", "").lower() == label.lower() for l in labels):
+            return False
+    except (subprocess.SubprocessError, json.JSONDecodeError, GitHubDeferred,
+            github_reads.GitHubReadError):
+        # Never attempt a write when existence could not be established.
+        logger.warning("Label check deferred; no label mutation attempted")
+        return False
+
     try:
         args = ["gh", "label", "create", label, "--repo", repo, "--color", color]
         if description:
             args.extend(["--description", description])
-        result = subprocess.run(
-            args,
-            capture_output=True,
-            text=True,
-            timeout=30,
-        )
+        result = github_reads.run(args[1:], timeout=30)
         if result.returncode == 0:
             logger.info("Created label '%s' in %s", label, repo)
             return True
         return False
-    except subprocess.SubprocessError:
+    except (subprocess.SubprocessError, GitHubDeferred):
         return False
 
 
@@ -432,12 +424,7 @@ def undraft_green_prs(repos=None, dry_run=True, max_undrafts=None):
                 continue
             
             try:
-                result = subprocess.run(
-                    ["gh", "pr", "ready", str(pr_num), "--repo", repo],
-                    capture_output=True,
-                    text=True,
-                    timeout=30,
-                )
+                result = github_reads.run(["pr", "ready", str(pr_num), "--repo", repo], timeout=30)
                 if result.returncode != 0:
                     logger.warning("Failed to undraft %s#%d: %s", repo, pr_num, result.stderr[:100])
                     continue
@@ -452,12 +439,7 @@ def undraft_green_prs(repos=None, dry_run=True, max_undrafts=None):
                     )
                     labels_ensured.add(repo)
                 
-                label_result = subprocess.run(
-                    ["gh", "pr", "edit", str(pr_num), "--repo", repo, "--add-label", "needs-karen"],
-                    capture_output=True,
-                    text=True,
-                    timeout=30,
-                )
+                label_result = github_reads.run(["pr", "edit", str(pr_num), "--repo", repo, "--add-label", "needs-karen"], timeout=30)
                 if label_result.returncode == 0:
                     logger.info("Labeled %s#%d with needs-karen after undraft", repo, pr_num)
                 else:
@@ -466,7 +448,7 @@ def undraft_green_prs(repos=None, dry_run=True, max_undrafts=None):
                 
                 undrafted.append(pr_info)
                 
-            except subprocess.SubprocessError as e:
+            except (subprocess.SubprocessError, GitHubDeferred) as e:
                 logger.warning("Failed to undraft %s#%d: %s", repo, pr_num, e)
                 continue
     
@@ -540,18 +522,13 @@ def label_queued_prs(repos=None, dry_run=True):
                     labels_ensured.add(repo)
                 
                 try:
-                    result = subprocess.run(
-                        ["gh", "pr", "edit", str(pr_num), "--repo", repo, "--add-label", "needs-karen"],
-                        capture_output=True,
-                        text=True,
-                        timeout=30,
-                    )
+                    result = github_reads.run(["pr", "edit", str(pr_num), "--repo", repo, "--add-label", "needs-karen"], timeout=30)
                     if result.returncode == 0:
                         logger.info("Labeled %s#%d with needs-karen", repo, pr_num)
                     else:
                         logger.warning("Failed to label %s#%d: %s", repo, pr_num, result.stderr[:100])
                         continue
-                except subprocess.SubprocessError as e:
+                except (subprocess.SubprocessError, GitHubDeferred) as e:
                     logger.warning("Failed to label %s#%d: %s", repo, pr_num, e)
                     continue
             

@@ -29,6 +29,9 @@ from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from typing import Optional, List, Dict, Any
 
+from .github_budget import GitHubDeferred
+from .github_reads import GitHubReadError
+
 LOG_DIR = Path(
     os.environ.get("STORYPOOL_LOG_DIR", "~/.local/share/storypool")
 ).expanduser()
@@ -403,20 +406,8 @@ def check_codex_in_path() -> HealthCheck:
 def check_labels_exist(repo: str) -> HealthCheck:
     """Check if required labels exist in a repo."""
     try:
-        result = subprocess.run(
-            ["gh", "label", "list", "--repo", repo, "--json", "name"],
-            capture_output=True,
-            text=True,
-            timeout=30,
-        )
-        if result.returncode != 0:
-            return HealthCheck(
-                name=f"labels_{repo.replace('/', '_')}",
-                passed=False, can_repair=False, execution_error=True,
-                message="Could not list labels; GitHub CLI failed",
-            )
-        
-        labels = json.loads(result.stdout)
+        from .github_reads import labels as read_labels
+        labels = read_labels(repo)
         label_names = {lbl.get("name", "") for lbl in labels}
         
         missing = [lbl for lbl in REQUIRED_LABELS if lbl not in label_names]
@@ -435,7 +426,11 @@ def check_labels_exist(repo: str) -> HealthCheck:
             passed=True,
             message="All required labels exist",
         )
-    except (OSError, subprocess.SubprocessError, json.JSONDecodeError):
+    except GitHubDeferred:
+        logger.warning("GitHub label check deferred by API budget/backoff")
+        return HealthCheck(name=f"labels_{repo.replace('/', '_')}", passed=True,
+                           can_repair=False, message="WARNING: label check deferred by GitHub API budget; labels unverified")
+    except (OSError, subprocess.SubprocessError, json.JSONDecodeError, GitHubReadError):
         return HealthCheck(
             name=f"labels_{repo.replace('/', '_')}",
             passed=False, can_repair=False, execution_error=True,

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import pytest
+
 import json
 import unittest
 
@@ -215,3 +217,12 @@ def test_different_workflows_cannot_hide_pending():
         {'name':'tests', 'workflow':'Mac', 'bucket':'pass'},
     ])
     assert result == {'Linux / tests':'pending', 'Mac / tests':'success'}
+
+
+@pytest.fixture(autouse=True)
+def isolated_github_admission(tmp_path, monkeypatch):
+    """Mock admission separately from CLI/label semantics; budget has race tests."""
+    from cluster.control_plane import github_budget
+    monkeypatch.setenv('STORYPOOL_DATA_DIR', str(tmp_path))
+    monkeypatch.setattr(github_budget, 'reserve', lambda resource='core': None)
+    monkeypatch.setattr(github_budget, 'observe', lambda *args, **kwargs: None)

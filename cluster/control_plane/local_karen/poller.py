@@ -28,6 +28,7 @@ from pathlib import Path
 from typing import Optional, List, Any
 
 from .config import KarenConfig
+from ..github_budget import GitHubDeferred
 from .gate import run_gate
 from .github_client import (
     list_prs_with_label,
@@ -205,6 +206,9 @@ def poll_and_run(
 
         try:
             prs = list_prs_with_label(owner, repo, config.poll_label)
+        except GitHubDeferred:
+            logger.warning("Remaining reviews deferred by GitHub API budget/backoff")
+            return results
         except GitHubError as e:
             logger.error(f"Failed to list PRs for {owner}/{repo}: {e}")
             continue
@@ -361,6 +365,15 @@ def _run_poll_once(config=None, auto_discover=True, auto_label=True, auto_update
         else:
             repos = ["rupret007/webjam", "rupret007/bob-ops-dashboard"]
 
+    try:
+        from ..github_reads import refresh_quota
+        refresh_quota()
+    except Exception as exc:
+        logger.warning("GitHub quota refresh deferred: %s", type(exc).__name__)
+
+    logger.info("Polling %d active repo(s) before optional housekeeping", len(repos))
+    results = poll_and_run(repos, config, post_comment, remove_label_on_complete, machine)
+
     undrafted = []  # type: list
     if auto_label and BACKLOG_AVAILABLE:
         logger.info("Auto-undrafting green draft PRs...")
@@ -383,7 +396,6 @@ def _run_poll_once(config=None, auto_discover=True, auto_label=True, auto_update
 
     logger.info("Polling %d repo(s) for PRs with %s label", len(repos), config.poll_label)
 
-    results = poll_and_run(repos, config, post_comment, remove_label_on_complete, machine)
     try:
         from .verdict_push import push
         receipt = push(config)

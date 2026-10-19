@@ -103,3 +103,12 @@ def test_macos_swap_is_measured_and_unknown_blocks():
          patch.object(guards.subprocess, 'run', side_effect=OSError('denied')):
         assert guards.get_swap_pct() == 100
         assert not guards.MachineGuards('mini', load_fn=lambda:1, disk_fn=lambda:30).check_all().passed
+
+
+@pytest.fixture(autouse=True)
+def isolated_github_admission(tmp_path, monkeypatch):
+    """Mock admission separately from CLI/label semantics; budget has race tests."""
+    from cluster.control_plane import github_budget
+    monkeypatch.setenv('STORYPOOL_DATA_DIR', str(tmp_path))
+    monkeypatch.setattr(github_budget, 'reserve', lambda resource='core': None)
+    monkeypatch.setattr(github_budget, 'observe', lambda *args, **kwargs: None)

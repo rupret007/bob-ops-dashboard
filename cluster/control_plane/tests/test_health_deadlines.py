@@ -178,3 +178,12 @@ def test_caught_cli_failure_remains_an_execution_error(function, tmp_path, monke
         result = function('owner/repo') if function == watchdog.check_labels_exist else function()
     assert not result.passed and result.execution_error
     assert 'unsafe details' not in result.message
+
+
+@pytest.fixture(autouse=True)
+def isolated_github_admission(tmp_path, monkeypatch):
+    """These tests inject CLI faults; account admission has separate race tests."""
+    from cluster.control_plane import github_budget
+    monkeypatch.setenv('STORYPOOL_DATA_DIR', str(tmp_path))
+    monkeypatch.setattr(github_budget, 'reserve', lambda resource='core': None)
+    monkeypatch.setattr(github_budget, 'observe', lambda *args, **kwargs: None)
