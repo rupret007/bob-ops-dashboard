@@ -28,6 +28,7 @@ from pathlib import Path
 from typing import Optional, List, Any
 
 from .config import KarenConfig
+from .review_queue import (Candidate, ReviewQueue, enrich, ADMISSION_SECONDS, MAX_REVIEWS_PER_CYCLE)
 from ..github_budget import GitHubDeferred
 from .gate import run_gate
 from .github_client import (
@@ -90,7 +91,7 @@ def _ensure_result_label(repo, label):
         return
     if ensure_label_exists is None:
         return
-    
+
     color = "0e8a16" if label == "karen-pass" else "d93f0b"
     desc = "Karen gate passed" if label == "karen-pass" else "Karen gate failed"
     try:
@@ -105,18 +106,18 @@ def _dispatch_fix_if_eligible(repo, pr_number, verdict):
     """Dispatch a fix attempt if eligible (low effort, not security, under cap)."""
     if not FIX_DISPATCH_AVAILABLE or dispatch_fix is None:
         return
-    
+
     verdict_dict = verdict.to_dict() if hasattr(verdict, "to_dict") else {}
-    
+
     try:
         should_fix, reason = should_attempt_fix(repo, pr_number, verdict_dict)
         if not should_fix:
             logger.debug(f"Skip fix for {repo}#{pr_number}: {reason}")
             return
-        
+
         machine = os.environ.get("STORYPOOL_MACHINE", "mini")
         live_mode = os.environ.get("STORYPOOL_LIVE", "").lower() in ("1", "true", "yes")
-        
+
         logger.info(f"Dispatching fix for {repo}#{pr_number}...")
         result = dispatch_fix(
             repo=repo,
@@ -125,7 +126,7 @@ def _dispatch_fix_if_eligible(repo, pr_number, verdict):
             dry_run=not live_mode,
             machine=machine,
         )
-        
+
         if result.get("dispatched"):
             logger.info(f"Fix dispatched for {repo}#{pr_number}: {result.get('reason')}")
         elif result.get("left_for_jeff") or "left for Jeff" in result.get("reason", ""):
@@ -182,7 +183,7 @@ def poll_and_run(
     guard_machine=None,
 ):
     # type: (...) -> List[dict]
-    """Poll for PRs with needs-karen label and run gate on them.
+    """Rank the whole labeled queue and admit a bounded set of complete reviews.
 
     Args:
         repos: List of repos to poll in owner/repo format
@@ -194,6 +195,7 @@ def poll_and_run(
         List of results with PR info and verdicts
     """
     results = []
+    candidates = []
 
     for repo_str in repos:
         if "/" not in repo_str:
@@ -229,75 +231,108 @@ def poll_and_run(
                                 "reason": "Draft PR awaits author decision"})
                 continue
 
-            from ..node_control import is_draining
-            if is_draining(guard_machine):
-                logger.info("Remaining reviews deferred: node in maintenance")
+            candidates.append(Candidate(repo_str, pr_data))
+
+    try:
+        enrich(candidates)
+        queue = ReviewQueue(config)
+        ordered = queue.order(candidates)
+        queue.begin(candidates)
+    except GitHubDeferred:
+        logger.warning("Review queue deferred by shared GitHub API budget")
+        return results
+    except OSError:
+        logger.error("Review scheduling state unavailable; cycle deferred")
+        return results
+
+    logger.info("Review queue: %d candidates, %d small CI-green, at most %d admissions",
+                len(candidates), sum(candidate.ci == 'green' and candidate.lines is not None
+                                     and candidate.lines < 300 for candidate in candidates),
+                MAX_REVIEWS_PER_CYCLE)
+
+    admission_deadline = time.monotonic() + ADMISSION_SECONDS
+    attempted = 0
+    for candidate in ordered:
+        if attempted >= MAX_REVIEWS_PER_CYCLE or time.monotonic() >= admission_deadline:
+            logger.info("Review admission window complete; remaining queue deferred")
+            break
+        repo_str, pr_data = candidate.repo, candidate.pr
+        owner, repo = repo_str.split('/', 1)
+        pr_number = pr_data.get('number')
+        from ..node_control import is_draining
+        if is_draining(guard_machine):
+            logger.info("Remaining reviews deferred: node in maintenance")
+            return results
+        if guard_machine:
+            from ..guards import MachineGuards
+            guard = MachineGuards(guard_machine).check_all()
+            if not guard.passed:
+                logger.warning("Remaining reviews deferred: %s", guard.reason)
                 return results
-            if guard_machine:
-                from ..guards import MachineGuards
-                guard = MachineGuards(guard_machine).check_all()
-                if not guard.passed:
-                    logger.warning("Remaining reviews deferred: %s", guard.reason)
-                    return results
-            logger.info(f"Running gate on {owner}/{repo}#{pr_number}")
+        try:
+            queue.attempted(candidate)
+        except OSError:
+            logger.error("Review scheduling state unavailable; remaining queue deferred")
+            return results
+        attempted += 1
+        logger.info(f"Running gate on {owner}/{repo}#{pr_number}")
+
+        try:
+            result = run_gate(
+                owner=owner,
+                repo=repo,
+                pr_number=pr_number,
+                config=config,
+                post_comment=post_comment,
+                expected_sha=pr_data.get("headRefOid", ""),
+            )
+
+            if result.error or not result.sha_verified or not result.verdict_path:
+                raise RuntimeError(result.error or "Review did not produce a verified artifact")
+
+            results.append({
+                "repo": f"{owner}/{repo}",
+                "pr": pr_number,
+                "sha": result.verdict.head_sha,
+                "passed": result.verdict.passed,
+                "reason": result.verdict.reason,
+            })
+
+            logger.info(
+                f"{'PASS' if result.verdict.passed else 'FAIL'}: "
+                f"{owner}/{repo}#{pr_number} - {result.verdict.reason[:50]}"
+            )
+
+            if remove_label_on_complete:
+                try:
+                    remove_label(owner, repo, pr_number, config.poll_label)
+                    logger.info(f"Removed {config.poll_label} label from {owner}/{repo}#{pr_number}")
+
+                    result_label = "karen-pass" if result.verdict.passed else "karen-fail"
+                    _ensure_result_label(f"{owner}/{repo}", result_label)
+                    add_label(owner, repo, pr_number, result_label)
+                    remove_label(owner, repo, pr_number,
+                                 "karen-fail" if result.verdict.passed else "karen-pass")
+                except GitHubError as e:
+                    logger.warning(f"Failed to update labels on {owner}/{repo}#{pr_number}: {e}")
 
             try:
-                result = run_gate(
-                    owner=owner,
-                    repo=repo,
-                    pr_number=pr_number,
-                    config=config,
-                    post_comment=post_comment,
-                    expected_sha=pr_data.get("headRefOid", ""),
-                )
+                from .verdict_push import push
+                logger.info("Verdict push: %s", push(config))
+            except Exception as exc:
+                logger.warning("Verdict push will retry: %s", type(exc).__name__)
 
-                if result.error or not result.sha_verified or not result.verdict_path:
-                    raise RuntimeError(result.error or "Review did not produce a verified artifact")
+            # Dispatch fix attempt for FAIL verdicts (max 2 attempts, never for security/high)
+            if not result.verdict.passed and FIX_DISPATCH_AVAILABLE:
+                _dispatch_fix_if_eligible(f"{owner}/{repo}", pr_number, result.verdict)
 
-                results.append({
-                    "repo": f"{owner}/{repo}",
-                    "pr": pr_number,
-                    "sha": result.verdict.head_sha,
-                    "passed": result.verdict.passed,
-                    "reason": result.verdict.reason,
-                })
-
-                logger.info(
-                    f"{'PASS' if result.verdict.passed else 'FAIL'}: "
-                    f"{owner}/{repo}#{pr_number} - {result.verdict.reason[:50]}"
-                )
-
-                if remove_label_on_complete:
-                    try:
-                        remove_label(owner, repo, pr_number, config.poll_label)
-                        logger.info(f"Removed {config.poll_label} label from {owner}/{repo}#{pr_number}")
-
-                        result_label = "karen-pass" if result.verdict.passed else "karen-fail"
-                        _ensure_result_label(f"{owner}/{repo}", result_label)
-                        add_label(owner, repo, pr_number, result_label)
-                        remove_label(owner, repo, pr_number,
-                                     "karen-fail" if result.verdict.passed else "karen-pass")
-                    except GitHubError as e:
-                        logger.warning(f"Failed to update labels on {owner}/{repo}#{pr_number}: {e}")
-                
-                try:
-                    from .verdict_push import push
-                    logger.info("Verdict push: %s", push(config))
-                except Exception as exc:
-                    logger.warning("Verdict push will retry: %s", type(exc).__name__)
-
-                # Dispatch fix attempt for FAIL verdicts (max 2 attempts, never for security/high)
-                if not result.verdict.passed and FIX_DISPATCH_AVAILABLE:
-                    _dispatch_fix_if_eligible(f"{owner}/{repo}", pr_number, result.verdict)
-
-            except Exception as e:
-                logger.error(f"Failed to run gate on {owner}/{repo}#{pr_number}: {e}")
-                results.append({
-                    "repo": f"{owner}/{repo}",
-                    "pr": pr_number,
-                    "error": str(e),
-                })
-                
+        except Exception as e:
+            logger.error(f"Failed to run gate on {owner}/{repo}#{pr_number}: {e}")
+            results.append({
+                "repo": f"{owner}/{repo}",
+                "pr": pr_number,
+                "error": str(e),
+            })
 
     return results
 
@@ -327,9 +362,9 @@ def _run_poll_once(config=None, auto_discover=True, auto_label=True, auto_update
             update_result = self_update(machine=machine, install_dir=install_dir)
             outcome = update_result.get("outcome", "UNKNOWN")
             reason = update_result.get("reason", "no reason")
-            
+
             if outcome == "UPDATED":
-                logger.info("Self-update UPDATED: %s -> %s (module_copied=%s, reinstalled=%s)", 
+                logger.info("Self-update UPDATED: %s -> %s (module_copied=%s, reinstalled=%s)",
                            update_result.get("old_head", "?"),
                            update_result.get("new_head", "?"),
                            update_result.get("module_copied", False),
@@ -385,7 +420,7 @@ def _run_poll_once(config=None, auto_discover=True, auto_label=True, auto_update
                     logger.info("  Undrafted: %s#%d (%s)", pr["repo"], pr["pr"], pr["title"][:40])
         except Exception as e:
             logger.warning("Auto-undraft failed: %s", e)
-        
+
         logger.info("Auto-labeling queued PRs...")
         try:
             labeled = label_queued_prs(repos=repos, dry_run=False)
@@ -417,13 +452,13 @@ def _run_poll_once(config=None, auto_discover=True, auto_label=True, auto_update
             repo_root_env = os.environ.get("STORYPOOL_INSTALL_DIR")
             repo_root = Path(repo_root_env).expanduser() if repo_root_env else None
             write_backlog_report(backlog, repo_root=repo_root)
-            logger.info("Backlog: %d PRs queued, %d draft_green, %d undrafted this tick", 
+            logger.info("Backlog: %d PRs queued, %d draft_green, %d undrafted this tick",
                        backlog["summary"].get("queued", 0),
                        backlog["summary"].get("draft_green", 0),
                        len(undrafted))
         except Exception as e:
             logger.warning("Backlog report failed: %s", e)
-        
+
         # Write Karen failures report
         if write_karen_fails_report is not None:
             try:
