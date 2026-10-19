@@ -37,3 +37,14 @@ independent-vote tests. They do not prove model comprehension. Before another
 live gate, separately calibrate each real reviewer on pinned known-good,
 known-bad and missing-context fixtures under existing budgets, without creating
 gate authority or manufacturing production PASS metrics.
+
+A source request for another changed file can receive its complete pinned diff
+when that diff is absent from the current chunk and supplied material. The entry
+is explicitly `diff`, never represented as complete `source`; no file is fetched
+and the immutable-source extension/privacy/16k limits remain unchanged. Exact PR
+identity, pinned chunk evidence, the same cumulative four-entry/48k packet and
+one independent follow-up still apply. Original source-request arrays remain in
+the attempt trace, with only a controlled routing count added to diagnostics.
+Repeating the source request remains unresolved; already-supplied, current-chunk
+and unchanged paths retain their normal source rules. Receiving a diff is not
+approval and never substitutes for either reviewer's fresh verdict.
