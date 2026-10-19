@@ -1681,6 +1681,11 @@ def _review_with_requested_context(invoke, part, original_pr, source_context=Non
             # requested paths, model reasons, source values or exception text.
             logger.info('Source context unavailable: code=%s', exc.code)
             scope = dict(result.scope or {}, source_context_error=exc.code)
+            scope.pop('source_metadata_reason', None)
+            detail = getattr(exc, 'metadata_reason', None)
+            if (exc.code == 'source_metadata' and type(detail) is str
+                    and detail in SourceUnavailable.METADATA_REASONS):
+                scope['source_metadata_reason'] = detail
             result = _context_resolution(replace(result, scope=scope), 'source_unavailable', counts)
             return result, [result]
     label = ('Requested changed-file context' if result.requested_files or source_diffs
