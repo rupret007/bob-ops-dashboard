@@ -80,7 +80,8 @@ def test_codex_receives_full_diff_and_reads_only_final_output(tmp_path):
         assert args[args.index('-m')+1] == 'gpt-6-astra'
         Path(args[args.index('-o')+1]).write_text(response)
         return subprocess.CompletedProcess(args, 0, 'progress text is not JSON', '')
-    with patch.object(reviewers.subprocess, 'run', side_effect=execute):
+    with patch.object(reviewers.subprocess, 'run', side_effect=execute), \
+            patch.object(reviewers, 'read_codex_quota', return_value={'weekly_pct': 21.0}):
         result = reviewers.CodexReviewer().review(info, ReviewTier.LOW,
                          KarenConfig(codex_host='local', state_dir=str(tmp_path)))
     assert result.verdict == ReviewVerdict.FAIL

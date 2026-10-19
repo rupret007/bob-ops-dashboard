@@ -27,6 +27,7 @@ from typing import Optional, List, Dict, Tuple, Any, Type
 
 from .config import KarenConfig
 from .checks import PRInfo
+from ..codex_quota import read_codex_quota
 
 
 logger = logging.getLogger(__name__)
@@ -439,8 +440,11 @@ class CodexReviewer(BaseReviewer):
                 return False, "codex CLI not found in PATH"
 
         usage_pct = self._get_weekly_usage_pct(config)
-        if usage_pct >= config.codex_weekly_cap_pct:
-            return False, "Codex at {:.1f}% weekly usage (cap: {}%)".format(usage_pct, config.codex_weekly_cap_pct)
+        cap = min(75.0, config.codex_weekly_cap_pct)
+        if usage_pct is None:
+            return False, "Codex weekly plan quota unknown; fresh rate-limit observation required"
+        if usage_pct >= cap:
+            return False, "Codex at {:.1f}% weekly usage (cap: {}%)".format(usage_pct, cap)
 
         return True, "ok"
 
@@ -470,44 +474,9 @@ class CodexReviewer(BaseReviewer):
         except (subprocess.TimeoutExpired, FileNotFoundError):
             return False
 
-    def _get_weekly_usage_pct(self, config: KarenConfig) -> float:
-        """Get current weekly Codex usage percentage."""
-        state_file = config.get_state_dir() / "codex_weekly_usage.json"
-        if not state_file.is_file():
-            return 0.0
-
-        try:
-            data = json.loads(state_file.read_text())
-            week_start = self._week_start_ts()
-            if data.get("week_start", 0) < week_start:
-                return 0.0
-            return data.get("usage_pct", 0.0)
-        except (json.JSONDecodeError, KeyError):
-            return 0.0
-
-    def _week_start_ts(self) -> float:
-        """Get timestamp of Monday 00:00 UTC this week."""
-        now = datetime.now(timezone.utc)
-        days_since_monday = now.weekday()
-        start = now.replace(hour=0, minute=0, second=0, microsecond=0)
-        start = start - timedelta(days=days_since_monday)
-        return start.timestamp()
-
-    def _record_usage(self, config: KarenConfig, added_pct: float) -> None:
-        """Record Codex usage."""
-        state_dir = config.get_state_dir()
-        state_dir.mkdir(parents=True, exist_ok=True)
-        state_file = state_dir / "codex_weekly_usage.json"
-
-        current_pct = self._get_weekly_usage_pct(config)
-        new_pct = current_pct + added_pct
-
-        data = {
-            "week_start": self._week_start_ts(),
-            "usage_pct": new_pct,
-            "last_updated": datetime.now(timezone.utc).isoformat(),
-        }
-        state_file.write_text(json.dumps(data, indent=2))
+    def _get_weekly_usage_pct(self, config: KarenConfig) -> Optional[float]:
+        """Use the same observed plan quota as worker admission."""
+        return read_codex_quota()["weekly_pct"]
 
     def _build_codex_args(self, effort: str) -> List[str]:
         """Use explicit model/effort, read-only execution, and stdin."""
@@ -519,6 +488,10 @@ class CodexReviewer(BaseReviewer):
     def review(self, pr: PRInfo, tier: ReviewTier, config: KarenConfig) -> ReviewResult:
         """Run Codex review via CLI."""
         start_time = time.time()
+        usage = self._get_weekly_usage_pct(config)
+        if usage is None or usage >= min(75.0, config.codex_weekly_cap_pct):
+            return ReviewResult(self.name, ReviewVerdict.ERROR,
+                                "Codex weekly quota unavailable or at cap; review not dispatched", tier=tier)
 
         effort = os.environ.get("STORYPOOL_KAREN_EFFORT", "max")
         if len(pr.diff) > 400000:
@@ -597,8 +570,6 @@ class CodexReviewer(BaseReviewer):
             review_result.duration_sec = duration
             review_result.model = os.environ.get("STORYPOOL_KAREN_MODEL", "gpt-6-astra")
             review_result.effort = effort
-
-            self._record_usage(config, 0.5 if effort == "high" else 0.2)
 
             return review_result
 

@@ -190,7 +190,9 @@ class TestCodexReviewer(unittest.TestCase):
             self.assertFalse(ok)
             self.assertIn("not found", reason)
 
-    def test_not_available_over_budget(self):
+    @patch('cluster.control_plane.local_karen.reviewers.read_codex_quota',
+           return_value={'weekly_pct': 80.0})
+    def test_not_available_over_budget(self, quota):
         tmpdir = tempfile.mkdtemp()
         config = KarenConfig(state_dir=tmpdir, codex_weekly_cap_pct=75.0)
 
@@ -207,6 +209,21 @@ class TestCodexReviewer(unittest.TestCase):
             ok, reason = reviewer.is_available(config)
             self.assertFalse(ok)
             self.assertIn("80.0%", reason)
+
+    def test_real_quota_boundary_and_unknown_block_even_with_old_zero_estimate(self):
+        reviewer = CodexReviewer()
+        config = KarenConfig(codex_host='local', codex_weekly_cap_pct=90.0)
+        for pct, expected in ((74.99, True), (75.0, False), (None, False)):
+            with self.subTest(pct=pct), \
+                    patch.object(reviewer, '_codex_available_locally', return_value=True), \
+                    patch('cluster.control_plane.local_karen.reviewers.read_codex_quota',
+                          return_value={'weekly_pct': pct}):
+                self.assertEqual(reviewer.is_available(config)[0], expected)
+                if not expected:
+                    with patch('subprocess.run') as run:
+                        result = reviewer.review(None, ReviewTier.LOW, config)
+                    self.assertEqual(result.verdict, ReviewVerdict.ERROR)
+                    run.assert_not_called()
 
 
 class TestClaudeReviewer(unittest.TestCase):
@@ -499,6 +516,12 @@ class TestGeminiConfig(unittest.TestCase):
 
 class TestCodexSSH(unittest.TestCase):
     """Tests for Codex SSH to remote host."""
+
+    def setUp(self):
+        quota = patch('cluster.control_plane.local_karen.reviewers.read_codex_quota',
+                      return_value={'weekly_pct': 21.0})
+        quota.start()
+        self.addCleanup(quota.stop)
 
     def test_uses_ssh_when_host_configured(self):
         """Verify SSH is used when codex_host is set and reachable."""
