@@ -1265,6 +1265,7 @@ class ClaudeReviewer(BaseReviewer):
                     raw_response="",
                 )
 
+            response = result.stdout.strip()
             review_result = self._parse_structured_verdict(response, pr, tier)
             review_result.duration_sec = duration
 

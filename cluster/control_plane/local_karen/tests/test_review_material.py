@@ -139,9 +139,7 @@ def test_all_four_actual_provider_paths_transmit_same_lossless_typed_input(tmp_p
         assert r.GeminiReviewer().review(part, r.ReviewTier.LOW, config).passed
         primary = r.ReviewResult('gemini', r.ReviewVerdict.PASS, 'Independent fixture primary')
         assert r.MiniMaxReviewer().review_as_second_judge(part, primary, config).passed
-        # This assertion targets Claude's outgoing input; its pre-existing stdout
-        # parsing defect is addressed independently from the handoff change.
-        r.ClaudeReviewer().review(part, r.ReviewTier.LOW, config)
+        assert r.ClaudeReviewer().review(part, r.ReviewTier.LOW, config).passed
     assert set(prompts) == {'codex', 'gemini', 'minimax', 'claude'}
     assert len(set(prompts.values())) == 1
     for prompt in prompts.values():
