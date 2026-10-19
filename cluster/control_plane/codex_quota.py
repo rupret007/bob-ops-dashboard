@@ -5,6 +5,7 @@ import json
 import math
 import os
 import re
+import stat
 import time
 from datetime import datetime, timezone
 from itertools import islice
@@ -16,6 +17,12 @@ MAX_DIRECTORY_ENTRIES = 2048
 MAX_AGE_SECONDS = 3600
 WEEK_MINUTES = 10080
 SOURCE = 'codex_session_rate_limits'
+APP_SOURCE = 'codex_app_server_rate_limits'
+CACHE_MAX_BYTES = 32768
+
+
+def quota_cache_path():
+    return Path.home() / '.local/share/storypool/quota/codex.json'
 
 
 def _empty(status='unknown'):
@@ -65,7 +72,7 @@ def _tail_records(path):
         tail = tail.rpartition(b'\n')[0]
     for line in tail.splitlines():
         if line.strip():
-            yield json.loads(line)
+            yield json.loads(line, object_pairs_hook=_unique_object)
 
 
 def _number(value):
@@ -75,6 +82,15 @@ def _number(value):
         return False
 
 
+def _unique_object(pairs):
+    value = {}
+    for key, entry in pairs:
+        if key in value:
+            raise ValueError('Duplicate JSON key')
+        value[key] = entry
+    return value
+
+
 def _observation(stamp, limits, now, max_age):
     result = _empty('malformed')
     result['observed_at'] = datetime.fromtimestamp(stamp, timezone.utc).isoformat()
@@ -82,7 +98,7 @@ def _observation(stamp, limits, now, max_age):
     weekly = [(name, window) for name, window in windows if isinstance(window, dict)
               and type(window.get('window_minutes')) is int
               and window['window_minutes'] == WEEK_MINUTES]
-    if not weekly or stamp > now + 60:
+    if not weekly or stamp > now:
         return result
     values = []
     for name, window in weekly:
@@ -106,7 +122,7 @@ def _observation(stamp, limits, now, max_age):
     return result
 
 
-def read_codex_quota(session_root=None, *, now=None, max_age_seconds=MAX_AGE_SECONDS):
+def _read_session_quota(session_root=None, *, now=None, max_age_seconds=MAX_AGE_SECONDS):
     """Select the latest actual observation from bounded recent session tails.
 
     File names/mtimes bound discovery only. Older valid data never replaces a
@@ -142,8 +158,153 @@ def read_codex_quota(session_root=None, *, now=None, max_age_seconds=MAX_AGE_SEC
                 elif observed == latest[0]:
                     if value['status'] != 'ok' or latest[1]['status'] != 'ok':
                         latest = (observed, _empty('malformed'))
-                    elif value['weekly_pct'] > latest[1]['weekly_pct']:
-                        latest = (observed, value)
+                    elif (value['weekly_pct'], value['resets_at']) != (latest[1]['weekly_pct'], latest[1]['resets_at']):
+                        latest = (observed, dict(_empty('malformed'), observed_at=raw_stamp))
+    except FileNotFoundError:
+        return _empty()
     except (OSError, ValueError, TypeError, OverflowError):
         return _empty('malformed')
     return latest[1] if latest is not None else _empty()
+
+
+def _stamp(value):
+    if not isinstance(value, str) or len(value) > 40:
+        raise ValueError('Invalid observation timestamp')
+    stamp = datetime.fromisoformat(value.replace('Z', '+00:00'))
+    if stamp.tzinfo is None:
+        raise ValueError('Observation timestamp must include timezone')
+    return stamp.timestamp()
+
+
+def normalize_app_limits(body):
+    """Accept only the exact Codex bucket, discarding all account/credit data."""
+    if not isinstance(body, dict):
+        raise ValueError('Malformed rate limits')
+    mapping = body.get('rateLimitsByLimitId')
+    if mapping is not None:
+        if not isinstance(mapping, dict) or not isinstance(mapping.get('codex'), dict):
+            raise ValueError('Missing Codex bucket')
+        selected = mapping['codex']
+    else:
+        selected = body.get('rateLimits')
+    if not isinstance(selected, dict) or selected.get('limitId') != 'codex':
+        raise ValueError('Wrong Codex bucket')
+
+    def normalize(bucket):
+        value = dict(limit_id='codex', plan_type=bucket.get('planType'))
+        for name in ('primary', 'secondary'):
+            window = bucket.get(name)
+            if window is not None and not isinstance(window, dict):
+                raise ValueError('Malformed quota window')
+            if window is not None and (not _number(window.get('usedPercent'))
+                    or not 0 <= window['usedPercent'] <= 100
+                    or type(window.get('windowDurationMins')) is not int
+                    or not 0 < window['windowDurationMins'] <= 525600
+                    or type(window.get('resetsAt')) is not int):
+                raise ValueError('Malformed quota window')
+            value[name] = None if window is None else dict(
+                used_percent=window.get('usedPercent'),
+                window_minutes=window.get('windowDurationMins'), resets_at=window.get('resetsAt'))
+        # A server-classified reached limit cannot authorize another call.
+        value['limit_reached'] = bucket.get('rateLimitReachedType') is not None
+        return value
+
+    normalized = normalize(selected)
+    legacy = body.get('rateLimits')
+    if mapping is not None and legacy is not None:
+        if not isinstance(legacy, dict) or legacy.get('limitId') != 'codex' or normalize(legacy) != normalized:
+            raise ValueError('Conflicting Codex observations')
+    if 'ordinaryUsageAllowed' in body:
+        allowed = body['ordinaryUsageAllowed']
+        if allowed is not None and type(allowed) is not bool:
+            raise ValueError('Malformed usage admission')
+        if allowed is False:
+            normalized['limit_reached'] = True
+    # Unknown plan strings must not enter the cache or dashboard.
+    if normalized['plan_type'] not in ('free', 'plus', 'pro', 'team', 'business', 'enterprise', 'edu'):
+        normalized['plan_type'] = None
+    return normalized
+
+
+def _read_cache(path, now, max_age):
+    empty = dict(_empty(), source=APP_SOURCE)
+    try:
+        descriptor = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+        with os.fdopen(descriptor, 'rb') as handle:
+            info = os.fstat(handle.fileno())
+            if (not stat.S_ISREG(info.st_mode) or info.st_uid != os.getuid() or info.st_nlink != 1
+                    or info.st_mode & 0o077 or info.st_size > CACHE_MAX_BYTES):
+                raise ValueError('Unsafe quota cache')
+            raw = handle.read(CACHE_MAX_BYTES + 1)
+            if len(raw) > CACHE_MAX_BYTES:
+                raise ValueError('Oversized quota cache')
+        value = json.loads(raw, object_pairs_hook=_unique_object)
+        if not isinstance(value, dict) or value.get('schema') != 1 or value.get('source') != APP_SOURCE:
+            raise ValueError('Malformed quota cache')
+        stamp = _stamp(value.get('observed_at'))
+        result = dict(empty, status='malformed', observed_at=value['observed_at'])
+        if value.get('status') == 'malformed':
+            return result
+        limits = value.get('limits')
+        if (value.get('status') != 'ok' or not isinstance(limits, dict)
+                or limits.get('limit_id') != 'codex' or type(limits.get('limit_reached')) is not bool):
+            return result
+        result = dict(_observation(stamp, limits, now, max_age), source=APP_SOURCE)
+        if limits['limit_reached'] and result['status'] == 'ok':
+            result.update(status='blocked', weekly_pct=None)
+        return result
+    except FileNotFoundError:
+        return empty
+    except (OSError, ValueError, TypeError, OverflowError):
+        return dict(empty, status='malformed')
+
+
+def read_codex_quota(session_root=None, *, cache_path=None, now=None, max_age_seconds=MAX_AGE_SECONDS):
+    """Pure bounded reads of the freshest authoritative local observation.
+
+    No CLI, network or inference is started here. Explicit fixture session roots
+    do not read the operator cache unless a cache_path is also supplied.
+    """
+    now = time.time() if now is None else now
+    if not _number(now) or not _number(max_age_seconds) or max_age_seconds <= 0:
+        return _empty('malformed')
+    session = _read_session_quota(session_root, now=now, max_age_seconds=max_age_seconds)
+    if (cache_path is None and session_root is not None
+            and Path(session_root).expanduser() != Path.home() / '.codex/sessions'):
+        return session
+    cached = _read_cache(Path(cache_path) if cache_path is not None else quota_cache_path(), now, max_age_seconds)
+    observations = []
+    for row in (session, cached):
+        if row['observed_at'] is None:
+            if row['status'] == 'malformed':
+                return row
+            continue
+        try:
+            stamp = _stamp(row['observed_at'])
+        except (ValueError, TypeError, OverflowError):
+            return _empty('malformed')
+        if stamp > now:
+            return dict(_empty('malformed'), source=row['source'])
+        observations.append((stamp, row))
+    if not observations:
+        return session
+    latest = max(stamp for stamp, row in observations)
+    current = [row for stamp, row in observations if stamp == latest]
+    if len(current) == 2 and any(current[0][key] != current[1][key]
+                                 for key in ('status', 'weekly_pct', 'resets_at')):
+        return dict(_empty('malformed'), observed_at=current[0]['observed_at'])
+    return current[0]
+
+
+def main():
+    """Fixed readonly SSH boundary: local-clock age travels with the quota."""
+    import argparse
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.parse_args()
+    served = time.time()
+    print(json.dumps(dict(schema=1, served_at=served, quota=read_codex_quota(now=served)),
+                     sort_keys=True, allow_nan=False))
+
+
+if __name__ == '__main__':
+    main()

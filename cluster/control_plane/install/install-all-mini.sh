@@ -483,6 +483,9 @@ run_self_check() {
 uninstall_all() {
     log_header "Uninstalling All Components"
 
+    launchctl bootout "gui/$(id -u)/com.storypool.codex-quota" 2>/dev/null || true
+    # Preserve the observer definition and private observations for recovery.
+
     for label in com.storypool.guardian com.storypool.selfupdate com.storypool.ops-doctor com.storypool.shadow com.storypool.dispatch com.storypool.conductor com.storypool.watchdog com.storypool.dashboard com.storypool.karen-poller; do
         local plist="$HOME/Library/LaunchAgents/$label.plist"
         if launchctl list "$label" &>/dev/null; then
@@ -537,6 +540,7 @@ main() {
     install_selfupdate
     install_dashboard
     install_karen_cli
+    PYTHONPATH="$REPO_ROOT" python3 -m cluster.control_plane.codex_quota_install --machine mini
     PYTHONPATH="$REPO_ROOT" python3 -m cluster.control_plane.health_install --machine mini
     local self_check_failed=0
     run_self_check || self_check_failed=1

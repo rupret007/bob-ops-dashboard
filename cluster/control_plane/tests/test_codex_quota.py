@@ -97,7 +97,8 @@ def test_conflicting_weekly_windows_and_equal_timestamp_take_no_lower_vote(tmp_p
     assert q.read_codex_quota(tmp_path, now=NOW)['weekly_pct'] is None
     path.unlink()
     write(tmp_path, [event(21), event(80)])
-    assert q.read_codex_quota(tmp_path, now=NOW)['weekly_pct'] == 80
+    assert q.read_codex_quota(tmp_path, now=NOW)['weekly_pct'] is None
+    assert q.read_codex_quota(tmp_path, now=NOW)['status'] == 'malformed'
 
 
 def test_partial_append_and_tail_start_never_parse_fragment_or_leak(tmp_path, monkeypatch):

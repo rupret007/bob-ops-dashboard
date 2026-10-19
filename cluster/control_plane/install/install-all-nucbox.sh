@@ -470,6 +470,10 @@ run_self_check() {
 uninstall_all() {
     log_header "Uninstalling All Components"
 
+    systemctl --user disable --now storypool-codex-quota.timer 2>/dev/null || true
+    systemctl --user stop storypool-codex-quota.service 2>/dev/null || true
+    # Preserve the observer definitions and private observations for recovery.
+
     for unit in storypool-guardian storypool-ops-doctor storypool-shadow storypool-dispatch storypool-conductor storypool-selfupdate storypool-karen-poller; do
         if systemctl --user is-active "$unit.timer" &>/dev/null; then
             log_info "Stopping $unit.timer..."
@@ -526,6 +530,7 @@ main() {
     install_ops_doctor
     install_dashboard
     install_karen_cli
+    PYTHONPATH="$REPO_ROOT" python3 -m cluster.control_plane.codex_quota_install --machine nucbox
     PYTHONPATH="$REPO_ROOT" python3 -m cluster.control_plane.health_install --machine nucbox
     run_self_check
 
