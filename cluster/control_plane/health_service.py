@@ -57,6 +57,61 @@ class Scheduler:
         self.status.setdefault('groups', {})
         self.status.setdefault('rollout', {'phase': 'observe', 'started_at': time.time()})
         self.status.setdefault('repair_after', {})
+        self.transition = None
+        self.retry_rollout_at = 0
+
+    def rollout_tick(self, monotonic, now):
+        from .health_rollout import (Manager, activate, compare_cycle, complete_cycle,
+                                     peer_canary_ok, rollback)
+        rollout = self.status['rollout']
+        if self.transition and self.transition[1].done():
+            kind, future = self.transition
+            self.transition = None
+            try:
+                result = future.result()
+                if kind == 'compare':
+                    rollout['comparison'] = result
+                else:
+                    self.status['rollout'] = rollout = result
+                    if kind == 'activate':
+                        self.due = {name: monotonic for name in PERIODS}
+            except Exception as exc:
+                rollout['error'] = type(exc).__name__
+                # A partial transition can be diagnosed from the persisted
+                # manager receipt; do not retry native mutations blindly.
+                rollout['phase'] = 'transition-failed' if kind != 'compare' else 'observe'
+                self.retry_rollout_at = now + 600
+        if self.transition or now < self.retry_rollout_at:
+            return
+        if rollout['phase'] == 'observe' and complete_cycle(self.status, now):
+            comparison = rollout.get('comparison', {})
+            if not comparison.get('passed') or comparison.get('head') != self.status['loaded_head']:
+                self.transition = ('compare', self.slow.submit(compare_cycle, copy.deepcopy(self.status)))
+                self.retry_rollout_at = now + 600
+                return
+            if self.machine == 'mini':
+                peer = self.status['groups']['peer'].get('details', {}).get('health', {})
+                if not peer_canary_ok(self.status, peer, now):
+                    return
+            rollout['phase'] = 'switching'
+            atomic_json(self.root / 'health-status.json', self.status)
+            self.transition = ('activate', self.slow.submit(activate, self.root,
+                               copy.deepcopy(self.status), Manager(self.machine), now))
+        elif rollout['phase'] == 'canary':
+            since = rollout.get('activated_at', now)
+            failed = any(group.get('error') or any(c.get('execution_error') for c in group.get('checks', []))
+                         for group in self.status['groups'].values()
+                         if group.get('started_at', 0) >= since)
+            if failed:
+                rollout['phase'] = 'switching'
+                atomic_json(self.root / 'health-status.json', self.status)
+                self.transition = ('rollback', self.slow.submit(rollback, self.root,
+                                   copy.deepcopy(self.status), Manager(self.machine)))
+            elif complete_cycle(self.status, now, since):
+                rollout.update(phase='active', canary_passed_at=now,
+                               last_confirmed_at=now, head=self.status['loaded_head'])
+        elif rollout['phase'] == 'active' and complete_cycle(self.status, now):
+            rollout['last_confirmed_at'] = now
 
     def tick(self, monotonic, now):
         for name, (future, started) in list(self.pending.items()):
@@ -116,6 +171,7 @@ def main():
             signal.signal(sig, lambda *_: stopped.append(True))
         while not stopped:
             scheduler.tick(time.monotonic(), time.time())
+            scheduler.rollout_tick(time.monotonic(), time.time())
             time.sleep(5)
         scheduler.fast.shutdown(wait=True)
         scheduler.slow.shutdown(wait=True)

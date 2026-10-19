@@ -48,7 +48,7 @@ def read_status(root=None):
 
 
 def authoritative(root=None):
-    return read_status(root).get('rollout', {}).get('phase') in ('active', 'canary')
+    return read_status(root).get('rollout', {}).get('phase') in ('active', 'canary', 'switching')
 
 
 def serialized_recovery(function):
