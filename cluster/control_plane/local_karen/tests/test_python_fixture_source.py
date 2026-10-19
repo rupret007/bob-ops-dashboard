@@ -49,6 +49,19 @@ def test_aliases_and_unknown_execution_wrappers_disable_masking(source):
     assert checks.check_no_dangerous_commands(candidate(source), KarenConfig()).failed
 
 
+@pytest.mark.parametrize('source', [
+    'CMD = "sudo whoami"\nscanner = __builtins__["eval"]\nscanner(CMD)',
+    'CMD = "sudo whoami"\nlen = __builtins__["eval"]\nlen(CMD)',
+    'CMD = "sudo whoami"\nchecks = __builtins__\nchecks.run_static_security_scan(CMD)',
+    'CMD = "sudo whoami"\ndef test_bad(scanner=eval):\n    scanner(CMD)',
+    'CMD = "sudo whoami"\nchecks.run_static_security_scan = eval\nchecks.run_static_security_scan(CMD)',
+    'CMD = "sudo whoami"\nfor scanner in (eval,):\n    scanner(CMD)',
+    'CMD = "sudo whoami"\ndef candidate(value):\n    return __builtins__[value]\ncandidate(CMD)',
+])
+def test_safe_callable_shadowing_and_writes_disable_masking(source):
+    assert checks.check_no_dangerous_commands(candidate(source), KarenConfig()).failed
+
+
 def test_incomplete_context_and_production_sources_fail_closed():
     pr = candidate(COMMAND_FIXTURE)
     assert checks.check_no_dangerous_commands(candidate(COMMAND_FIXTURE, 'app.py'), KarenConfig()).failed

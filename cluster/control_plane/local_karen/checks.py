@@ -520,11 +520,49 @@ def _python_test_fixture_source(diff):
                       'checks.check_no_dangerous_commands', 'checks.check_no_secrets_in_diff',
                       'checks.check_security_patterns', 'checks.run_static_security_scan',
                       'source.splitlines', 'pr.diff.replace'}
+        protected = {'candidate', 'scanner', 'len', 'KarenConfig',
+                     'classify_fix_difficulty', 'pytest', 'checks'}
+        parents = {child: node for node in ast.walk(tree) for child in ast.iter_child_nodes(node)}
         invalid = False
         for node in ast.walk(tree):
             if isinstance(node, (ast.Import, ast.ImportFrom)):
                 module = getattr(node, 'module', '') or ''
-                if any(alias.asname or (module, alias.name) not in imports for alias in node.names):
+                if (getattr(node, 'level', 0)
+                        or any(alias.asname or (module, alias.name) not in imports for alias in node.names)):
+                    invalid = True
+            elif isinstance(node, ast.arg) and node.arg in protected:
+                invalid = True
+            elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)) and node.name in protected:
+                canonical = (isinstance(node, ast.FunctionDef) and node.name == 'candidate'
+                             and len(node.args.args) == 2
+                             and node.args.args[0].arg in ('line', 'source')
+                             and node.args.args[1].arg == 'path'
+                             and all(isinstance(item, (ast.Assign, ast.AugAssign, ast.Return))
+                                     for item in node.body)
+                             and isinstance(node.body[-1], ast.Return)
+                             and isinstance(node.body[-1].value, ast.Call)
+                             and ast.unparse(node.body[-1].value.func) == 'checks.PRInfo')
+                if not canonical:
+                    invalid = True
+            elif isinstance(node, ast.Name) and isinstance(node.ctx, (ast.Store, ast.Del)) and node.id in protected:
+                parent = parents.get(node)
+                scanner_loop = (node.id == 'scanner' and isinstance(parent, ast.For)
+                                and parent.target is node and isinstance(parent.iter, (ast.Tuple, ast.List))
+                                and bool(parent.iter.elts)
+                                and all(isinstance(item, ast.Attribute)
+                                        and ast.unparse(item) in safe_calls
+                                        and ast.unparse(item).startswith('checks.check_')
+                                        or isinstance(item, ast.Attribute)
+                                        and ast.unparse(item) == 'checks.run_static_security_scan'
+                                        for item in parent.iter.elts))
+                if not scanner_loop:
+                    invalid = True
+            elif isinstance(node, (ast.Attribute, ast.Subscript)) and isinstance(node.ctx, (ast.Store, ast.Del)):
+                parent = parents.get(node)
+                fixture_diff = (ast.unparse(node) == 'pr.diff' and isinstance(parent, ast.Assign)
+                                and isinstance(parent.value, ast.Call)
+                                and ast.unparse(parent.value.func) == 'pr.diff.replace')
+                if not fixture_diff:
                     invalid = True
             elif isinstance(node, ast.Call):
                 literal_format = (isinstance(node.func, ast.Attribute)
