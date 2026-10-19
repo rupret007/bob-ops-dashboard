@@ -13,6 +13,10 @@ from cluster.control_plane import conductor as c
 from cluster.control_plane.tests.test_deterministic_merge import artifact, pr, runner
 
 
+DRAINING_TARGET = 'cluster.control_plane.node_control.is_draining'
+REFRESH_TARGET = 'cluster.control_plane.improvement.refresh'
+
+
 def prepared(tmp_path, *, approved=True):
     if approved:
         artifact(tmp_path)
@@ -48,8 +52,8 @@ def assert_deferred(worker, summary):
 def test_actual_merge_validation_budget_exhaustion_defers_cycle_without_more_work(tmp_path):
     worker = prepared(tmp_path)
     worker.execute_action = Mock()
-    with patch('cluster.control_plane.node_control.is_draining', return_value=False), \
-         patch('cluster.control_plane.improvement.refresh', return_value={}), \
+    with patch(DRAINING_TARGET, return_value=False), \
+         patch(REFRESH_TARGET, return_value={}), \
          patch.object(c.github_reads.budget, 'reserve', side_effect=exhausted()) as budget, \
          patch.object(c.subprocess, 'run') as command:
         summary = worker.run(live=True)
@@ -73,8 +77,8 @@ def test_other_uncaught_admission_boundaries_also_stop_the_cycle(tmp_path, stage
         worker.deterministic_merge_pass = Mock(return_value=[])
         worker.get_llm_proposals.return_value = {'proposed_actions':[
             {'action_type':'label_needs_karen', 'repo':'owner/repo', 'pr_number':7}]}
-    with patch('cluster.control_plane.node_control.is_draining', return_value=False), \
-         patch('cluster.control_plane.improvement.refresh', return_value={}), \
+    with patch(DRAINING_TARGET, return_value=False), \
+         patch(REFRESH_TARGET, return_value={}), \
          patch.object(c, '_get_pr_details', side_effect=exhausted() if stage == 'optional-validation' else None,
                       return_value=pr()), \
          patch.object(c.subprocess, 'run') as command:
@@ -94,8 +98,8 @@ def test_review_admission_releases_lease_and_stops_after_first_budget_refusal(tm
         calls.append((args, kwargs))
         if not at_write or len(calls) > 1:
             raise exhausted()
-    with patch('cluster.control_plane.node_control.is_draining', return_value=False), \
-         patch('cluster.control_plane.improvement.refresh', return_value={}), \
+    with patch(DRAINING_TARGET, return_value=False), \
+         patch(REFRESH_TARGET, return_value={}), \
          patch.object(c.ClaimClient, 'from_env') as factory, patch.object(c, 'Lease') as lease, \
          patch.object(c, 'ensure_label_exists'), \
          patch.object(c.github_reads.budget, 'reserve', side_effect=reserve), \
@@ -118,8 +122,8 @@ def test_earlier_actions_are_not_misreported_as_zero_or_as_rejected(tmp_path):
                                   executed=True, execution_result='labeled')
     worker.deterministic_review_pass = Mock(return_value=[completed])
     worker.deterministic_merge_pass = Mock(side_effect=exhausted())
-    with patch('cluster.control_plane.node_control.is_draining', return_value=False), \
-         patch('cluster.control_plane.improvement.refresh', return_value={}):
+    with patch(DRAINING_TARGET, return_value=False), \
+         patch(REFRESH_TARGET, return_value={}):
         summary = worker.run(live=True)
     assert_deferred(worker, summary)
     assert completed.executed and completed.execution_result == 'labeled'
@@ -129,7 +133,7 @@ def test_earlier_actions_are_not_misreported_as_zero_or_as_rejected(tmp_path):
 def test_non_budget_bug_is_not_swallowed(tmp_path):
     worker = prepared(tmp_path)
     worker.build_state_snapshot.side_effect = ValueError('fixture programming error')
-    with patch('cluster.control_plane.node_control.is_draining', return_value=False):
+    with patch(DRAINING_TARGET, return_value=False):
         with pytest.raises(ValueError, match='fixture programming error'):
             worker.run(live=True)
 
@@ -146,8 +150,8 @@ def test_missing_local_pass_still_never_spends_fresh_pr_admission(tmp_path):
 
 def test_under_lease_revalidation_defers_without_merge_and_releases_ownership(tmp_path):
     worker = prepared(tmp_path)
-    with patch('cluster.control_plane.node_control.is_draining', return_value=False), \
-         patch('cluster.control_plane.improvement.refresh', return_value={}), \
+    with patch(DRAINING_TARGET, return_value=False), \
+         patch(REFRESH_TARGET, return_value={}), \
          patch.object(c.ClaimClient, 'from_env') as factory, patch.object(c, 'Lease') as lease, \
          patch.object(c.github_reads.budget, 'reserve', side_effect=[None, exhausted()]) as budget, \
          patch.object(c.subprocess, 'run', return_value=subprocess.CompletedProcess(
@@ -166,7 +170,7 @@ def test_under_lease_revalidation_defers_without_merge_and_releases_ownership(tm
 def test_deferral_persists_only_controlled_metadata_not_exception_text(tmp_path):
     worker = prepared(tmp_path)
     worker.build_state_snapshot.side_effect = c.GitHubDeferred('private-placeholder-marker')
-    with patch('cluster.control_plane.node_control.is_draining', return_value=False):
+    with patch(DRAINING_TARGET, return_value=False):
         summary = worker.run(live=True)
     assert summary['deferred_code'] == 'other' and summary['retry_after'] is None
     assert 'private-placeholder-marker' not in worker._status_file().read_text()
@@ -176,7 +180,7 @@ def test_deferral_persists_only_controlled_metadata_not_exception_text(tmp_path)
 def test_existing_cli_reports_deferred_cycle_without_crashing(tmp_path, capsys):
     worker = prepared(tmp_path)
     worker.build_state_snapshot.side_effect = exhausted()
-    with patch('cluster.control_plane.node_control.is_draining', return_value=False), \
+    with patch(DRAINING_TARGET, return_value=False), \
          patch.object(c, 'Conductor', return_value=worker), patch.object(sys, 'argv', ['conductor']):
         assert c.main() == 0
     output = capsys.readouterr().out
@@ -205,7 +209,7 @@ def go_live_predicate(script, path):
 def test_go_live_predicates_reject_real_deferred_cycle(tmp_path, script):
     worker = prepared(tmp_path)
     worker.build_state_snapshot.side_effect = exhausted()
-    with patch('cluster.control_plane.node_control.is_draining', return_value=False):
+    with patch(DRAINING_TARGET, return_value=False):
         summary = worker.run(live=True)
     path = tmp_path / 'deferred.json'
     path.write_text(json.dumps(summary))
@@ -231,8 +235,8 @@ def test_go_live_predicates_require_explicit_complete_shape(tmp_path, script, pa
 @pytest.mark.parametrize('script', GO_LIVE_SCRIPTS)
 def test_normal_complete_cycle_is_explicit_and_accepted_by_real_predicate(tmp_path, script):
     worker = prepared(tmp_path, approved=False)
-    with patch('cluster.control_plane.node_control.is_draining', return_value=False), \
-         patch('cluster.control_plane.improvement.refresh', return_value={}):
+    with patch(DRAINING_TARGET, return_value=False), \
+         patch(REFRESH_TARGET, return_value={}):
         summary = worker.run(live=False)
     assert summary['counts_complete'] is True and summary['deferred'] is False
     assert all(type(summary[key]) is int for key in
