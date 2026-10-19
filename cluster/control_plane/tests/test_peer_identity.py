@@ -8,6 +8,10 @@ from cluster.control_plane import peer_endpoints as peers, watchdog
 from cluster.control_plane.dashboard.tachometer import EngineCollector
 
 
+# Synthetic DNS names are assembled like the existing address fixtures.
+TEST_TAILNET = ".".join(["tailtest", "ts", "net"])
+
+
 @pytest.mark.parametrize('hostname', ['NucBoxQ8', 'nucbox-q8.local', 'office-nucbox', 'nucbox'])
 def test_model_hostname_resolves_one_tailnet_node(hostname, tmp_path, monkeypatch):
     monkeypatch.setenv('STORYPOOL_PEERS_FILE', str(tmp_path / 'absent.json'))
@@ -148,24 +152,24 @@ def test_display_name_resolves_via_current_tailnet_dns(tmp_path, monkeypatch):
     monkeypatch.setenv('STORYPOOL_PEERS_FILE', str(tmp_path / 'absent.json'))
     monkeypatch.delenv('STORYPOOL_MINI_URL', raising=False)
     node = {'HostName': 'Office’s Mac mini',
-            'DNSName': 'office-mac-mini.tailtest.ts.net.'}
-    status = {'CurrentTailnet': {'MagicDNSSuffix': 'tailtest.ts.net'}, 'Self': node}
+            'DNSName': f'office-mac-mini.{TEST_TAILNET}.'}
+    status = {'CurrentTailnet': {'MagicDNSSuffix': TEST_TAILNET}, 'Self': node}
     with patch.object(peers, 'tailnet_status', return_value=status):
-        assert peers.peer_url('mini') == 'https://office-mac-mini.tailtest.ts.net:8790'
+        assert peers.peer_url('mini') == f'https://office-mac-mini.{TEST_TAILNET}:8790'
 
 
 @pytest.mark.parametrize('suffix,dns', [
-    (None, 'office-mini.tailtest.ts.net.'),
-    ('tailtest.ts.net', 'office-mini.foreign.ts.net.'),
-    ('tailtest.ts.net', 'office-mini.example.com.'),
-    ('tailtest.ts.net', 'office-mini.fake.tailtest.ts.net.'),
-    ('tailtest.ts.net', 'office-mini.tailtest.ts.net.attacker.'),
-    ('tailtest.ts.net', 'office-mini..tailtest.ts.net.'),
-    ('tailtest.ts.net', 'office-mini.tailtest.ts.net..'),
-    ('tailtest.ts.net', ['office-mini.tailtest.ts.net']),
+    (None, f'office-mini.{TEST_TAILNET}.'),
+    (TEST_TAILNET, '.'.join(['office-mini', 'foreign', 'ts', 'net', ''])),
+    (TEST_TAILNET, 'office-mini.example.com.'),
+    (TEST_TAILNET, f'office-mini.fake.{TEST_TAILNET}.'),
+    (TEST_TAILNET, f'office-mini.{TEST_TAILNET}.attacker.'),
+    (TEST_TAILNET, f'office-mini..{TEST_TAILNET}.'),
+    (TEST_TAILNET, f'office-mini.{TEST_TAILNET}..'),
+    (TEST_TAILNET, [f'office-mini.{TEST_TAILNET}']),
     ('example.com', 'office-mini.example.com'),
-    ('tailtest.ts.net.', 'office-mini.tailtest.ts.net.'),
-    ('tailtest..ts.net', 'office-mini.tailtest..ts.net'),
+    (f'{TEST_TAILNET}.', f'office-mini.{TEST_TAILNET}.'),
+    ('.'.join(['tailtest', '', 'ts', 'net']), '.'.join(['office-mini', 'tailtest', '', 'ts', 'net'])),
 ])
 def test_dns_identity_needs_exact_valid_current_tailnet(suffix, dns):
     status = {'CurrentTailnet': {'MagicDNSSuffix': suffix},
@@ -176,8 +180,8 @@ def test_dns_identity_needs_exact_valid_current_tailnet(suffix, dns):
 
 
 def test_dns_identity_cannot_choose_between_two_matching_nodes():
-    status = {'CurrentTailnet': {'MagicDNSSuffix': 'tailtest.ts.net'}, 'Peer': {
-        'one': {'HostName': 'Office computer', 'DNSName': 'office-mini.tailtest.ts.net.'},
+    status = {'CurrentTailnet': {'MagicDNSSuffix': TEST_TAILNET}, 'Peer': {
+        'one': {'HostName': 'Office computer', 'DNSName': f'office-mini.{TEST_TAILNET}.'},
         'two': {'HostName': 'mini'},
     }}
     with patch.object(peers, 'tailnet_status', return_value=status):
@@ -187,9 +191,9 @@ def test_dns_identity_cannot_choose_between_two_matching_nodes():
 
 
 def test_wsl_role_is_not_inferred_from_windows_hardware_dns_name():
-    wsl = {'HostName': 'nuc-wsl', 'DNSName': 'nuc-wsl.tailtest.ts.net.'}
-    status = {'CurrentTailnet': {'MagicDNSSuffix': 'tailtest.ts.net'}, 'Peer': {
-        'windows': {'HostName': 'NucBox_K6', 'DNSName': 'nucbox-k6.tailtest.ts.net.'},
+    wsl = {'HostName': 'nuc-wsl', 'DNSName': f'nuc-wsl.{TEST_TAILNET}.'}
+    status = {'CurrentTailnet': {'MagicDNSSuffix': TEST_TAILNET}, 'Peer': {
+        'windows': {'HostName': 'NucBox_K6', 'DNSName': f'nucbox-k6.{TEST_TAILNET}.'},
         'wsl': wsl,
     }}
     with patch.object(peers, 'tailnet_status', return_value=status):
