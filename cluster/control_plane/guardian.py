@@ -107,18 +107,22 @@ def command(argv):
 
 
 RELOAD_ATTEMPTS = 5
+# Health waits for its scheduler/probes to exit; launchd may remain registered
+# through that shutdown. Observe for 30 seconds without repeating bootout.
+UNREGISTER_ATTEMPTS = 61
 
 
 def _launchctl_wait(argv, expected, label, stage, run=None):
     """Retry asynchronous launchd transitions; never log command output."""
     run = run or command
-    for attempt in range(1, RELOAD_ATTEMPTS + 1):
+    attempts = UNREGISTER_ATTEMPTS if stage == 'unregister' else RELOAD_ATTEMPTS
+    for attempt in range(1, attempts + 1):
         result = run(argv)
         if result.returncode == expected:
             return True
         event('guardian', 'reload_stage_pending', unit=label, stage=stage,
               attempt=attempt, exit_code=result.returncode)
-        if attempt < RELOAD_ATTEMPTS:
+        if attempt < attempts:
             time.sleep(0.5)
     event('guardian', 'reload_failed', level=logging.ERROR, unit=label,
           stage=stage, exit_code=result.returncode)

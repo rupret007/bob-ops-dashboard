@@ -240,8 +240,40 @@ def test_unproven_removal_never_bootstraps_or_clears_pending(tmp_path, monkeypat
         return response(print_code if argv[1] == 'print' else 0)
     monkeypatch.setattr(guardian, 'command', run)
     assert not guardian.reload_agent(path)
-    assert calls == ['enable', 'bootout'] + ['print'] * guardian.RELOAD_ATTEMPTS
+    assert calls == ['enable', 'bootout'] + ['print'] * guardian.UNREGISTER_ATTEMPTS
     assert pending.exists()
+
+
+@pytest.mark.parametrize('disappears_at,ok', [(15, True), (30, True), (30.5, False), (None, False)])
+def test_health_unregister_observes_full_native_shutdown_grace(tmp_path, monkeypatch, disappears_at, ok):
+    path = agent(tmp_path, 'health')
+    pending = path.with_suffix('.reload-pending')
+    pending.touch()
+    elapsed, sleeps, calls = [0.0], [], []
+    registered = [False]
+    def sleep(seconds):
+        sleeps.append(seconds)
+        elapsed[0] += seconds
+    def run(argv):
+        action = argv[1]
+        calls.append((action, elapsed[0]))
+        if action == 'bootstrap':
+            registered[0] = True
+        if action == 'print' and not registered[0]:
+            return response(113 if disappears_at is not None and elapsed[0] >= disappears_at else 0)
+        return response()
+    monkeypatch.setattr(guardian.time, 'sleep', sleep)
+    monkeypatch.setattr(guardian, 'command', run)
+    assert guardian.reload_agent(path) is ok
+    expected_wait = disappears_at if ok else 30
+    assert elapsed[0] == expected_wait
+    assert sleeps == [0.5] * int(expected_wait * 2)
+    assert sum(action == 'bootout' for action, _ in calls) == 1
+    prints = [at for action, at in calls if action == 'print']
+    assert prints[:int(expected_wait * 2) + 1] == [i / 2 for i in range(int(expected_wait * 2) + 1)]
+    assert len(prints) == int(expected_wait * 2) + 1 + int(ok)
+    assert sum(action == 'bootstrap' for action, _ in calls) == int(ok)
+    assert pending.exists() is (not ok)
 
 
 @pytest.mark.parametrize('live,registered,message', [(True, False, 'live marker present'),

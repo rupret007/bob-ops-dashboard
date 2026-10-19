@@ -110,7 +110,9 @@ def test_registration_error_is_unknown_not_absent(tmp_path):
         manager.verify_disabled()
 
 
-@pytest.mark.parametrize('prints,ok', [([0, 113], True), ([0] * 5, False), ([1] * 5, False)])
+@pytest.mark.parametrize('prints,ok', [([0, 113], True),
+    ([0] * rollout.guardian.UNREGISTER_ATTEMPTS, False),
+    ([1] * rollout.guardian.UNREGISTER_ATTEMPTS, False)])
 def test_disable_waits_for_proven_unregistration_without_more_mutations(tmp_path, monkeypatch, prints, ok):
     manager = rollout.Manager('mini', tmp_path)
     manager.snapshot = Mock(return_value={'watchdog': {'installed': True}})
