@@ -18,8 +18,13 @@ class PeerUnavailable(RuntimeError):
 
 
 def tailnet_status():
+    argv = ['tailscale']
+    socket = discovery_socket()
+    if socket:
+        argv.append('--socket=' + socket)
+    argv += ['status', '--json']
     try:
-        result = subprocess.run(['tailscale', 'status', '--json'], check=True,
+        result = subprocess.run(argv, check=True,
                                 capture_output=True, text=True, timeout=3)
         status = json.loads(result.stdout)
         if not isinstance(status, dict):
@@ -28,6 +33,40 @@ def tailnet_status():
     except (OSError, ValueError, subprocess.SubprocessError) as exc:
         raise PeerUnavailable('Peer discovery unavailable; configure private peers.json',
                               kind='discovery-unavailable') from exc
+
+
+def discovery_socket():
+    """Select the configured local daemon, including a userspace WSL daemon.
+
+    The locator holds no peer addresses or credentials; roles and current
+    addresses still come from the daemon's authenticated tailnet state.
+    """
+    try:
+        socket = os.environ.get('STORYPOOL_TAILSCALE_SOCKET')
+        if socket is None:
+            path = Path(os.environ.get('STORYPOOL_DISCOVERY_FILE',
+                '~/.config/storypool/discovery.json')).expanduser()
+            try:
+                with path.open('rb') as stream:
+                    raw = stream.read(8193)
+            except FileNotFoundError:
+                return None
+            if len(raw) > 8192:
+                raise ValueError('Oversized discovery configuration')
+            value = json.loads(raw)
+            if not isinstance(value, dict):
+                raise ValueError('Invalid discovery configuration')
+            socket = value.get('tailscale_socket')
+            if socket is None:
+                return None
+        if (not isinstance(socket, str) or not socket or len(socket) > 4096
+                or '\x00' in socket or not Path(socket).is_absolute()
+                or not Path(socket).is_socket()):
+            raise ValueError('Invalid daemon socket')
+        return socket
+    except (OSError, ValueError) as exc:
+        raise PeerUnavailable('Private discovery configuration invalid; check local daemon socket',
+                              kind='discovery-configuration') from exc
 
 
 
@@ -70,6 +109,26 @@ def manifest_hostnames(machine):
         raise PeerUnavailable('Private host manifest unreadable or invalid') from exc
 
 
+def canonical_hostname(node, status):
+    """Use only a DNS label issued in this node's current private tailnet.
+
+    Tailscale HostName is an OS display name; macOS may include spaces and
+    punctuation there. DNSName is the canonical host.<MagicDNSSuffix> name.
+    """
+    tailnet = status.get('CurrentTailnet')
+    suffix = tailnet.get('MagicDNSSuffix') if isinstance(tailnet, dict) else None
+    dns = node.get('DNSName')
+    label = r'[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?'
+    if not isinstance(suffix, str) or not isinstance(dns, str):
+        return ''
+    suffix, dns = suffix.lower(), dns.lower().removesuffix('.')
+    if not re.fullmatch(r'(?:' + label + r'\.)+ts\.net', suffix):
+        return ''
+    ending = '.' + suffix
+    host = dns[:-len(ending)] if dns.endswith(ending) else ''
+    return host if re.fullmatch(label, host) else ''
+
+
 def peer_node(machine):
     aliases = {'mini': ('mini', 'mac-mini'), 'nucbox': ('nucbox',)}
     if machine not in aliases:
@@ -82,12 +141,14 @@ def peer_node(machine):
     matches = []
     for node in nodes:
         host = str(node.get('HostName', '')).lower().removesuffix('.local')
+        identities = {host, canonical_hostname(node, status)} - {''}
         # Hardware model suffixes are common on NucBox hosts. Keep the grammar
         # anchored and reject multiple matches rather than selecting a host by
         # list order, online state, or a loose substring match.
         model_host = machine == 'nucbox' and re.fullmatch(r'nucbox-?[a-z]{1,4}[0-9]{1,3}', host)
-        if (model_host or host in exact_hosts or
-                any(host == name or host.endswith('-' + name) for name in aliases[machine])):
+        if (model_host or identities & exact_hosts or
+                any(identity == name or identity.endswith('-' + name)
+                    for identity in identities for name in aliases[machine])):
             matches.append(node)
     if len(matches) != 1:
         kind = 'identity-ambiguous' if matches else 'identity-missing'

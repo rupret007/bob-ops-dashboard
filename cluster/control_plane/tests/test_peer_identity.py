@@ -76,6 +76,61 @@ def clear_host_manifest(monkeypatch):
     monkeypatch.delenv('STORYPOOL_MANIFEST_FILE', raising=False)
 
 
+@pytest.fixture(autouse=True)
+def isolate_discovery_configuration(tmp_path, monkeypatch):
+    monkeypatch.delenv('STORYPOOL_TAILSCALE_SOCKET', raising=False)
+    monkeypatch.setenv('STORYPOOL_DISCOVERY_FILE', str(tmp_path / 'discovery.json'))
+
+
+@pytest.fixture
+def socket_path():
+    import tempfile
+    from pathlib import Path
+    # Darwin AF_UNIX paths must fit within104bytes; pytest's paths exceed it.
+    with tempfile.TemporaryDirectory(prefix='sp-socket-', dir='/tmp') as directory:
+        yield Path(directory) / 'daemon.sock'
+
+
+def test_userspace_daemon_socket_discovers_actual_tailnet(tmp_path, socket_path):
+    import socket
+    from unittest.mock import Mock
+    path = socket_path
+    with socket.socket(socket.AF_UNIX) as listener:
+        listener.bind(str(path))
+        (tmp_path / 'discovery.json').write_text(json.dumps({'tailscale_socket': str(path)}))
+        status = {'Self': {'HostName': 'nuc-wsl'}}
+        with patch.object(peers.subprocess, 'run', return_value=Mock(stdout=json.dumps(status))) as command:
+            assert peers.peer_node('nucbox') == status['Self']
+        assert command.call_args.args[0] == ['tailscale', '--socket=' + str(path), 'status', '--json']
+        assert command.call_args.kwargs['timeout'] == 3
+
+
+@pytest.mark.parametrize('value', ['malformed', '[]', ' ' * 8193,
+    '{"tailscale_socket": "relative.sock"}', '{"tailscale_socket": ""}',
+    '{"tailscale_socket": 3}', '{"tailscale_socket": "/absent/socket"}'])
+def test_invalid_daemon_locator_fails_closed_without_cli_or_sensitive_error(tmp_path, value):
+    (tmp_path / 'discovery.json').write_text(value)
+    with patch.object(peers.subprocess, 'run', side_effect=AssertionError('No fallback daemon')):
+        with pytest.raises(peers.PeerUnavailable) as error:
+            peers.tailnet_status()
+    assert error.value.kind == 'discovery-configuration'
+    assert value not in str(error.value)
+
+
+def test_explicit_socket_override_requires_socket_and_does_not_read_file(tmp_path, monkeypatch, socket_path):
+    import socket
+    path = socket_path
+    (tmp_path / 'discovery.json').write_text('malformed private content')
+    monkeypatch.setenv('STORYPOOL_TAILSCALE_SOCKET', str(path))
+    path.write_text('regular files are not daemon sockets')
+    with pytest.raises(peers.PeerUnavailable):
+        peers.discovery_socket()
+    path.unlink()
+    with socket.socket(socket.AF_UNIX) as listener:
+        listener.bind(str(path))
+        assert peers.discovery_socket() == str(path)
+
+
 def configure_hosts(tmp_path, monkeypatch, hostnames):
     path = tmp_path / 'manifest.json'
     path.write_text(json.dumps({'machines': {'nucbox': {'hostnames': hostnames}}}))
@@ -87,6 +142,58 @@ def test_nuc_wsl_resolves_without_manifest():
     node = {'HostName': 'nuc-wsl'}
     with patch.object(peers, 'tailnet_status', return_value={'Peer': {'one': node}}):
         assert peers.peer_node('nucbox') is node
+
+
+def test_display_name_resolves_via_current_tailnet_dns(tmp_path, monkeypatch):
+    monkeypatch.setenv('STORYPOOL_PEERS_FILE', str(tmp_path / 'absent.json'))
+    monkeypatch.delenv('STORYPOOL_MINI_URL', raising=False)
+    node = {'HostName': 'Office’s Mac mini',
+            'DNSName': 'office-mac-mini.tailtest.ts.net.'}
+    status = {'CurrentTailnet': {'MagicDNSSuffix': 'tailtest.ts.net'}, 'Self': node}
+    with patch.object(peers, 'tailnet_status', return_value=status):
+        assert peers.peer_url('mini') == 'https://office-mac-mini.tailtest.ts.net:8790'
+
+
+@pytest.mark.parametrize('suffix,dns', [
+    (None, 'office-mini.tailtest.ts.net.'),
+    ('tailtest.ts.net', 'office-mini.foreign.ts.net.'),
+    ('tailtest.ts.net', 'office-mini.example.com.'),
+    ('tailtest.ts.net', 'office-mini.fake.tailtest.ts.net.'),
+    ('tailtest.ts.net', 'office-mini.tailtest.ts.net.attacker.'),
+    ('tailtest.ts.net', 'office-mini..tailtest.ts.net.'),
+    ('tailtest.ts.net', 'office-mini.tailtest.ts.net..'),
+    ('tailtest.ts.net', ['office-mini.tailtest.ts.net']),
+    ('example.com', 'office-mini.example.com'),
+    ('tailtest.ts.net.', 'office-mini.tailtest.ts.net.'),
+    ('tailtest..ts.net', 'office-mini.tailtest..ts.net'),
+])
+def test_dns_identity_needs_exact_valid_current_tailnet(suffix, dns):
+    status = {'CurrentTailnet': {'MagicDNSSuffix': suffix},
+              'Peer': {'one': {'HostName': 'Display name', 'DNSName': dns}}}
+    with patch.object(peers, 'tailnet_status', return_value=status):
+        with pytest.raises(peers.PeerUnavailable):
+            peers.peer_node('mini')
+
+
+def test_dns_identity_cannot_choose_between_two_matching_nodes():
+    status = {'CurrentTailnet': {'MagicDNSSuffix': 'tailtest.ts.net'}, 'Peer': {
+        'one': {'HostName': 'Office computer', 'DNSName': 'office-mini.tailtest.ts.net.'},
+        'two': {'HostName': 'mini'},
+    }}
+    with patch.object(peers, 'tailnet_status', return_value=status):
+        with pytest.raises(peers.PeerUnavailable) as error:
+            peers.peer_node('mini')
+    assert error.value.kind == 'identity-ambiguous'
+
+
+def test_wsl_role_is_not_inferred_from_windows_hardware_dns_name():
+    wsl = {'HostName': 'nuc-wsl', 'DNSName': 'nuc-wsl.tailtest.ts.net.'}
+    status = {'CurrentTailnet': {'MagicDNSSuffix': 'tailtest.ts.net'}, 'Peer': {
+        'windows': {'HostName': 'NucBox_K6', 'DNSName': 'nucbox-k6.tailtest.ts.net.'},
+        'wsl': wsl,
+    }}
+    with patch.object(peers, 'tailnet_status', return_value=status):
+        assert peers.peer_node('nucbox') is wsl
 
 
 def test_manifest_hostname_is_exact_and_case_insensitive(tmp_path, monkeypatch):
