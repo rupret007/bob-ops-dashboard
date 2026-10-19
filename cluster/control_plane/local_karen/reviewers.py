@@ -29,6 +29,7 @@ from .config import KarenConfig
 from .deadline import remaining_timeout
 from .checks import PRInfo
 from ..codex_quota import read_codex_quota
+from ..codex_quota_remote import read_remote_codex_quota, valid_host
 
 
 logger = logging.getLogger(__name__)
@@ -433,14 +434,12 @@ class CodexReviewer(BaseReviewer):
 
     def is_available(self, config: KarenConfig) -> Tuple[bool, str]:
         """Check if Codex CLI is available and within budget."""
-        if not self._codex_available_locally():
-            if config.codex_host and config.codex_host != "local":
-                if not self._can_ssh_to_host(config.codex_host):
-                    return False, "codex CLI not local and SSH to {} failed".format(config.codex_host)
-            else:
-                return False, "codex CLI not found in PATH"
-
-        usage_pct = self._get_weekly_usage_pct(config)
+        target = self._execution_target(config)
+        if target is None:
+            return False, "SSH target unavailable and codex CLI not found locally"
+        if target == 'local' and not self._codex_available_locally():
+            return False, "codex CLI not found in PATH"
+        usage_pct = self._get_weekly_usage_pct(replace(config, codex_host=target))
         cap = min(75.0, config.codex_weekly_cap_pct)
         if usage_pct is None:
             return False, "Codex weekly plan quota unknown; fresh rate-limit observation required"
@@ -456,7 +455,7 @@ class CodexReviewer(BaseReviewer):
                 ["which", "codex"],
                 capture_output=True,
                 text=True,
-                timeout=5,
+                timeout=remaining_timeout(5),
             )
             return result.returncode == 0
         except (subprocess.TimeoutExpired, FileNotFoundError):
@@ -464,19 +463,34 @@ class CodexReviewer(BaseReviewer):
 
     def _can_ssh_to_host(self, host: str) -> bool:
         """Check if we can SSH to a remote host."""
+        if not valid_host(host):
+            return False
         try:
             result = subprocess.run(
-                ["ssh", "-o", "ConnectTimeout=5", "-o", "BatchMode=yes", host, "which", "codex"],
+                ["ssh", "-o", "ConnectTimeout=5", "-o", "BatchMode=yes", host,
+                 'PATH="$HOME/bin:$HOME/.local/bin:/usr/local/bin:/usr/bin:/bin" command -v codex >/dev/null'],
                 capture_output=True,
                 text=True,
-                timeout=10,
+                timeout=remaining_timeout(10),
             )
             return result.returncode == 0
         except (subprocess.TimeoutExpired, FileNotFoundError):
             return False
 
+    def _execution_target(self, config: KarenConfig):
+        """Resolve the actual host before inspecting its account-specific quota."""
+        if config.codex_host and config.codex_host != 'local':
+            if not valid_host(config.codex_host):
+                return None
+            if self._can_ssh_to_host(config.codex_host):
+                return config.codex_host
+            return 'local' if self._codex_available_locally() else None
+        return 'local'
+
     def _get_weekly_usage_pct(self, config: KarenConfig) -> Optional[float]:
-        """Use the same observed plan quota as worker admission."""
+        """Read only the selected execution host's actual plan observation."""
+        if config.codex_host and config.codex_host != 'local':
+            return read_remote_codex_quota(config.codex_host, timeout=remaining_timeout(10))['weekly_pct']
         return read_codex_quota()["weekly_pct"]
 
     def _build_codex_args(self, effort: str) -> List[str]:
@@ -508,7 +522,13 @@ class CodexReviewer(BaseReviewer):
     def review(self, pr: PRInfo, tier: ReviewTier, config: KarenConfig) -> ReviewResult:
         """Run Codex review via CLI."""
         start_time = time.time()
-        usage = self._get_weekly_usage_pct(config)
+        target = self._execution_target(config)
+        if target is None:
+            return ReviewResult(self.name, ReviewVerdict.ERROR,
+                                "SSH target unavailable and no local Codex; review not dispatched", tier=tier)
+        # Availability checks cannot authorize a later fallback on another
+        # account. Resolve again, then re-read that exact target immediately.
+        usage = self._get_weekly_usage_pct(replace(config, codex_host=target))
         if usage is None or usage >= min(75.0, config.codex_weekly_cap_pct):
             return ReviewResult(self.name, ReviewVerdict.ERROR,
                                 "Codex weekly quota unavailable or at cap; review not dispatched", tier=tier)
@@ -533,23 +553,7 @@ class CodexReviewer(BaseReviewer):
             diff_len=len(pr.diff),
         )
 
-        run_on_host = None
-        use_ssh = False
-
-        if config.codex_host and config.codex_host not in ("local", ""):
-            if self._can_ssh_to_host(config.codex_host):
-                use_ssh = True
-                run_on_host = config.codex_host
-            elif self._codex_available_locally():
-                pass
-            else:
-                return ReviewResult(
-                    reviewer=self.name,
-                    verdict=ReviewVerdict.ERROR,
-                    reason="Cannot reach {} via SSH and no local codex".format(config.codex_host),
-                    tier=tier,
-                    duration_sec=time.time() - start_time,
-                )
+        use_ssh = target != 'local'
 
         codex_args = self._build_codex_args(effort)
 
@@ -562,8 +566,9 @@ class CodexReviewer(BaseReviewer):
                     import shlex
                     remote = codex_args[:-1] + ["-"]
                     result = subprocess.run(
-                        ["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=30", run_on_host,
-                         " ".join(shlex.quote(arg) for arg in remote)],
+                        ["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=30", target,
+                         'PATH="$HOME/bin:$HOME/.local/bin:/usr/local/bin:/usr/bin:/bin" '
+                         + " ".join(shlex.quote(arg) for arg in remote)],
                         input=prompt, capture_output=True, text=True, timeout=remaining_timeout(900))
                     response = result.stdout.strip()
                 else:

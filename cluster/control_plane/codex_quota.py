@@ -239,7 +239,8 @@ def _read_cache(path, now, max_age):
             if len(raw) > CACHE_MAX_BYTES:
                 raise ValueError('Oversized quota cache')
         value = json.loads(raw, object_pairs_hook=_unique_object)
-        if not isinstance(value, dict) or value.get('schema') != 1 or value.get('source') != APP_SOURCE:
+        if (not isinstance(value, dict) or type(value.get('schema')) is not int
+                or value['schema'] != 1 or value.get('source') != APP_SOURCE):
             raise ValueError('Malformed quota cache')
         stamp = _stamp(value.get('observed_at'))
         result = dict(empty, status='malformed', observed_at=value['observed_at'])
@@ -300,9 +301,13 @@ def main():
     """Fixed readonly SSH boundary: local-clock age travels with the quota."""
     import argparse
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.parse_args()
+    parser.add_argument('--nonce')
+    args = parser.parse_args()
+    if args.nonce is not None and not re.fullmatch('[0-9a-f]{32}', args.nonce):
+        parser.error('nonce must be 32 lowercase hexadecimal characters')
     served = time.time()
-    print(json.dumps(dict(schema=1, served_at=served, quota=read_codex_quota(now=served)),
+    print(json.dumps(dict(schema=1, limit_id='codex', nonce=args.nonce, served_at=served,
+                          quota=read_codex_quota(now=served)),
                      sort_keys=True, allow_nan=False))
 
 

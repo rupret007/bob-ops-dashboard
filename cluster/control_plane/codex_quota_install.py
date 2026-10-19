@@ -18,7 +18,7 @@ def install(machine, repo, home=None):
     reader = home / '.local/bin/storypool-codex-quota-read'
     reader.parent.mkdir(parents=True, exist_ok=True)
     reader.write_text('#!/bin/sh\nPYTHONPATH=' + shlex.quote(str(repo))
-                      + ' exec /usr/bin/python3 -m cluster.control_plane.codex_quota\n')
+                      + ' exec /usr/bin/python3 -m cluster.control_plane.codex_quota "$@"\n')
     reader.chmod(0o700)
     module = 'cluster.control_plane.codex_quota_observer'
     if machine == 'mini':

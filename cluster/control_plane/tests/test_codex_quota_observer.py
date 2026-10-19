@@ -255,7 +255,7 @@ def test_native_observers_have_fixed_interval_paths_and_owned_cleanup(tmp_path):
     timer=(tmp_path/'.config/systemd/user/storypool-codex-quota.timer').read_text()
     assert 'OnUnitActiveSec=300s' in timer
     reader=tmp_path/'.local/bin/storypool-codex-quota-read'
-    assert 'cluster.control_plane.codex_quota\n' in reader.read_text()
+    assert 'cluster.control_plane.codex_quota "$@"\n' in reader.read_text()
     assert stat.S_IMODE(reader.stat().st_mode)==0o700
     for name in ('mini','nucbox'):
         script=(Path(install.__file__).parent/'install'/('install-all-'+name+'.sh')).read_text()

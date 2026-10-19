@@ -117,35 +117,40 @@ def fetch_limits(*, executable='codex', timeout=TIMEOUT_SECONDS):
     finally:
         selector.close()
         if process is not None:
-            if process.stdin is not None:
-                try:
-                    process.stdin.close()
-                except OSError:
-                    pass
-            try:
-                process.wait(timeout=.5)
-            except subprocess.TimeoutExpired:
-                pass
-            # The server can exit while a host/helper remains. The whole group
-            # belongs to this one probe; never leave it behind on a fast exit.
-            try:
-                os.killpg(process.pid, signal.SIGTERM)
-            except ProcessLookupError:
-                pass
-            try:
-                process.wait(timeout=.5)
-            except subprocess.TimeoutExpired:
-                pass
-            try:
-                os.killpg(process.pid, signal.SIGKILL)
-            except ProcessLookupError:
-                pass
-            try:
-                process.wait(timeout=1)
-            except subprocess.TimeoutExpired:
-                raise ObservationError('cleanup_timeout') from None
-            if process.stdout is not None:
-                process.stdout.close()
+            stop_owned_process(process)
+
+
+def stop_owned_process(process):
+    """Close the process and all helpers in its separately owned group."""
+    if process.stdin is not None:
+        try:
+            process.stdin.close()
+        except OSError:
+            pass
+    try:
+        process.wait(timeout=.5)
+    except subprocess.TimeoutExpired:
+        pass
+    # The server can exit while a host/helper remains. The whole group
+    # belongs to this one probe; never leave it behind on a fast exit.
+    try:
+        os.killpg(process.pid, signal.SIGTERM)
+    except ProcessLookupError:
+        pass
+    try:
+        process.wait(timeout=.5)
+    except subprocess.TimeoutExpired:
+        pass
+    try:
+        os.killpg(process.pid, signal.SIGKILL)
+    except ProcessLookupError:
+        pass
+    try:
+        process.wait(timeout=1)
+    except subprocess.TimeoutExpired:
+        raise ObservationError('cleanup_timeout') from None
+    if process.stdout is not None:
+        process.stdout.close()
 
 
 def _private_directory(path):

@@ -40,10 +40,19 @@ Observations are specific to the host whose installed CLI fetched them. Do not a
 authentication accounts or quotas are interchangeable between Mini and NucBox. The
 fixed installed `~/.local/bin/storypool-codex-quota-read` boundary reads only that
 execution host's local cache/session observations, returning sanitized quota plus its
-own `served_at` clock. It never starts a CLI or contacts a provider. Remote callers
-must bind their admission decision to the selected execution target, validate
-source-clock age plus transport elapsed time, and recheck local admission if an SSH
-execution fails over locally. No account identifier needs to cross this boundary.
+own `served_at` clock and an explicit Codex bucket identifier. It never starts a CLI
+or contacts a provider. A nonce binds the response to the current bounded SSH read;
+freshness includes source-clock age and the whole transport interval, so clock skew
+cannot rejuvenate stale evidence. No account identifier crosses this boundary.
+
+Karen resolves its actual SSH/local target before reading that target's quota. A
+low Mini balance cannot authorize Nuc work, and a high Mini balance cannot suppress
+an eligible Nuc reviewer. If SSH preflight fails, a local fallback requires a fresh
+local quota check immediately before review. Unknown, stale or capped remote quota
+does not trigger an account switch; it declines that Codex invocation and allows the
+normal independent reviewer chain to continue. An SSH execution failure is reported
+without automatically replaying uncertain model work locally. Availability checks
+never authorize a later fallback on a different host.
 
 Offline protocol fixtures cover exact handshake/method ordering, malformed and
 conflicting buckets, primary/secondary weekly windows, private-data exclusion,

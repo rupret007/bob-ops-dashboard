@@ -194,7 +194,7 @@ class TestCodexReviewer(unittest.TestCase):
            return_value={'weekly_pct': 80.0})
     def test_not_available_over_budget(self, quota):
         tmpdir = tempfile.mkdtemp()
-        config = KarenConfig(state_dir=tmpdir, codex_weekly_cap_pct=75.0)
+        config = KarenConfig(state_dir=tmpdir, codex_host='local', codex_weekly_cap_pct=75.0)
 
         state_file = Path(tmpdir) / "codex_weekly_usage.json"
         state_file.write_text(json.dumps({
@@ -522,6 +522,10 @@ class TestCodexSSH(unittest.TestCase):
                       return_value={'weekly_pct': 21.0})
         quota.start()
         self.addCleanup(quota.stop)
+        remote = patch('cluster.control_plane.local_karen.reviewers.read_remote_codex_quota',
+                       return_value={'weekly_pct': 21.0})
+        remote.start()
+        self.addCleanup(remote.stop)
 
     def test_uses_ssh_when_host_configured(self):
         """Verify SSH is used when codex_host is set and reachable."""
