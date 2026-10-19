@@ -155,7 +155,7 @@ def observed():
                 observation=dict(nonce='d' * 32, served_at=1000),
                 rollout=dict(phase='active', head=TARGET, activated_at=990, last_confirmed_at=1000),
                 groups={name: dict(started_at=1000, finished_at=1000, period=period,
-                                   checks=[dict(name=name, passed=True)])
+                                   execution_completed=True, checks=[dict(name=name, passed=True)])
                         for name, period in PERIODS.items()})
     return health_peer.direct_observation(peer, 'nucbox', 'd' * 32, 1000, .1)
 
@@ -182,7 +182,7 @@ def test_target_gate_requires_direct_fresh_exact_active_observation(monkeypatch,
     if change == 'semantic-yellow': peer['groups']['guardian']['checks'][0].update(passed=False, unknown=True)
     monkeypatch.setattr(health_adapters, 'collect_peer', lambda _: dict(details=details))
     monkeypatch.setattr(updater.time, 'time', lambda: 1001)
-    assert updater.target_canary_ready('mini', TARGET) is (change in ('none', 'semantic-yellow'))
+    assert updater.target_canary_ready('mini', TARGET) is (change == 'none')
 
 
 def test_unavailable_peer_fails_closed_without_logging_raw_values(monkeypatch, caplog):

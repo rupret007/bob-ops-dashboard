@@ -89,7 +89,7 @@ def test_active_mini_new_head_cannot_promote_before_matching_nuc_canary(tmp_path
     scheduler = service.Scheduler(tmp_path, 'mini', TARGET, Executor(), Executor())
     scheduler.status['rollout'] = dict(phase='canary', activated_at=1000, head=TARGET)
     scheduler.status['groups'] = {name: dict(started_at=1000, finished_at=1000,
-        checks=[dict(name=name, passed=True)], details={}) for name in PERIODS}
+        execution_completed=True, checks=[dict(name=name, passed=True)], details={}) for name in PERIODS}
     details = observed()
     if change == 'loaded-head': details['health']['loaded_head'] = OLD
     if change == 'receipt-head': details['health']['rollout']['head'] = OLD
@@ -149,7 +149,7 @@ def test_new_revision_recovers_only_to_observe_with_private_failure_archive(tmp_
     assert not scheduler.slow.calls  # Fresh complete groups must precede comparison.
     assert not (tmp_path / '.health-authority').exists()
     scheduler.status['groups'] = {name: dict(checks=[dict(name=name, passed=True)],
-        finished_at=1000, details={}) for name in PERIODS}
+        started_at=1000, finished_at=1000, execution_completed=True, details={}) for name in PERIODS}
     scheduler.rollout_tick(1, 1000)
     assert scheduler.transition[0] == 'compare'
     scheduler.transition[1].set_result(dict(passed=True, head='b' * 40))

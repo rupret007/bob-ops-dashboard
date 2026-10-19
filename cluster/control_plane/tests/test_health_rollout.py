@@ -11,7 +11,8 @@ from cluster.control_plane.health_adapters import PERIODS
 def candidate(machine='nucbox'):
     return {'machine': machine, 'loaded_head': 'a' * 40, 'timestamp': 1000,
             'groups': {name: {'checks': [{'name': name, 'passed': True}],
-                              'finished_at': 1000, 'period': period, 'details': {}}
+                              'started_at': 1000, 'finished_at': 1000,
+                              'execution_completed': True, 'period': period, 'details': {}}
                        for name, period in PERIODS.items()},
             'rollout': {'phase': 'observe'}}
 

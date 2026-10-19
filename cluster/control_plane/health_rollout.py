@@ -8,10 +8,12 @@ import time
 from pathlib import Path
 
 from . import guardian, watchdog
-from .health_adapters import PERIODS, collect
-from .health_state import atomic_json, recovery_lock
+from .health_adapters import PERIODS, TIMEOUTS, collect
+from .health_peer import number
+from .health_state import atomic_json, recovery_lock, unknown
 
 RETIRED = ('watchdog', 'guardian', 'ops-doctor', 'shadow')
+CANARY_TIMEOUT = 2 * sum(TIMEOUTS.values()) + 90
 
 
 def launchd_enable_states(output):
@@ -41,15 +43,63 @@ def same_checks(old, new):
     return len(old) == len(new) and normalize(old) == normalize(new)
 
 
-def complete_cycle(status, now, since=0):
-    for name, period in PERIODS.items():
-        group = status.get('groups', {}).get(name, {})
-        if (not group or group.get('error') or not group.get('checks')
-                or any(c.get('execution_error') for c in group['checks'])
-                or group.get('started_at', group.get('finished_at', 0)) < since
-                or not 0 <= now - group.get('finished_at', 0) <= period + 90):
+def positive_group(group, name, now, since=0):
+    """Only a bounded, completed probe with positive findings proves health."""
+    if (name not in PERIODS or not isinstance(group, dict)
+            or not all(number(value) for value in (now, since, group.get('started_at'),
+                                                   group.get('finished_at')))
+            or not 0 <= since <= group['started_at'] <= group['finished_at'] <= now
+            or now - group['finished_at'] > PERIODS[name] + 90
+            or group.get('execution_completed') is not True
+            or group.get('error') is not None or group.get('unknown', False) is not False):
+        return False
+    checks = group.get('checks')
+    if not isinstance(checks, list) or not checks:
+        return False
+    names = set()
+    for check in checks:
+        if (not isinstance(check, dict) or not isinstance(check.get('name'), str)
+                or not check['name'].strip() or check['name'] in names
+                or check['name'] == name + '_execution'
+                or check.get('passed') is not True
+                or not isinstance(check.get('message', ''), str)
+                or any(key in check and type(check[key]) is not bool
+                       for key in ('unknown', 'execution_error', 'repaired'))
+                or check.get('execution_error', False) or unknown(check)):
             return False
+        names.add(check['name'])
     return True
+
+
+def complete_cycle(status, now, since=0):
+    groups = status.get('groups') if isinstance(status, dict) else None
+    return (isinstance(groups, dict) and all(
+        positive_group(groups.get(name), name, now, since) for name in PERIODS))
+
+
+def failed_canary(status, now, since):
+    """Wait for initial groups only within two existing probe budgets +90s.
+
+    Even serialized probes have time for an already in-flight cycle and a new
+    post-activation cycle, plus the existing freshness/scheduler allowance.
+    Probe deadlines and cadences themselves remain unchanged.
+    """
+    groups = status.get('groups', {})
+    if (not isinstance(groups, dict) or not all(number(value) for value in (now, since))
+            or not 0 < since <= now or now - since > CANARY_TIMEOUT):
+        return True
+    for name in PERIODS:
+        if name not in groups:
+            continue
+        group = groups[name]
+        if isinstance(group, dict):
+            started, finished = group.get('started_at'), group.get('finished_at')
+            if (all(number(value) for value in (started, finished))
+                    and 0 <= started < since and started <= finished <= now):
+                continue  # Valid pre-activation results cannot certify this canary.
+        if not positive_group(group, name, now, since):
+            return True
+    return False
 
 
 def peer_canary_ok(status, peer, now, observation=None):
@@ -141,9 +191,18 @@ class Manager:
                 unit = 'storypool-' + name + '.timer'
                 installed = (self.root / '.config/systemd/user' / unit).exists()
                 result[name] = dict(installed=installed,
-                                    enabled=self.run(['systemctl', '--user', 'is-enabled', unit]).returncode == 0,
-                                    active=self.run(['systemctl', '--user', 'is-active', unit]).returncode == 0)
+                                    enabled=self.systemd_state(unit, 'is-enabled'),
+                                    active=self.systemd_state(unit, 'is-active'))
         return result
+
+    def systemd_state(self, unit, operation):
+        result = self.run(['systemctl', '--user', operation, unit])
+        states = ({(0, 'enabled'): True, (1, 'disabled'): False} if operation == 'is-enabled'
+                  else {(0, 'active'): True, (3, 'inactive'): False})
+        key = result.returncode, (result.stdout or '').strip()
+        if key not in states:
+            raise RuntimeError('Unable to inspect legacy timer state')
+        return states[key]
 
     def disable(self):
         for name, value in self.snapshot().items():
@@ -190,6 +249,18 @@ class Manager:
                     if selected and self.run(['systemctl', '--user', action, unit]).returncode:
                         raise RuntimeError('Unable to restore legacy timer')
 
+    def verify_restored(self, previous):
+        observed = self.snapshot()
+        if (not isinstance(previous, dict) or not isinstance(observed, dict)
+                or set(previous) != set(RETIRED) or set(observed) != set(RETIRED)):
+            return False
+        keys = ('installed', 'enabled', 'active')
+        return all(isinstance(previous[name], dict) and isinstance(observed[name], dict)
+                   and all(type(previous[name].get(key)) is bool
+                           and type(observed[name].get(key)) is bool
+                           and previous[name][key] == observed[name][key] for key in keys)
+                   for name in RETIRED)
+
 
 def recover_transition(root, status, manager, head, now):
     """A new binary may observe again only after proving legacy ownership."""
@@ -217,6 +288,17 @@ def recover_transition(root, status, manager, head, now):
     return dict(phase='observe', started_at=now, recovered_transition_head=old_head)
 
 
+def _restore_verified(root, status, manager, previous):
+    try:
+        manager.restore(previous)
+        if not manager.verify_restored(previous):
+            raise RuntimeError('Legacy unit restoration could not be verified')
+    except Exception as exc:
+        status['rollout'].update(phase='transition-failed', error=type(exc).__name__)
+        atomic_json(Path(root) / 'health-status.json', status)
+        raise
+
+
 def activate(root, status, manager, now):
     with recovery_lock(root):
         previous = manager.snapshot()
@@ -231,7 +313,7 @@ def activate(root, status, manager, now):
             if not manager.verify_disabled():
                 raise RuntimeError('Legacy units still active')
         except Exception:
-            manager.restore(previous)
+            _restore_verified(root, status, manager, previous)
             status['rollout'] = old
             atomic_json(Path(root) / 'health-status.json', status)
             (Path(root) / '.health-authority').unlink(missing_ok=True)
@@ -246,7 +328,7 @@ def rollback(root, status, manager):
     with recovery_lock(root):
         status['rollout']['phase'] = 'switching'
         atomic_json(Path(root) / 'health-status.json', status)
-        manager.restore(status['rollout']['previous_units'])
+        _restore_verified(root, status, manager, status['rollout']['previous_units'])
         status['rollout'].update(phase='rolled-back', rolled_back_at=time.time())
         atomic_json(Path(root) / 'health-status.json', status)
         (Path(root) / '.health-authority').unlink(missing_ok=True)

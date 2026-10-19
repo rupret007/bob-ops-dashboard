@@ -112,7 +112,7 @@ class Scheduler:
 
     def rollout_tick(self, monotonic, now):
         from .health_rollout import (Manager, activate, compare_cycle, complete_cycle,
-                                     peer_canary_ok, rollback)
+                                     failed_canary, peer_canary_ok, rollback)
         rollout = self.status['rollout']
         if self.transition and self.transition[1].done():
             kind, future = self.transition
@@ -158,11 +158,8 @@ class Scheduler:
             self.transition = ('activate', self.slow.submit(activate, self.root,
                                copy.deepcopy(self.status), Manager(self.machine), now))
         elif rollout['phase'] == 'canary':
-            since = rollout.get('activated_at', now)
-            failed = any(group.get('error') or any(c.get('execution_error') for c in group.get('checks', []))
-                         for group in self.status['groups'].values()
-                         if group.get('started_at', 0) >= since)
-            if failed:
+            since = rollout.get('activated_at')
+            if failed_canary(self.status, now, since):
                 rollout['phase'] = 'switching'
                 atomic_json(self.root / 'health-status.json', self.status)
                 self.transition = ('rollback', self.slow.submit(rollback, self.root,
@@ -176,7 +173,8 @@ class Scheduler:
                         return
                 rollout.update(phase='active', canary_passed_at=now,
                                last_confirmed_at=now, head=self.status['loaded_head'])
-        elif rollout['phase'] == 'active' and complete_cycle(self.status, now):
+        elif rollout['phase'] == 'active' and complete_cycle(
+                self.status, now, rollout.get('activated_at')):
             rollout['last_confirmed_at'] = now
 
     def tick(self, monotonic, now):

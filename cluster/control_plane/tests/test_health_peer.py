@@ -22,6 +22,7 @@ def report(served=1000):
                 rollout=dict(phase='active', head='b' * 40, activated_at=served - 30,
                              last_confirmed_at=served - 5),
                 groups={name: dict(started_at=served - 15, finished_at=served - 10,
+                                   execution_completed=True,
                                    period=period, checks=[dict(name=name, passed=True)])
                         for name, period in PERIODS.items()})
 
