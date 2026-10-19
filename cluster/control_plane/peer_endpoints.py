@@ -30,10 +30,53 @@ def tailnet_status():
                               kind='discovery-unavailable') from exc
 
 
+
+def manifest_hostnames(machine):
+    """Read optional machine identities without generating deployment config.
+
+    STORYPOOL_MANIFEST_FILE points to JSON containing
+    {"machines": {"nucbox": {"hostnames": ["build-station"]}}}.
+    Entries are exact Tailscale HostName labels, not URLs or suffix patterns.
+    Explicit malformed configuration fails closed; private URL checks still apply.
+    """
+    if 'STORYPOOL_MANIFEST_FILE' not in os.environ:
+        return set()
+    try:
+        path = Path(os.environ['STORYPOOL_MANIFEST_FILE']).expanduser()
+        with path.open('rb') as source:
+            raw = source.read(65537)
+        if len(raw) > 65536:
+            raise ValueError('Manifest too large')
+        data = json.loads(raw)
+        machines = data.get('machines') if isinstance(data, dict) else None
+        if not isinstance(machines, dict):
+            raise ValueError('Invalid machine map')
+        profile = machines.get(machine, {})
+        if not isinstance(profile, dict):
+            raise ValueError('Invalid machine profile')
+        names = profile.get('hostnames', [])
+        if not isinstance(names, list) or len(names) > 16:
+            raise ValueError('Invalid hostname list')
+        result = set()
+        for name in names:
+            if not isinstance(name, str):
+                raise ValueError('Invalid hostname')
+            host = name.lower().removesuffix('.local')
+            if not re.fullmatch(r'[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?', host):
+                raise ValueError('Invalid hostname')
+            result.add(host)
+        return result
+    except (OSError, ValueError) as exc:
+        raise PeerUnavailable('Private host manifest unreadable or invalid') from exc
+
+
 def peer_node(machine):
     aliases = {'mini': ('mini', 'mac-mini'), 'nucbox': ('nucbox',)}
     if machine not in aliases:
         raise PeerUnavailable('Unknown machine')
+    exact_hosts = manifest_hostnames(machine)
+    if machine == 'nucbox':
+        exact_hosts.add('nuc-wsl')
     status = tailnet_status()
     nodes = [status.get('Self', {})] + list((status.get('Peer') or {}).values())
     matches = []
@@ -43,7 +86,8 @@ def peer_node(machine):
         # anchored and reject multiple matches rather than selecting a host by
         # list order, online state, or a loose substring match.
         model_host = machine == 'nucbox' and re.fullmatch(r'nucbox-?[a-z]{1,4}[0-9]{1,3}', host)
-        if model_host or any(host == name or host.endswith('-' + name) for name in aliases[machine]):
+        if (model_host or host in exact_hosts or
+                any(host == name or host.endswith('-' + name) for name in aliases[machine])):
             matches.append(node)
     if len(matches) != 1:
         kind = 'identity-ambiguous' if matches else 'identity-missing'
