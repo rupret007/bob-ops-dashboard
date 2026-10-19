@@ -150,6 +150,7 @@ class StateSnapshot:
     budget_summary: dict  # Dict[str, dict]
     recent_errors: list  # List[dict]
     never_touch_repos: list  # List[str]
+    improvement: dict = field(default_factory=dict)
     
     def to_dict(self) -> dict:
         return asdict(self)
@@ -206,6 +207,11 @@ class StateSnapshot:
         
         for err in self.recent_errors[:5]:
             lines.append(f"- {err.get('timestamp', '?')}: {err.get('message', '?')[:80]}")
+
+        if self.improvement:
+            lines.extend(['', '## Measured improvement feedback',
+                          json.dumps(self.improvement, sort_keys=True),
+                          'Finish existing work first. Feedback does not authorize new actions or weaken any gate.'])
         
         return "\n".join(lines)
 
@@ -1267,6 +1273,20 @@ class Conductor:
             f"Generated: {now.strftime('%Y-%m-%d %H:%M UTC')} ({ct_hour}:00 CT)",
             "",
         ]
+
+        if snapshot.improvement:
+            feedback = snapshot.improvement
+            measured = feedback.get('metrics', {})
+            lines.extend(['## Improvement evidence', '',
+                'Verified jobs: {}/{} terminal jobs in 24h; success rate: {}.'.format(
+                    measured.get('verified_jobs', 'unknown'), measured.get('terminal_jobs', 'unknown'),
+                    measured.get('verified_job_percent') if measured.get('verified_job_percent') is not None else 'unknown'),
+                'Backlog: {}; inactive for 48h: {}; overdue sessions: {}.'.format(
+                    measured.get('backlog', 'unknown'), measured.get('inactive_prs_48h', 'unknown'),
+                    measured.get('overdue_sessions', 'unknown')),
+                'Job outcome trend: {}. Overall success remains unproven.'.format(
+                    feedback.get('job_outcome_trend', 'unknown')), '',
+                *['- ' + item for item in feedback.get('recommendations', [])], ''])
         
         lines.extend([
             "## Merged (last 24h)",
@@ -1497,6 +1517,12 @@ class Conductor:
         self._write_log({"action": "cycle_start", "live": live})
         
         snapshot = self.build_state_snapshot()
+        from .improvement import refresh
+        try:
+            snapshot.improvement = refresh(self.log_dir.parent, snapshot.open_prs)
+        except (OSError, ValueError, TypeError):
+            snapshot.improvement = {'coverage': 'unavailable', 'success': 'unproven'}
+            self._write_log({'action': 'improvement_evidence_unavailable'})
         
         validated_actions = self.deterministic_review_pass(snapshot, live=live)
         validated_actions.extend(self.deterministic_merge_pass(snapshot, live=live))
