@@ -10,7 +10,7 @@ from cluster.control_plane.local_karen.checks import PRInfo
 from cluster.control_plane.local_karen.config import KarenConfig
 from cluster.control_plane.local_karen.reviewers import ReviewResult, ReviewVerdict
 
-SECRET = 'synthetic-private-value-never-retain'
+UNTRUSTED_TEXT = 'synthetic-private-value-never-retain'
 EXPECTED = [{'reviewer': 'minimax', 'chunk': 2, 'source_context_error': 'source_metadata',
              'context_code': 'source_unavailable', 'changed_requests': 0, 'source_requests': 1}]
 
@@ -19,14 +19,14 @@ def incomplete(tmp_path, verdict=ReviewVerdict.ERROR):
     pr = PRInfo(owner='owner', repo='repo', number=7, head_sha='a' * 40,
                 title='fixture', author='fixture', is_draft=False, diff='+fixture',
                 ci_status={}, changed_files=[], deleted_files=[])
-    review = ReviewResult('minimax', ReviewVerdict.BORDERLINE, SECRET,
-                          raw_response=SECRET, requested_source_files=[SECRET],
-                          findings={'security_issues': [SECRET]},
+    review = ReviewResult('minimax', ReviewVerdict.BORDERLINE, UNTRUSTED_TEXT,
+                          raw_response=UNTRUSTED_TEXT, requested_source_files=[UNTRUSTED_TEXT],
+                          findings={'security_issues': [UNTRUSTED_TEXT]},
                           scope={'chunk': 2, 'source_context_error': 'source_metadata',
                                  'context_resolution': {'code': 'source_unavailable',
                                                         'changed_requests': 0, 'source_requests': 1},
-                                 'file_header': SECRET, 'arbitrary': SECRET})
-    combined = ReviewResult('chain', verdict, SECRET, scope={'context_incomplete': True})
+                                 'file_header': UNTRUSTED_TEXT, 'arbitrary': UNTRUSTED_TEXT})
+    combined = ReviewResult('chain', verdict, UNTRUSTED_TEXT, scope={'context_incomplete': True})
     config = KarenConfig(state_dir=str(tmp_path), verdict_dir=str(tmp_path))
     with patch.object(gate, 'run_all_checks', return_value=[]), \
          patch.object(gate, 'run_review_chain', return_value=(combined, [review])), \
@@ -48,7 +48,7 @@ def test_incomplete_gate_retains_fixed_code_without_artifact_or_approval(tmp_pat
     assert result.verdict_path is None and not result.sha_verified
     assert result.verdict.review_results == []
     assert getattr(result, 'context_diagnostics', None) == EXPECTED
-    assert SECRET not in json.dumps(result.context_diagnostics)
+    assert UNTRUSTED_TEXT not in json.dumps(result.context_diagnostics)
 
 
 def test_poller_persists_safe_diagnostics_without_model_reason(tmp_path, caplog):
@@ -69,24 +69,24 @@ def test_poller_persists_safe_diagnostics_without_model_reason(tmp_path, caplog)
     assert records[0].get('context_diagnostics') == EXPECTED
     state = (tmp_path / 'poll_state.json').read_text()
     assert json.loads(state)['prs_checked'] == records
-    assert SECRET not in state and SECRET not in caplog.text
+    assert UNTRUSTED_TEXT not in state and UNTRUSTED_TEXT not in caplog.text
 
 
 def test_sanitizer_rejects_untrusted_values_and_bounds_records():
     from cluster.control_plane.local_karen.context_diagnostics import sanitize_context_diagnostics
-    hostile = dict(EXPECTED[0], source_context_error=SECRET, context_code=[SECRET],
+    hostile = dict(EXPECTED[0], source_context_error=UNTRUSTED_TEXT, context_code=[UNTRUSTED_TEXT],
                    changed_requests=True, source_requests=5, chunk=-1,
-                   path=SECRET, reason=SECRET, raw_response=SECRET, findings=SECRET)
-    safe = sanitize_context_diagnostics([hostile, {'reviewer': SECRET, 'context_code': SECRET}])
+                   path=UNTRUSTED_TEXT, reason=UNTRUSTED_TEXT, raw_response=UNTRUSTED_TEXT, findings=UNTRUSTED_TEXT)
+    safe = sanitize_context_diagnostics([hostile, {'reviewer': UNTRUSTED_TEXT, 'context_code': UNTRUSTED_TEXT}])
     assert safe == [{'reviewer': 'minimax', 'source_context_error': 'unknown', 'context_code': 'unknown'}]
-    assert SECRET not in json.dumps(safe)
+    assert UNTRUSTED_TEXT not in json.dumps(safe)
     assert len(sanitize_context_diagnostics(EXPECTED * 100)) == 32
-    for malformed in (None, SECRET, {}, 1, True):
+    for malformed in (None, UNTRUSTED_TEXT, {}, 1, True):
         assert sanitize_context_diagnostics(malformed) == []
-    assert sanitize_context_diagnostics([None, [], SECRET, {'reviewer': 'minimax'}]) == []
+    assert sanitize_context_diagnostics([None, [], UNTRUSTED_TEXT, {'reviewer': 'minimax'}]) == []
 
 
-@pytest.mark.parametrize('chunk', [0, -1, True, 4097, 1.5, SECRET])
+@pytest.mark.parametrize('chunk', [0, -1, True, 4097, 1.5, UNTRUSTED_TEXT])
 def test_malformed_chunk_is_omitted(chunk):
     from cluster.control_plane.local_karen.context_diagnostics import sanitize_context_diagnostics
     assert 'chunk' not in sanitize_context_diagnostics([dict(EXPECTED[0], chunk=chunk)])[0]
@@ -94,7 +94,7 @@ def test_malformed_chunk_is_omitted(chunk):
 
 def test_poller_resanitizes_gate_boundary(tmp_path):
     from cluster.control_plane.local_karen.context_diagnostics import sanitize_context_diagnostics
-    untrusted = dict(EXPECTED[0], arbitrary=SECRET, changed_requests=999, reviewer='minimax')
+    untrusted = dict(EXPECTED[0], arbitrary=UNTRUSTED_TEXT, changed_requests=999, reviewer='minimax')
     result = SimpleNamespace(error='incomplete', sha_verified=False, verdict_path=None,
                              context_diagnostics=[untrusted])
     with patch.object(poller, 'list_prs_with_label', return_value=[{'number': 7, 'headRefOid': 'a'*40}]), \
@@ -102,17 +102,17 @@ def test_poller_resanitizes_gate_boundary(tmp_path):
          patch('cluster.control_plane.node_control.is_draining', return_value=False):
         records = poller.poll_and_run(['owner/repo'], KarenConfig(state_dir=str(tmp_path)))
     assert records[0]['context_diagnostics'] == sanitize_context_diagnostics([untrusted])
-    assert SECRET not in json.dumps(records)
+    assert UNTRUSTED_TEXT not in json.dumps(records)
 
 
 def test_collector_omits_malformed_scopes_and_unknown_reviewers():
     from cluster.control_plane.local_karen.context_diagnostics import collect_context_diagnostics
-    reviews = [SimpleNamespace(reviewer='minimax', scope=SECRET),
-               SimpleNamespace(reviewer=SECRET, scope={'source_context_error': 'source_metadata'}),
+    reviews = [SimpleNamespace(reviewer='minimax', scope=UNTRUSTED_TEXT),
+               SimpleNamespace(reviewer=UNTRUSTED_TEXT, scope={'source_context_error': 'source_metadata'}),
                SimpleNamespace(reviewer='codex', scope={'chunk': 4096,
                    'source_context_error': 'source_identity_or_path',
                    'context_resolution': {'code': 'context_budget', 'changed_requests': 4,
-                                          'source_requests': 0}, 'source': SECRET})]
+                                          'source_requests': 0}, 'source': UNTRUSTED_TEXT})]
     assert collect_context_diagnostics(reviews) == [{
         'reviewer': 'codex', 'chunk': 4096, 'source_context_error': 'source_identity_or_path',
         'context_code': 'context_budget', 'changed_requests': 4, 'source_requests': 0}]
@@ -121,7 +121,7 @@ def test_collector_omits_malformed_scopes_and_unknown_reviewers():
 def test_context_diagnostics_cannot_inherit_a_verdict_or_authority():
     from cluster.control_plane.local_karen.context_diagnostics import sanitize_context_diagnostics
     record = dict(EXPECTED[0], passed=True, verdict='PASS', sha_verified=True,
-                  verdict_path=SECRET, head_sha='a' * 40, status='COMPLETE')
+                  verdict_path=UNTRUSTED_TEXT, head_sha='a' * 40, status='COMPLETE')
     assert sanitize_context_diagnostics([record]) == EXPECTED
 
 
