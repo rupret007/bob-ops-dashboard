@@ -191,6 +191,8 @@ def verdict(status, machine, now):
     if (status.get('schema') != 1 or status.get('machine') != machine
             or not isinstance(timestamp, (int, float)) or not 0 <= now - timestamp <= 150):
         return result
+    if status.get('rollout', {}).get('phase') == 'transition-failed':
+        return dict(result, state='red', detail='Health cutover/rollback failed; inspect native manager and health logs')
     groups = status.get('groups', {})
     expected = status.get('expected_groups', list(groups))
     if not expected:

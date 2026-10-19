@@ -88,6 +88,13 @@ class Scheduler:
                 self.retry_rollout_at = now + 600
         if self.transition or now < self.retry_rollout_at:
             return
+        request = self.root / '.health-rollback-request'
+        if request.exists() and rollout['phase'] in ('active', 'canary'):
+            rollout['phase'] = 'switching'
+            atomic_json(self.root / 'health-status.json', self.status)
+            self.transition = ('rollback', self.slow.submit(rollback, self.root,
+                               copy.deepcopy(self.status), Manager(self.machine)))
+            return
         if rollout['phase'] == 'observe' and complete_cycle(self.status, now):
             comparison = rollout.get('comparison', {})
             if not comparison.get('passed') or comparison.get('head') != self.status['loaded_head']:
@@ -154,7 +161,7 @@ class Scheduler:
         self.status['timestamp'] = now
         self.status['in_flight'] = list(self.pending)
         atomic_json(self.root / 'health-status.json', self.status)
-        if live:
+        if live or self.status['rollout']['phase'] == 'transition-failed':
             render_alerts(self.root, self.status)
 
 

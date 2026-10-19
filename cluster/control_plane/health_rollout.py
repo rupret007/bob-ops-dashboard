@@ -84,11 +84,19 @@ class Manager:
 
     def snapshot(self):
         result = {}
+        disabled = ''
+        if self.machine == 'mini':
+            listing = self.run(['launchctl', 'print-disabled', self.domain])
+            if listing.returncode:
+                raise RuntimeError('Unable to inspect agent enable state')
+            disabled = listing.stdout
         for name in RETIRED:
             if self.machine == 'mini':
                 target = self.domain + '/com.storypool.' + name
                 installed = (self.root / 'Library/LaunchAgents' / ('com.storypool.' + name + '.plist')).exists()
-                result[name] = dict(installed=installed, active=self.run(['launchctl', 'print', target]).returncode == 0)
+                enabled = not re.search(r'"com\.storypool\.' + re.escape(name) + r'"\s*=>\s*true', disabled)
+                result[name] = dict(installed=installed, enabled=enabled,
+                                    active=self.run(['launchctl', 'print', target]).returncode == 0)
             else:
                 unit = 'storypool-' + name + '.timer'
                 installed = (self.root / '.config/systemd/user' / unit).exists()
@@ -130,6 +138,8 @@ class Manager:
                     if self.run(['launchctl', 'print', target]).returncode:
                         if self.run(['launchctl', 'bootstrap', self.domain, str(path)]).returncode:
                             raise RuntimeError('Unable to restore legacy agent')
+                if not value.get('enabled', True) and self.run(['launchctl', 'disable', target]).returncode:
+                    raise RuntimeError('Unable to restore disabled agent state')
             else:
                 unit = 'storypool-' + name + '.timer'
                 for action, selected in [('enable' if value['enabled'] else 'disable', True),
@@ -171,4 +181,5 @@ def rollback(root, status, manager):
         status['rollout'].update(phase='rolled-back', rolled_back_at=time.time())
         atomic_json(Path(root) / 'health-status.json', status)
         (Path(root) / '.health-authority').unlink(missing_ok=True)
+        (Path(root) / '.health-rollback-request').unlink(missing_ok=True)
     return status['rollout']
