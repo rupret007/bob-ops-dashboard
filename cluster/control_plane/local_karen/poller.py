@@ -316,7 +316,6 @@ def _run_poll_once(config=None, auto_discover=True, auto_label=True, auto_update
     Reads repos from environment or config, or auto-discovers if enabled.
     Auto-discovery wins over single-repo config (repos=[] or 'auto' triggers discovery).
     """
-    record_runtime(config or KarenConfig.load())
     machine = os.environ.get("STORYPOOL_MACHINE", "mini")
     install_dir_env = os.environ.get("STORYPOOL_INSTALL_DIR")
     install_dir = Path(install_dir_env).expanduser() if install_dir_env else None
@@ -449,6 +448,9 @@ def run_poll_once(config=None, auto_discover=True, auto_label=True, auto_update=
         except BlockingIOError:
             logger.info("Poll skipped: another review cycle is active")
             return []
+        # Loaded-code evidence must survive a resource deferral. This starts no
+        # review, provider call or self-update and does not bypass any guard.
+        record_runtime(config)
         guard = MachineGuards(os.environ.get("STORYPOOL_MACHINE", "mini")).check_all()
         if not guard.passed:
             logger.warning("Poll deferred: %s", guard.reason)

@@ -320,6 +320,7 @@ def run_tests(repo_dir: Path) -> bool:
              "cluster/tests/test_never_touch.py",
              "cluster/tests/test_install_scripts.py",
              "cluster/tests/test_python39.py",
+             "cluster/control_plane/tests/test_update_imports.py",
              "cluster/control_plane/tests/test_guardian.py",
              "cluster/control_plane/tests/test_guardian_http.py",
              "-q", "--tb=short", "-r", "fE"],
