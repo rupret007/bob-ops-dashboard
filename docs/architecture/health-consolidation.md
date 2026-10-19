@@ -164,6 +164,16 @@ results atomically; overdue/missing/invalid observations are yellow.
 | Work flowing | Full-SHA Karen verdict and verified job in60m, no stale NEEDS_JEFF | Yellow with exact reason; never manufacture jobs/PASSes to turn green |
 | Peer freshness | Direct authenticated private endpoint, original node identity/time | Expired/partitioned peer is unknown; never remote-restart or elect leader |
 
+The Nuc doctor runs the actual local queued → running → pushed → exact-SHA
+Karen smoke. Mini has no enabled Codex fix lane, so its doctor observes that
+same Nuc pipeline through a fresh nonce-validated response, using the peer clock
+and the full revision explicitly supplied by its own health scheduler. The Nuc
+doctor must have a completed positive `pipeline_smoke`, exit code 0, and probe
+times after activation of that revision. Mini's local services remain covered
+by watchdog. This observation does not qualify the whole peer cycle: deployment
+admission still separately requires the complete positive Nuc canary. Neither
+an absent job nor a failed or stale Nuc smoke becomes a healthy result.
+
 Thresholds: transient GitHub execution failures notify only after three consecutive
 failed *observations*. A budget-deferred check neither resolves an incident nor
 proves success. Show pending/warning immediately. Genuine local repair failure is

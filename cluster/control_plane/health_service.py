@@ -47,12 +47,14 @@ def validated_result(result, group):
     return result
 
 
-def execute(group, machine, live):
+def execute(group, machine, live, expected_head=None):
     started = time.monotonic()
     argv = [sys.executable, '-m', 'cluster.control_plane.health_adapters', group,
             '--machine', machine]
     if live:
         argv.append('--live')
+    if expected_head is not None:
+        argv.extend(['--expected-head', expected_head])
     result = redact(validated_result(json.loads(bounded_output(argv, TIMEOUTS[group])), group))
     elapsed = time.monotonic() - started
     if not math.isfinite(elapsed) or not 0 <= elapsed <= TIMEOUTS[group]:
@@ -215,7 +217,8 @@ class Scheduler:
                 continue
             permit = live and now >= self.status['repair_after'].get(name, 0)
             pool = self.fast if name in ('guardian', 'flow') else self.slow
-            self.pending[name] = (pool.submit(execute, name, self.machine, permit), now)
+            self.pending[name] = (pool.submit(execute, name, self.machine, permit,
+                                              self.status['loaded_head']), now)
             self.due[name] = monotonic + PERIODS[name]
         self.status['timestamp'] = now
         self.status['in_flight'] = list(self.pending)

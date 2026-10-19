@@ -49,7 +49,7 @@ def test_live_watchdog_only_repairs_allowlisted_local_failures():
 def test_doctor_preserves_diagnostics_and_distinguishes_finding_from_execution_error():
     for code, failed, execution in [(0, False, False), (1, True, False), (2, True, True)]:
         with patch.object(adapter.subprocess, 'run', return_value=Mock(returncode=code, stdout='SMOKE evidence', stderr='')):
-            result = adapter.collect('doctor', 'mini', False)
+            result = adapter.collect('doctor', 'nucbox', False)
         assert result['checks'][0]['passed'] is not failed
         assert result['checks'][0]['execution_error'] is execution
         assert result['details']['diagnostics'] == 'SMOKE evidence'

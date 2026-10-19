@@ -147,7 +147,7 @@ def compare_cycle(status):
         comparisons['guardian'] = fresh and old_guardian['dashboard']['ok'] == status['groups']['guardian']['details']['dashboard']['ok']
     except (OSError, ValueError, KeyError, TypeError):
         comparisons['guardian'] = False
-    old_doctor = collect('doctor', machine, False)
+    old_doctor = collect('doctor', machine, False, expected_head=status['loaded_head'])
     comparisons['doctor'] = same_checks(old_doctor['checks'], status['groups']['doctor']['checks'])
     old_shadow = collect('shadow', machine, False)
     def decisions(value):

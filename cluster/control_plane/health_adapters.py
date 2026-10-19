@@ -5,6 +5,7 @@ import argparse
 import contextlib
 import json
 import os
+import re
 import subprocess
 import sys
 import time
@@ -25,7 +26,7 @@ def check(name, passed, message='', **kwargs):
     return dict(name=name, passed=passed, message=message, **kwargs)
 
 
-def collect(group, machine, live=False):
+def collect(group, machine, live=False, *, expected_head=None):
     live = live and not is_draining(machine)
     if group == 'guardian':
         observations = []
@@ -81,6 +82,8 @@ def collect(group, machine, live=False):
         return dict(checks=[c.to_dict() for c in result.checks], details=result.to_dict(),
                     repair_attempted=attempted)
     if group == 'doctor':
+        if machine == 'mini':
+            return peer_pipeline_doctor(expected_head)
         result = subprocess.run([sys.executable, '-m', 'cluster.control_plane.smoke'],
                                 capture_output=True, text=True, timeout=100)
         return dict(checks=[check('pipeline_smoke', result.returncode == 0,
@@ -147,17 +150,77 @@ def collect_peer(machine):
                 details=details)
 
 
+def peer_pipeline_doctor(expected_head):
+    """Observe Nuc's own pipeline without depending on its whole health cycle.
+
+    Mini owns reviews rather than Codex fix lanes. Its local service checks stay
+    in watchdog; source admission still separately requires the complete Nuc
+    canary. Never use a disk cache or repeat another derived cluster verdict.
+    """
+    from .health_peer import number, observation_time
+    from .health_rollout import positive_group
+    details = dict(pipeline_scope='nucbox-local-pipeline',
+                   watchdog_reference='groups.watchdog')
+
+    def unqualified(reason):
+        return dict(checks=[check('pipeline_smoke', False,
+            'Nuc pipeline evidence incomplete; direct current-source proof required',
+            unknown=True, execution_error=False)], details=dict(details, reason=reason))
+
+    if not isinstance(expected_head, str) or not re.fullmatch(r'[0-9a-f]{40}', expected_head):
+        return unqualified('scheduler-source-unavailable')
+    try:
+        observation = collect_peer('mini')['details']
+        if not isinstance(observation.get('clock_observation'), dict):
+            return unqualified('peer-source-unqualified')
+        now = observation_time(observation, time.time())
+        served = observation['clock_observation']['served_at']
+        peer = observation['health']
+        rollout = peer['rollout']
+        timestamp, activated = peer.get('timestamp'), rollout.get('activated_at')
+        if (observation.get('machine') != 'nucbox'
+                or type(peer.get('schema')) is not int or peer['schema'] != 1
+                or peer.get('machine') != 'nucbox'
+                or peer.get('loaded_head') != expected_head
+                or rollout.get('head') != expected_head
+                or rollout.get('phase') not in ('canary', 'active')
+                or not all(number(value) for value in (timestamp, activated))
+                or not 0 < activated <= served <= now
+                or not 0 <= now - timestamp <= 150
+                or not 0 <= served - timestamp <= 150):
+            return unqualified('peer-source-unqualified')
+        doctor = peer['groups']['doctor']
+        if (not positive_group(doctor, 'doctor', now, activated)
+                or doctor['finished_at'] > timestamp
+                or len(doctor['checks']) != 1
+                or doctor['checks'][0]['name'] != 'pipeline_smoke'
+                or type(doctor.get('details', {}).get('exit_code')) is not int
+                or doctor['details']['exit_code'] != 0):
+            return unqualified('peer-doctor-unqualified')
+        details.update(source_machine='nucbox', source_head=expected_head,
+                       source_started_at=doctor['started_at'],
+                       source_finished_at=doctor['finished_at'],
+                       source_activated_at=activated, clock_mode='direct')
+        return dict(checks=[check('pipeline_smoke', True,
+            'Direct Nuc pipeline smoke verified for this source',
+            unknown=False, execution_error=False)], details=details)
+    except Exception:
+        return unqualified('peer-observation-unavailable')
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('group', choices=PERIODS)
     parser.add_argument('--machine', choices=('mini', 'nucbox'), required=True)
     parser.add_argument('--live', action='store_true')
+    parser.add_argument('--expected-head', help='Full source SHA loaded by the parent health scheduler')
     args = parser.parse_args()
     os.environ['STORYPOOL_HEALTH_WORKER'] = '1'
     with contextlib.redirect_stdout(sys.stderr):
         # Observation never holds recovery ownership while waiting on APIs.
         # Each local action rechecks authority and maintenance under its lock.
-        result = collect(args.group, args.machine, args.live and authoritative())
+        result = collect(args.group, args.machine, args.live and authoritative(),
+                         expected_head=args.expected_head)
     print(json.dumps(result))
 
 
