@@ -14,6 +14,9 @@ Each tick:
 
 from __future__ import annotations
 
+# Snapshot before loading any local review modules that an update could replace.
+from .runtime_status import record_runtime
+
 import json
 import logging
 import os
@@ -26,7 +29,6 @@ from typing import Optional, List, Any
 
 from .config import KarenConfig
 from .gate import run_gate
-from .runtime_status import record_runtime
 from .github_client import (
     list_prs_with_label,
     remove_label,

@@ -37,9 +37,17 @@ def test_receipt_is_atomic_and_public_fields_are_allowlisted(tmp_path):
     config = KarenConfig(state_dir=str(tmp_path))
     with patch.object(runtime, 'deployment_status', return_value={'installed_head': 'c' * 40, 'loaded_head': 'c' * 40, 'source_matches': True, 'loaded_at': runtime.LOADED_AT, 'pid': 42}):
         value = runtime.record_runtime(config)
-    assert runtime.public_status(config) == value
+    assert runtime.public_status(config) == dict(value, fresh=True)
     path = tmp_path / 'poller-runtime.json'
     path.write_text(json.dumps(dict(value, token='must not appear', loaded_head='invalid')))
     public = runtime.public_status(config)
     assert 'token' not in public and public['loaded_head'] is None
     assert not (tmp_path / 'poller-runtime.tmp').exists()
+
+
+def test_old_receipt_is_explicitly_stale(tmp_path):
+    config = KarenConfig(state_dir=str(tmp_path))
+    (tmp_path / 'poller-runtime.json').write_text(json.dumps({
+        'loaded_head': 'a' * 40, 'source_matches': True,
+        'observed_at': '2020-01-01T00:00:00+00:00'}))
+    assert runtime.public_status(config)['fresh'] is False

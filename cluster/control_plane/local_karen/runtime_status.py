@@ -71,6 +71,12 @@ def public_status(config):
         for field in ('installed_head', 'loaded_head'):
             head = value.get(field)
             out[field] = head if isinstance(head, str) and re.fullmatch('[0-9a-f]{40}', head) else None
+        try:
+            observed = datetime.fromisoformat(str(out.get('observed_at')))
+            age = (datetime.now(timezone.utc) - observed).total_seconds()
+            out['fresh'] = 0 <= age <= 900
+        except (ValueError, TypeError):
+            out['fresh'] = False
         return out
     except (OSError, ValueError):
         return None
