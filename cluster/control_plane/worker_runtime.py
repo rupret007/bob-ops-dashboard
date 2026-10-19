@@ -17,15 +17,20 @@ PROFILE = '.local/share/storypool/overseer/webjam-failure-audit/runtime-py311'
 REASON = 'Webjam test runtime is not qualified for this exact head'
 IMPORTS = ('PySide6.QtCore', 'PySide6.QtWidgets', 'PySide6.QtMultimedia',
            'sounddevice', 'soundfile')
-TEST_RECIPE = 'webjam-linux-per-module-v1'
+TEST_RECIPE = 'webjam-linux-per-module-v2'
 FONT_DIRECTORY = 'usr/share/fonts/truetype/liberation'
 ALSA_CONFIG = (b'# Private headless ALSA configuration: null PCM discards audio; no includes.\n'
                b'pcm.!default {\n type null\n hint { show on description "Private null PCM" }\n}\n')
 ALSA_SHA256 = hashlib.sha256(ALSA_CONFIG).hexdigest()
+# Load the installed entrypoint before exposing project imports. A checkout's
+# pytest.py/package must never be able to report success without running tests.
+PYTEST_LAUNCHER = ("import os,sys,pytest\n"
+                   "sys.path.append(os.getcwd())\n"
+                   "raise SystemExit(pytest.main([sys.argv[1],'-v']))\n")
 # This code is supervisor-owned. Repository files supply path data, never code.
 MODULE_RUNNER = ("import subprocess,sys\n"
                  "for path in sys.argv[1:]:\n"
-                 " result=subprocess.run([sys.executable,'-m','pytest',path,'-v'])\n"
+                 " result=subprocess.run([sys.executable,'-I','-c'," + repr(PYTEST_LAUNCHER) + ",path])\n"
                  " if result.returncode:\n"
                  "  raise SystemExit(result.returncode if result.returncode>0 else 128-result.returncode)\n")
 _SHA = re.compile(r'[0-9a-f]{64}')
@@ -159,6 +164,22 @@ def test_files(raw):
         _require(name.startswith('tests/test_') and name.endswith('.py') and len(name.encode()) <= 512
                  and all(part not in ('', '.', '..') for part in name.split('/')))
     return files
+
+
+def outside_standard_tests(raw):
+    """Snapshot names outside the proven CI scope; new ones need qualification."""
+    _require(isinstance(raw, str) and raw.endswith('\0') and len(raw.encode()) <= 2 * 1024 * 1024)
+    paths = raw[:-1].split('\0')
+    _require(len(paths) <= 16384 and len(paths) == len(set(paths)))
+    outside = set()
+    for name in paths:
+        _require(name.endswith('.py') and len(name.encode()) <= 512
+                 and all(part not in ('', '.', '..') for part in name.split('/')))
+        base = name.rsplit('/', 1)[-1]
+        if ((base.startswith('test_') or base.endswith('_test.py'))
+                and not name.startswith('tests/test_')):
+            outside.add(name)
+    return outside
 
 
 def qualified_runtime(repo, head_sha, tree=None):

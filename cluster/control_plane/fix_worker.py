@@ -20,7 +20,8 @@ from .retry_policy import PreflightFailure, REASONS, STAGE_CODES, WorkerFailure,
 from .fix_dispatcher import _find_codex, extract_findings_from_verdict
 from .local_karen.config import KarenConfig
 from .local_karen.verdict import load_verdict
-from .worker_runtime import qualified_runtime, RuntimeUnqualified, MODULE_RUNNER, test_files
+from .worker_runtime import (qualified_runtime, RuntimeUnqualified, MODULE_RUNNER,
+                             test_files, outside_standard_tests)
 
 
 CODEX_EFFORT = 'xhigh'
@@ -206,10 +207,13 @@ def _fix_pr(repo, pr_number, head_sha, findings):
         if runtime is not None and tests != [runtime.python, '-m', 'pytest', '-q']:
             raise RuntimeUnqualified()
         original_files = []
+        original_outside = set()
         if runtime is not None:
             original_files = runtime.validate_test_files(run(
                 ['git', 'ls-files', '-z', '--', 'tests/test_*.py'], tree))
             tests = runtime.test_command(original_files)
+            original_outside = outside_standard_tests(run(
+                ['git', 'ls-files', '-z', '--cached', '--others', '--exclude-standard', '--', '*.py'], tree))
         if tests[0] == 'npm':
             if not (tree / 'package-lock.json').is_file():
                 raise PreflightFailure('missing-lockfile')
@@ -222,7 +226,8 @@ def _fix_pr(repo, pr_number, head_sha, findings):
                   'No sudo, force-push, main pushes, tags, releases, merges, secrets, or rad-dad-show-night.\n' +
                   ('Test command: ' + ' '.join(tests) if runtime is None else
                    'Run every Git-tracked tests/test_*.py module in Git order, each in a fresh '
-                   f'{runtime.python} -m pytest FILE -v process; stop on the first failure.'))
+                   f'{runtime.python} process with pytest FILE -v; stop on the first failure. '
+                   'The supervisor loads installed pytest in isolation before allowing project imports.'))
         test_env = {**os.environ,
             'STORYPOOL_JOBS_DIR': str(Path(temp) / 'test-jobs'),
             'STORYPOOL_METRICS_DIR': str(Path(temp) / 'test-metrics'),
@@ -247,6 +252,10 @@ def _fix_pr(repo, pr_number, head_sha, findings):
                 files = test_files(run(['git', 'ls-files', '-z', '--cached', '--others',
                                        '--exclude-standard', '--', 'tests/test_*.py'], tree))
                 if not set(original_files).issubset(files):
+                    raise RuntimeUnqualified()
+                outside = outside_standard_tests(run(['git', 'ls-files', '-z', '--cached', '--others',
+                                                      '--exclude-standard', '--', '*.py'], tree))
+                if not outside.issubset(original_outside):
                     raise RuntimeUnqualified()
                 tests = runtime.test_command(sorted(files, key=lambda name: name.encode()))
             _stage('tests')

@@ -45,6 +45,9 @@ def qualified(tmp_path, monkeypatch):
     (tree / '.github/workflows/ci.yml').write_bytes(b'python-version: "3.11"\n')
     (tree / 'tests').mkdir()
     (tree / 'tests/test_project.py').write_text('def test_project(): assert 2 + 2 == 4\n')
+    (tree / 'pytest.ini').write_text('[pytest]\ntestpaths=tests\n')
+    (tree / 'tools').mkdir()
+    (tree / 'tools/test_existing.py').write_text('def test_manual_helper(): assert False\n')
     git_env = dict(os.environ, GIT_CONFIG_NOSYSTEM='1', GIT_CONFIG_GLOBAL=os.devnull,
                    GIT_CONFIG_COUNT='0', GIT_TEMPLATE_DIR=str(tmp_path / 'empty-template'))
     (tmp_path / 'empty-template').mkdir()
@@ -315,7 +318,7 @@ def test_qualification_does_not_override_existing_retry_limit(qualified, tmp_pat
 
 
 @pytest.mark.parametrize('drift', ['none', 'missing-before', 'requirements', 'receipt', 'tree',
-                                    'drop-module', 'new-module', 'alsa-job'])
+                                    'drop-module', 'new-module', 'outside-module', 'alsa-job'])
 def test_worker_uses_identical_env_and_rechecks_before_testing(qualified, drift):
     import shutil
     q = qualified
@@ -341,14 +344,18 @@ def test_worker_uses_identical_env_and_rechecks_before_testing(qualified, drift)
                 q.receipt['operator_note'] = 'private-sensitive-drift'
                 q.save()
             if drift == 'alsa-job': audio.write_bytes(b'pcm.!default { type hw }\n')
+            if drift in ('new-module', 'outside-module'):
+                name = 'test_added.py' if drift == 'new-module' else 'extra_test.py'
+                (Path(cwd) / 'tests' / name).write_text('def test_added(): assert False\n')
         if args[:3] == ['git', 'rev-parse', 'HEAD']:
             return pushed if any(c[:2] == ['git', 'commit'] for c, _ in calls) else q.head
         if args[:3] == ['git', 'rev-parse', 'HEAD^{tree}']:
             return 'e' * 40 if drift == 'tree' else q.receipt['qualified_heads'][0]['tree_sha']
         if args[:2] == ['git', 'ls-files']:
             if '--others' in args and drift == 'drop-module': return 'tests/test_other.py\0'
-            return 'tests/test_project.py\0' + ('tests/test_added.py\0'
-                                               if '--others' in args and drift == 'new-module' else '')
+            return subprocess.check_output(args, cwd=cwd, text=True,
+                env=dict(os.environ, GIT_CONFIG_NOSYSTEM='1', GIT_CONFIG_GLOBAL=os.devnull,
+                         GIT_CONFIG_COUNT='0'))
         if args[:3] == ['git', 'diff', '--cached']: return 'changed.py'
         if args[:2] == ['git', 'ls-remote']: return pushed + ' refs/heads/fix/fixture'
         return ''
@@ -375,7 +382,8 @@ def test_worker_uses_identical_env_and_rechecks_before_testing(qualified, drift)
         assert audio_path.name == 'alsa.conf' and audio_path.parent.name == 'config'
     else:
         assert not tests
-        assert len(providers) == (1 if drift in ('requirements', 'receipt', 'drop-module', 'alsa-job') else 0)
+        assert len(providers) == (1 if drift in ('requirements', 'receipt', 'drop-module',
+                                                'outside-module', 'alsa-job') else 0)
         assert not any(args[:2] in (['git', 'commit'], ['git', 'push']) for args, _ in calls)
 
 
@@ -415,17 +423,29 @@ def test_runtime_race_after_reservation_keeps_exact_head_attempt_count(qualified
 
 
 @pytest.mark.parametrize('failure_index', [None, 1])
-def test_real_recipe_runs_complete_order_in_fresh_processes_and_stops_on_failure(tmp_path, failure_index):
+@pytest.mark.parametrize('shadow', [None, 'module', 'package', 'symlink'])
+def test_real_recipe_runs_complete_order_in_fresh_processes_and_stops_on_failure(tmp_path, failure_index, shadow):
     import importlib.util
     import venv
     tree = tmp_path / 'project'
     (tree / 'tests').mkdir(parents=True)
+    (tree / 'project_values.py').write_text('ANSWER=42\n')
+    fake = 'from pathlib import Path\nPath("shadow-executed").touch()\nraise SystemExit(0)\n'
+    if shadow == 'package':
+        (tree / 'pytest').mkdir()
+        (tree / 'pytest/__init__.py').write_text(fake)
+    elif shadow == 'module': (tree / 'pytest.py').write_text(fake)
+    elif shadow == 'symlink':
+        (tmp_path / 'fake-pytest.py').write_text(fake)
+        (tree / 'pytest.py').symlink_to(tmp_path / 'fake-pytest.py')
     names = ['tests/test_01_first.py', 'tests/test_02 space.py', 'tests/test_03_last.py']
     for index, name in enumerate(names):
         (tree / name).write_text(
             'import builtins,json,os\n'
             'from pathlib import Path\n'
+            'from project_values import ANSWER\n'
             'def test_native_lifetime():\n'
+            ' assert ANSWER==42\n'
             ' assert not hasattr(builtins,"_webjam_native_lifetime")\n'
             ' builtins._webjam_native_lifetime=True\n'
             ' with Path("executed.jsonl").open("a") as stream:\n'
@@ -455,6 +475,7 @@ def test_real_recipe_runs_complete_order_in_fresh_processes_and_stops_on_failure
     assert len({entry['pid'] for entry in executed}) == len(executed)
     assert result.returncode == (0 if failure_index is None else 1)
     assert not (tree / 'space.py').exists()
+    assert not (tree / 'shadow-executed').exists()
 
 
 @pytest.mark.parametrize('raw', ['', 'tests/test_ok.py', 'tests/../test_escape.py\0',
@@ -470,3 +491,11 @@ def test_recipe_file_list_is_bound_to_receipt_count_and_exact_nul_bytes(qualifie
     for raw in ('tests/test_other.py\0', 'tests/test_project.py\0tests/test_added.py\0'):
         with pytest.raises(runtimes.RuntimeUnqualified):
             runtime.validate_test_files(raw)
+
+
+def test_new_standard_test_names_outside_proven_ci_scope_are_distinct():
+    before = runtimes.outside_standard_tests('tools/test_existing.py\0tests/test_project.py\0')
+    assert before == {'tools/test_existing.py'}
+    assert runtimes.outside_standard_tests('tools/test_existing.py\0tests/test_added.py\0') == before
+    for name in ('tests/extra_test.py', 'test_extra.py'):
+        assert not runtimes.outside_standard_tests('tools/test_existing.py\0' + name + '\0').issubset(before)
