@@ -177,6 +177,26 @@ def test_new_deferral_is_typed_bounded_and_background_batch_does_not_wait_or_cla
     assert budget.GitHubDeferred('fixed message', code='private-value').code == 'other'
 
 
+def test_immediate_ci_check_can_run_after_scheduled_observer_allowance_is_full(monkeypatch):
+    state = budget._state(dict(version=1, requests=[1000] * 24, resources={}))
+    def admission(resource, *, background=False):
+        reserve(state, now=1000, resource=resource, background=background)
+    monkeypatch.setattr(budget, 'reserve', admission)
+    process = Mock(return_value=subprocess.CompletedProcess([], 0, '{}', ''))
+    monkeypatch.setattr(reads.subprocess, 'run', process)
+    argv = ['gh', 'api', 'repos/owner/repo/commits/main/status']
+    assert main_ci.command(argv) == '{}'
+    assert len(state['requests']) == 25 and len(state['foreground_requests']) == 1
+    token = main_ci._deadline.set(main_ci.time.monotonic()+120)
+    try:
+        with pytest.raises(budget.GitHubDeferred) as error:
+            main_ci.command(argv)
+        assert error.value.code == 'background-exhausted'
+    finally:
+        main_ci._deadline.reset(token)
+    process.assert_called_once()
+
+
 def test_snapshot_exposes_only_numeric_priority_counts_with_legacy_fallback(tmp_path):
     data = dict(status='ok', updated_at=1000, resources={}, requests_last_minute=29,
                 background_requests_last_minute=24, foreground_requests=['private-value'])

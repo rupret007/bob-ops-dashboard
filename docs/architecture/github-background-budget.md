@@ -8,8 +8,8 @@ bounded source-context and current-head checks. Primary API reserves, backoff an
 the total cap are unchanged. Other foreground work still competes within 40;
 this reservation does not promise every foreground request will be admitted.
 
-Only the main-CI caller marks its known read commands as background. Recovery
-writes retain ordinary admission. Exhaustion raises the typed
+Only scheduled main-CI batches mark known read commands as background. Immediate
+merge validation and recovery writes retain foreground admission. Exhaustion raises the typed
 `background-exhausted` deferral with a retry delay bounded to 60 seconds. A
 background batch stops without manufacturing a CI result. Evidence freshness,
 unknown findings and exact-head merge gates retain their existing rules.
