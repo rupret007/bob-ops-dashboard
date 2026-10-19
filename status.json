@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-10-18T22:20:50.379463-05:00",
-  "generated_at_display": "Sun Oct 18, 2026 \u00b7 10:20 PM CDT",
+  "generated_at": "2026-10-18T22:35:47.365369-05:00",
+  "generated_at_display": "Sun Oct 18, 2026 \u00b7 10:35 PM CDT",
   "timezone": "America/Chicago",
   "owner": "rupret007",
   "dashboard": "bob-ops-dashboard",
@@ -495,11 +495,11 @@
           "status": "yellow",
           "chip": "Yellow",
           "default_branch": "main",
-          "tip_sha": "1d088ea",
-          "tip_date": "2026-10-19T03:05:54Z",
+          "tip_sha": "14c0269",
+          "tip_date": "2026-10-19T03:21:06Z",
           "open_prs": 7,
-          "open_pr_url": "https://github.com/rupret007/bob-ops-dashboard/pull/87",
-          "open_pr_number": 87,
+          "open_pr_url": "https://github.com/rupret007/bob-ops-dashboard/pull/88",
+          "open_pr_number": 88,
           "open_pr_draft": false,
           "open_pr_stack": [],
           "pr_listing_complete": true,
@@ -900,7 +900,7 @@
     "barker"
   ],
   "publish_notes": "Public board -- no secrets or customer paths. Private repositories stay high-level; AI Music Vault stays private-content-boundary only.",
-  "refresh_started_ms": 1792380019022,
+  "refresh_started_ms": 1792380920345,
   "agents_source": "file:stale->unknown",
   "agents": [
     {
@@ -949,11 +949,11 @@
   "cloud_agents": [
     {
       "id": "bc-8010dd7e-0b0b-5074-a351-0faafe9a47c7",
-      "name": "PR #87",
+      "name": "PR #88",
       "state": "unknown",
-      "detail": "Add storypool-dispatch and LLM-in-the-loop conductor services",
+      "detail": "All-in-one install: merge PRs #84, #85, #86, #87 with unified installers",
       "url": "https://cursor.com/agents/bc-8010dd7e-0b0b-5074-a351-0faafe9a47c7",
-      "pr_url": "https://github.com/rupret007/bob-ops-dashboard/pull/87",
+      "pr_url": "https://github.com/rupret007/bob-ops-dashboard/pull/88",
       "checked_at": null
     },
     {
@@ -1099,7 +1099,7 @@
     }
   ],
   "llm_work_now_freshness": {
-    "generated_at": "2026-10-18 22:20 CT",
+    "generated_at": "2026-10-18 22:35 CT",
     "warn_ttl_sec": 1200,
     "warnings": [],
     "ok": true
@@ -1130,7 +1130,7 @@
     ],
     "scorecards": {
       "v": "scorecards/v1",
-      "generated_at": "2026-10-19T03:20:51.980551+00:00",
+      "generated_at": "2026-10-19T03:35:48.455227+00:00",
       "windows": {
         "24h": {
           "providers": {
