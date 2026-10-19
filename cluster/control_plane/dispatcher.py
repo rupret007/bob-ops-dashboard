@@ -505,6 +505,7 @@ class Dispatcher:
                     repo=repo,
                     head_sha=head_sha,
                     guard_values=guard_values,
+                    extra={"reason_code": "active-lease"},
                 )
                 self._write_decision(decision)
                 decisions.append(decision)
@@ -512,6 +513,23 @@ class Dispatcher:
             
             provider = self.select_provider(pr, active_lanes)
             if not provider:
+                # Preserve the actual admission reason rather than silently
+                # blaming all idle work on provider filters at the end.
+                rejections = {}
+                for candidate_provider in sorted(IMPLEMENTED_PROVIDERS):
+                    allowed, reason = self.check_provider_allowed(candidate_provider, active_lanes)
+                    if not allowed:
+                        rejections[candidate_provider] = reason
+                decision = DispatchDecision(
+                    timestamp=_now_iso(), action="skip",
+                    reason="No implemented provider currently available",
+                    machine=self.machine, live=live, repo=repo,
+                    pr_number=pr_number, head_sha=head_sha,
+                    extra={"reason_code": "provider-unavailable",
+                           "provider_rejections": rejections},
+                )
+                self._write_decision(decision)
+                decisions.append(decision)
                 continue
             
             if live:
@@ -525,6 +543,7 @@ class Dispatcher:
                         timestamp=_now_iso(), action="skip", reason="No Karen findings available",
                         machine=self.machine, live=True, repo=repo, pr_number=pr_number,
                         head_sha=head_sha, provider=provider,
+                        extra={"reason_code": "missing-reviewed-findings"},
                     )
                     self._write_decision(decision)
                     decisions.append(decision)
@@ -559,7 +578,8 @@ class Dispatcher:
                     if blocked:
                         decision = DispatchDecision(timestamp=_now_iso(), action='skip_blocked',
                             reason=blocked, machine=self.machine, live=True, repo=repo,
-                            pr_number=pr_number, head_sha=head_sha, provider=provider)
+                            pr_number=pr_number, head_sha=head_sha, provider=provider,
+                            extra={"reason_code": "retry-blocked"})
                         self._write_decision(decision)
                         decisions.append(decision)
                         coordinator.call('release', claim)
@@ -624,7 +644,8 @@ class Dispatcher:
                 provider=provider,
                 priority_score=pr.get("_score"),
                 guard_values=guard_values,
-                extra={"job_id": job.job_id if job else None, "pid": pid} if live else None,
+                extra={"job_id": job.job_id if job else None, "pid": pid,
+                       **({"reason_code": "spawn-failed"} if spawn_error else {})} if live else None,
             )
             
             self._write_decision(decision)
@@ -633,15 +654,26 @@ class Dispatcher:
             active_lanes[provider] = active_lanes.get(provider, 0) + 1
             dispatched += 1
         
-        if dispatched == 0 and candidates:
+        if candidates and not any(d.action in ("dispatch", "would_dispatch") for d in decisions):
+            blocked_counts = {}
+            for candidate_decision in decisions:
+                code = (candidate_decision.extra or {}).get("reason_code")
+                if code:
+                    blocked_counts[code] = blocked_counts.get(code, 0) + 1
+            if max_dispatch == 0:
+                blocked_counts["lane-capacity-unavailable"] = len(candidates)
             decision = DispatchDecision(
                 timestamp=_now_iso(),
                 action="skip",
-                reason="No candidates passed provider filters",
+                reason="No work dispatched; see candidate admission reasons",
                 machine=self.machine,
                 live=live,
                 guard_values=guard_values,
-                extra={"candidate_count": len(candidates)},
+                extra={"reason_code": "no-dispatch-summary",
+                       "candidate_count": len(candidates),
+                       "considered_candidates": sum(d.pr_number is not None for d in decisions),
+                       "blocked_candidates": blocked_counts,
+                       "implemented_providers": sorted(IMPLEMENTED_PROVIDERS)},
             )
             self._write_decision(decision)
             decisions.append(decision)
@@ -675,7 +707,9 @@ class Dispatcher:
             "machine": self.machine,
             "live": live,
             "dispatched": sum(1 for d in decisions if d.action in ("dispatch", "would_dispatch")),
-            "skipped": sum(1 for d in decisions if d.action == "skip"),
+            "skipped": sum(1 for d in decisions
+                           if d.action in ("skip", "skip_leased", "skip_blocked")
+                           and (d.extra or {}).get("reason_code") != "no-dispatch-summary"),
             "decisions": [d.to_dict() for d in decisions],
         }
         
