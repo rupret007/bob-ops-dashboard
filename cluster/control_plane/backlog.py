@@ -527,12 +527,15 @@ def label_queued_prs(repos=None, dry_run=True):
             # Completion is local exact-head evidence, independent of labels.
             # Changed external CI still takes the existing claimed refresh path.
             head = pr.get('headRefOid')
-            if (not ci_refresh and verdict_dir is not None and '/' in repo
+            pr_num = pr.get("number")
+            if (not ci_refresh and verdict_dir is not None
+                    and isinstance(repo, str)
+                    and re.fullmatch(r'[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+', repo)
+                    and type(pr_num) is int and pr_num > 0
                     and isinstance(head, str) and re.fullmatch(r'[0-9a-f]{40}', head)
                     and _has_verdict_for_head(verdict_dir, repo, pr)):
                 continue
             
-            pr_num = pr.get("number")
             if not pr_num:
                 continue
             

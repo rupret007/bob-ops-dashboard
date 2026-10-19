@@ -43,12 +43,12 @@ def harness(tmp_path):
     config.get_verdict_dir().mkdir()
     boundary = Mock(return_value=SimpleNamespace(returncode=0))
     ensure = Mock()
-    def enroll(candidate, directory=config.get_verdict_dir()):
+    def enroll(candidate, directory=config.get_verdict_dir(), repo=REPO):
         with patch.object(backlog, '_local_verdict_dir', return_value=directory), \
              patch.object(backlog, 'get_open_prs', return_value=[candidate]), \
              patch.object(backlog, 'ensure_label_exists', ensure), \
              patch.object(backlog.github_reads, 'run', boundary):
-            return backlog.label_queued_prs([REPO], dry_run=False)
+            return backlog.label_queued_prs([repo], dry_run=False)
     return config, boundary, ensure, enroll
 
 
@@ -93,6 +93,34 @@ def test_unknown_identity_is_not_mistaken_for_completed_authority(harness, head)
     complete(config)
     assert len(enroll(pr(head))) == 1
     assert boundary.call_count == 1
+
+
+@pytest.mark.parametrize('repo', ['owner/extra/repo', 'owner//repo', '/repo', 'owner/',
+                                  'owner/with space', 'owner/repo\n', 'owner'])
+def test_malformed_repo_never_consults_canonical_completion_storage(harness, repo):
+    config, _, _, enroll = harness
+    complete(config)
+    with patch('cluster.control_plane.local_karen.verdict.load_verdict',
+               side_effect=AssertionError('invalid identity reached canonical storage')) as completion, \
+         patch.object(ci_review_refresh, 'load_verdict',
+                      side_effect=AssertionError('invalid identity reached refresh storage')) as refresh:
+        enroll(pr(), repo=repo)
+    completion.assert_not_called()
+    refresh.assert_not_called()
+
+
+@pytest.mark.parametrize('number', [True, False, 0, -1, 1.5, '7', None])
+def test_malformed_pr_number_never_consults_canonical_completion_storage(harness, number):
+    config, _, _, enroll = harness
+    complete(config)
+    candidate = dict(pr(), number=number)
+    with patch('cluster.control_plane.local_karen.verdict.load_verdict',
+               side_effect=AssertionError('invalid identity reached canonical storage')) as completion, \
+         patch.object(ci_review_refresh, 'load_verdict',
+                      side_effect=AssertionError('invalid identity reached refresh storage')) as refresh:
+        enroll(candidate)
+    completion.assert_not_called()
+    refresh.assert_not_called()
 
 
 def test_no_local_artifact_still_enrolls_even_with_peer_only_completion(harness, tmp_path):
