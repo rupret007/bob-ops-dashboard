@@ -89,11 +89,14 @@ def test_css_receives_js_and_tests_before_either_judge_without_repacking():
     assert all(review.scope['head_sha'] == pr.head_sha for review in reviews)
 
 
-def test_partial_file_chunks_defer_to_normal_requests_and_keep_original_plan():
+def test_partial_file_chunks_receive_complete_pinned_file_and_keep_original_plan():
     pr = pr_info([section('large.js', 20000), section('tail.js')])
     chunks = r.split_review_diff(pr.diff)
     initial, code = c.automatic_complement(pr, chunks, 1)
-    assert code == 'partial_file' and initial == []
+    assert code == 'partial_file_supplied'
+    assert initial == [dict(path='large.js', diff=c.requested_file_diff(pr, 'large.js', pr.head_sha))]
+    assert len(initial[0]['diff']) == 20000
+    assert max(c.context_size(initial)) <= c.MAX_CONTEXT_SIZE
     assert len(c.requested_file_diff(pr, 'large.js', pr.head_sha)) == 20000
     assert ''.join(chunks) == pr.diff and all(len(chunk) <= 12000 for chunk in chunks)
 
@@ -253,3 +256,77 @@ def test_requested_context_again_cannot_start_a_third_call_and_logs_only_safe_sh
     assert 'Initial review context: code=supplied; changed_files=2' in caplog.text
     assert 'Review context: changed_requests=1; source_requests=0' in caplog.text
     assert 'extra0.js' not in caplog.text and 'private model body' not in caplog.text
+
+
+@pytest.mark.parametrize('size', [12345, 20000])
+def test_each_partial_fragment_gets_the_complete_file_not_a_fragment(size):
+    pr = pr_info([section('large.js', size), section('tail.js')])
+    chunks = r.split_review_diff(pr.diff)
+    with patch.object(Path, 'read_text', side_effect=AssertionError('no checkout reads')), \
+         patch('urllib.request.urlopen', side_effect=AssertionError('no network')):
+        for index, chunk in enumerate(chunks, 1):
+            initial, code = c.automatic_complement(pr, chunks, index)
+            if 'large.js' in c.build_review_scope(pr, chunks, index).data['current_chunk']['files']:
+                assert code == 'partial_file_supplied'
+                assert initial == [dict(path='large.js', diff=pr.diff[:size])]
+                assert len(initial) <= c.MAX_CONTEXT_FILES
+                assert max(c.context_size(initial)) <= c.MAX_CONTEXT_SIZE
+    assert ''.join(chunks) == pr.diff and all(len(chunk) <= r.REVIEW_DIFF_LIMIT for chunk in chunks)
+
+
+def test_partial_seed_leaves_the_existing_followup_for_integration_context():
+    pr = pr_info([section('large.js', 20000), section('tail.js')])
+    chunks = r.split_review_diff(pr.diff)
+    part = replace(pr, diff=chunks[0], review_scope=c.build_review_scope(pr, chunks, 1))
+    initial = c.automatic_complement(pr, chunks, 1)
+    calls = {'gemini': [], 'minimax': []}
+    def review(supplied, name):
+        calls[name].append(supplied)
+        entries = packet(supplied, 'supplemental') or packet(supplied, 'requested')
+        paths = [entry['path'] for entry in entries]
+        for needed in ('large.js', 'tail.js'):
+            if needed not in paths:
+                return replace(vote(r.ReviewVerdict.BORDERLINE, changed=[needed]), reviewer=name)
+        assert entries[0]['diff'] == c.requested_file_diff(pr, 'large.js', pr.head_sha)
+        return replace(vote(), reviewer=name)
+    primary = Mock(review=lambda supplied, *_: review(supplied, 'gemini'))
+    with patch.object(r, 'get_available_reviewers', return_value=[('gemini', primary)]), \
+         patch.object(r.MiniMaxReviewer, 'is_available', return_value=(True, 'ok')), \
+         patch.object(r.MiniMaxReviewer, 'review_as_second_judge',
+                      side_effect=lambda supplied, *_: review(supplied, 'minimax')):
+        result, reviews = r._run_review_chain_single(part, KarenConfig(), context_pr=pr,
+                                                     initial_context=initial)
+    assert result.passed and len(reviews) == 2
+    assert len(calls['gemini']) == len(calls['minimax']) == 2
+    assert all(call.diff == part.diff and call.head_sha == pr.head_sha
+               for attempts in calls.values() for call in attempts)
+
+
+@pytest.mark.parametrize('kind', ['raw', 'serialized', 'unknown', 'unsafe'])
+def test_partial_seed_keeps_existing_bounds_and_unknown_input_refusal(kind):
+    pr = pr_info([section('../outside.js' if kind == 'unsafe' else 'large.js',
+                          48001 if kind == 'raw' else 13000,
+                          '\u2603' if kind == 'serialized' else 'x')])
+    if kind == 'unknown': pr.changed_files.append('missing.js')
+    chunks = r.split_review_diff(pr.diff)
+    initial, code = c.automatic_complement(pr, chunks, 1)
+    assert initial == []
+    assert code == ('changed_unavailable' if kind in ('unknown', 'unsafe') else 'context_budget')
+
+
+def test_partial_seed_aggregates_repeated_sections_for_one_pinned_path():
+    first, repeated = section('large.js', 20000), section('large.js')
+    pr = pr_info([first, section('tail.js'), repeated])
+    initial, code = c.automatic_complement(pr, r.split_review_diff(pr.diff), 1)
+    assert code == 'partial_file_supplied'
+    assert initial == [dict(path='large.js', diff=first+repeated)]
+
+
+def test_partial_seed_still_cannot_start_a_third_reviewer_call():
+    pr = pr_info([section('large.js', 20000), section('tail.js')])
+    chunks = r.split_review_diff(pr.diff); part = replace(pr, diff=chunks[0])
+    initial = c.automatic_complement(pr, chunks, 1)
+    invoke = Mock(return_value=vote(r.ReviewVerdict.BORDERLINE, changed=['tail.js']))
+    result, _ = r._review_with_requested_context(invoke, part, pr, initial_context=initial)
+    assert not result.passed and invoke.call_count == 2
+    assert result.requested_files == ['tail.js'] and result.scope['context_incomplete'] is True

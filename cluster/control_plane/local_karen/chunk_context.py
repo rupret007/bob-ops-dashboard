@@ -217,10 +217,11 @@ def context_size(entries):
 
 
 def automatic_complement(pr: PRInfo, chunks: Sequence[str], index: int):
-    """All missing complete changed-file diffs, or no automatic supplement.
+    """Complete pinned files for partial chunks, or missing whole-file context.
 
-    Never infer complete context from a partial file or unavailable manifest
-    entry. This only reads the already pinned input, without source/file/API IO.
+    A split file is supplied in full within the same context budget. Other
+    integration evidence still requires review; packets confer no authority.
+    This only reads the pinned input, without source/file/API IO.
     """
     if (not 1 <= index <= len(chunks) or ''.join(chunks) != pr.diff
             or not re.fullmatch(r'[0-9a-fA-F]{40}', pr.head_sha or '')):
@@ -231,11 +232,13 @@ def automatic_complement(pr: PRInfo, chunks: Sequence[str], index: int):
     manifest = file_manifest(pr)
     if any(not item['diff_available'] for item in manifest) or any(not s['path'] for s in sections):
         return [], 'changed_unavailable'
-    if any(s['start'] < end and s['end'] > start and
-           not (start <= s['start'] and s['end'] <= end) for s in sections):
-        return [], 'partial_file'
+    partial = list(dict.fromkeys(s['path'] for s in sections
+        if s['start'] < end and s['end'] > start
+        and not (start <= s['start'] and s['end'] <= end)))
     # Repeated sections for one path must all be present before it is complete.
-    missing = [item['path'] for item in manifest if any(
+    # Seed the current split file first, leaving the same cumulative budget for
+    # any explicitly requested integration evidence in the normal follow-up.
+    missing = partial or [item['path'] for item in manifest if any(
         s['path'] == item['path'] and not (start <= s['start'] and s['end'] <= end)
         for s in sections)]
     if len(missing) > MAX_CONTEXT_FILES:
@@ -248,4 +251,4 @@ def automatic_complement(pr: PRInfo, chunks: Sequence[str], index: int):
         entries.append(dict(path=path, diff=supplied))
         if max(context_size(entries)) > MAX_CONTEXT_SIZE:
             return [], 'context_budget'
-    return entries, 'supplied' if entries else 'not_needed'
+    return entries, ('partial_file_supplied' if partial else 'supplied') if entries else 'not_needed'
