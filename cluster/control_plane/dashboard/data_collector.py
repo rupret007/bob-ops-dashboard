@@ -388,8 +388,8 @@ class DataCollector:
         if dispatch_status:
             guard_vals = dispatch_status.get("summary", {}).get("decisions", [{}])[0].get("guard_values", {})
             if guard_vals:
-                guards.load = guard_vals.get("load", guards.load)
-                guards.disk_gb = guard_vals.get("disk", guards.disk_gb)
+                # Dispatch decisions are historical context, not current
+                # host load or disk telemetry.
                 guards.lanes_active = int(guard_vals.get("lanes", 0))
         
         guards.guards_passed = (
