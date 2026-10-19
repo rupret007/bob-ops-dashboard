@@ -479,7 +479,9 @@ class Dispatcher:
             remaining_capacity = self.get_nucbox_lane_capacity(active_lanes)
             max_dispatch = min(max_dispatch, remaining_capacity)
         
-        for pr in candidates[:15]:
+        # Leased, blocked, or unreviewed PRs consume no lane. Keep looking
+        # through the ordered backlog until the existing dispatch cap is met.
+        for pr in candidates:
             if dispatched >= max_dispatch:
                 break
             
