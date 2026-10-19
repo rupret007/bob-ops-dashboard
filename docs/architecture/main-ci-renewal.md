@@ -25,3 +25,11 @@ receipt, eight requests per minute reserved for other services, bounded partial
 batches, and steady renewal across sixteen scheduling intervals. It preserves
 the strict 40-per-minute limit and 600-second acceptance threshold. Production
 still requires observed coverage and diagnosis of genuine unknown CI results.
+
+Implicit current-CI checks resolve the repository's default branch and commit
+together through one shared-budget GraphQL read. Check runs and commit statuses
+then use that immutable commit SHA, including when the default is `master` or
+the branch advances during the reads. Missing or malformed metadata remains
+unknown. Explicit refs, including post-merge squash commits, retain their
+existing two REST requests and CI interpretation. Scheduled resolution uses
+the existing background allowance and whole-batch deadline.

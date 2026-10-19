@@ -19,6 +19,8 @@ from .github_budget import GitHubDeferred
 _deadline = ContextVar('main_ci_deadline', default=None)
 RECEIPT_SECONDS = 600
 RENEW_AFTER_SECONDS = 480
+_DEFAULT_HEAD_QUERY = '''query($owner:String!,$name:String!){repository(owner:$owner,name:$name){
+nameWithOwner defaultBranchRef{name target{... on Commit{oid}}}}}'''
 
 
 def command(argv, cwd=None):
@@ -27,13 +29,16 @@ def command(argv, cwd=None):
     if timeout <= 0:
         raise subprocess.TimeoutExpired(argv, 0)
     if argv[0] == 'gh':
-        resource = 'search' if argv[1:2] == ['search'] else None
+        default_head_read = (argv[1:4] == ['api', 'graphql', '-f']
+                             and argv[4:5] == ['query=' + _DEFAULT_HEAD_QUERY])
+        resource = ('graphql' if argv[1:3] == ['api', 'graphql'] else
+                    'search' if argv[1:2] == ['search'] else None)
         api_read = (argv[1:2] == ['api'] and len(argv) > 2
                     and all(arg in ('--paginate', '--slurp') or arg.startswith('repos/')
                             for arg in argv[2:]))
         # This module also serves immediate merge validation. Only scheduled
         # sweeps carry a batch deadline and use the background allowance.
-        background = (deadline is not None and (api_read
+        background = (deadline is not None and (api_read or default_head_read
                       or argv[1:3] in (['pr', 'view'], ['pr', 'list'], ['search', 'prs'])))
         result = github_reads.run(argv[1:], timeout=timeout, resource=resource, deadline=deadline,
                                   background=background)
@@ -47,9 +52,27 @@ def gh_json(*args):
     return json.loads(command(['gh', *args]))
 
 
-def check_ci(repo, ref='main'):
+def check_ci(repo, ref=None):
     """Require completed green checks/statuses; absence and errors are unknown."""
     try:
+        if ref is None:
+            if not isinstance(repo, str) or not re.fullmatch(r'[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+', repo):
+                return False, 'unknown'
+            owner, name = repo.split('/')
+            # Resolve branch and commit in one snapshot; mutable branch names
+            # must not let check-runs and commit statuses observe different heads.
+            data = gh_json('api', 'graphql', '-f', 'query=' + _DEFAULT_HEAD_QUERY,
+                           '-f', 'owner=' + owner, '-f', 'name=' + name)
+            if not isinstance(data, dict) or data.get('errors'):
+                return False, 'unknown'
+            repository = data['data']['repository']
+            branch = repository['defaultBranchRef']
+            ref = branch['target']['oid']
+            identity = repository['nameWithOwner']
+            if (not isinstance(identity, str) or identity.lower() != repo.lower()
+                    or not isinstance(branch['name'], str) or not branch['name']
+                    or not isinstance(ref, str) or not re.fullmatch('[0-9a-f]{40}', ref)):
+                return False, 'unknown'
         checks = gh_json('api', '--paginate', '--slurp', f'repos/{repo}/commits/{ref}/check-runs?per_page=100')
         status = gh_json('api', f'repos/{repo}/commits/{ref}/status')
         runs = [run for page in checks for run in page['check_runs']]
