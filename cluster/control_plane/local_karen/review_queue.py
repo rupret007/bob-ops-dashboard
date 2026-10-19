@@ -32,7 +32,7 @@ class Candidate:
         return '{}#{}@{}'.format(self.repo, self.pr.get('number'), self.pr.get('headRefOid', ''))
 
 
-def enrich(candidates):
+def enrich(candidates, max_batches=None):
     """At most thirty seconds of optional, budgeted metadata across the whole queue."""
     deadline = time.monotonic() + METADATA_SECONDS
     valid = [candidate for candidate in candidates
@@ -40,6 +40,10 @@ def enrich(candidates):
              and type(candidate.pr.get('number')) is int and candidate.pr['number'] > 0
              and isinstance(candidate.pr.get('headRefOid'), str)
              and re.fullmatch(r'[0-9a-f]{40}', candidate.pr['headRefOid'])]
+    if max_batches is not None:
+        if type(max_batches) is not int or max_batches <= 0:
+            raise ValueError('Invalid metadata batch bound')
+        valid = valid[:max_batches * METADATA_BATCH]
     for offset in range(0, len(valid), METADATA_BATCH):
         remaining = deadline - time.monotonic()
         if remaining <= 0:
@@ -113,9 +117,15 @@ class ReviewQueue:
             ordered.insert(0, oldest)
         return ordered
 
-    def begin(self, candidates):
-        self.deferred = {candidate.key: min(self.deferred.get(candidate.key, 0) + 1, 1000000)
-                         for candidate in candidates}
+    def begin(self, candidates, observed_repos=None):
+        previous = self.deferred
+        # A scheduled partial scan can reconcile heads only for repos whose
+        # complete listing succeeded; unscanned/failed repos retain their age.
+        self.deferred = ({key: count for key, count in previous.items()
+                          if key.split('#', 1)[0] not in observed_repos}
+                         if observed_repos is not None else {})
+        self.deferred.update({candidate.key: min(previous.get(candidate.key, 0) + 1, 1000000)
+                              for candidate in candidates})
         self.save()
 
     def attempted(self, candidate):
@@ -123,11 +133,14 @@ class ReviewQueue:
         self.save()
 
     def save(self):
+        encoded = json.dumps({'deferred': self.deferred})
+        if len(self.deferred) > 10000 or len(encoded.encode('utf-8')) > 1024 * 1024:
+            raise OSError('Review scheduling state exceeds bound')
         self.path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
         fd, temp = tempfile.mkstemp(dir=str(self.path.parent), prefix='.review-queue-')
         try:
             with os.fdopen(fd, 'w') as stream:
-                json.dump({'deferred': self.deferred}, stream)
+                stream.write(encoded)
             os.replace(temp, self.path)
         finally:
             Path(temp).unlink(missing_ok=True)

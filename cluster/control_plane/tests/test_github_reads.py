@@ -131,5 +131,6 @@ def test_rate_limited_poll_is_retry_without_review_or_fail_label(api):
     from cluster.control_plane.local_karen.config import KarenConfig
     api.return_value=SimpleNamespace(returncode=1,stdout='',stderr='API rate limit already exceeded')
     with patch.object(poller,'run_gate') as gate:
-        assert poller.poll_and_run(['owner/repo'],KarenConfig(),guard_machine=None)==[]
+        with pytest.raises(reads.budget.GitHubDeferred):
+            poller.poll_and_run(['owner/repo'],KarenConfig(),guard_machine=None)
     gate.assert_not_called()

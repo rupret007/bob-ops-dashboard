@@ -433,7 +433,11 @@ class TestEnsureLabelExists(unittest.TestCase):
                 mock_labels.reset_mock()
                 mock_labels.side_effect = error
 
-                self.assertFalse(ensure_label_exists("rupret007/webjam", "needs-karen"))
+                if isinstance(error, GitHubDeferred):
+                    with self.assertRaises(GitHubDeferred):
+                        ensure_label_exists("rupret007/webjam", "needs-karen")
+                else:
+                    self.assertFalse(ensure_label_exists("rupret007/webjam", "needs-karen"))
 
                 mock_labels.assert_called_once_with("rupret007/webjam")
                 mock_run.assert_not_called()

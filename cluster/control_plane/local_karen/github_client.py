@@ -36,8 +36,8 @@ def _run_gh(args: list[str], timeout: int = 30, allowed_codes=(0,)) -> str:
 
         return result.stdout
 
-    except GitHubDeferred as exc:
-        raise GitHubError(str(exc)) from None
+    except GitHubDeferred:
+        raise
     except subprocess.TimeoutExpired:
         raise GitHubError(f"gh {' '.join(args)} timed out after {timeout}s")
     except FileNotFoundError:

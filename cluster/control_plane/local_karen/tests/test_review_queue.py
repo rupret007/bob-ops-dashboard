@@ -153,9 +153,8 @@ def test_twenty_minute_admission_window_does_not_start_another_review(tmp_path):
 
 
 def test_shared_api_budget_deferral_starts_no_model_work(tmp_path):
-    gate, results, add, remove = run_cycle(tmp_path, [candidate()],
-        enrich_error=GitHubDeferred('shared API budget unavailable'))
+    gate = Mock()
+    with pytest.raises(GitHubDeferred):
+        run_cycle(tmp_path, [candidate()], gate=gate,
+            enrich_error=GitHubDeferred('shared API budget unavailable'))
     gate.assert_not_called()
-    add.assert_not_called()
-    remove.assert_not_called()
-    assert results == []

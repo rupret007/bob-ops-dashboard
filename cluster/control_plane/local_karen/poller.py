@@ -29,7 +29,9 @@ from typing import Optional, List, Any
 
 from .config import KarenConfig
 from .review_queue import (Candidate, ReviewQueue, enrich, ADMISSION_SECONDS, MAX_REVIEWS_PER_CYCLE)
+from .repo_scan import RepoScan, RepoScanError
 from ..github_budget import GitHubDeferred
+from ..github_reads import GitHubReadError
 from .gate import run_gate
 from .github_client import (
     list_prs_with_label,
@@ -181,6 +183,7 @@ def poll_and_run(
     post_comment=True,  # type: bool
     remove_label_on_complete=True,  # type: bool
     guard_machine=None,
+    scan=None,
 ):
     # type: (...) -> List[dict]
     """Rank the whole labeled queue and admit a bounded set of complete reviews.
@@ -204,16 +207,21 @@ def poll_and_run(
 
         owner, repo = repo_str.split("/", 1)
         if config.is_blocked_repo(owner, repo):
+            if scan is not None:
+                scan.observed(repo_str)
             continue
 
         try:
             prs = list_prs_with_label(owner, repo, config.poll_label)
         except GitHubDeferred:
             logger.warning("Remaining reviews deferred by GitHub API budget/backoff")
-            return results
+            raise
         except GitHubError as e:
             logger.error(f"Failed to list PRs for {owner}/{repo}: {e}")
             continue
+
+        if scan is not None:
+            scan.observed(repo_str)
 
         if not prs:
             logger.debug(f"No PRs with {config.poll_label} label in {owner}/{repo}")
@@ -234,15 +242,23 @@ def poll_and_run(
             candidates.append(Candidate(repo_str, pr_data))
 
     try:
-        enrich(candidates)
         queue = ReviewQueue(config)
+        if scan is None:
+            enrich(candidates)
+        else:
+            # One optional batch, aged work first. Unsampled candidates remain
+            # unknown and still require the normal exact-head gate checks.
+            metadata_order = sorted(candidates, key=lambda item: (-queue.deferred.get(item.key, 0), item.key))
+            enrich(metadata_order, max_batches=1)
         ordered = queue.order(candidates)
-        queue.begin(candidates)
+        queue.begin(candidates, observed_repos=scan.observed_repos if scan is not None else None)
     except GitHubDeferred:
         logger.warning("Review queue deferred by shared GitHub API budget")
-        return results
+        raise
     except OSError:
         logger.error("Review scheduling state unavailable; cycle deferred")
+        if scan is not None:
+            raise RepoScanError('Review scheduling state unavailable') from None
         return results
 
     logger.info("Review queue: %d candidates, %d small CI-green, at most %d admissions",
@@ -273,6 +289,8 @@ def poll_and_run(
             queue.attempted(candidate)
         except OSError:
             logger.error("Review scheduling state unavailable; remaining queue deferred")
+            if scan is not None:
+                raise RepoScanError('Review scheduling state unavailable') from None
             return results
         attempted += 1
         logger.info(f"Running gate on {owner}/{repo}#{pr_number}")
@@ -326,6 +344,11 @@ def poll_and_run(
             if not result.verdict.passed and FIX_DISPATCH_AVAILABLE:
                 _dispatch_fix_if_eligible(f"{owner}/{repo}", pr_number, result.verdict)
 
+        except GitHubDeferred:
+            if scan is not None and any('sha' in item and 'passed' in item for item in results):
+                scan.deferred_after_review = True
+                return results
+            raise
         except Exception as e:
             logger.error(f"Failed to run gate on {owner}/{repo}#{pr_number}: {e}")
             results.append({
@@ -403,11 +426,26 @@ def _run_poll_once(config=None, auto_discover=True, auto_label=True, auto_update
     try:
         from ..github_reads import refresh_quota
         refresh_quota()
+    except (GitHubDeferred, GitHubReadError):
+        raise
     except Exception as exc:
         logger.warning("GitHub quota refresh deferred: %s", type(exc).__name__)
 
     logger.info("Polling %d active repo(s) before optional housekeeping", len(repos))
-    results = poll_and_run(repos, config, post_comment, remove_label_on_complete, machine)
+    scan = RepoScan(config, repos)
+    results = poll_and_run(scan.repos, config, post_comment, remove_label_on_complete, machine, scan)
+
+    # Optional housekeeping must not discard completed review outcomes. Persist
+    # these before any further GitHub reads; incomplete discovery never reaches
+    # this point and therefore cannot replace previous poll history.
+    state = load_poll_state(config)
+    state.last_poll = datetime.now(timezone.utc).isoformat()
+    state.prs_checked.extend(results)
+    state.prs_checked = state.prs_checked[-100:]
+    save_poll_state(state, config)
+    if scan.deferred_after_review:
+        logger.warning("GitHub admission deferred; completed review results preserved and housekeeping skipped")
+        return results
 
     undrafted = []  # type: list
     if auto_label and BACKLOG_AVAILABLE:
@@ -418,6 +456,9 @@ def _run_poll_once(config=None, auto_discover=True, auto_label=True, auto_update
                 logger.info("Undrafted %d PR(s) with green CI", len(undrafted))
                 for pr in undrafted:
                     logger.info("  Undrafted: %s#%d (%s)", pr["repo"], pr["pr"], pr["title"][:40])
+        except (GitHubDeferred, GitHubReadError):
+            logger.warning("Optional GitHub housekeeping deferred; completed review results preserved")
+            return results
         except Exception as e:
             logger.warning("Auto-undraft failed: %s", e)
 
@@ -426,6 +467,9 @@ def _run_poll_once(config=None, auto_discover=True, auto_label=True, auto_update
             labeled = label_queued_prs(repos=repos, dry_run=False)
             if labeled:
                 logger.info("Labeled %d PR(s) with needs-karen", len(labeled))
+        except (GitHubDeferred, GitHubReadError):
+            logger.warning("Optional GitHub housekeeping deferred; completed review results preserved")
+            return results
         except Exception as e:
             logger.warning("Auto-label failed: %s", e)
 
@@ -437,12 +481,6 @@ def _run_poll_once(config=None, auto_discover=True, auto_label=True, auto_update
         logger.info("Verdict push: %s", receipt)
     except Exception as exc:
         logger.warning("Verdict push will retry: %s", type(exc).__name__)
-
-    state = load_poll_state(config)
-    state.last_poll = datetime.now(timezone.utc).isoformat()
-    state.prs_checked.extend(results)
-    state.prs_checked = state.prs_checked[-100:]
-    save_poll_state(state, config)
 
     if BACKLOG_AVAILABLE:
         logger.info("Writing backlog report...")
@@ -456,6 +494,9 @@ def _run_poll_once(config=None, auto_discover=True, auto_label=True, auto_update
                        backlog["summary"].get("queued", 0),
                        backlog["summary"].get("draft_green", 0),
                        len(undrafted))
+        except (GitHubDeferred, GitHubReadError):
+            logger.warning("Optional GitHub housekeeping deferred; completed review results preserved")
+            return results
         except Exception as e:
             logger.warning("Backlog report failed: %s", e)
 
@@ -464,6 +505,9 @@ def _run_poll_once(config=None, auto_discover=True, auto_label=True, auto_update
             try:
                 fails_path = write_karen_fails_report()
                 logger.info("Wrote Karen failures report to %s", fails_path)
+            except (GitHubDeferred, GitHubReadError):
+                logger.warning("Optional GitHub housekeeping deferred; completed review results preserved")
+                return results
             except Exception as e:
                 logger.warning("Karen failures report failed: %s", e)
 
@@ -490,8 +534,18 @@ def run_poll_once(config=None, auto_discover=True, auto_label=True, auto_update=
         if not guard.passed:
             logger.warning("Poll deferred: %s", guard.reason)
             return []
-        return _run_poll_once(config, auto_discover, auto_label, auto_update,
-                              post_comment, remove_label_on_complete)
+        try:
+            return _run_poll_once(config, auto_discover, auto_label, auto_update,
+                                  post_comment, remove_label_on_complete)
+        except GitHubDeferred:
+            logger.warning("Poll cycle deferred by GitHub budget/backoff; remaining housekeeping skipped")
+            return []
+        except RepoScanError:
+            logger.warning("Review scan state unavailable; cycle deferred")
+            return []
+        except GitHubReadError:
+            logger.warning("GitHub discovery unavailable; cycle deferred and previous reports preserved")
+            return []
 
 
 def run_poll_loop(config: Optional[KarenConfig] = None) -> None:

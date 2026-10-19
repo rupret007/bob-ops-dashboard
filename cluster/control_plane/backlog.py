@@ -46,13 +46,13 @@ def _run_gh(args, default=None):
             return github_reads.active_repos(args[2])
         result = github_reads.run(args, timeout=60)
         if result.returncode != 0:
-            logger.warning("gh %s failed: %s", " ".join(args[:3]), result.stderr[:100])
-            return default
+            raise github_reads.GitHubReadError('GitHub backlog read unavailable')
         return json.loads(result.stdout)
+    except GitHubDeferred:
+        raise  # Unknown admission is not an empty repository or backlog.
     except (subprocess.SubprocessError, json.JSONDecodeError, FileNotFoundError,
-            GitHubDeferred, github_reads.GitHubReadError) as e:
-        logger.warning("gh command error: %s", e)
-        return default
+            github_reads.GitHubReadError):
+        raise github_reads.GitHubReadError('GitHub backlog read unavailable') from None
 
 
 def discover_repos(owner="rupret007"):
@@ -94,7 +94,9 @@ def get_open_prs(repo):
         "--limit", "50",
     ], default=[])
     
-    return prs if isinstance(prs, list) else []
+    if not isinstance(prs, list) or any(not isinstance(pr, dict) for pr in prs):
+        raise github_reads.GitHubReadError('GitHub backlog response unavailable')
+    return prs
 
 
 def is_ci_all_green(pr):
@@ -339,7 +341,9 @@ def ensure_label_exists(repo, label, color="d4c5f9", description=""):
         labels = github_reads.labels(repo)
         if any(l.get("name", "").lower() == label.lower() for l in labels):
             return False
-    except (subprocess.SubprocessError, json.JSONDecodeError, GitHubDeferred,
+    except GitHubDeferred:
+        raise
+    except (subprocess.SubprocessError, json.JSONDecodeError,
             github_reads.GitHubReadError):
         # Never attempt a write when existence could not be established.
         logger.warning("Label check deferred; no label mutation attempted")
@@ -354,7 +358,9 @@ def ensure_label_exists(repo, label, color="d4c5f9", description=""):
             logger.info("Created label '%s' in %s", label, repo)
             return True
         return False
-    except (subprocess.SubprocessError, GitHubDeferred):
+    except GitHubDeferred:
+        raise
+    except subprocess.SubprocessError:
         return False
 
 
@@ -449,7 +455,9 @@ def undraft_green_prs(repos=None, dry_run=True, max_undrafts=None):
                 
                 undrafted.append(pr_info)
                 
-            except (subprocess.SubprocessError, GitHubDeferred) as e:
+            except GitHubDeferred:
+                raise
+            except subprocess.SubprocessError as e:
                 logger.warning("Failed to undraft %s#%d: %s", repo, pr_num, e)
                 continue
     
@@ -541,7 +549,9 @@ def label_queued_prs(repos=None, dry_run=True):
                     else:
                         logger.warning("Label deferred for %s#%d", repo, pr_num)
                         continue
-                except (subprocess.SubprocessError, GitHubDeferred, github_reads.GitHubReadError,
+                except GitHubDeferred:
+                    raise
+                except (subprocess.SubprocessError, github_reads.GitHubReadError,
                         CoordinationError, OSError, ValueError) as e:
                     logger.warning("Label deferred for %s#%d: %s", repo, pr_num, type(e).__name__)
                     continue
