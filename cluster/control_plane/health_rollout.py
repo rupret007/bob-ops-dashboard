@@ -33,7 +33,17 @@ def complete_cycle(status, now, since=0):
     return True
 
 
-def peer_canary_ok(status, peer, now):
+def peer_canary_ok(status, peer, now, observation=None):
+    if observation is not None:
+        from .health_peer import observation_time, number
+        try:
+            now = observation_time(observation, now)
+        except ValueError:
+            return False
+        served = observation.get('clock_observation', {}).get('served_at', now)
+        confirmed = peer.get('rollout', {}).get('last_confirmed_at', peer.get('rollout', {}).get('canary_passed_at', 0))
+        if not number(confirmed) or confirmed > served:
+            return False
     receipt = peer.get('rollout', {})
     return (peer.get('machine') == 'nucbox' and receipt.get('phase') == 'active'
             and receipt.get('head') == status.get('loaded_head')

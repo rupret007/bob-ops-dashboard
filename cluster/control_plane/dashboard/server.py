@@ -13,6 +13,7 @@ from __future__ import annotations
 import html
 import json
 import os
+import re
 import socket
 from datetime import datetime, timezone
 from http.server import HTTPServer, BaseHTTPRequestHandler
@@ -799,8 +800,12 @@ class DashboardHandler(BaseHTTPRequestHandler):
     def _serve_api_health(self) -> None:
         from ..health_state import read_status
         from ..health_service import public_snapshot
+        nonce = parse_qs(urlparse(self.path).query).get('nonce', [None])[0]
+        if nonce is not None and not re.fullmatch(r'[0-9a-f]{32}', nonce):
+            self.send_error(400, 'Invalid observation challenge')
+            return
         source = self.collector or DataCollector()
-        payload = json.dumps(public_snapshot(read_status(source.data_dir))).encode('utf-8')
+        payload = json.dumps(public_snapshot(read_status(source.data_dir), nonce)).encode('utf-8')
         self.send_response(200)
         self.send_header('Content-Type', 'application/json')
         self.send_header('Content-Length', str(len(payload)))

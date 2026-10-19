@@ -35,11 +35,13 @@ def execute(group, machine, live):
     return redact(result)
 
 
-def public_snapshot(status):
+def public_snapshot(status, nonce=None):
     result = copy.deepcopy(status)
     # Peers may exchange only self-observations, never recursively cached peers.
     result.get('groups', {}).get('peer', {}).pop('details', None)
     result.pop('incidents', None)
+    if nonce is not None:
+        result['observation'] = dict(nonce=nonce, served_at=time.time())
     return result
 
 
@@ -57,6 +59,12 @@ class Scheduler:
                            expected_groups=list(PERIODS))
         self.status.setdefault('groups', {})
         self.status.setdefault('rollout', {'phase': 'observe', 'started_at': time.time()})
+        if changed:
+            # Never compare/certify a new binary using a previous binary's checks.
+            self.status['groups'] = {}
+            if self.status['rollout']['phase'] == 'rolled-back':
+                self.status['rollout'] = dict(phase='observe', started_at=time.time(),
+                                              previous_rollback=self.status['rollout'])
         if changed and self.status['rollout']['phase'] in ('active', 'canary'):
             self.status['rollout'].update(phase='canary', activated_at=time.time(), head=head)
         self.status.setdefault('repair_after', {})
@@ -102,8 +110,9 @@ class Scheduler:
                 self.retry_rollout_at = now + 600
                 return
             if self.machine == 'mini':
-                peer = self.status['groups']['peer'].get('details', {}).get('health', {})
-                if not peer_canary_ok(self.status, peer, now):
+                observation = self.status['groups']['peer'].get('details', {})
+                peer = observation.get('health', {})
+                if not peer_canary_ok(self.status, peer, now, observation):
                     return
             rollout['phase'] = 'switching'
             atomic_json(self.root / 'health-status.json', self.status)

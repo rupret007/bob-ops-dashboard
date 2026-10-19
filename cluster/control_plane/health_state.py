@@ -224,7 +224,14 @@ def machine_health(root, machine, now):
     health = {}
     for name in ('mini', 'nucbox'):
         value = status if name == machine else peer.get('health', {})
-        result = verdict(value, name, now)
+        reference = now
+        if name != machine:
+            from .health_peer import observation_time
+            try:
+                reference = observation_time(peer, now)
+            except ValueError:
+                value = {}
+        result = verdict(value, name, reference)
         timestamp = result.get('timestamp')
         result['timestamp'] = (datetime.fromtimestamp(timestamp, timezone.utc).isoformat()
                                if isinstance(timestamp, (int, float)) else None)

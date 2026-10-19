@@ -77,3 +77,16 @@ def test_new_revision_reproves_canary_without_resurrecting_legacy(tmp_path):
     assert scheduler.status['rollout']['phase'] == 'canary'
     assert scheduler.status['rollout']['head'] == 'b' * 40
     assert scheduler.status['rollout']['previous_units'] == {'saved': True}
+
+
+def test_failed_canary_retries_only_after_code_changes_and_needs_new_checks(tmp_path):
+    saved = {'machine': 'nucbox', 'loaded_head': 'a' * 40,
+             'groups': {'guardian': {'finished_at': 100, 'checks': [{'passed': True}]}},
+             'rollout': {'phase': 'rolled-back', 'rolled_back_at': 90, 'head': 'a' * 40}}
+    service.atomic_json(tmp_path / 'health-status.json', saved)
+    same = service.Scheduler(tmp_path, 'nucbox', 'a' * 40, Executor(), Executor())
+    assert same.status['rollout']['phase'] == 'rolled-back'
+    changed = service.Scheduler(tmp_path, 'nucbox', 'b' * 40, Executor(), Executor())
+    assert changed.status['rollout']['phase'] == 'observe'
+    assert changed.status['rollout']['previous_rollback'] == saved['rollout']
+    assert changed.status['groups'] == {}

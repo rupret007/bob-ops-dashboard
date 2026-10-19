@@ -15,7 +15,7 @@ from .health_state import authoritative, data_dir, recovery_lock, repair_once
 from .node_control import is_draining
 from .service_logging import redact
 
-PERIODS = {'guardian': 120, 'watchdog': 600, 'peer': 300,
+PERIODS = {'guardian': 120, 'watchdog': 600, 'peer': 120,
            'shadow': 900, 'doctor': 3600, 'main_ci': 600, 'flow': 120}
 TIMEOUTS = {'guardian': 90, 'watchdog': 180, 'peer': 15,
             'shadow': 600, 'doctor': 120, 'main_ci': 180, 'flow': 20}
@@ -119,21 +119,23 @@ def collect(group, machine, live=False):
 
 def collect_peer(machine):
     """Keep direct source identity/time; never repeat a derived cluster verdict."""
+    import secrets
     import urllib.request
-    from .health_state import verdict
+    from .health_peer import direct_observation
     peer = 'mini' if machine == 'nucbox' else 'nucbox'
-    with urllib.request.urlopen(watchdog.PEER_URLS[peer] + '/api/health', timeout=5) as response:
+    nonce = secrets.token_hex(16)
+    started = time.monotonic()
+    request = urllib.request.Request(watchdog.PEER_URLS[peer] + '/api/health?nonce=' + nonce,
+                                     headers={'Cache-Control': 'no-cache'})
+    with urllib.request.urlopen(request, timeout=5) as response:
         raw = response.read(8 * 1024 * 1024 + 1)
+    elapsed, received = time.monotonic() - started, time.time()
     if len(raw) > 8 * 1024 * 1024:
         raise ValueError('Peer response exceeds limit')
     value = json.loads(raw)
-    if value.get('machine') != peer:
-        raise ValueError('Peer identity mismatch')
-    result = verdict(value, peer, time.time())
-    if result['detail'] == 'health evidence unavailable or stale':
-        raise ValueError('Peer evidence expired')
+    details = direct_observation(value, peer, nonce, received, elapsed)
     return dict(checks=[check('peer_freshness', True, 'Direct peer report verified')],
-                details=dict(machine=peer, received_at=time.time(), health=value))
+                details=details)
 
 
 def main():
