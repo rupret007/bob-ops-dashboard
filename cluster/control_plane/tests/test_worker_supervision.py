@@ -27,6 +27,9 @@ def test_worker_uses_platform_lifecycle(platform, tmp_path):
         assert '--unit=storypool-job-' + job_id in argv
         assert '--collect' in argv
         assert '--property=Type=exec' in argv
+        assert '--property=RuntimeMaxSec=2700' in argv
+        assert '--property=TimeoutStopSec=10' in argv
+        assert '--property=KillMode=control-group' in argv
         assert '--property=StandardOutput=append:' + str(tmp_path / (job_id + '.log')) in argv
         assert '--setenv=STORYPOOL_JOBS_DIR=' + str(tmp_path) in argv
         assert argv[-3:] == ['-m', 'cluster.control_plane.fix_worker', job_id]
@@ -74,3 +77,20 @@ def test_live_worker_keeps_lease(tmp_path):
     ledger.start_job(job.job_id, os.getpid())
     assert ledger.expire_stale_leases() == []
     assert ledger._load_jobs()[0].state == 'running'
+
+
+def test_expired_but_live_worker_keeps_lane_until_confirmed_exit(tmp_path):
+    ledger = JobLedger(tmp_path)
+    job = ledger.create_job('owner/repo', 7, 'a' * 40, 'codex', 'nucbox')
+    ledger.start_job(job.job_id, os.getpid())
+    with patch.object(Job, 'has_valid_lease', return_value=False), \
+         patch.object(Job, 'is_process_running', return_value=True):
+        assert ledger.expire_stale_leases() == []
+        assert ledger.has_active_lease('owner/repo', 7)
+        assert ledger._load_jobs()[0].error == 'stale-worker-still-running'
+        with pytest.raises(ValueError, match='active lease'):
+            ledger.create_job('owner/repo', 7, 'b' * 40, 'codex', 'nucbox')
+    with patch.object(Job, 'is_process_running', return_value=False):
+        changed = ledger.expire_stale_leases()
+    assert len(changed) == 1 and changed[0].state == 'failed'
+    assert not changed[0].outcome_verified

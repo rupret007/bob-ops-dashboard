@@ -210,6 +210,8 @@ def _spawn_worker(
         subprocess.run(
             ["systemd-run", "--user", f"--unit=storypool-job-{job_id}",
              "--collect", "--property=Type=exec",
+             "--property=RuntimeMaxSec=2700", "--property=TimeoutStopSec=10",
+             "--property=KillMode=control-group",
              f"--working-directory={repo_dir}",
              f"--property=StandardOutput=append:{worker_log}",
              "--property=StandardError=inherit",

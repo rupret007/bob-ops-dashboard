@@ -24,6 +24,8 @@ from .local_karen.verdict import load_verdict
 
 CODEX_EFFORT = 'xhigh'
 _lease = ContextVar('cluster_lease', default=None)
+_job_deadline = ContextVar('worker_job_deadline', default=None)
+JOB_SECONDS = 45 * 60
 
 
 def codex_model():
@@ -61,11 +63,13 @@ TEST_OUTPUT_TAIL = 6000
 
 def _run_claimed(args, cwd, lease, **kwargs):
     """Stop the entire command process group if ownership is lost mid-command."""
+    deadline = min(time.monotonic() + 1800, _job_deadline.get() or float('inf'))
+    if time.monotonic() >= deadline:
+        raise subprocess.TimeoutExpired(args, 0)
     prompt = kwargs.pop('input', None)
     process = subprocess.Popen(args, cwd=cwd, text=True, stdout=subprocess.PIPE,
         stderr=subprocess.PIPE, stdin=subprocess.PIPE if prompt is not None else None,
         start_new_session=True, **kwargs)
-    deadline = time.monotonic() + 1800
     try:
         while True:
             if lease.lost:
@@ -243,6 +247,7 @@ def execute(job_id):
     started = time.monotonic()
     lease_token = None
     lease = None
+    deadline_token = _job_deadline.set(started + JOB_SECONDS)
     try:
         from .coordination import ClaimClient, Lease
         lease = Lease(ClaimClient.from_env(), job.cluster_claim)
@@ -282,6 +287,7 @@ def execute(job_id):
               error_type=type(exc).__name__, reason=message, duration_ms=round((time.monotonic() - started) * 1000))
         return 1
     finally:
+        _job_deadline.reset(deadline_token)
         if lease_token is not None:
             _lease.reset(lease_token)
             lease.__exit__(None, None, None)

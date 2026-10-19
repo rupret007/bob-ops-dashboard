@@ -369,10 +369,20 @@ class JobLedger:
                 should_expire = False
                 reason = ""
                 
-                if job.state == JobState.RUNNING.value and not job.is_process_running():
+                running = job.is_process_running()
+                if job.state == JobState.RUNNING.value and not running:
                     should_expire = True
                     reason = "worker-died"
                 elif not job.has_valid_lease():
+                    if running:
+                        # Time alone cannot free a lane while its old worker can
+                        # still act. Native runtime limits stop the owned unit;
+                        # only a later confirmed exit releases local admission.
+                        if job.error != 'stale-worker-still-running':
+                            job.error = 'stale-worker-still-running'
+                            job.failure_code = 'stale-session'
+                            changed = True
+                        continue
                     should_expire = True
                     reason = "lease expired"
                 
