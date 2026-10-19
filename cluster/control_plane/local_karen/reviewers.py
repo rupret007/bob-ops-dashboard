@@ -26,6 +26,7 @@ from pathlib import Path
 from typing import Optional, List, Dict, Tuple, Any, Type
 
 from .config import KarenConfig
+from .deadline import remaining_timeout
 from .checks import PRInfo
 from ..codex_quota import read_codex_quota
 
@@ -563,12 +564,12 @@ class CodexReviewer(BaseReviewer):
                     result = subprocess.run(
                         ["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=30", run_on_host,
                          " ".join(shlex.quote(arg) for arg in remote)],
-                        input=prompt, capture_output=True, text=True, timeout=900)
+                        input=prompt, capture_output=True, text=True, timeout=remaining_timeout(900))
                     response = result.stdout.strip()
                 else:
                     result = subprocess.run(
                         codex_args[:-1] + ["-o", str(output), "-"], cwd=directory,
-                        input=prompt, capture_output=True, text=True, timeout=900)
+                        input=prompt, capture_output=True, text=True, timeout=remaining_timeout(900))
                     response = output.read_text().strip() if output.is_file() else ""
 
             duration = time.time() - start_time
@@ -600,9 +601,9 @@ class CodexReviewer(BaseReviewer):
             return ReviewResult(
                 reviewer=self.name,
                 verdict=ReviewVerdict.ERROR,
-                reason="Codex CLI timed out after 15 minutes",
+                reason="Codex CLI exceeded the provider or remaining review deadline",
                 tier=tier,
-                duration_sec=900,
+                duration_sec=time.time() - start_time,
             )
         except Exception as e:
             return ReviewResult(
@@ -726,7 +727,7 @@ class GeminiReviewer(BaseReviewer):
                 method="POST",
             )
 
-            with urllib.request.urlopen(req, timeout=60) as resp:
+            with urllib.request.urlopen(req, timeout=remaining_timeout(60)) as resp:
                 result = json.loads(resp.read().decode("utf-8"))
 
             duration = time.time() - start_time
@@ -860,7 +861,7 @@ class MiniMaxReviewer(BaseReviewer):
             )
 
             for attempt in range(2):
-                with urllib.request.urlopen(req, timeout=240) as resp:
+                with urllib.request.urlopen(req, timeout=remaining_timeout(240)) as resp:
                     raw = resp.read()
                 metadata = self._response_metadata(None)
                 try:
@@ -1085,7 +1086,7 @@ class ClaudeReviewer(BaseReviewer):
                 ["claude", "-p", prompt],
                 capture_output=True,
                 text=True,
-                timeout=180,
+                timeout=remaining_timeout(180),
             )
 
             duration = time.time() - start_time

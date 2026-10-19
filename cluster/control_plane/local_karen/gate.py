@@ -16,6 +16,7 @@ from typing import Optional
 
 from ..coordination import ClaimClient, CoordinationError, Lease
 from .config import KarenConfig
+from .deadline import review_budget, remaining_timeout
 from .checks import PRInfo, run_all_checks, all_checks_pass, get_failed_checks, CheckResult
 from .reviewers import (
     run_review_chain,
@@ -38,6 +39,7 @@ _review_lease = ContextVar("karen_review_lease", default=None)
 
 def review_checkpoint():
     """Fence provider calls and publication when a review owns a shared lease."""
+    remaining_timeout(1200)
     lease = _review_lease.get()
     if lease is not None:
         lease.renew()
@@ -116,7 +118,8 @@ class GateRunner:
             with Lease(client, claim) as lease:
                 token = _review_lease.set(lease)
                 try:
-                    return self._run_claimed(pr, post_comment, start_time)
+                    with review_budget():
+                        return self._run_claimed(pr, post_comment, start_time)
                 finally:
                     _review_lease.reset(token)
         except CoordinationError as exc:
