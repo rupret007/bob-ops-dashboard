@@ -174,6 +174,10 @@ def store_peer_engine(peer: str, data: dict) -> bool:
                 "guardian": data.get("machines", {}).get(peer, {}).get("guardian", {}),
                 "jobs": dict(jobs, running=list(jobs.get("running") or [])[:50]),
                 "llm_local": [g for g in (data.get("llm_local") or []) if isinstance(g, dict)][:20]}
+    resources = data.get("resources")
+    if (isinstance(resources, dict) and resources.get("machine") == peer
+            and resources.get("source") == "local"):
+        snapshot["resources"] = resources
     out = LOG_DIR / "machines" / peer / "engine.json"
     out.parent.mkdir(parents=True, exist_ok=True)
     tmp = out.with_suffix(".json.tmp")

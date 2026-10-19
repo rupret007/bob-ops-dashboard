@@ -377,7 +377,9 @@ class EngineCollector:
         def gauge(label, value, maximum=None, unit=''):
             return {'label': label, 'value': value, 'max': maximum, 'unit': unit}
         from ..github_budget import snapshot as github_snapshot
+        from ..reporting_telemetry import local_resources
         return {'timestamp': now.isoformat(), 'engine': overall, 'github_api': github_snapshot(self.data_dir), 'machines': health, 'admission': admission,
+                'resources': local_resources(self.data_dir, self.machine, now.timestamp()),
                 'review_evidence': review_evidence,
                 'karen_runtime': runtime,
                 'security_evidence': security_evidence,
