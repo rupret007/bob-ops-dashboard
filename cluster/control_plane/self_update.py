@@ -328,6 +328,7 @@ def run_tests(repo_dir: Path) -> bool:
              "cluster/control_plane/tests/test_guardian.py",
              "cluster/control_plane/tests/test_guardian_http.py",
              "cluster/control_plane/tests/test_update_coordination.py",
+             "cluster/control_plane/tests/test_update_maintenance.py",
              "cluster/control_plane/tests/test_health_state.py",
              "cluster/control_plane/tests/test_health_service.py",
              "cluster/control_plane/tests/test_health_rollout.py",
@@ -534,6 +535,9 @@ def finish_install(repo_dir: Path, machine: str, result: dict) -> dict:
     """Persist unfinished deployment so an unchanged HEAD still retries it."""
     pending = repo_dir / '.storypool-reinstall-pending'
     pending.touch()
+    deferred = _maintenance_deferred(repo_dir, machine, result)
+    if deferred is not None:
+        return deferred
     result['reinstalled'] = reinstall(repo_dir, machine)
     if result['reinstalled']:
         pending.unlink(missing_ok=True)
@@ -551,6 +555,37 @@ def _deferred(repo_dir, reason):
                   repo_dir=str(repo_dir))
     _log_update_outcome('SKIPPED: ' + reason, result)
     return result
+
+
+def _maintenance_deferred(repo_dir, machine, result=None, *, pending=False, previous_head=None):
+    """Read the operator's atomic state without holding up maintenance requests."""
+    try:
+        from .node_control import is_draining
+        # Only an explicit healthy boolean admits work. Missing files are false
+        # by read_control's contract; malformed/unreadable state fails closed.
+        held = is_draining(machine) is not False
+    except Exception:
+        held = True
+    if not held:
+        return None
+    if pending:
+        (repo_dir / '.storypool-reinstall-pending').touch()
+    reason = 'operator maintenance hold; update deferred'
+    if result is None:
+        return _deferred(repo_dir, reason)
+    if previous_head is not None:
+        _observe_source(repo_dir, result, previous_head)
+    result.update(outcome='SKIPPED', reason=reason)
+    _log_update_outcome('SKIPPED: ' + reason, result)
+    return result
+
+
+def _observe_source(repo_dir, result, previous_head):
+    """Report partial source movement independently of validation/installation."""
+    observed = get_current_head(repo_dir)
+    result.update(observed_head=observed,
+                  source_advanced=(observed != previous_head) if observed is not None else None)
+    return observed
 
 
 def target_canary_ready(machine, target_sha):
@@ -580,6 +615,9 @@ def self_update(machine: str = "mini", install_dir: Optional[Path] = None, *,
             (operator and expected_head is None)):
         return dict(updated=False, reinstalled=False, outcome='FAILED',
                     reason='invalid machine or expected full head for operator update')
+    deferred = _maintenance_deferred(repo_dir, machine)
+    if deferred is not None:
+        return deferred
     root = Path(os.environ.get('STORYPOOL_DATA_DIR', '~/.local/share/storypool')).expanduser()
     try:
         root.mkdir(parents=True, exist_ok=True)
@@ -605,13 +643,27 @@ def self_update(machine: str = "mini", install_dir: Optional[Path] = None, *,
 def _prepare_and_finish(repo_dir, machine, result, target_sha):
     # Preserve retry even when code is current but peer admission expires in tests.
     (repo_dir / '.storypool-reinstall-pending').touch()
+    deferred = _maintenance_deferred(repo_dir, machine, result)
+    if deferred is not None:
+        return deferred
     if get_current_head(repo_dir) != target_sha:
         result.update(outcome='FAILED', reason='HEAD changed before installation')
     elif not target_canary_ready(machine, target_sha):
         result.update(outcome='SKIPPED', reason='awaiting matching Nuc canary before installation')
     else:
-        result['pycache_cleared'] = clear_pycache(repo_dir / 'cluster') + clear_pycache(KAREN_MODULE_DIR)
+        result['pycache_cleared'] = 0
+        for cache in (repo_dir / 'cluster', KAREN_MODULE_DIR):
+            deferred = _maintenance_deferred(repo_dir, machine, result)
+            if deferred is not None:
+                return deferred
+            result['pycache_cleared'] += clear_pycache(cache)
+        deferred = _maintenance_deferred(repo_dir, machine, result)
+        if deferred is not None:
+            return deferred
         result['module_copied'] = copy_karen_module(repo_dir)
+        deferred = _maintenance_deferred(repo_dir, machine, result)
+        if deferred is not None:
+            return deferred
         result['config_migrated'] = migrate_config()
         if get_current_head(repo_dir) != target_sha:
             result.update(outcome='FAILED', reason='HEAD changed during installation preparation')
@@ -682,7 +734,14 @@ def _self_update(machine: str, repo_dir: Path, expected_head: Optional[str]) -> 
         _log_update_outcome("SKIPPED: working tree has uncommitted changes", result)
         return result
     
-    if not fetch_branch(repo_dir):
+    deferred = _maintenance_deferred(repo_dir, machine, result)
+    if deferred is not None:
+        return deferred
+    fetched = fetch_branch(repo_dir)
+    deferred = _maintenance_deferred(repo_dir, machine, result)
+    if deferred is not None:
+        return deferred
+    if not fetched:
         result["reason"] = "git fetch failed"
         result["outcome"] = "FAILED"
         _log_update_outcome("FAILED: git fetch failed", result)
@@ -703,7 +762,12 @@ def _self_update(machine: str, repo_dir: Path, expected_head: Optional[str]) -> 
     
     if remote_sha == old_head:
         if (repo_dir / '.storypool-reinstall-pending').exists():
-            if not run_tests(repo_dir):
+            tests_passed = run_tests(repo_dir)
+            deferred = _maintenance_deferred(repo_dir, machine, result, pending=True,
+                                            previous_head=old_head)
+            if deferred is not None:
+                return deferred
+            if not tests_passed:
                 result['outcome'] = 'FAILED'
                 result['reason'] = 'pending reinstall gate tests failed; retry retained'
                 _log_update_outcome('FAILED: ' + result['reason'], result)
@@ -724,6 +788,9 @@ def _self_update(machine: str, repo_dir: Path, expected_head: Optional[str]) -> 
         _log_update_outcome("SKIPPED: cannot fast-forward, HEAD diverged", result)
         return result
     
+    deferred = _maintenance_deferred(repo_dir, machine, result)
+    if deferred is not None:
+        return deferred
     ff_success, rollback_sha = fast_forward(repo_dir, remote_sha)
     if not ff_success:
         result["reason"] = "fast-forward merge failed"
@@ -731,21 +798,35 @@ def _self_update(machine: str, repo_dir: Path, expected_head: Optional[str]) -> 
         _log_update_outcome("FAILED: fast-forward merge failed", result)
         return result
     
-    new_head = get_current_head(repo_dir)
+    # A newly requested hold must not trigger rollback or preparation after git
+    # has moved. Keep a retry marker for normal gates when service resumes.
+    new_head = _observe_source(repo_dir, result, old_head)
+    deferred = _maintenance_deferred(repo_dir, machine, result, pending=True)
+    if deferred is not None:
+        return deferred
     if new_head != remote_sha:
-        result["reason"] = "HEAD mismatch after fast-forward"
         result["outcome"] = "FAILED"
-        rollback_to_sha(repo_dir, rollback_sha)
-        _log_update_outcome("FAILED: HEAD mismatch after fast-forward", result)
+        result["rolled_back"] = rollback_to_sha(repo_dir, rollback_sha)
+        result["reason"] = ('HEAD mismatch after fast-forward; rolled back' if result['rolled_back']
+                            else 'HEAD mismatch after fast-forward; rollback incomplete')
+        _observe_source(repo_dir, result, old_head)
+        _log_update_outcome('FAILED: ' + result['reason'], result)
         return result
     
     result["new_head"] = new_head[:12]
     
-    if not run_tests(repo_dir):
-        result["reason"] = "tests failed after update - rolled back"
+    tests_passed = run_tests(repo_dir)
+    deferred = _maintenance_deferred(repo_dir, machine, result, pending=True,
+                                    previous_head=old_head)
+    if deferred is not None:
+        return deferred
+    if not tests_passed:
         result["outcome"] = "FAILED"
         result["rolled_back"] = rollback_to_sha(repo_dir, rollback_sha)
-        _log_update_outcome("FAILED: tests failed, rolled back to {}".format(rollback_sha[:12] if rollback_sha else "unknown"), result)
+        result["reason"] = ('tests failed after update - rolled back' if result['rolled_back']
+                            else 'tests failed after update; rollback incomplete')
+        _observe_source(repo_dir, result, old_head)
+        _log_update_outcome('FAILED: ' + result['reason'], result)
         return result
     
     result["updated"] = True
