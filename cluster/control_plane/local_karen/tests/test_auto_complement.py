@@ -89,14 +89,14 @@ def test_css_receives_js_and_tests_before_either_judge_without_repacking():
     assert all(review.scope['head_sha'] == pr.head_sha for review in reviews)
 
 
-def test_partial_file_chunks_receive_complete_pinned_file_and_keep_original_plan():
-    pr = pr_info([section('large.js', 20000), section('tail.js')])
+def test_partial_file_chunks_defer_to_normal_requests_and_keep_original_plan():
+    pr = pr_info([section('large.js', 20000, '\u2603'), section('tail.js')])
+    # This full file exceeds the serialized budget; keep the original fallback.
+    full = c.requested_file_diff(pr, 'large.js', pr.head_sha)
+    assert c.context_size([dict(path='large.js', diff=full)])[1] > c.MAX_CONTEXT_SIZE
     chunks = r.split_review_diff(pr.diff)
     initial, code = c.automatic_complement(pr, chunks, 1)
-    assert code == 'partial_file_supplied'
-    assert initial == [dict(path='large.js', diff=c.requested_file_diff(pr, 'large.js', pr.head_sha))]
-    assert len(initial[0]['diff']) == 20000
-    assert max(c.context_size(initial)) <= c.MAX_CONTEXT_SIZE
+    assert code == 'partial_file' and initial == []
     assert len(c.requested_file_diff(pr, 'large.js', pr.head_sha)) == 20000
     assert ''.join(chunks) == pr.diff and all(len(chunk) <= 12000 for chunk in chunks)
 
@@ -311,7 +311,7 @@ def test_partial_seed_keeps_existing_bounds_and_unknown_input_refusal(kind):
     chunks = r.split_review_diff(pr.diff)
     initial, code = c.automatic_complement(pr, chunks, 1)
     assert initial == []
-    assert code == ('changed_unavailable' if kind in ('unknown', 'unsafe') else 'context_budget')
+    assert code == ('changed_unavailable' if kind in ('unknown', 'unsafe') else 'partial_file')
 
 
 def test_partial_seed_aggregates_repeated_sections_for_one_pinned_path():

@@ -242,7 +242,7 @@ def automatic_complement(pr: PRInfo, chunks: Sequence[str], index: int):
         s['path'] == item['path'] and not (start <= s['start'] and s['end'] <= end)
         for s in sections)]
     if len(missing) > MAX_CONTEXT_FILES:
-        return [], 'context_budget'
+        return [], 'partial_file' if partial else 'context_budget'
     entries = []
     for path in missing:
         supplied = requested_file_diff(pr, path, pr.head_sha)
@@ -250,5 +250,5 @@ def automatic_complement(pr: PRInfo, chunks: Sequence[str], index: int):
             return [], 'changed_unavailable'
         entries.append(dict(path=path, diff=supplied))
         if max(context_size(entries)) > MAX_CONTEXT_SIZE:
-            return [], 'context_budget'
+            return [], 'partial_file' if partial else 'context_budget'
     return entries, ('partial_file_supplied' if partial else 'supplied') if entries else 'not_needed'
