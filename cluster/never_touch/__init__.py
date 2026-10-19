@@ -12,8 +12,10 @@ from the root Pages build without a site-wide configuration override.
 
 from __future__ import annotations
 
+import math
 import re
 import subprocess
+import time
 from dataclasses import dataclass
 from typing import Optional
 
@@ -22,6 +24,7 @@ NEVER_TOUCH_REPOS: frozenset[str] = frozenset({
 })
 
 _REPO_RE = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
+_SHA_RE = re.compile(r"[0-9a-fA-F]{40}")
 
 
 class NeverTouchViolation(PermissionError):
@@ -109,11 +112,19 @@ def check_gate_pass_at_sha(
         operation: Description of the operation (for error messages)
 
     Raises:
-        NeverTouchViolation: If the repo is never-touch and gate_pass is missing/invalid
+        NeverTouchViolation: If the repo is invalid, or a never-touch repo's
+            SHA or gate pass is missing/invalid. A receipt never authorizes an
+            automated write; the operation guards still block protected repos.
     """
-    normalized = normalize_repo(repo)
+    try:
+        normalized = normalize_repo(repo)
+    except ValueError as e:
+        raise NeverTouchViolation(repo, operation, f"invalid repo: {e}") from e
     if normalized not in NEVER_TOUCH_REPOS:
         return
+
+    if not isinstance(sha, str) or not _SHA_RE.fullmatch(sha):
+        raise NeverTouchViolation(normalized, operation, "invalid HEAD SHA: expected 40 hex characters")
 
     if gate_pass is None:
         raise NeverTouchViolation(
@@ -122,13 +133,22 @@ def check_gate_pass_at_sha(
             f"no gate PASS at SHA {sha[:12]}",
         )
 
-    if normalize_repo(gate_pass.repo) != normalized:
+    if not isinstance(gate_pass, GatePassReceipt):
+        raise NeverTouchViolation(normalized, operation, "invalid gate PASS receipt")
+
+    try:
+        receipt_repo = normalize_repo(gate_pass.repo)
+    except ValueError as e:
+        raise NeverTouchViolation(normalized, operation, f"invalid gate PASS repo: {e}") from e
+    if receipt_repo != normalized:
         raise NeverTouchViolation(
             normalized,
             operation,
             f"gate PASS is for different repo {gate_pass.repo!r}",
         )
 
+    if not isinstance(gate_pass.sha, str) or not _SHA_RE.fullmatch(gate_pass.sha):
+        raise NeverTouchViolation(normalized, operation, "invalid gate PASS SHA: expected 40 hex characters")
     if gate_pass.sha != sha:
         raise NeverTouchViolation(
             normalized,
@@ -136,7 +156,15 @@ def check_gate_pass_at_sha(
             f"gate PASS at {gate_pass.sha[:12]} but HEAD is {sha[:12]}",
         )
 
-    import time
+    if not isinstance(gate_pass.reviewer, str) or not gate_pass.reviewer.strip():
+        raise NeverTouchViolation(normalized, operation, "invalid gate PASS reviewer")
+
+    try:
+        valid_expiry = type(gate_pass.expires_at) in (int, float) and math.isfinite(gate_pass.expires_at)
+    except OverflowError:
+        valid_expiry = False
+    if not valid_expiry:
+        raise NeverTouchViolation(normalized, operation, "invalid gate PASS expiry: expected a finite timestamp")
     if gate_pass.expires_at <= time.time():
         raise NeverTouchViolation(
             normalized,

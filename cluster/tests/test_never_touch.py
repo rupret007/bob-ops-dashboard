@@ -271,6 +271,87 @@ class CheckGatePassAtShaTests(unittest.TestCase):
             )
         self.assertIn("different repo", str(ctx.exception))
 
+    def test_matching_malformed_shas_cannot_authorize_a_pass(self):
+        for sha in (None, False, 1, "", "a" * 39, "a" * 41, "g" * 40, "a" * 40 + "\n"):
+            with self.subTest(sha=sha):
+                receipt = GatePassReceipt(
+                    repo="rupret007/rad-dad-show-night", sha=sha,
+                    reviewer="karen", expires_at=time.time() + 3600,
+                )
+                with self.assertRaises(NeverTouchViolation):
+                    check_gate_pass_at_sha(receipt.repo, sha, receipt, "merge")
+
+    def test_malformed_receipt_sha_is_rejected(self):
+        for sha in (None, False, 1, [], {}):
+            with self.subTest(sha=sha):
+                receipt = GatePassReceipt(
+                    repo="rupret007/rad-dad-show-night", sha=sha,
+                    reviewer="karen", expires_at=time.time() + 3600,
+                )
+                with self.assertRaises(NeverTouchViolation):
+                    check_gate_pass_at_sha(receipt.repo, "a" * 40, receipt, "merge")
+
+    def test_invalid_receipt_objects_are_rejected(self):
+        for receipt in ({}, False, "PASS", object()):
+            with self.subTest(receipt=receipt):
+                with self.assertRaises(NeverTouchViolation):
+                    check_gate_pass_at_sha(
+                        "rupret007/rad-dad-show-night", "a" * 40, receipt, "merge",
+                    )
+
+    def test_invalid_repositories_raise_policy_violations(self):
+        for repo in (None, "", "not-a-repo", [], {}):
+            with self.subTest(repo=repo):
+                with self.assertRaises(NeverTouchViolation):
+                    check_gate_pass_at_sha(repo, "a" * 40, None, "merge")
+                receipt = GatePassReceipt(
+                    repo=repo, sha="a" * 40,
+                    reviewer="karen", expires_at=time.time() + 3600,
+                )
+                with self.assertRaises(NeverTouchViolation):
+                    check_gate_pass_at_sha(
+                        "rupret007/rad-dad-show-night", receipt.sha, receipt, "merge",
+                    )
+
+    def test_invalid_expiry_cannot_authorize_a_pass(self):
+        for expiry in (float("nan"), float("inf"), -float("inf"),
+                       None, "later", True, False, 10 ** 1000):
+            with self.subTest(expiry=expiry):
+                receipt = GatePassReceipt(
+                    repo="rupret007/rad-dad-show-night", sha="a" * 40,
+                    reviewer="karen", expires_at=expiry,
+                )
+                with self.assertRaises(NeverTouchViolation):
+                    check_gate_pass_at_sha(receipt.repo, receipt.sha, receipt, "merge")
+
+    def test_missing_reviewer_cannot_authorize_a_pass(self):
+        for reviewer in (None, "", " \t\n", False, 1):
+            with self.subTest(reviewer=reviewer):
+                receipt = GatePassReceipt(
+                    repo="rupret007/rad-dad-show-night", sha="a" * 40,
+                    reviewer=reviewer, expires_at=time.time() + 3600,
+                )
+                with self.assertRaises(NeverTouchViolation):
+                    check_gate_pass_at_sha(receipt.repo, receipt.sha, receipt, "merge")
+
+    def test_expiry_boundary_and_normalized_repositories(self):
+        now = 1_000_000.0
+        for expiry, expired in ((now - 1, True), (now, True), (now + 1, False)):
+            with self.subTest(expiry=expiry), patch("time.time", return_value=now):
+                receipt = GatePassReceipt(
+                    repo="git@github.com:RUPRET007/RAD-DAD-SHOW-NIGHT.git",
+                    sha="a" * 40, reviewer="karen", expires_at=expiry,
+                )
+                if expired:
+                    with self.assertRaisesRegex(NeverTouchViolation, "expired"):
+                        check_gate_pass_at_sha(
+                            "rupret007/rad-dad-show-night", receipt.sha, receipt, "merge",
+                        )
+                else:
+                    check_gate_pass_at_sha(
+                        "rupret007/rad-dad-show-night", receipt.sha, receipt, "merge",
+                    )
+
 
 class NeverTouchReposContentTests(unittest.TestCase):
     def test_show_night_in_list(self):
@@ -424,6 +505,32 @@ class ProductionWritePathTests(unittest.TestCase):
                     job_exec.run_cmd(spec, Path("/unused"), dry_run)
                 workdir.assert_not_called()
                 run.assert_not_called()
+
+    def test_mesh_guard_covers_all_capabilities_if_allowlist_expands(self):
+        from cluster.capabilities import CAPABILITIES, GUEST_CAPS
+        from cluster.mesh_worker import Executor
+        from cluster.routing import validate_cap_spec
+
+        for cap in CAPABILITIES:
+            for dry_run in (False, True):
+                with self.subTest(cap=cap, dry_run=dry_run), \
+                        patch("cluster.routing.ALLOWED_REPOS", {PROTECTED_REPO}), \
+                        patch("cluster.job_exec.prepare_worktree") as checkout, \
+                        patch.object(Executor, "_proc") as run:
+                    spec = {
+                        "v": 2, "id": "fixture", "repo": PROTECTED_REPO, "ref": "main",
+                        "cap": cap, "timeout_s": 60, "load_ceiling": 4,
+                    }
+                    if cap.startswith("llm."):
+                        spec["prompt"] = "Run the fixture checks"
+                    else:
+                        spec["cmd"] = ["npm", "run", "build"] if cap == "shell.build" else ["npm", "test"]
+                    guest = cap in GUEST_CAPS
+                    spec = validate_cap_spec(spec, guest=guest)
+                    with self.assertRaises(NeverTouchViolation):
+                        Executor("guest" if guest else "member", dry_run).run(spec)
+                    checkout.assert_not_called()
+                    run.assert_not_called()
 
     def test_dispatch_blocks_before_calling_github(self):
         with tempfile.TemporaryDirectory() as tmp:
