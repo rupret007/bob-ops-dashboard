@@ -10,6 +10,7 @@ import tempfile
 import time
 import logging
 import signal
+from contextlib import contextmanager
 from contextvars import ContextVar
 from pathlib import Path
 
@@ -180,6 +181,17 @@ def fix_pr(repo, pr_number, head_sha, findings):
         _failure_stage.reset(token)
 
 
+@contextmanager
+def _private_workspace():
+    """One worker owns its process; keep its checkout and children private."""
+    previous = os.umask(0o077)
+    try:
+        with tempfile.TemporaryDirectory(prefix='storypool-fix-') as temp:
+            yield temp
+    finally:
+        os.umask(previous)
+
+
 def _fix_pr(repo, pr_number, head_sha, findings):
     _stage('provider')
     codex = _find_codex()
@@ -193,7 +205,7 @@ def _fix_pr(repo, pr_number, head_sha, findings):
         raise PreflightFailure('protected-pr')
     if pr['headRefOid'] != head_sha:
         raise PreflightFailure('head-changed')
-    with tempfile.TemporaryDirectory(prefix='storypool-fix-') as temp:
+    with _private_workspace() as temp:
         checkout = Path(temp) / 'repo'
         tree = Path(temp) / 'worktree'
         run(['git', 'clone', '--no-checkout', '--single-branch', '--branch', branch,
