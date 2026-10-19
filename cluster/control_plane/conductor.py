@@ -1426,8 +1426,13 @@ class Conductor:
             ci = _ci_status_from_pr(pr)
             if not ci or any(state != "success" for state in ci.values()):
                 continue
+            from .ci_review_refresh import ci_failure_for_head
+            ci_refresh = False
+            existing_verdict = _read_verdict(repo, number, sha, self.verdict_dir)
+            if not pr.get("isDraft") and existing_verdict:
+                ci_refresh = ci_failure_for_head(repo, number, sha, self.verdict_dir)
             if not pr.get("isDraft") and (_has_label(pr, "needs-karen")
-                    or _read_verdict(repo, number, sha, self.verdict_dir)):
+                    or (existing_verdict and not ci_refresh)):
                 continue
             action = ProposedAction(ActionType.UNDRAFT_PR.value if pr.get("isDraft")
                                     else ActionType.LABEL_NEEDS_KAREN.value,
@@ -1453,6 +1458,8 @@ class Conductor:
                             return details
 
                         details = fresh_head()
+                        if ci_refresh and not ci_failure_for_head(repo, number, sha, self.verdict_dir):
+                            raise ValueError("Karen evidence changed; review refresh deferred")
                         if details.get("isDraft"):
                             if repo.lower() in MANUAL_READINESS_REPOS:
                                 raise ValueError("Manual Web Bob readiness awaits Jeff")

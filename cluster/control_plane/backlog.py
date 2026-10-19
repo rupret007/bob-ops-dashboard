@@ -16,6 +16,7 @@ from typing import List, Dict, Optional, Any
 
 from . import github_reads
 from .github_budget import GitHubDeferred
+from .coordination import CoordinationError
 
 logger = logging.getLogger(__name__)
 
@@ -497,7 +498,15 @@ def label_queued_prs(repos=None, dry_run=True):
         prs = get_open_prs(repo)
         
         for pr in prs:
+            if any(isinstance(label, dict) and label.get('name') == 'needs-karen'
+                   for label in pr.get('labels', [])):
+                continue
             state = get_pr_state(pr)
+            from .ci_review_refresh import refresh_candidate, queue_refresh
+            ci_refresh = (state == 'failed' and verdict_dir is not None
+                          and refresh_candidate(repo, pr, verdict_dir))
+            if ci_refresh:
+                state = 'queued'
             if state in ("passed", "failed") and not pr.get("isDraft") \
                     and (verdict_dir is None or not _has_verdict_for_head(verdict_dir, repo, pr)):
                 # A karen-pass/karen-fail label from an older commit must not
@@ -513,7 +522,7 @@ def label_queued_prs(repos=None, dry_run=True):
             if dry_run:
                 logger.info("[DRY-RUN] Would label %s#%d with needs-karen", repo, pr_num)
             else:
-                if repo not in labels_ensured:
+                if repo not in labels_ensured and not ci_refresh:
                     ensure_label_exists(
                         repo, "needs-karen", 
                         color="d4c5f9", 
@@ -522,14 +531,19 @@ def label_queued_prs(repos=None, dry_run=True):
                     labels_ensured.add(repo)
                 
                 try:
-                    result = github_reads.run(["pr", "edit", str(pr_num), "--repo", repo, "--add-label", "needs-karen"], timeout=30)
-                    if result.returncode == 0:
+                    if ci_refresh:
+                        queued = queue_refresh(repo, pr_num, pr.get('headRefOid'), verdict_dir)
+                    else:
+                        result = github_reads.run(["pr", "edit", str(pr_num), "--repo", repo, "--add-label", "needs-karen"], timeout=30)
+                        queued = result.returncode == 0
+                    if queued:
                         logger.info("Labeled %s#%d with needs-karen", repo, pr_num)
                     else:
-                        logger.warning("Failed to label %s#%d: %s", repo, pr_num, result.stderr[:100])
+                        logger.warning("Label deferred for %s#%d", repo, pr_num)
                         continue
-                except (subprocess.SubprocessError, GitHubDeferred) as e:
-                    logger.warning("Failed to label %s#%d: %s", repo, pr_num, e)
+                except (subprocess.SubprocessError, GitHubDeferred, github_reads.GitHubReadError,
+                        CoordinationError, OSError, ValueError) as e:
+                    logger.warning("Label deferred for %s#%d: %s", repo, pr_num, type(e).__name__)
                     continue
             
             labeled.append({

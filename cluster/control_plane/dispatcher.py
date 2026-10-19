@@ -42,6 +42,8 @@ from ..never_touch import is_never_touch
 from .budget_tracker import BudgetTracker
 from .guards import MachineGuards
 from .job_ledger import JobLedger, get_ledger, Job, JobState
+from .github_budget import GitHubDeferred
+from .github_reads import GitHubReadError
 
 DISPATCH_LOG_DIR = Path(
     os.environ.get("STORYPOOL_DISPATCH_LOG_DIR", "~/.local/share/storypool/dispatch")
@@ -475,6 +477,7 @@ class Dispatcher:
                 candidates.append(pr)
         
         candidates.sort(key=lambda p: -p.get("_score", 0))
+        ci_preflight_deadline = time.monotonic() + 30
         
         dispatched = 0
         max_dispatch = 3
@@ -544,6 +547,24 @@ class Dispatcher:
                         machine=self.machine, live=True, repo=repo, pr_number=pr_number,
                         head_sha=head_sha, provider=provider,
                         extra={"reason_code": "missing-reviewed-findings"},
+                    )
+                    self._write_decision(decision)
+                    decisions.append(decision)
+                    continue
+                from .ci_review_refresh import repair_preflight
+                try:
+                    ci_preflight = repair_preflight(repo, pr_number, head_sha, ci_preflight_deadline)
+                except (OSError, subprocess.SubprocessError, ValueError, GitHubDeferred, GitHubReadError):
+                    ci_preflight = 'unknown'
+                if ci_preflight != 'repair':
+                    needs_review = ci_preflight == 'green'
+                    decision = DispatchDecision(
+                        timestamp=_now_iso(), action='skip', machine=self.machine, live=True,
+                        repo=repo, pr_number=pr_number, head_sha=head_sha, provider=provider,
+                        reason=('Current exact-head CI is green; fresh Karen review required'
+                                if needs_review else 'CI-only repair evidence requires a current terminal CI result'),
+                        extra={'reason_code': 'review-needed' if needs_review else 'ci-preflight-deferred',
+                               'ci_observation': ci_preflight},
                     )
                     self._write_decision(decision)
                     decisions.append(decision)
