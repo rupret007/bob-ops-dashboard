@@ -599,8 +599,9 @@ class TestConductorExecution(unittest.TestCase):
 
     @patch("cluster.control_plane.conductor.ClaimClient.from_env")
     @patch("cluster.control_plane.conductor.Conductor.validate_action")
+    @patch("cluster.control_plane.github_budget.reserve")
     @patch("subprocess.run")
-    def test_execute_live_merge(self, mock_run, mock_validate, mock_client):
+    def test_execute_live_merge(self, mock_run, mock_budget, mock_validate, mock_client):
         """Merge action is executed in live mode."""
         def mock_run_side_effect(cmd, **kwargs):
             result = MagicMock(returncode=0)
@@ -635,6 +636,8 @@ class TestConductorExecution(unittest.TestCase):
         self.assertIn("--match-head-commit", call_args)
         self.assertIn("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", call_args)
         mock_validate.assert_called_once()
+        mock_budget.assert_any_call("graphql")
+        mock_budget.assert_any_call("core")
 
     @patch("subprocess.run")
     def test_execute_handles_error(self, mock_run):
