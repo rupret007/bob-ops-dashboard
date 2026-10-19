@@ -123,3 +123,20 @@ def test_context_diagnostics_cannot_inherit_a_verdict_or_authority():
     record = dict(EXPECTED[0], passed=True, verdict='PASS', sha_verified=True,
                   verdict_path=SECRET, head_sha='a' * 40, status='COMPLETE')
     assert sanitize_context_diagnostics([record]) == EXPECTED
+
+
+@pytest.mark.parametrize('error_first', [False, True])
+def test_source_error_survives_more_than_32_ordinary_component_contexts(error_first):
+    from cluster.control_plane.local_karen.context_diagnostics import collect_context_diagnostics
+    normal = SimpleNamespace(reviewer='gemini', scope={
+        'chunk': 1, 'context_resolution': {'code': 'not_requested',
+                                         'changed_requests': 0, 'source_requests': 0}})
+    failure = SimpleNamespace(reviewer='minimax', scope={
+        'chunk': 33, 'source_context_error': 'source_metadata',
+        'context_resolution': {'code': 'source_unavailable',
+                               'changed_requests': 0, 'source_requests': 1}})
+    reviews = [failure] + [normal] * 40 if error_first else [normal] * 40 + [failure]
+    diagnostics = collect_context_diagnostics(reviews)
+    assert len(diagnostics) == 32
+    assert diagnostics[0] == dict(EXPECTED[0], chunk=33)
+    assert sum(item.get('source_context_error') == 'source_metadata' for item in diagnostics) == 1

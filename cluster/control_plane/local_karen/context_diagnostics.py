@@ -39,7 +39,8 @@ def collect_context_diagnostics(reviews):
     if type(reviews) not in (list, tuple):
         return []
     records = []
-    for review in reviews[:MAX_DIAGNOSTICS]:
+    failures = 0
+    for review in reviews:
         scope = getattr(review, 'scope', None)
         if type(scope) is not dict:
             continue
@@ -54,5 +55,18 @@ def collect_context_diagnostics(reviews):
             for key in ('changed_requests', 'source_requests'):
                 if key in resolution:
                     record[key] = resolution[key]
-        records.append(record)
-    return sanitize_context_diagnostics(records)
+        sanitized = sanitize_context_diagnostics([record])
+        if not sanitized:
+            continue
+        item = sanitized[0]
+        failure = ('source_context_error' in item or
+                   ('context_code' in item and item['context_code'] not in
+                    ('not_requested', 'context_supplied', 'followup_complete')))
+        if failure and failures < MAX_DIAGNOSTICS:
+            if len(records) == MAX_DIAGNOSTICS:
+                records.pop()  # Evict ordinary context, never an earlier error.
+            records.insert(failures, item)
+            failures += 1
+        elif not failure and len(records) < MAX_DIAGNOSTICS:
+            records.append(item)
+    return records
