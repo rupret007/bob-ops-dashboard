@@ -12,7 +12,7 @@ Components:
 - guards: Machine health checks (no LLM)
 - llm_router: Cost-tiered LLM routing
 
-See docs/design/storypool-control-plane.md for the full design.
+See cluster/control_plane/_docs/storypool-control-plane.md for the full design.
 """
 
 __version__ = "0.1.0"

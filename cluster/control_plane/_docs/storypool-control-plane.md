@@ -205,7 +205,7 @@ def fill_lanes():
 2. PR must be **undrafted** before gate check
 3. No **force-push** between gate PASS and merge
 4. Gate never creates tags or releases
-5. Gate never uses sudo
+5. Gate only runs with unprivileged user permissions
 6. Gate never loosens or deletes tests
 7. Gate never sends messages without Jeff's approval
 8. Gate never commits or prints secrets
@@ -274,7 +274,7 @@ Author: {author}
 {ci_status}
 
 Review this PR for:
-1. Security vulnerabilities (injection, auth bypass, secrets)
+1. Security vulnerabilities (injection, broken authentication or authorization, secrets)
 2. Test coverage (are new paths tested?)
 3. Code quality (obvious bugs, edge cases)
 
@@ -420,8 +420,10 @@ arguments, URLs, reports, and tracked files.
 - Identify edge cases before cutover
 
 Shadow mode is limited to the authorized dashboard repository. Runtime state
-and JSONL reports must be outside the checkout; Pages excludes operational code
-and the design/research documents. Shadow reads budget state without creating or
+and JSONL reports must be outside the checkout; Pages excludes operational code.
+Design and research documents live in `cluster/control_plane/_docs/`, within the
+excluded `cluster` tree and an underscore directory omitted by Jekyll by default.
+The Pages configuration only adds exclusions. Shadow reads budget state without creating or
 updating it. Weekly budgets reset on Monday UTC; Gemini prepaid spend persists
 across weeks. Missing usage observations block shadow dispatch and LLM review
 instead of implying zero spend. Capacity uses live lane counts and limits each evaluation to the
@@ -539,6 +541,7 @@ the same validation checks. Budget and capacity checks still apply to dispatch.
 cluster/
 ├── control_plane/
 │   ├── __init__.py
+│   ├── _docs/            # Internal design and research; excluded from Pages
 │   ├── scheduler.py      # Cron/NATS schedule management
 │   ├── dispatcher.py     # Lane fill logic
 │   ├── gate_runner.py    # Claude gate + Ken second judge
@@ -579,7 +582,7 @@ cluster/
 
 - **No merge execution by gate:** Gate only PASSes or FAILs; human or existing automation merges.
 - **No tag/release creation:** Out of scope for control plane.
-- **No sudo operations:** All operations run as unprivileged user.
+- **Unprivileged operations:** All operations run with regular user permissions.
 - **No test weakening:** Gate cannot suggest or approve test removal.
 - **No external messaging:** No Slack/email without Jeff's approval.
 - **No secret handling:** Gate never sees or logs credentials.

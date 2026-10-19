@@ -10,6 +10,7 @@ from pathlib import Path
 from unittest.mock import Mock, patch
 
 import pytest
+import yaml
 
 from cluster.control_plane.budget_tracker import BudgetCaps, BudgetTracker
 from cluster.control_plane.gate_runner import (
@@ -386,12 +387,26 @@ def test_pages_excludes_operational_docs_and_code():
     config = (root / "_config.yml").read_text()
     for path in ("cluster", "docs/design", "docs/research", ".config", ".local"):
         assert f"  - {path}\n" in config
+    # A deny-only config cannot opt private paths back into the Pages build.
+    parsed = yaml.safe_load(config)
+    assert set(parsed) == {"exclude"}
+    assert isinstance(parsed["exclude"], list)
+    assert all(isinstance(path, str) for path in parsed["exclude"])
+    assert {"cluster", "docs/design", "docs/research", ".config", ".local"} <= set(parsed["exclude"])
+
+
+def test_control_plane_docs_stay_outside_public_docs():
+    root = Path(__file__).resolve().parents[2]
+    private_docs = root / "cluster" / "control_plane" / "_docs"
+    for name in ("storypool-control-plane.md", "storypool-control-plane-research.md"):
+        assert (private_docs / name).is_file()
+        assert not list((root / "docs").rglob(name))
 
 
 @pytest.mark.parametrize("name", ["install-shadow-mini.sh", "install-shadow-nucbox.sh"])
 def test_installers_have_no_destructive_or_auth_setup_advice(name):
     path = Path(__file__).resolve().parents[1] / "control_plane" / "install" / name
     text = path.read_text()
-    for command in ("rm -rf", "sudo apt", "gh auth login"):
+    for command in ("rm -rf", "sudo", "gh auth login"):
         assert command not in text
     subprocess.run(["bash", "-n", str(path)], check=True)
