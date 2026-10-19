@@ -10,7 +10,7 @@ import hashlib
 import json
 import os
 import uuid
-from dataclasses import dataclass, asdict, replace
+from dataclasses import dataclass, asdict
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
@@ -18,7 +18,6 @@ from typing import Optional
 from .config import KarenConfig
 from .checks import CheckResult, PRInfo
 from .reviewers import ReviewResult, ReviewVerdict
-from .review_diagnostics import sanitize_context_diagnostics
 
 
 @dataclass
@@ -42,7 +41,6 @@ class Verdict:
     status: str = "COMPLETE"
     budget_used_usd: float = 0.0
     duration_sec: float = 0.0
-    context_diagnostics: Optional[list[dict]] = None
 
     @property
     def verdict_type(self) -> str:
@@ -56,15 +54,7 @@ class Verdict:
         return f"{self.owner}/{self.repo}#{self.pr_number}@{self.head_sha[:12]}"
 
     def to_dict(self) -> dict:
-        # Never traverse arbitrary optional diagnostics before applying the
-        # bounded projection, including when COMPLETE output omits them.
-        value = asdict(replace(self, context_diagnostics=None))
-        diagnostics = sanitize_context_diagnostics(self.context_diagnostics) if self.status == 'ERROR' else []
-        if diagnostics:
-            value['context_diagnostics'] = diagnostics
-        else:
-            value.pop('context_diagnostics')
-        return value
+        return asdict(self)
 
     def to_json(self, indent: int = 2) -> str:
         return json.dumps(self.to_dict(), indent=indent)

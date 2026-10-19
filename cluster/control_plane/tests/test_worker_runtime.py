@@ -376,6 +376,16 @@ def test_worker_uses_identical_env_and_rechecks_before_testing(qualified, drift)
     if drift in ('none', 'new-module'):
         expected_files = ['tests/test_added.py', 'tests/test_project.py'] if drift == 'new-module' else ['tests/test_project.py']
         assert tests[0][0] == [q.receipt['python'], '-I', '-c', runtimes.MODULE_RUNNER, *expected_files]
+        prompt = providers[0][1]['input']
+        assert 'run focused regression tests for the affected behavior' in prompt
+        assert 'iterate on any failures' in prompt
+        assert q.receipt['python'] in prompt
+        assert 'leave that full-suite run to the supervisor' in prompt
+        assert 'Run every Git-tracked' not in prompt
+        test_index = next(i for i, (args, _) in enumerate(calls) if runtimes.MODULE_RUNNER in args)
+        commit_index = next(i for i, (args, _) in enumerate(calls) if args[:2] == ['git', 'commit'])
+        push_index = next(i for i, (args, _) in enumerate(calls) if args[:2] == ['git', 'push'])
+        assert test_index < commit_index < push_index
         assert providers[0][1]['env'] == tests[0][1]['env']
         assert providers[0][1]['env']['HOME'] == os.environ['HOME']
         assert Path(providers[0][1]['env']['STORYPOOL_STATE_DIR']).name == 'test-state'
