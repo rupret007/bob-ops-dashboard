@@ -5,6 +5,7 @@ import argparse
 import copy
 import fcntl
 import json
+import math
 import os
 import signal
 import subprocess
@@ -21,18 +22,51 @@ from .service_logging import event, redact
 from .watchdog_check import bounded_output
 
 
+def validated_result(result, group):
+    """An empty or malformed adapter reply cannot prove probe completion."""
+    if (not isinstance(result, dict) or not isinstance(result.get('checks'), list)
+            or not result['checks']):
+        raise ValueError('Invalid check result')
+    names = set()
+    for check in result['checks']:
+        if (not isinstance(check, dict) or not isinstance(check.get('name'), str)
+                or not check['name'].strip() or check['name'] in names
+                or check['name'] == group + '_execution'
+                or type(check.get('passed')) is not bool
+                or not isinstance(check.get('message', ''), str)
+                or any(key in check and type(check[key]) is not bool
+                       for key in ('unknown', 'execution_error', 'repaired'))):
+            raise ValueError('Invalid check schema')
+        names.add(check['name'])
+    if (any(key in result and type(result[key]) is not bool
+            for key in ('unknown', 'repair_attempted', 'execution_completed'))
+            or ('details' in result and not isinstance(result['details'], dict))
+            or (result.get('error') is not None
+                and (not isinstance(result['error'], str) or not result['error']))):
+        raise ValueError('Invalid group schema')
+    return result
+
+
 def execute(group, machine, live):
+    started = time.monotonic()
     argv = [sys.executable, '-m', 'cluster.control_plane.health_adapters', group,
             '--machine', machine]
     if live:
         argv.append('--live')
-    result = json.loads(bounded_output(argv, TIMEOUTS[group]))
-    if not isinstance(result, dict) or not isinstance(result.get('checks'), list):
-        raise ValueError('Invalid check result')
-    if any(not isinstance(c, dict) or not isinstance(c.get('name'), str)
-           or type(c.get('passed')) is not bool for c in result['checks']):
-        raise ValueError('Invalid check schema')
-    return redact(result)
+    result = redact(validated_result(json.loads(bounded_output(argv, TIMEOUTS[group])), group))
+    elapsed = time.monotonic() - started
+    if not math.isfinite(elapsed) or not 0 <= elapsed <= TIMEOUTS[group]:
+        raise TimeoutError('Probe completion exceeded deadline')
+    # Only this parent-side runner can supply completion proof, after the
+    # bounded child has exited and its complete response has been validated.
+    result['execution_completed'] = True
+    return result
+
+
+def execution_succeeded(result):
+    return (result.get('execution_completed') is True and result.get('error') is None
+            and not result.get('unknown', False)
+            and not any(check.get('execution_error') for check in result['checks']))
 
 
 def public_snapshot(status, nonce=None):
@@ -144,7 +178,7 @@ class Scheduler:
             if not future.done():
                 continue
             try:
-                result = future.result()
+                result = validated_result(future.result(), name)
             except Exception as exc:
                 result = dict(error=type(exc).__name__, checks=[{
                     'name': name + '_execution', 'passed': False,
@@ -158,6 +192,13 @@ class Scheduler:
                 details['timestamp'] = datetime.fromtimestamp(now, timezone.utc).isoformat()
             self.status['groups'][name] = result
             observe(self.status, self.machine, name, result['checks'], now)
+            if execution_succeeded(result):
+                # Adapter check names describe health findings, so a later
+                # successful execution must explicitly resolve its own old
+                # scheduler incident without changing those semantic checks.
+                observe(self.status, self.machine, name, [{
+                    'name': name + '_execution', 'passed': True,
+                    'message': 'Probe execution completed within its deadline'}], now)
             if result.get('repair_attempted'):
                 self.status['repair_after'][name] = now + 300
             event('health', 'group_complete', machine=self.machine, group=name,

@@ -190,6 +190,16 @@ atomic replace. Do not resolve on timeout, missing observations, daemon restart,
 or API backoff. Resolve on a new positive observation, archive once, and preserve
 all operator text outside the managed section. Repeated writes are idempotent.
 
+Scheduler exceptions have their own stable `<group>_execution` incident. The
+parent runner must receive a nonempty, valid adapter result within the existing
+group deadline before recording execution completion. The scheduler resolves
+that execution incident only when the completed result has no group error,
+execution-unknown flag or check execution error. Adapter replies cannot supply
+the scheduler's reserved execution check name. Missing, malformed, pending or
+overdue completion provides no recovery evidence. Semantic findings retain their
+original check names, states and uncertainty: a completed probe can resolve its
+old execution failure while an unhealthy or unverified finding remains open.
+
 Peer data includes schema, machine, original timestamp, receive timestamp and
 expiry. Reject wrong machine, future timestamps and oversized payloads; expose
 only redacted status on a private read-only endpoint. A peer can be reachable but
