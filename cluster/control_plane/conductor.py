@@ -1645,6 +1645,8 @@ class Conductor:
         summary = {
             "timestamp": _now_iso(),
             "live": live,
+            "counts_complete": True,
+            "deferred": False,
             "llm_available": proposals is not None,
             "llm_unavailable_reason": llm_unavailable_reason if proposals is None else "",
             "proposals_count": len(proposals.get("proposed_actions", [])) if proposals else 0,

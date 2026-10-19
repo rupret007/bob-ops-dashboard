@@ -1,5 +1,7 @@
 """Account admission defers the cycle, never a PR verdict or a retry loop."""
 import json
+from pathlib import Path
+import shlex
 import subprocess
 import sys
 from types import SimpleNamespace
@@ -180,3 +182,61 @@ def test_existing_cli_reports_deferred_cycle_without_crashing(tmp_path, capsys):
     output = capsys.readouterr().out
     assert 'GitHub API admission deferred; cycle incomplete' in output
     assert 'Executed: None' in output
+
+
+GO_LIVE_SCRIPTS = ['go-live-mini.sh', 'go-live-nucbox.sh']
+
+
+def go_live_predicate(script, path):
+    """Execute only the real inline JSON predicate, never an installer block."""
+    text = (Path(c.__file__).parent / 'install' / script).read_text()
+    lines = [line.strip() for line in text.splitlines()
+             if line.strip().startswith('if [[ $conductor_exit -eq 0 ]] && python3 -c ')]
+    assert len(lines) == 1
+    command = lines[0].split(' && ', 1)[1]
+    assert command.endswith(' 2>/dev/null; then')
+    args = shlex.split(command[:-len(' 2>/dev/null; then')])
+    assert args[:2] == ['python3', '-c'] and args[3:] == ['$conductor_tmp']
+    return subprocess.run([sys.executable, '-I', '-c', args[2], str(path)],
+                          capture_output=True, text=True, timeout=10).returncode
+
+
+@pytest.mark.parametrize('script', GO_LIVE_SCRIPTS)
+def test_go_live_predicates_reject_real_deferred_cycle(tmp_path, script):
+    worker = prepared(tmp_path)
+    worker.build_state_snapshot.side_effect = exhausted()
+    with patch('cluster.control_plane.node_control.is_draining', return_value=False):
+        summary = worker.run(live=True)
+    path = tmp_path / 'deferred.json'
+    path.write_text(json.dumps(summary))
+    assert go_live_predicate(script, path) != 0
+
+
+@pytest.mark.parametrize('script', GO_LIVE_SCRIPTS)
+@pytest.mark.parametrize('payload,accepted', [
+    ('{"counts_complete":true,"deferred":false}', True),
+    ('{"counts_complete":false,"deferred":true}', False),
+    ('{"counts_complete":true,"deferred":true}', False),
+    ('{"counts_complete":true}', False), ('{"deferred":false}', False),
+    ('{"counts_complete":1,"deferred":0}', False),
+    ('{"counts_complete":"true","deferred":"false"}', False),
+    ('{}', False), ('[]', False), ('null', False), ('"complete"', False),
+    ('{broken json', False)])
+def test_go_live_predicates_require_explicit_complete_shape(tmp_path, script, payload, accepted):
+    path = tmp_path / 'predicate.json'
+    path.write_text(payload)
+    assert (go_live_predicate(script, path) == 0) is accepted
+
+
+@pytest.mark.parametrize('script', GO_LIVE_SCRIPTS)
+def test_normal_complete_cycle_is_explicit_and_accepted_by_real_predicate(tmp_path, script):
+    worker = prepared(tmp_path, approved=False)
+    with patch('cluster.control_plane.node_control.is_draining', return_value=False), \
+         patch('cluster.control_plane.improvement.refresh', return_value={}):
+        summary = worker.run(live=False)
+    assert summary['counts_complete'] is True and summary['deferred'] is False
+    assert all(type(summary[key]) is int for key in
+               ('proposals_count', 'validated_count', 'rejected_count', 'executed_count'))
+    path = tmp_path / 'complete.json'
+    path.write_text(json.dumps(summary))
+    assert go_live_predicate(script, path) == 0
