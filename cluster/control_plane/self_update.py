@@ -379,7 +379,7 @@ def copy_karen_module(repo_dir: Path, module_dir: Optional[Path] = None) -> bool
     - cluster/control_plane/dashboard -> module/cluster/control_plane/dashboard
     - cluster/control_plane/backlog.py -> module/cluster/control_plane/backlog.py
     - cluster/control_plane/self_update.py -> module/cluster/control_plane/self_update.py
-    - cluster/never_touch.py -> module/cluster/never_touch.py
+    - cluster/*.py -> module/cluster/*.py (root runtime dependencies)
     """
     if module_dir is None:
         module_dir = KAREN_MODULE_DIR
@@ -388,7 +388,6 @@ def copy_karen_module(repo_dir: Path, module_dir: Optional[Path] = None) -> bool
     src_dashboard = repo_dir / "cluster" / "control_plane" / "dashboard"
     src_backlog = repo_dir / "cluster" / "control_plane" / "backlog.py"
     src_self_update = repo_dir / "cluster" / "control_plane" / "self_update.py"
-    src_never_touch = repo_dir / "cluster" / "never_touch.py"
     
     if not src_karen.is_dir():
         logger.error("Source karen module not found: %s", src_karen)
@@ -422,8 +421,12 @@ def copy_karen_module(repo_dir: Path, module_dir: Optional[Path] = None) -> bool
         if src_self_update.is_file():
             shutil.copy2(src_self_update, dst_control_plane / "self_update.py")
         
-        if src_never_touch.is_file():
-            shutil.copy2(src_never_touch, module_dir / "cluster" / "never_touch.py")
+        # Coordination imports the bucket registry and loads credentials via
+        # submit -> spec/config/worker_logic/sanitize. Copy root runtime modules
+        # together so a new control-plane import cannot strand the installed poller.
+        for source in (repo_dir / "cluster").glob("*.py"):
+            if source.name != "conftest.py":
+                shutil.copy2(source, module_dir / "cluster" / source.name)
         
         (module_dir / "cluster" / "__init__.py").touch()
         (dst_control_plane / "__init__.py").touch()
