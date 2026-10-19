@@ -28,8 +28,11 @@ PRIVATE_TEXT = re.compile(
 
 class SourceUnavailable(RuntimeError):
     """Only fixed diagnostic codes, never remote text or source values."""
+    # Keep source_metadata readable in previously saved diagnostic records.
     CODES = frozenset(('source_budget source_read response_size response_shape source_identity_or_path '
                        'commit_identity tree_identity_or_incomplete tree_shape source_metadata '
+                       'source_entry_missing source_parent_metadata source_type_or_mode source_size_invalid '
+                       'source_file_limit source_total_limit source_blob_sha '
                        'blob_identity source_encoding blob_hash source_nontext source_private').split())
 
     def __init__(self, code):
@@ -110,14 +113,23 @@ class PinnedSourceContext:
         for length in range(1, len(parts)):
             parent = self.tree.get('/'.join(parts[:length]), {})
             if parent.get('type') != 'tree' or parent.get('mode') != '040000':
-                raise SourceUnavailable('source_metadata')
-        entry = self.tree.get(path, {})
+                raise SourceUnavailable('source_parent_metadata')
+        # Preserve the existing validation order. Only the fixed reason becomes
+        # more precise; no requested path, source value or remote text is logged.
+        if path not in self.tree:
+            raise SourceUnavailable('source_entry_missing')
+        entry = self.tree[path]
         size, sha = entry.get('size'), entry.get('sha')
-        if (entry.get('type') != 'blob' or entry.get('mode') not in ('100644', '100755')
-                or type(size) is not int or not 0 <= size <= MAX_FILE_BYTES
-                or self.bytes + size > MAX_SOURCE_BYTES or not isinstance(sha, str)
-                or not re.fullmatch(r'[0-9a-f]{40}', sha)):
-            raise SourceUnavailable('source_metadata')
+        if entry.get('type') != 'blob' or entry.get('mode') not in ('100644', '100755'):
+            raise SourceUnavailable('source_type_or_mode')
+        if type(size) is not int or size < 0:
+            raise SourceUnavailable('source_size_invalid')
+        if size > MAX_FILE_BYTES:
+            raise SourceUnavailable('source_file_limit')
+        if self.bytes + size > MAX_SOURCE_BYTES:
+            raise SourceUnavailable('source_total_limit')
+        if not isinstance(sha, str) or not re.fullmatch(r'[0-9a-f]{40}', sha):
+            raise SourceUnavailable('source_blob_sha')
         blob = self._json('blobs/' + sha, MAX_FILE_BYTES * 2 + 2048)
         if blob.get('sha') != sha or type(blob.get('size')) is not int or blob['size'] != size or blob.get('encoding') != 'base64':
             raise SourceUnavailable('blob_identity')
