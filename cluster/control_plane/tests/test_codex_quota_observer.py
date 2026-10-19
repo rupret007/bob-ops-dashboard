@@ -4,8 +4,10 @@ import json
 import os
 from pathlib import Path
 import plistlib
+import shutil
 import stat
 import subprocess
+import sys
 import time
 from unittest.mock import Mock, patch
 
@@ -249,6 +251,7 @@ def test_native_observers_have_fixed_interval_paths_and_owned_cleanup(tmp_path):
     assert plist['WorkingDirectory']==str(repo)
     assert plist['EnvironmentVariables']['PYTHONPATH']==str(repo)
     unit=(tmp_path/'.config/systemd/user/storypool-codex-quota.service').read_text()
+    assert 'WorkingDirectory='+str(repo)+'\n' in unit
     assert 'KillMode=control-group' in unit and 'TimeoutStartSec=30' in unit
     assert 'PYTHONPATH='+str(repo) in unit
     assert '--feature' not in unit and 'codex_quota_observer' in unit
@@ -260,3 +263,25 @@ def test_native_observers_have_fixed_interval_paths_and_owned_cleanup(tmp_path):
     for name in ('mini','nucbox'):
         script=(Path(install.__file__).parent/'install'/('install-all-'+name+'.sh')).read_text()
         assert 'codex_quota_install --machine '+name in script
+
+
+@pytest.mark.skipif(sys.platform != 'linux' or not shutil.which('systemd-analyze'),
+                    reason='Native systemd parser requires Linux')
+def test_generated_observer_units_pass_native_systemd_parser(tmp_path):
+    repo=tmp_path/'repo with spaces and % marker';repo.mkdir()
+    with patch.object(install,'command',return_value=Mock(returncode=0)):
+        install.install('nucbox',repo,tmp_path)
+    units=tmp_path/'.config/systemd/user'
+    result=subprocess.run(['systemd-analyze','--user','verify',
+                           str(units/'storypool-codex-quota.service'),
+                           str(units/'storypool-codex-quota.timer')],
+                          capture_output=True,text=True,timeout=15)
+    assert result.returncode==0,result.stderr
+
+
+@pytest.mark.parametrize('directory',['relative-repo','/tmp/repo\nEnvironment=BAD=1'])
+def test_systemd_working_directory_rejects_nonabsolute_or_control_text(tmp_path,directory):
+    with patch.object(install,'command') as command:
+        with pytest.raises(ValueError,match='absolute repository'):
+            install.install('nucbox',directory,tmp_path)
+    command.assert_not_called()

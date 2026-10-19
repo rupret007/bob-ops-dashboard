@@ -36,6 +36,12 @@ def install(machine, repo, home=None):
         if not reload_agent(path):
             raise RuntimeError('Quota observer registration failed')
     elif machine == 'nucbox':
+        # WorkingDirectory is a single path setting, unlike Environment's
+        # quoted word list. Quotes become literal filename characters here.
+        directory = str(repo)
+        if not repo.is_absolute() or any(ord(c) < 32 or ord(c) == 127 for c in directory):
+            raise ValueError('Expected an absolute repository directory')
+        directory = directory.replace('%', '%%')
         folder = home / '.config/systemd/user'
         folder.mkdir(parents=True, exist_ok=True)
         def quote(value):
@@ -44,7 +50,7 @@ def install(machine, repo, home=None):
         search = ':'.join((str(path), str(home / '.local/bin'), '/usr/local/bin', '/usr/bin', '/bin'))
         (folder / 'storypool-codex-quota.service').write_text(
             '[Unit]\nDescription=StoryPool readonly Codex plan quota observer\n\n'
-            '[Service]\nType=oneshot\nWorkingDirectory=' + quote(repo) + '\n'
+            '[Service]\nType=oneshot\nWorkingDirectory=' + directory + '\n'
             'Environment=' + quote('HOME=' + str(home)) + '\n'
             'Environment=' + quote('PYTHONPATH=' + str(repo)) + '\n'
             'Environment=' + quote('PATH=' + search) + '\n'
