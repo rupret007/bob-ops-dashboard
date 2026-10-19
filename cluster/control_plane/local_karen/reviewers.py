@@ -174,6 +174,8 @@ Review this PR for:
 - A FAIL requires a concrete defect with changed-file path and actual line number (file:line).
 - Missing context, omitted files or uncertainty alone are never defects: use BORDERLINE,
   list specific changed-file paths in requested_files, and explain what you need.
+- requested_files must be an array of at most four exact changed-file path strings.
+  Use [] when no additional context is needed; never use null or non-string entries.
 - A context request blocks approval until resolved; never infer PASS from absent context.
 - Break functional and security claims BEFORE approval
 
@@ -184,7 +186,7 @@ You MUST respond with ONLY a valid JSON object in this exact format:
   "verdict": "PASS" | "FAIL" | "BORDERLINE",
   "reason": "One sentence summary of your decision",
   "confidence": 0.0 to 1.0,
-  "requested_files": ["exact changed-file paths needed for context, or empty"],
+  "requested_files": [],
   "findings": {{
     "security_issues": ["list of security concerns found, or empty"],
     "functional_issues": ["list of bugs/logic errors found, or empty"],
@@ -301,8 +303,17 @@ class BaseReviewer(ABC):
         requested_files = data.get("requested_files", [])
         if (not isinstance(requested_files, list) or len(requested_files) > 4
                 or any(not isinstance(path, str) for path in requested_files)):
+            # Diagnose the schema mismatch without retaining PR/model values.
+            if not isinstance(requested_files, list):
+                detail = "type={}".format(type(requested_files).__name__)
+            elif len(requested_files) > 4:
+                detail = "count={}; maximum=4".format(len(requested_files))
+            else:
+                detail = "non_string_count={}".format(sum(
+                    not isinstance(path, str) for path in requested_files))
             return ReviewResult(self.name, ReviewVerdict.ERROR,
-                                "Invalid context request; retry required", tier=tier)
+                                "Invalid context request; retry required ({})".format(detail),
+                                tier=tier)
 
         if verdict_str not in ("PASS", "FAIL", "BORDERLINE"):
             return ReviewResult(

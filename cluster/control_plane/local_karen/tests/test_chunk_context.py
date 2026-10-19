@@ -45,6 +45,9 @@ def test_documentation_chunk_knows_implementation_tests_and_counts():
     assert "not\na defect and must not produce FAIL" in c.CONTEXT_RULES
     assert "changed-file:line evidence" in c.CONTEXT_RULES
     assert "unresolved, never PASS" in c.CONTEXT_RULES
+    assert "at most four exact manifest path strings" in c.CONTEXT_RULES
+    assert "Use [] when no additional context is needed" in c.CONTEXT_RULES
+    assert "never use null or non-string entries" in c.CONTEXT_RULES
 
 
 def test_midfile_and_midline_chunks_retain_file_identity():

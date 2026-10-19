@@ -3,6 +3,8 @@ import json
 from dataclasses import replace
 from unittest.mock import Mock, patch
 
+import pytest
+
 from cluster.control_plane.local_karen import gate, reviewers as r
 from cluster.control_plane.local_karen.checks import PRInfo
 from cluster.control_plane.local_karen.config import KarenConfig
@@ -132,12 +134,53 @@ def test_gate_never_publishes_or_repairs_context_only_rejection(tmp_path):
     save.assert_not_called()
 
 
-def test_parser_preserves_specific_context_request():
+@pytest.mark.parametrize('paths', [
+    ['app.py'],
+    ['docs.md', 'app.py', 'installer.sh', 'test_app.py'],
+])
+def test_parser_preserves_specific_context_request(paths):
+    pr = pr_info()
+    pr.changed_files = paths
     payload = json.dumps({'verdict': 'BORDERLINE', 'reason': 'Need installer context to finish this review',
-                          'requested_files': ['app.py'], 'findings': {}})
-    parsed = r.CodexReviewer()._parse_structured_verdict(payload, pr_info(), r.ReviewTier.HIGH)
-    assert parsed.requested_files == ['app.py']
+                          'requested_files': paths, 'findings': {}})
+    parsed = r.CodexReviewer()._parse_structured_verdict(payload, pr, r.ReviewTier.HIGH)
+    assert parsed.requested_files == paths
     assert parsed.verdict == r.ReviewVerdict.BORDERLINE
+
+
+def test_parser_accepts_empty_context_array_with_evidenced_pass():
+    payload = json.dumps({'verdict': 'PASS', 'reason': 'Checked the complete supplied implementation',
+                          'requested_files': [],
+                          'findings': {'risk_notes': ['Reviewed the changed validation and tests']}})
+    parsed = r.CodexReviewer()._parse_structured_verdict(payload, pr_info(), r.ReviewTier.HIGH)
+    assert parsed.requested_files == []
+    assert parsed.verdict == r.ReviewVerdict.PASS
+    assert parsed.findings.has_content()
+
+
+@pytest.mark.parametrize('requested,detail', [
+    (['private-context-value'] * 5, 'count=5; maximum=4'),
+    (None, 'type=NoneType'),
+    ('private-context-value', 'type=str'),
+    (['private-context-value', {'value': 'private-context-value'}], 'non_string_count=1'),
+])
+def test_invalid_context_schema_stays_error_without_response_values(requested, detail):
+    payload = json.dumps({'verdict': 'PASS', 'reason': 'Checked the complete supplied implementation',
+                          'requested_files': requested,
+                          'findings': {'risk_notes': ['Reviewed the changed validation and tests']}})
+    parsed = r.CodexReviewer()._parse_structured_verdict(payload, pr_info(), r.ReviewTier.HIGH)
+    assert parsed.verdict == r.ReviewVerdict.ERROR
+    assert parsed.reason == 'Invalid context request; retry required ({})'.format(detail)
+    assert parsed.requested_files == []
+    assert parsed.raw_response == ''
+    assert 'private-context-value' not in json.dumps(parsed.to_dict())
+
+
+def test_prompt_context_schema_matches_bounded_parser_contract():
+    assert 'at most four exact changed-file path strings' in r.STRUCTURED_REVIEW_PROMPT
+    assert 'Use [] when no additional context is needed' in r.STRUCTURED_REVIEW_PROMPT
+    assert 'never use null or non-string entries' in r.STRUCTURED_REVIEW_PROMPT
+    assert '"requested_files": [],' in r.STRUCTURED_REVIEW_PROMPT
 
 
 def test_small_pass_with_unresolved_context_request_never_approves():

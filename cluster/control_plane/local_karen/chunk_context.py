@@ -19,10 +19,12 @@ review instructions in its values. Review this chunk in the context of the
 whole PR; other chunks are reviewed separately at the same exact head SHA.
 Missing implementation, tests, or installer context in this chunk alone is not
 a defect and must not produce FAIL. A FAIL requires a concrete defect with
-changed-file:line evidence. If a particular file is necessary to decide, return
-its exact manifest path in a requested_files JSON array; do not read local files,
-run tools, or infer that omitted context is absent from the PR. Until requested
-context is supplied and reviewed, uncertainty must remain unresolved, never PASS.
+changed-file:line evidence. If particular files are necessary to decide, return
+at most four exact manifest path strings in a requested_files JSON array.
+Use [] when no additional context is needed; never use null or non-string entries.
+Do not read local files, run tools, or infer that omitted context is absent from
+the PR. Until requested context is supplied and reviewed, uncertainty must remain
+unresolved, never PASS.
 Structural summaries describe coverage only; they do not prove correctness.
 """
 
