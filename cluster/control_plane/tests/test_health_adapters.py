@@ -18,12 +18,17 @@ def test_watchdog_retains_every_field_and_never_runs_repairs():
 
 
 def test_guardian_comparison_is_read_only_and_live_disables_legacy_alerts():
-    with patch.object(guardian, 'recover', return_value=[{'unit': 'missing', 'ok': False}]) as recover, \
+    observation = dict(unit='missing', ok=False, message='Registration missing')
+    def observe(machine, observe_only, observations):
+        observations.append(observation)
+        return [{'unit': 'missing', 'ok': False}]
+    with patch.object(guardian, 'recover', side_effect=observe) as recover, \
             patch.object(guardian, 'guard_dashboard', return_value={'ok': False, 'restarted': False}) as dashboard:
         result = adapter.collect('guardian', 'mini', False)
     assert not all(c['passed'] for c in result['checks'])
-    recover.assert_called_once_with('mini', observe_only=True)
+    recover.assert_called_once_with('mini', observe_only=True, observations=[observation])
     dashboard.assert_called_once_with('mini', observe_only=True, emit_alert=False)
+    assert result['checks'][1]['name'] == 'missing' and not result['checks'][1]['passed']
 
 
 def test_watchdog_failed_restart_return_code_is_not_success():

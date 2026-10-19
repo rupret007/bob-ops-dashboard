@@ -28,12 +28,16 @@ def check(name, passed, message='', **kwargs):
 def collect(group, machine, live=False):
     live = live and not is_draining(machine)
     if group == 'guardian':
-        actions = guardian.recover(machine, observe_only=True)
+        observations = []
+        actions = guardian.recover(machine, observe_only=True, observations=observations)
         attempted = False
         if live and actions:
-            attempted, recovered = repair_once('registrations', lambda: guardian.recover(machine))
+            recovered_observations = []
+            attempted, recovered = repair_once('registrations', lambda: guardian.recover(
+                machine, observations=recovered_observations))
             if attempted:
                 actions = recovered
+                observations = recovered_observations
         dashboard = guardian.guard_dashboard(machine, observe_only=True, emit_alert=False)
         if live and not dashboard['ok']:
             repaired, result = repair_once('dashboard', lambda: guardian.guard_dashboard(machine, emit_alert=False))
@@ -43,7 +47,8 @@ def collect(group, machine, live=False):
         details = dict(machine=machine, actions=actions, dashboard=dashboard,
                        reloads=sum(a['ok'] for a in actions))
         checks = [check('dashboard_http', dashboard['ok'], 'Dashboard HTTP verified' if dashboard['ok'] else 'Dashboard HTTP failed')]
-        checks += [check(a['unit'], a['ok'], 'Registration recovery' if live else 'Registration missing') for a in actions]
+        checks += [check(item['unit'], item['ok'], item['message'],
+                         unknown=item.get('unknown', False)) for item in observations]
         return dict(checks=checks, details=details,
                     repair_attempted=attempted)
     if group == 'watchdog':

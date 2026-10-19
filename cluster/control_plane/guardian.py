@@ -190,7 +190,12 @@ def _reload_agent(path, defer_running=False):
 
 
 @serialized_recovery
-def recover(machine, root=None, observe_only=False):
+def recover(machine, root=None, observe_only=False, observations=None):
+    """Return recovery actions; optionally retain the native registration reads.
+
+    Observations precede repairs. A successful enable/reload action alone must
+    not replace native proof when resolving an incident.
+    """
     root = Path(root or Path.home())
     actions = []
     if machine == 'mini':
@@ -206,6 +211,14 @@ def recover(machine, root=None, observe_only=False):
                 continue
             current = command(['launchctl', 'print', domain + '/' + label])
             pending = path.with_suffix('.reload-pending').exists()
+            if observations is not None:
+                observations.append(dict(
+                    unit=label, ok=current.returncode == 0 and not pending,
+                    registered=current.returncode == 0, reload_pending=pending,
+                    unknown=pending or current.returncode not in (0, 113),
+                    message=('Registration reload pending' if pending else
+                             'Native registration verified' if current.returncode == 0 else
+                             'Registration not verified')))
             if current.returncode or pending:
                 if pending and re.search(r'\bpid\s*=\s*\d+', current.stdout):
                     continue
@@ -220,8 +233,16 @@ def recover(machine, root=None, observe_only=False):
             if authoritative() and unit in ('storypool-watchdog.timer', 'storypool-guardian.timer',
                                              'storypool-ops-doctor.timer', 'storypool-shadow.timer'):
                 continue
-            enabled = command(['systemctl', '--user', 'is-enabled', unit]).returncode == 0
-            active = command(['systemctl', '--user', 'is-active', unit]).returncode == 0
+            enabled_result = command(['systemctl', '--user', 'is-enabled', unit])
+            active_result = command(['systemctl', '--user', 'is-active', unit])
+            enabled, active = enabled_result.returncode == 0, active_result.returncode == 0
+            if observations is not None:
+                observations.append(dict(
+                    unit=unit, ok=enabled and active, enabled=enabled, active=active,
+                    unknown=any(result.returncode and not (result.stdout or '').strip()
+                                for result in (enabled_result, active_result)),
+                    message=('Native timer enabled and active' if enabled and active else
+                             'Timer enabled/active state not verified')))
             if not enabled or not active:
                 ok = False if observe_only else command(['systemctl', '--user', 'enable', '--now', unit]).returncode == 0
                 actions.append({'unit': unit, 'ok': ok})
