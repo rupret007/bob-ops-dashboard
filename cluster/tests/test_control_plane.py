@@ -7,7 +7,7 @@ import tempfile
 import time
 import unittest
 from pathlib import Path
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 from cluster.control_plane.budget_tracker import (
     BudgetCaps,
@@ -80,11 +80,14 @@ class TestBudgetTracker(unittest.TestCase):
         self.assertFalse(allowed)
         self.assertIn("exceeded", reason.lower())
 
-    def test_weekly_pct(self):
-        """Weekly percentage calculation."""
+    @patch("cluster.control_plane.budget_tracker.read_codex_quota",
+           return_value={"status": "ok", "weekly_pct": 50.0})
+    def test_weekly_pct(self, mock_quota):
+        """Weekly percentage comes from the measured plan quota."""
         self.tracker.record("codex", cost_usd=25.0)
         pct = self.tracker.weekly_pct("codex")
         self.assertEqual(pct, 50.0)
+        mock_quota.assert_called_once_with()
 
     def test_unknown_provider_raises(self):
         """Unknown provider raises ValueError."""

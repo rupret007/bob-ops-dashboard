@@ -346,6 +346,8 @@ class Dispatcher:
         weekly_cap = rules.get("weekly_cap_pct")
         if weekly_cap is not None and weekly_cap > 0:
             pct = self.budget.weekly_pct(provider)
+            if pct is None:
+                return False, f"{provider} weekly plan quota unknown; fresh rate-limit observation required"
             if pct >= weekly_cap:
                 return False, f"{provider} at {pct:.1f}% of weekly cap (limit {weekly_cap}%)"
         

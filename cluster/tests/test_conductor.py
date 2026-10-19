@@ -318,7 +318,9 @@ class TestConductor(unittest.TestCase):
             self.assertTrue(allowed)
             self.assertEqual(reason, "ok")
 
-    def test_can_use_codex_over_cap(self):
+    @patch("cluster.control_plane.budget_tracker.read_codex_quota",
+           return_value={"status": "ok", "weekly_pct": 100.0})
+    def test_can_use_codex_over_cap(self, mock_quota):
         """Codex cannot be used when over cap."""
         self.conductor.budget.record("codex", cost_usd=50.0)
         allowed, reason = self.conductor._can_use_codex()

@@ -750,6 +750,8 @@ class Conductor:
     def _can_use_codex(self) -> tuple[bool, str]:
         """Check if Codex is within budget cap."""
         pct = self.budget.weekly_pct("codex")
+        if pct is None:
+            return False, "Codex weekly plan quota unknown; fresh rate-limit observation required"
         if pct >= CODEX_WEEKLY_CAP_PCT:
             return False, "Codex at {:.1f}% of weekly cap (limit {}%)".format(pct, CODEX_WEEKLY_CAP_PCT)
         return True, "ok"

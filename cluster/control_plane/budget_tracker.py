@@ -14,6 +14,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
+from .codex_quota import read_codex_quota
+
 PROVIDERS = ("codex", "cursor", "claude", "minimax", "gemini", "grok")
 
 DEFAULT_CAPS = {
@@ -26,7 +28,6 @@ DEFAULT_CAPS = {
 }
 
 WEEKLY_BUDGETS = {
-    "codex": 50.0,
     "cursor": 50.0,
 }
 
@@ -159,8 +160,10 @@ class BudgetTracker:
         """Get current weekly usage for a provider."""
         return self._get_or_create_usage(provider)
 
-    def weekly_pct(self, provider: str) -> float:
+    def weekly_pct(self, provider: str) -> Optional[float]:
         """Get weekly usage as a percentage of the weekly budget."""
+        if provider == "codex":
+            return read_codex_quota()["weekly_pct"]
         usage = self.get_usage(provider)
         if provider in WEEKLY_BUDGETS:
             budget = WEEKLY_BUDGETS[provider]
@@ -176,7 +179,9 @@ class BudgetTracker:
 
         if provider == "codex":
             pct = self.weekly_pct(provider)
-            if pct >= self.caps.codex_weekly_pct:
+            if pct is None:
+                return False, "Codex weekly plan quota unknown; fresh rate-limit observation required"
+            if pct >= min(75.0, self.caps.codex_weekly_pct):
                 return False, f"Codex at {pct:.1f}% of weekly cap"
 
         elif provider == "cursor":
@@ -209,13 +214,17 @@ class BudgetTracker:
             usage = self.get_usage(provider)
             allowed, reason = self.can_use(provider)
             result[provider] = {
-                "cost_usd": usage.cost_usd,
+                "cost_usd": None if provider == "codex" else usage.cost_usd,
                 "calls": usage.calls,
                 "tokens_in": usage.tokens_in,
                 "tokens_out": usage.tokens_out,
                 "allowed": allowed,
                 "reason": reason,
             }
-            if provider in WEEKLY_BUDGETS:
+            if provider == "codex":
+                quota = read_codex_quota()
+                result[provider]["weekly_pct"] = quota["weekly_pct"]
+                result[provider]["quota"] = quota
+            elif provider in WEEKLY_BUDGETS:
                 result[provider]["weekly_pct"] = self.weekly_pct(provider)
         return result
