@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-10-20T02:50:11.227586-05:00",
-  "generated_at_display": "Tue Oct 20, 2026 \u00b7 2:50 AM CDT",
+  "generated_at": "2026-10-20T03:05:21.634805-05:00",
+  "generated_at_display": "Tue Oct 20, 2026 \u00b7 3:05 AM CDT",
   "timezone": "America/Chicago",
   "owner": "rupret007",
   "dashboard": "bob-ops-dashboard",
@@ -299,8 +299,8 @@
           "tip_sha": "76b7bc8",
           "tip_date": "2026-10-17T09:14:30Z",
           "open_prs": 9,
-          "open_pr_url": "https://github.com/rupret007/Turdanoid/pull/88",
-          "open_pr_number": 88,
+          "open_pr_url": "https://github.com/rupret007/Turdanoid/pull/87",
+          "open_pr_number": 87,
           "open_pr_draft": false,
           "open_pr_stack": [],
           "pr_listing_complete": true,
@@ -495,8 +495,8 @@
           "status": "yellow",
           "chip": "Yellow",
           "default_branch": "main",
-          "tip_sha": "4e29049",
-          "tip_date": "2026-10-20T07:20:22Z",
+          "tip_sha": "1a5c4f4",
+          "tip_date": "2026-10-20T07:50:26Z",
           "open_prs": 13,
           "open_pr_url": "https://github.com/rupret007/bob-ops-dashboard/pull/110",
           "open_pr_number": 110,
@@ -900,7 +900,7 @@
     "barker"
   ],
   "publish_notes": "Public board -- no secrets or customer paths. Private repositories stay high-level; AI Music Vault stays private-content-boundary only.",
-  "refresh_started_ms": 1792482582018,
+  "refresh_started_ms": 1792483485640,
   "agents_source": "file:stale->unknown",
   "agents": [
     {
@@ -1099,7 +1099,7 @@
     }
   ],
   "llm_work_now_freshness": {
-    "generated_at": "2026-10-20 02:50 CT",
+    "generated_at": "2026-10-20 03:05 CT",
     "warn_ttl_sec": 1200,
     "warnings": [],
     "ok": true
@@ -1130,7 +1130,7 @@
     ],
     "scorecards": {
       "v": "scorecards/v1",
-      "generated_at": "2026-10-20T07:50:12.331133+00:00",
+      "generated_at": "2026-10-20T08:05:23.131845+00:00",
       "windows": {
         "24h": {
           "providers": {
