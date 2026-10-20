@@ -44,13 +44,14 @@ APPROVED = Contract(
     185, '5012f4fa1be0aaf9d271cf210961c600caa20b57509d08ddbee1cf17a40fe956',
 )
 
-# Separately reviewed and human-merged PR100 and PR107. Every ancestry edge is
+# Separately reviewed and human-merged PR100, PR107 and PR108. Every ancestry edge is
 # pinned; this is not a live-base wildcard. The #104 packet remains unchanged.
 BASE_ADVANCEMENTS = (
     ('c3374b769820408edd43cdd4abf1eed5efb0e65b', 'c5650be27329e507fe73ef5fc7a3905b64991469'),
     ('21242f72725cd64065b37656e6c269676793f7aa', 'c3374b769820408edd43cdd4abf1eed5efb0e65b'),
+    ('079d0a184895556f64e8aa9806211c13a39fa1c8', '21242f72725cd64065b37656e6c269676793f7aa'),
 )
-ADMITTED_BASE = '21242f72725cd64065b37656e6c269676793f7aa'
+ADMITTED_BASE = '079d0a184895556f64e8aa9806211c13a39fa1c8'
 
 POLICY_FILES = frozenset({
     'cluster/control_plane/local_karen/checks.py',

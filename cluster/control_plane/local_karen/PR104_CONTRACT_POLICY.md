@@ -16,7 +16,7 @@ must match the approved digest; any changed packet needs a new decision.
 
 ## Frozen baseline and advancing target
 
-The head/base merge base must remain the frozen baseline. Two explicit
+The head/base merge base must remain the frozen baseline. Three explicit
 separately reviewed base advancements are admitted. The first is
 `c3374b769820408edd43cdd4abf1eed5efb0e65b`, the human merge of PR #100,
 with sole parent `c5650be27329e507fe73ef5fc7a3905b64991469`.
@@ -35,6 +35,19 @@ The Nuc-native exact-head COMPLETE/PASS artifact SHA-256 is
 normal authority revalidation found nine checks and six Gemini/MiniMax PASS
 votes accepted by the existing approval predicate. GitHub confirmed green
 CI on that head and its actual merged release at 2026-10-20 02:34 UTC.
+
+The third is PR #108's human-merged commit
+`079d0a184895556f64e8aa9806211c13a39fa1c8`, with sole parent 21242f above.
+Its reviewed head is `330d9a91c77b8efbdc21743633910f4d18f01d10`.
+The Nuc-native exact-head COMPLETE/PASS artifact SHA-256 is
+`38d4944e8464f42b923d0977d7e6c3f8c4ab6e438824dc14bc296f60991d2015`;
+normal authority revalidation found nine checks and four Gemini/MiniMax PASS
+votes accepted by the existing approval predicate. Independent REST metadata
+confirms Jeff's human merge at 2026-10-20 03:51:28 UTC; current GitHub checks
+confirm green CI on that exact head and merged release. No artifact or signing
+key was copied. The earlier policy review for 17346a1a remains historical;
+this additional pinned transition requires a new policy head and normal review.
+
 Every sole-parent edge from the frozen baseline to this explicit admitted
 commit is proved from immutable objects. Missing, reversed, skipped or
 additional-parent transitions fail; no later unlisted release is permitted.
