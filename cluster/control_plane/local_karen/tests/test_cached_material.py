@@ -147,3 +147,29 @@ def test_full_source_and_requested_diff_remain_distinct_in_one_bounded_followup(
     assert result.verdict == r.ReviewVerdict.ERROR and invoke.call_count == 2
     assert resolver.calls == io.call_count == 5
     assert result.scope['initial_context']['cached_source_files'] == 2
+
+
+def test_partial_primary_keeps_required_diff_before_any_optional_replanning(cached):
+    pr, _, resolver, io, sources = cached
+    whole = section('test_case.py')
+    chunks = [whole[:len(whole)//2], pr.diff[len(whole)//2:]]
+    part = replace(pr, diff=chunks[0], review_scope=build_review_scope(pr, chunks, 1))
+    required = dict(path='test_case.py', diff=whole)
+    initial = [required, dict(path='worker.py', diff=section('worker.py')),
+               dict(path='retry.py', diff=section('retry.py'))]
+    assert initial_cached_material(part, pr, initial, resolver) is initial
+    packet = initial_cached_material(part, pr, initial, resolver, 'partial_file_supplied')
+    assert packet[0] is required
+    assert [x['path'] for x in packet[1:]] == ['worker.py', 'formatter.py']
+    assert all(x['source'] == sources[x['path']] for x in packet[1:])
+    assert len(packet) == 3 and max(context_size(packet)) <= 48000
+    assert io.call_count == 5
+
+
+def test_partial_file_without_verified_cache_keeps_all_integration_diffs(cached):
+    pr, _, _, _, _ = cached
+    whole = section('test_case.py')
+    chunks = [whole[:len(whole)//2], pr.diff[len(whole)//2:]]
+    part = replace(pr, diff=chunks[0], review_scope=build_review_scope(pr, chunks, 1))
+    initial = [dict(path='test_case.py', diff=whole), dict(path='retry.py', diff=section('retry.py'))]
+    assert initial_cached_material(part, pr, initial, s.PinnedSourceContext(pr), 'partial_file_supplied') is initial

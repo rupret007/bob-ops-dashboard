@@ -1611,11 +1611,13 @@ def _review_with_requested_context(invoke, part, original_pr, source_context=Non
     logger.info('Initial review context: code=%s; changed_files=%s; raw_size=%s; serialized_size=%s',
                 automatic_code, len(context), raw, serialized)
     from .cached_material import initial_cached_material
-    context = initial_cached_material(part, original_pr, context, source_context)
-    if context and 'source' in context[0]:
-        automatic.update(cached_source_files=len(context), raw_size=context_size(context)[0],
+    context = initial_cached_material(part, original_pr, context, source_context, automatic_code)
+    cached_count = sum('source' in item for item in context)
+    if cached_count:
+        automatic.update(cached_source_files=cached_count, changed_files=len(context) - cached_count,
+                         raw_size=context_size(context)[0],
                          serialized_size=context_size(context)[1])
-    label = ('Supplemental cached immutable source' if context and 'source' in context[0]
+    label = ('Supplemental cached immutable source' if cached_count
              else 'Supplemental changed-file context')
     supplied_part = _context_part(part, context, label) if context else part
     result = _validate_chunk_result(invoke(supplied_part), original_pr)
