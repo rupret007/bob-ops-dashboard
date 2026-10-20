@@ -1617,9 +1617,9 @@ def _review_with_requested_context(invoke, part, original_pr, source_context=Non
         automatic.update(cached_source_files=cached_count, changed_files=len(context) - cached_count,
                          raw_size=context_size(context)[0],
                          serialized_size=context_size(context)[1])
-    label = ('Supplemental cached immutable source' if cached_count
-             else 'Supplemental changed-file context')
-    supplied_part = _context_part(part, context, label) if context else part
+    # This factory label sets the initial phase; entry fields distinguish
+    # verified source from changed diffs. Cached bytes are not a follow-up.
+    supplied_part = _context_part(part, context, 'Supplemental changed-file context') if context else part
     result = _validate_chunk_result(invoke(supplied_part), original_pr)
     result = replace(result, scope=dict(result.scope or {}, initial_context=automatic))
     counts = tuple(len(paths) if isinstance(paths, list) else None

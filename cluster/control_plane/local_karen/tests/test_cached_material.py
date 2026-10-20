@@ -138,6 +138,8 @@ def test_full_source_and_requested_diff_remain_distinct_in_one_bounded_followup(
     final = r.ReviewResult('codex', r.ReviewVerdict.ERROR, 'Synthetic evidence probe grants no approval')
     invoke = Mock(side_effect=[initial, final])
     result, _ = r._review_with_requested_context(invoke, part, pr, resolver)
+    assert invoke.call_args_list[0].args[0].review_material.phase == 'supplemental'
+    assert invoke.call_args_list[1].args[0].review_material.phase == 'requested'
     first, second = [call.args[0].review_material.entries for call in invoke.call_args_list]
     assert len(first) == 2 and len(second) == 3
     assert {(x['path'], 'source' in x) for x in second} == {
