@@ -186,11 +186,18 @@ Review this PR for:
 - requested_files requests complete changed-file diffs, not full source files.
   requested_source_files requests full repository source, including unchanged code
   outside the changed-file manifest, subject to existing privacy and size guards.
+  If you need existing implementation in a changed source file, request that path
+  in requested_source_files; its diff alone cannot provide the omitted code.
+  There is at most one context follow-up. Request all needed evidence together
+  on the initial invocation, within the combined four-path limit. When
+  supplemental_material.phase is requested, no further context can be supplied;
+  unresolved evidence must remain BORDERLINE, never an inferred PASS.
   For a completed PASS or FAIL, both request arrays must be []. They list only
   still-missing evidence, never files already inspected or requests already resolved.
 - If cross-file integration requires a file from another chunk not already
-  supplied as complete supplemental context, return BORDERLINE
-  and put its exact manifest path in requested_files. Saying another chunk must
+  supplied as complete supplemental context, return BORDERLINE and request its
+  exact path: requested_files for the diff, requested_source_files for existing
+  implementation. Saying another chunk must
   be reviewed without a structured file request cannot supply the missing context.
   Another chunk's independent PASS is never proof of this chunk's integration.
 - findings.security_issues and findings.functional_issues contain ONLY concrete
@@ -285,6 +292,11 @@ checks performed in risk_notes. Never approve weakened tests, secrets or sudo.
 requested_files requests complete changed-file diffs from the changed-file manifest.
 requested_source_files requests full repository source, including unchanged code
 outside the changed-file manifest, subject to existing privacy and size guards.
+Request existing implementation with requested_source_files even when that file
+is changed. There is at most one context follow-up; request all needed evidence
+together within the combined four-path limit on the initial invocation. When
+supplemental_material.phase is requested, no further context can be supplied;
+unresolved evidence must remain BORDERLINE, never an inferred PASS.
 A complete changed-file diff is not the full source file. For a completed PASS
 or FAIL, both request arrays must be []. They list only still-missing evidence,
 never files already inspected or requests already resolved.
@@ -1632,9 +1644,10 @@ def _review_with_requested_context(invoke, part, original_pr, source_context=Non
     # Changed and immutable source evidence are distinct entries even for one
     # path. Deduplicate overlaps without granting a second four-file/48k budget.
     keys = {('diff', item['path']) for item in context}
-    # A source request for another changed file may be answered with new diff
-    # evidence. Never claim that a changed-file diff is complete source, repeat
-    # already supplied evidence, or bypass the immutable-source privacy guard.
+    # Eligible source requests require complete verified source, even for a
+    # changed file. Preserve labelled diff delivery for non-source kinds (CSS,
+    # for example), without extending the source allowlist or privacy guards.
+    from .source_context import safe_source_path
     current_paths = {item['path'] for item in _file_sections(part.diff) if item['path']}
     if isinstance(part.review_scope, ReviewScope):
         current_paths.update(part.review_scope.data.get('current_chunk', {}).get('files', []))
@@ -1645,7 +1658,8 @@ def _review_with_requested_context(invoke, part, original_pr, source_context=Non
             (original_pr.owner, original_pr.repo, original_pr.number, original_pr.head_sha)
             and current_paths and part.diff and part.diff in original_pr.diff):
         for path in result.requested_source_files:
-            if path not in current_paths and path not in supplied_paths:
+            if (path not in current_paths and path not in supplied_paths
+                    and not safe_source_path(path)):
                 diff = requested_file_diff(original_pr, path, head_sha=part.head_sha)
                 if diff is not None:
                     source_diffs[path] = diff
