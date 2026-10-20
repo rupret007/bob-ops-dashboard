@@ -622,8 +622,12 @@ class TestConductorExecution(unittest.TestCase):
                 else:
                     result.stdout = '{"state":"success","statuses":[{}]}'
             elif cmd[:3] == ["gh", "pr", "view"]:
-                result.stdout = json.dumps({"state":"MERGED", "mergeCommit":{"oid":"b"*40},
-                                           "baseRefName":"main"})
+                if cmd[-1] == 'number,state,isDraft,headRefOid,title,labels':
+                    result.stdout = json.dumps(dict(number=1, state='OPEN', isDraft=False,
+                                                   headRefOid='a'*40, title='Ready', labels=[]))
+                else:
+                    result.stdout = json.dumps({"state":"MERGED", "mergeCommit":{"oid":"b"*40},
+                                               "baseRefName":"main"})
             return result
         mock_run.side_effect = mock_run_side_effect
         mock_client.return_value.ttl = 300
