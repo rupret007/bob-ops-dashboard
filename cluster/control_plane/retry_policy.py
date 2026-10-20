@@ -59,9 +59,11 @@ def classify_failure(exc, stage):
         return exc.code, exc.stage
     if isinstance(exc, subprocess.TimeoutExpired):
         return 'deadline', stage
-    from .coordination import ClaimLost
+    from .coordination import ClaimLost, CoordinationError
     if isinstance(exc, ClaimLost):
         return 'ownership-lost', stage
+    if isinstance(exc, CoordinationError):
+        return 'coordination-failed', stage
     return STAGE_CODES[stage], stage
 
 

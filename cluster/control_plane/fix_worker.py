@@ -180,6 +180,11 @@ def fix_pr(repo, pr_number, head_sha, findings):
         raise
     except Exception as exc:
         code, stage = classify_failure(exc, _failure_stage.get())
+        # Preserve the original frame chain before replacing the exception.
+        # The structured formatter excludes its message, locals and CLI output.
+        event('fix-worker', 'operation_failed', level=logging.ERROR, exc_info=True,
+              failure_code=code, failure_stage=stage,
+              error_type=type(exc).__name__)
         raise WorkerFailure(code, stage) from None
     finally:
         _failure_stage.reset(token)
