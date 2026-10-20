@@ -9,6 +9,7 @@ import time
 
 from ..github_reads import run as budgeted_gh
 from .checks import SECRET_PATTERNS
+from .verified_source_cache import VerifiedSourceSnapshots
 from .deadline import remaining_timeout
 
 MAX_FILE_BYTES = 16000
@@ -56,9 +57,20 @@ def safe_source_path(path):
 class PinnedSourceContext:
     def __init__(self, pr):
         self.identity = (pr.owner, pr.repo, pr.head_sha)
+        self.pr_number = getattr(pr, 'number', None)
+        self._snapshots = VerifiedSourceSnapshots(self.identity, self.pr_number)
         self.calls, self.bytes = 0, 0
         self.tree, self.tree_sha, self.sources = None, None, {}
         self.seconds = 30.0
+
+    def previously_verified(self, pr):
+        """Copies of immutable snapshots, never caller-mutable cache entries.
+
+        Only fetch's completed hash, metadata and privacy checks create these
+        snapshots. Another PR, repository or revision cannot reuse this cache.
+        This performs no IO and cannot replenish source/API budgets.
+        """
+        return self._snapshots.for_pr(pr)
 
     def _json(self, suffix, maximum):
         from .gate import review_checkpoint
@@ -153,4 +165,5 @@ class PinnedSourceContext:
         self.bytes += size
         source = dict(path=path, head_sha=head, tree_sha=self.tree_sha, blob_sha=sha, bytes=size, source=text)
         self.sources[path] = source
+        self._snapshots.remember(source)
         return source
