@@ -1,5 +1,6 @@
 """Causal worker diagnostics retain frames without leaking exception payloads."""
 import json
+import logging
 import subprocess
 from unittest.mock import Mock
 
@@ -82,5 +83,52 @@ def test_diagnostic_failure_preserves_original_controlled_job_failure(monkeypatc
     monkeypatch.setattr(fix_worker, 'event', Mock(side_effect=OSError('synthetic log unavailable')))
     with pytest.raises(WorkerFailure) as caught:
         fix_worker.fix_pr('fixture/repo', 1, 'fixture-head', ['synthetic finding'])
+    assert (caught.value.code, caught.value.stage) == ('tests-failed', 'tests')
+    assert caught.value.cause_diagnostic_unavailable is True
+
+
+@pytest.mark.parametrize('failure', ['file-write', 'rollover', 'stderr-write'])
+@pytest.mark.parametrize('logging_debug', [True, False])
+def test_real_handler_failure_never_prints_exception_payload(
+        tmp_path, monkeypatch, capsys, failure, logging_debug):
+    from cluster.control_plane.service_logging import event, RetainedRotatingHandler
+
+    marker = 'SyntheticConfidentialHandlerPayload987'
+    monkeypatch.setenv('STORYPOOL_LOG_DIR', str(tmp_path))
+    monkeypatch.setattr(logging, 'raiseExceptions', logging_debug)
+    event('fix-worker', 'fixture_initialized')
+    path = tmp_path / 'fix-worker.jsonl'
+    logger = logging.getLogger('storypool.structured.' + str(path))
+    file_handler = next(h for h in logger.handlers if isinstance(h, RetainedRotatingHandler))
+
+    class BrokenStream:
+        def write(self, text):
+            raise OSError(marker)
+
+        def flush(self):
+            pass
+
+    if failure == 'rollover':
+        monkeypatch.setattr(file_handler, 'maxBytes', 1)
+
+        def rollover():
+            raise OSError(marker)
+
+        monkeypatch.setattr(file_handler, 'doRollover', rollover)
+    else:
+        handler = file_handler if failure == 'file-write' else next(
+            h for h in logger.handlers if not isinstance(h, RetainedRotatingHandler))
+        monkeypatch.setattr(handler, 'stream', BrokenStream())
+
+    def fail(*args):
+        fix_worker._stage('tests')
+        raise subprocess.CalledProcessError(7, ['fixture-command', marker], output=marker)
+
+    monkeypatch.setattr(fix_worker, '_fix_pr', fail)
+    with pytest.raises(WorkerFailure) as caught:
+        fix_worker.fix_pr('fixture/repo', 1, 'fixture-head', ['synthetic finding'])
+    observed = capsys.readouterr()
+    assert marker not in observed.err + observed.out + path.read_text()
+    assert '--- Logging error ---' not in observed.err
     assert (caught.value.code, caught.value.stage) == ('tests-failed', 'tests')
     assert caught.value.cause_diagnostic_unavailable is True

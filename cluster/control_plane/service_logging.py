@@ -69,7 +69,22 @@ class JsonFormatter(logging.Formatter):
         return json.dumps(redact(data), ensure_ascii=True, default=str)
 
 
-class RetainedRotatingHandler(RotatingFileHandler):
+class DiagnosticWriteError(OSError):
+    """A handler failed; its exception payload must not reach stderr."""
+
+
+class _PrivateHandlerErrors:
+    def handleError(self, record):
+        # logging's default fallback prints chained exceptions and record arguments.
+        # Report a fixed failure to the caller, regardless of logging.raiseExceptions.
+        raise DiagnosticWriteError('Structured diagnostic write failed') from None
+
+
+class PrivateStreamHandler(_PrivateHandlerErrors, logging.StreamHandler):
+    pass
+
+
+class RetainedRotatingHandler(_PrivateHandlerErrors, RotatingFileHandler):
     """Size cap plus seven-day expiry for rotated files; one writer per job."""
     def doRollover(self):
         super().doRollover()
@@ -98,7 +113,7 @@ def event(service, name, level=logging.INFO, exc_info=None, **fields):
         handler = RetainedRotatingHandler(path, maxBytes=5 * 1024 * 1024, backupCount=7, encoding='utf-8')
         handler.setFormatter(formatter)
         logger.addHandler(handler)
-        stream = logging.StreamHandler(sys.stderr)
+        stream = PrivateStreamHandler(sys.stderr)
         stream.setFormatter(formatter)
         logger.addHandler(stream)
     logger.log(level, name, extra={'fields': fields}, exc_info=exc_info)
