@@ -21,7 +21,7 @@ must match the approved digest; any changed packet needs a new decision.
 
 ## Frozen baseline and advancing target
 
-The head/base merge base must remain the frozen baseline. Three explicit
+The head/base merge base must remain the frozen baseline. Four explicit
 separately reviewed base advancements are admitted. The first is
 `c3374b769820408edd43cdd4abf1eed5efb0e65b`, the human merge of PR #100,
 with sole parent `c5650be27329e507fe73ef5fc7a3905b64991469`.
@@ -52,6 +52,20 @@ confirms Jeff's human merge at 2026-10-20 03:51:28 UTC; current GitHub checks
 confirm green CI on that exact head and merged release. No artifact or signing
 key was copied. The earlier policy review for 17346a1a remains historical;
 this additional pinned transition requires a new policy head and normal review.
+
+The fourth is PR #109's human-merged commit
+`26384733115ce9803a61298e8fb49c4eb3b8780a`, with sole parent 079d0a above.
+Its reviewed head is `3b926929292274aea028c4d9fc86428884f32ab4`.
+The exact-head COMPLETE/PASS artifact SHA-256 on both native nodes is
+`bd7883ad52cbdc2c607d968aaa9090805bba102d709f21ba805b260674641c04`;
+fresh validation found nine deterministic passes and independent Gemini and
+MiniMax PASS votes. The prior normal signed receiver acknowledgment is retained.
+GitHub confirmed the human merge at 2026-10-20 12:28:54 UTC and green release
+CI. Its single-parent squash commit has the exact reviewed Git tree
+`2d444c51919451be3d725b602295964ff333dff3`; reviewed-head ancestry is not assumed.
+The Nuc's normally installed module copy matches this release. This is source
+qualification, not a claim of whole-host health or Mini readiness. The new
+baseline still requires this policy head's own complete normal review.
 
 Every sole-parent edge from the frozen baseline to this explicit admitted
 commit is proved from immutable objects. Missing, reversed, skipped or
@@ -125,14 +139,15 @@ APPROVED = Contract(
     185, '5012f4fa1be0aaf9d271cf210961c600caa20b57509d08ddbee1cf17a40fe956',
 )
 
-# Separately reviewed and human-merged PR100, PR107 and PR108. Every ancestry edge is
+# Separately reviewed and human-merged PR100, PR107, PR108 and PR109. Every ancestry edge is
 # pinned; this is not a live-base wildcard. The #104 packet remains unchanged.
 BASE_ADVANCEMENTS = (
     ('c3374b769820408edd43cdd4abf1eed5efb0e65b', 'c5650be27329e507fe73ef5fc7a3905b64991469'),
     ('21242f72725cd64065b37656e6c269676793f7aa', 'c3374b769820408edd43cdd4abf1eed5efb0e65b'),
     ('079d0a184895556f64e8aa9806211c13a39fa1c8', '21242f72725cd64065b37656e6c269676793f7aa'),
+    ('26384733115ce9803a61298e8fb49c4eb3b8780a', '079d0a184895556f64e8aa9806211c13a39fa1c8'),
 )
-ADMITTED_BASE = '079d0a184895556f64e8aa9806211c13a39fa1c8'
+ADMITTED_BASE = '26384733115ce9803a61298e8fb49c4eb3b8780a'
 
 POLICY_FILES = frozenset({
     'cluster/control_plane/local_karen/checks.py',

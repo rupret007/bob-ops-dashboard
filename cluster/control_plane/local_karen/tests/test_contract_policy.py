@@ -355,3 +355,52 @@ def test_every_pinned_advancement_edge_is_required(packet, monkeypatch, change):
                    'omitted-middle': (chain[0], chain[-1]), 'empty': ()}
         monkeypatch.setattr(p, 'BASE_ADVANCEMENTS', changes[change])
     with pytest.raises(p.ContractUnavailable): p._prove(packet['base'], git)
+
+
+@pytest.fixture
+def fourth_advancement(packet, monkeypatch):
+    git = packet['git']
+    git('checkout', '-q', '-b', 'fourth-admitted', packet['admitted_base'])
+    (packet['root'] / 'fourth-reviewed-context.txt').write_text('separately reviewed context change\n')
+    git('add', '.')
+    git('commit', '-qm', 'fourth separately reviewed base fixture')
+    fourth = git('rev-parse', 'HEAD').decode().strip()
+    chain = p.BASE_ADVANCEMENTS + ((fourth, packet['admitted_base']),)
+    monkeypatch.setattr(p, 'BASE_ADVANCEMENTS', chain)
+    monkeypatch.setattr(p, 'ADMITTED_BASE', fourth)
+    for name, content in packet['loaded'].items():
+        dest = packet['root'] / name
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        dest.write_bytes(content)
+    git('add', '.')
+    git('commit', '-qm', 'normally installed policy after fourth fixture')
+    base = git('rev-parse', 'HEAD').decode().strip()
+    packet['runtime'].update(installed_head=base, loaded_head=base)
+    return dict(packet, base=base, fourth=fourth)
+
+
+def test_fourth_reviewed_context_advancement_preserves_the_exact_contract(fourth_advancement):
+    case = fourth_advancement
+    raw, files, proof = p._prove(case['base'], case['git'])
+    pr = replace(case['pr'], base_sha=case['base'], test_contract_proof=proof)
+    assert raw == pr.diff and tuple(f['path'] for f in files) == proof.files
+    assert checks.check_tests_not_weakened(pr, KarenConfig()).passed
+    assert proof.contract == case['record'] and proof.contract.head == case['head']
+
+
+@pytest.mark.parametrize('change', ['missing-last', 'wrong-parent', 'extra-parent'])
+def test_fourth_context_edge_cannot_be_inferred_or_widened(fourth_advancement, monkeypatch, change):
+    case = fourth_advancement
+    git = case['git']
+    if change == 'missing-last':
+        monkeypatch.setattr(p, 'BASE_ADVANCEMENTS', p.BASE_ADVANCEMENTS[:-1])
+    else:
+        original = git
+        def git(*args):
+            if args == ('rev-list', '--parents', '-n', '1', case['fourth']):
+                parents = [case['fourth'], case['admitted_base']]
+                if change == 'wrong-parent': parents[1] = 'b' * 40
+                else: parents.append('a' * 40)
+                return (' '.join(parents) + '\n').encode()
+            return original(*args)
+    with pytest.raises(p.ContractUnavailable): p._prove(case['base'], git)
