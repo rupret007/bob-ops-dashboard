@@ -24,6 +24,7 @@ from .local_karen.verdict import load_verdict
 from .worker_runtime import (qualified_runtime, RuntimeUnqualified, MODULE_RUNNER,
                              test_files, outside_standard_tests)
 from . import cursor_worker
+from .worker_test_feedback import run_worker_tests
 
 
 CODEX_EFFORT = 'xhigh'
@@ -264,7 +265,9 @@ def _fix_pr(repo, pr_number, head_sha, findings):
             runtime.prepare_state(state)
             test_env = runtime.environment(test_env, state)
         attempt_prompt = prompt
+        last_failed_tests = []
         for attempt in range(1, MAX_FIX_ATTEMPTS + 1):
+            changed_python = []
             _stage('provider')
             if cursor:
                 with cursor_worker.policy(tree) as model_env:
@@ -288,14 +291,19 @@ def _fix_pr(repo, pr_number, head_sha, findings):
                 if not outside.issubset(original_outside):
                     raise RuntimeUnqualified()
                 tests = runtime.test_command(sorted(files, key=lambda name: name.encode()))
+                changed_python = run(['git', 'diff', '--no-ext-diff', '--no-textconv',
+                                      '--no-renames', '--name-only', '-z', 'HEAD', '--', '*.py'], tree).split('\0')
             _stage('tests')
             try:
-                run(tests, tree, env=test_env)
+                run_worker_tests(run, tests, tree, test_env, runtime=runtime,
+                                 files=files if runtime is not None else (),
+                                 changed_paths=changed_python, prior_failed_tests=last_failed_tests)
                 break
             except subprocess.CalledProcessError as exc:
                 if attempt >= MAX_FIX_ATTEMPTS:
                     raise
                 output = ((exc.stdout or '') + '\n' + (exc.stderr or ''))[-TEST_OUTPUT_TAIL:]
+                last_failed_tests = failing_tests(exc.stdout or '')
                 event('fix-worker', 'tests_retry', attempt=attempt,
                       max_attempts=MAX_FIX_ATTEMPTS, failed_tests=failing_tests(exc.stdout or ''),
                       failure_code='tests-failed', failure_stage='tests')
