@@ -404,3 +404,62 @@ def test_fourth_context_edge_cannot_be_inferred_or_widened(fourth_advancement, m
                 return (' '.join(parents) + '\n').encode()
             return original(*args)
     with pytest.raises(p.ContractUnavailable): p._prove(case['base'], git)
+
+
+@pytest.fixture
+def fifth_advancement(fourth_advancement, monkeypatch):
+    case = fourth_advancement
+    git = case['git']
+    git('checkout', '-q', '-b', 'fifth-admitted', case['fourth'])
+    (case['root'] / 'fifth-reviewed-context.txt').write_text('reviewed context extraction\n')
+    git('add', '.')
+    git('commit', '-qm', 'fifth separately reviewed base fixture')
+    fifth = git('rev-parse', 'HEAD').decode().strip()
+    monkeypatch.setattr(p, 'BASE_ADVANCEMENTS', p.BASE_ADVANCEMENTS + ((fifth, case['fourth']),))
+    monkeypatch.setattr(p, 'ADMITTED_BASE', fifth)
+    for name, content in case['loaded'].items():
+        dest = case['root'] / name
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        dest.write_bytes(content)
+    git('add', '.')
+    git('commit', '-qm', 'normally installed policy after fifth fixture')
+    base = git('rev-parse', 'HEAD').decode().strip()
+    case['runtime'].update(installed_head=base, loaded_head=base)
+    return dict(case, base=base, fifth=fifth)
+
+
+def test_fifth_reviewed_context_advancement_preserves_the_exact_contract(fifth_advancement):
+    case = fifth_advancement
+    raw, files, proof = p._prove(case['base'], case['git'])
+    pr = replace(case['pr'], base_sha=case['base'], test_contract_proof=proof)
+    assert raw == pr.diff and tuple(f['path'] for f in files) == proof.files
+    assert checks.check_tests_not_weakened(pr, KarenConfig()).passed
+    assert proof.contract == case['record'] and proof.contract.head == case['head']
+
+
+@pytest.mark.parametrize('change', ['missing-last', 'wrong-parent', 'extra-parent'])
+def test_fifth_context_edge_cannot_be_inferred_or_widened(fifth_advancement, monkeypatch, change):
+    case = fifth_advancement
+    git = case['git']
+    if change == 'missing-last':
+        monkeypatch.setattr(p, 'BASE_ADVANCEMENTS', p.BASE_ADVANCEMENTS[:-1])
+    else:
+        original = git
+        def git(*args):
+            if args == ('rev-list', '--parents', '-n', '1', case['fifth']):
+                parents = [case['fifth'], case['fourth']]
+                if change == 'wrong-parent': parents[1] = 'b' * 40
+                else: parents.append('a' * 40)
+                return (' '.join(parents) + '\n').encode()
+            return original(*args)
+    with pytest.raises(p.ContractUnavailable): p._prove(case['base'], git)
+
+
+def test_fifth_context_edge_does_not_admit_an_unlisted_later_release(fifth_advancement):
+    case = fifth_advancement
+    (case['root'] / 'unlisted-release.txt').write_text('not the approved context change\n')
+    case['git']('add', '.')
+    case['git']('commit', '-qm', 'unlisted later release')
+    base = case['git']('rev-parse', 'HEAD').decode().strip()
+    case['runtime'].update(installed_head=base, loaded_head=base)
+    with pytest.raises(p.ContractUnavailable): p._prove(base, case['git'])
