@@ -148,12 +148,15 @@ def test_gate_never_publishes_or_repairs_context_only_rejection(tmp_path):
     incomplete.scope = {'context_incomplete': True}
     with patch.object(gate, 'fetch_pr_info', return_value=pr), \
          patch.object(gate, 'run_all_checks', return_value=[]), \
-         patch.object(gate, 'run_review_chain', return_value=(incomplete, [])), \
+         patch.object(gate.ClaimClient, 'from_env'), patch.object(gate, 'Lease'), \
+         patch.object(gate, 'run_review_chain', return_value=(incomplete, [])) as chain, \
          patch.object(gate, 'save_verdict') as save:
         result = gate.run_gate('owner', 'repo', 1, KarenConfig(verdict_dir=str(tmp_path)))
     assert result.verdict.status == 'ERROR'
     assert result.verdict_path is None
     save.assert_not_called()
+    chain.assert_called_once()
+    assert 'Review error:' in result.error
 
 
 @pytest.mark.parametrize('paths', [
