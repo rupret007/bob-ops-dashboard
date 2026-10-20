@@ -59,6 +59,17 @@ def test_payload_has_one_static_data_only_schema_and_no_unsupported_forcing(pr):
     assert pr.diff in payload['messages'][1]['content']
 
 
+def test_wire_contract_distinguishes_missing_diff_source_and_resolved_requests(pr):
+    _, request, _ = review(pr, [tool_response()])
+    messages = json.loads(request.call_args.args[0].data)['messages']
+    for message in messages:
+        assert 'requested_files requests complete changed-file diffs' in message['content']
+        assert 'requested_source_files requests full repository source' in message['content']
+        assert 'outside the changed-file manifest' in message['content']
+        assert 'both request arrays must be []' in message['content']
+    assert 'from the supplied manifest' not in messages[0]['content']
+
+
 @pytest.mark.parametrize('vote', ['PASS', 'FAIL', 'BORDERLINE'])
 @pytest.mark.parametrize('content', [None, '', ' \n '])
 def test_complete_single_function_vote_uses_unchanged_parser_and_is_terminal(pr, caplog, vote, content):
