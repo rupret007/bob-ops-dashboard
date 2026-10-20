@@ -29,12 +29,17 @@ def vote(verdict=r.ReviewVerdict.PASS, defect=None, requests=None):
     return result
 
 
-def run(primary, second=None):
+def run(primary, second=None, source_objects=None):
+    from cluster.control_plane.local_karen import source_context
+    from cluster.control_plane.local_karen.tests.test_source_context import Objects
+    objects = source_objects or Objects(b'return unsafe(user_input)\n')
+    objects.tree['tree'] = [dict(objects.tree['tree'][0], path='app.py')]
     reviewer = Mock(review=Mock(side_effect=primary))
     with patch.object(r, 'get_available_reviewers', return_value=[('codex', reviewer)]), \
          patch.object(r.MiniMaxReviewer, 'is_available', return_value=(True, 'ok')), \
          patch.object(r.MiniMaxReviewer, 'review_as_second_judge',
-                      side_effect=second or (lambda *args: replace(vote(), reviewer='minimax'))):
+                       side_effect=second or (lambda *args: replace(vote(), reviewer='minimax'))), \
+         patch.object(source_context, 'budgeted_gh', side_effect=objects.read):
         outcome, reviews = r.run_review_chain(pr_info(), KarenConfig())
     return outcome, reviews, reviewer
 
@@ -88,15 +93,31 @@ def test_concrete_early_defect_does_not_hide_remaining_chunks():
 
 
 def test_requested_file_is_supplied_at_exact_head_then_two_passes_required():
+    from cluster.control_plane.local_karen import source_context
+    from cluster.control_plane.local_karen.tests.test_source_context import Objects
+    objects = Objects(b'return unsafe(user_input)\n')
+    objects.tree['tree'] = [dict(objects.tree['tree'][0], path='app.py')]
     def review(pr, *args):
         assert pr.description == pr_info().description
         if pr.review_material is None or pr.review_material.phase != 'requested':
             return vote(r.ReviewVerdict.BORDERLINE, requests=['app.py'])
         supplied = [item for item in pr.review_material.entries if item.get('path') == 'app.py']
+        assert len(supplied) == 1
+        if 'source' in supplied[0]:
+            assert supplied[0]['source'] == objects.raw.decode()
+            assert supplied[0]['head_sha'] == pr.head_sha
+            assert supplied[0]['blob_sha'] == objects.sha
+            assert supplied[0]['bytes'] == len(objects.raw)
+            # The patch is already in this chunk; check that exact visible
+            # evidence with the original assertion, alongside the new proof.
+            from cluster.control_plane.local_karen.chunk_context import requested_file_diff
+            visible = requested_file_diff(pr, 'app.py', pr.head_sha)
+            assert visible == requested_file_diff(pr_info(), 'app.py', pr.head_sha)
+            supplied = [{'path': 'app.py', 'diff': visible}]
         assert len(supplied) == 1 and 'return unsafe(user_input)' in supplied[0]['diff']
         assert pr.review_scope.data['head_sha'] == pr.head_sha == pr_info().head_sha
         return vote()
-    result, reviews, reviewer = run(review)
+    result, reviews, reviewer = run(review, source_objects=objects)
     assert result.passed
     assert all(item.verdict == r.ReviewVerdict.PASS for item in reviews)
     assert any((item.scope or {}).get('context_attempts') for item in reviews)
@@ -105,6 +126,7 @@ def test_requested_file_is_supplied_at_exact_head_then_two_passes_required():
     verdict = create_verdict(pr_info(), [], reviews, True, result.reason, result.reviewer)
     assert reviewed(verdict)
     assert reviewer.review.call_count == 2 * len(r.split_review_diff(pr_info().diff))
+    assert len(objects.calls) == 3
 
 
 def test_unknown_context_request_never_reads_or_approves():
@@ -130,12 +152,15 @@ def test_gate_never_publishes_or_repairs_context_only_rejection(tmp_path):
     incomplete.scope = {'context_incomplete': True}
     with patch.object(gate, 'fetch_pr_info', return_value=pr), \
          patch.object(gate, 'run_all_checks', return_value=[]), \
-         patch.object(gate, 'run_review_chain', return_value=(incomplete, [])), \
+         patch.object(gate.ClaimClient, 'from_env'), patch.object(gate, 'Lease'), \
+         patch.object(gate, 'run_review_chain', return_value=(incomplete, [])) as chain, \
          patch.object(gate, 'save_verdict') as save:
         result = gate.run_gate('owner', 'repo', 1, KarenConfig(verdict_dir=str(tmp_path)))
     assert result.verdict.status == 'ERROR'
     assert result.verdict_path is None
     save.assert_not_called()
+    chain.assert_called_once()
+    assert 'Review error:' in result.error
 
 
 @pytest.mark.parametrize('paths', [
