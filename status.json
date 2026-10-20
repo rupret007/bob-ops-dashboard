@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-10-20T07:20:58.924958-05:00",
-  "generated_at_display": "Tue Oct 20, 2026 \u00b7 7:20 AM CDT",
+  "generated_at": "2026-10-20T07:35:52.484390-05:00",
+  "generated_at_display": "Tue Oct 20, 2026 \u00b7 7:35 AM CDT",
   "timezone": "America/Chicago",
   "owner": "rupret007",
   "dashboard": "bob-ops-dashboard",
@@ -495,15 +495,15 @@
           "status": "yellow",
           "chip": "Yellow",
           "default_branch": "main",
-          "tip_sha": "f61d86a",
-          "tip_date": "2026-10-20T12:06:02Z",
-          "open_prs": 16,
-          "open_pr_url": "https://github.com/rupret007/bob-ops-dashboard/pull/113",
-          "open_pr_number": 113,
+          "tip_sha": "cfdc12e",
+          "tip_date": "2026-10-20T12:21:15Z",
+          "open_prs": 15,
+          "open_pr_url": "https://github.com/rupret007/bob-ops-dashboard/pull/88",
+          "open_pr_number": 88,
           "open_pr_draft": false,
           "open_pr_stack": [],
           "pr_listing_complete": true,
-          "agent_url": "https://cursor.com/agents/bc-4522847c-e01a-58c5-9fc7-ee9317e6b0db",
+          "agent_url": "https://cursor.com/agents/bc-8010dd7e-0b0b-5074-a351-0faafe9a47c7",
           "ci": null,
           "release": null,
           "release_sha": null,
@@ -900,7 +900,7 @@
     "barker"
   ],
   "publish_notes": "Public board -- no secrets or customer paths. Private repositories stay high-level; AI Music Vault stays private-content-boundary only.",
-  "refresh_started_ms": 1792498822381,
+  "refresh_started_ms": 1792499721346,
   "agents_source": "file:stale->unknown",
   "agents": [
     {
@@ -948,21 +948,21 @@
   ],
   "cloud_agents": [
     {
-      "id": "bc-4522847c-e01a-58c5-9fc7-ee9317e6b0db",
-      "name": "PR #84",
-      "state": "unknown",
-      "detail": "feat: StoryPool control plane migration from Grok to deterministic scheduler",
-      "url": "https://cursor.com/agents/bc-4522847c-e01a-58c5-9fc7-ee9317e6b0db",
-      "pr_url": "https://github.com/rupret007/bob-ops-dashboard/pull/84",
-      "checked_at": null
-    },
-    {
       "id": "bc-8010dd7e-0b0b-5074-a351-0faafe9a47c7",
       "name": "PR #88",
       "state": "unknown",
       "detail": "All-in-one install: merge PRs #84, #85, #86, #87 with unified installers",
       "url": "https://cursor.com/agents/bc-8010dd7e-0b0b-5074-a351-0faafe9a47c7",
       "pr_url": "https://github.com/rupret007/bob-ops-dashboard/pull/88",
+      "checked_at": null
+    },
+    {
+      "id": "bc-4522847c-e01a-58c5-9fc7-ee9317e6b0db",
+      "name": "PR #84",
+      "state": "unknown",
+      "detail": "feat: StoryPool control plane migration from Grok to deterministic scheduler",
+      "url": "https://cursor.com/agents/bc-4522847c-e01a-58c5-9fc7-ee9317e6b0db",
+      "pr_url": "https://github.com/rupret007/bob-ops-dashboard/pull/84",
       "checked_at": null
     },
     {
@@ -1099,7 +1099,7 @@
     }
   ],
   "llm_work_now_freshness": {
-    "generated_at": "2026-10-20 07:20 CT",
+    "generated_at": "2026-10-20 07:35 CT",
     "warn_ttl_sec": 1200,
     "warnings": [],
     "ok": true
@@ -1130,7 +1130,7 @@
     ],
     "scorecards": {
       "v": "scorecards/v1",
-      "generated_at": "2026-10-20T12:21:00.320076+00:00",
+      "generated_at": "2026-10-20T12:35:53.552804+00:00",
       "windows": {
         "24h": {
           "providers": {
