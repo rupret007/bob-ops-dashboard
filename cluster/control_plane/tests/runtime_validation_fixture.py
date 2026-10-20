@@ -1,7 +1,7 @@
 """Controlled closure for alternate-namespace validation integration tests.
 
 The established fixture remains untouched in test_worker_runtime.py. Its setup
-is preserved here so this complete fixture fits immutable-source review limits.
+is preserved here with a plain local Git identity for source privacy checks.
 No provider or hardware probe executes: only the fixed probe response is mocked.
 """
 import hashlib
@@ -53,7 +53,7 @@ def qualified(tmp_path, monkeypatch):
     (tmp_path / 'empty-template').mkdir()
     def git(*args):
         return subprocess.check_output(['git', '-c', 'user.name=Fixture', '-c',
-            'user.email=fixture@example.invalid', '-c', 'commit.gpgsign=false',
+            'user.email=fixture.invalid', '-c', 'commit.gpgsign=false',
             '-c', 'core.hooksPath=/dev/null', *args], cwd=tree, env=git_env, text=True).strip()
     git('init', '--quiet')
     git('add', '.')
