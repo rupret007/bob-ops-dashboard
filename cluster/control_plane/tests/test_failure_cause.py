@@ -72,3 +72,15 @@ def test_already_classified_failures_keep_identity_without_duplicate_wrapper_eve
 def test_ownership_loss_still_has_priority_over_general_coordination_failure():
     assert classify_failure(ClaimLost('synthetic'), 'provider') == ('ownership-lost', 'provider')
     assert classify_failure(CoordinationError('synthetic'), 'tests') == ('coordination-failed', 'tests')
+
+
+def test_diagnostic_failure_preserves_original_controlled_job_failure(monkeypatch):
+    def fail(*args):
+        fix_worker._stage('tests')
+        raise subprocess.CalledProcessError(7, ['synthetic-test-command'])
+    monkeypatch.setattr(fix_worker, '_fix_pr', fail)
+    monkeypatch.setattr(fix_worker, 'event', Mock(side_effect=OSError('synthetic log unavailable')))
+    with pytest.raises(WorkerFailure) as caught:
+        fix_worker.fix_pr('fixture/repo', 1, 'fixture-head', ['synthetic finding'])
+    assert (caught.value.code, caught.value.stage) == ('tests-failed', 'tests')
+    assert caught.value.cause_diagnostic_unavailable is True

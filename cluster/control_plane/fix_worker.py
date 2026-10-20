@@ -180,12 +180,17 @@ def fix_pr(repo, pr_number, head_sha, findings):
         raise
     except Exception as exc:
         code, stage = classify_failure(exc, _failure_stage.get())
+        failure = WorkerFailure(code, stage)
         # Preserve the original frame chain before replacing the exception.
         # The structured formatter excludes its message, locals and CLI output.
-        event('fix-worker', 'operation_failed', level=logging.ERROR, exc_info=True,
-              failure_code=code, failure_stage=stage,
-              error_type=type(exc).__name__)
-        raise WorkerFailure(code, stage) from None
+        try:
+            event('fix-worker', 'operation_failed', level=logging.ERROR, exc_info=True,
+                  failure_code=code, failure_stage=stage,
+                  error_type=type(exc).__name__)
+        except Exception:
+            # Telemetry cannot replace the cause or turn failure into success.
+            failure.cause_diagnostic_unavailable = True
+        raise failure from None
     finally:
         _failure_stage.reset(token)
 
@@ -410,6 +415,7 @@ def execute(job_id):
         event('fix-worker', 'job_failed', level=logging.ERROR, exc_info=True,
               error_type=type(exc).__name__, reason=message,
               failure_code=code, failure_stage=stage,
+              cause_diagnostic_unavailable=bool(getattr(exc, 'cause_diagnostic_unavailable', False)),
               duration_ms=round((time.monotonic() - started) * 1000))
         return 1
     finally:
