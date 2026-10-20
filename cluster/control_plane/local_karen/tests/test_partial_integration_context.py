@@ -3,7 +3,24 @@ from dataclasses import replace
 from unittest.mock import Mock, patch
 
 from cluster.control_plane.local_karen import chunk_context as c, reviewers as r
-from cluster.control_plane.local_karen.tests.test_auto_complement import pr_info, section, vote
+from cluster.control_plane.local_karen.checks import PRInfo
+
+
+def section(path, size):
+    header = 'diff --git a/{0} b/{0}\n--- a/{0}\n+++ b/{0}\n@@ -0,0 +1 @@\n+'.format(path)
+    return header + 'x' * (size - len(header) - 1) + '\n'
+
+
+def pr_info(sections):
+    diff = ''.join(sections)
+    paths = [item['path'] for item in c._file_sections(diff)]
+    return PRInfo('owner', 'repo', 32, 'a' * 40, 'Integration', 'author', False, diff, {}, paths, [])
+
+
+def vote(verdict, changed=None):
+    return r.ReviewResult('gemini', verdict, 'Offline bounded integration evidence probe',
+        findings=r.ReviewFindings(risk_notes=['Checked the supplied evidence boundaries']),
+        requested_files=changed or [])
 
 
 def packet():
