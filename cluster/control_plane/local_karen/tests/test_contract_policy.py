@@ -40,6 +40,11 @@ def packet(tmp_path, monkeypatch):
                      diff_sha256=hashlib.sha256(diff).hexdigest())
     monkeypatch.setattr(p, 'APPROVED', record)
     git('checkout', '-q', '-b', 'installed-policy', baseline)
+    (tmp_path / 'approved-base-change.txt').write_text('separately reviewed base advance\n')
+    git('add', '.')
+    git('commit', '-qm', 'separately reviewed admitted base fixture')
+    admitted_base = git('rev-parse', 'HEAD').decode().strip()
+    monkeypatch.setattr(p, 'ADMITTED_BASE', admitted_base)
     loaded = {f: ('# loaded policy fixture: ' + f + '\n').encode() for f in p.POLICY_FILES}
     for f, content in loaded.items():
         dest = tmp_path / f
@@ -55,7 +60,7 @@ def packet(tmp_path, monkeypatch):
     pr = checks.PRInfo(record.owner, record.repo, record.number, record.head,
                        'Correction', 'author', False, raw, {'test': 'success'},
                        [f['path'] for f in files], [], base_sha=base, test_contract_proof=proof)
-    return dict(pr=pr, git=git, root=tmp_path, baseline=baseline, base=base,
+    return dict(pr=pr, git=git, root=tmp_path, baseline=baseline, base=base, admitted_base=admitted_base,
                 head=head, runtime=runtime, loaded=loaded, record=record)
 
 
@@ -149,7 +154,7 @@ def test_unproved_base_advancement_and_incomplete_objects_fail_closed(packet, ki
         original = git
         def git(*args):
             if kind == 'merge-base' and args[:2] == ('merge-base', base): return b'a' * 40 + b'\n'
-            if kind == 'baseline-ancestor' and args[:2] == ('merge-base', packet['baseline']): return b'b' * 40 + b'\n'
+            if kind == 'baseline-ancestor' and args[:2] == ('merge-base', packet['admitted_base']): return b'b' * 40 + b'\n'
             if kind == 'object-missing' and args[0] == 'show': raise p.ContractUnavailable('objects unavailable')
             return original(*args)
     with pytest.raises(p.ContractUnavailable): p._prove(base, git)
@@ -297,3 +302,20 @@ def test_policy_files_do_not_add_pages_publication_paths(monkeypatch):
     monkeypatch.setattr(checks, '_pages_source', pages)
     assert checks.check_pages_exposure(pr, KarenConfig()).passed
     pages.assert_not_called()
+
+
+@pytest.mark.parametrize('change', ['other-floor', 'wrong-floor-parent', 'extra-parent'])
+def test_only_the_explicit_reviewed_base_advancement_is_admitted(packet, monkeypatch, change):
+    git = packet['git']
+    if change == 'other-floor':
+        monkeypatch.setattr(p, 'ADMITTED_BASE', packet['base'])
+    else:
+        original = git
+        def git(*args):
+            if args == ('rev-list', '--parents', '-n', '1', packet['admitted_base']):
+                parents = [packet['admitted_base'], packet['baseline']]
+                if change == 'extra-parent': parents.append('a' * 40)
+                else: parents[1] = 'b' * 40
+                return (' '.join(parents) + '\n').encode()
+            return original(*args)
+    with pytest.raises(p.ContractUnavailable): p._prove(packet['base'], git)

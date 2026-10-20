@@ -16,10 +16,20 @@ must match the approved digest; any changed packet needs a new decision.
 
 ## Frozen baseline and advancing target
 
-The head/base merge base must remain the frozen baseline. The baseline must
-also be an ancestor of the live base. The live base must equal the installed
+The head/base merge base must remain the frozen baseline. One explicit
+separately reviewed base advancement is admitted:
+`c3374b769820408edd43cdd4abf1eed5efb0e65b`, the human merge of PR #100,
+with sole parent `c5650be27329e507fe73ef5fc7a3905b64991469`.
+Its reviewed head is `62c64bdd27da4fcd1a07ac9b3be43d60663f86b0`; the
+native Nuc's exact-head COMPLETE/PASS artifact SHA-256 is
+`e1df7fe6ed9fb78e0a9dab4decc208c624da82f60eac30f7bb49f28677b2dd6b`.
+Revalidation found nine deterministic passes and four independent Gemini/
+MiniMax PASS votes accepted by the existing normal approval predicate.
+No verdict copy, signing-key provision or public-label inference was used.
+
+The admitted commit must be an ancestor of the live base. The live base must equal the installed
 and loaded source revision, verified by the existing runtime source check.
-Its complete tree difference from the baseline must contain exactly the five
+Its complete tree difference from that admitted commit must contain exactly the five
 policy files listed in the module, each with regular-file mode and content
 identical to the policy snapshot loaded by that process. Consequently a
 separate reviewed policy merge can advance the target without admitting

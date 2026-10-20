@@ -44,6 +44,11 @@ APPROVED = Contract(
     185, '5012f4fa1be0aaf9d271cf210961c600caa20b57509d08ddbee1cf17a40fe956',
 )
 
+# PR100's separately reviewed and human-merged release commit. The #104 packet
+# remains frozen at APPROVED.baseline; this is an explicit base advancement,
+# not permission for arbitrary later target changes.
+ADMITTED_BASE = 'c3374b769820408edd43cdd4abf1eed5efb0e65b'
+
 POLICY_FILES = frozenset({
     'cluster/control_plane/local_karen/checks.py',
     'cluster/control_plane/local_karen/github_client.py',
@@ -117,8 +122,10 @@ def _prove(base, git):
              and runtime.get('installed_head') == runtime.get('loaded_head') == base)
     _require(set(_LOADED_FILES) == POLICY_FILES)
     _require(git('merge-base', base, APPROVED.head).decode().strip() == APPROVED.baseline)
-    _require(git('merge-base', APPROVED.baseline, base).decode().strip() == APPROVED.baseline)
-    changed_base = git('diff', '--name-only', '--no-renames', '-z', APPROVED.baseline, base)
+    _require(git('rev-list', '--parents', '-n', '1', ADMITTED_BASE).decode().split()
+             == [ADMITTED_BASE, APPROVED.baseline])
+    _require(git('merge-base', ADMITTED_BASE, base).decode().strip() == ADMITTED_BASE)
+    changed_base = git('diff', '--name-only', '--no-renames', '-z', ADMITTED_BASE, base)
     paths = changed_base.decode().rstrip('\0').split('\0') if changed_base else []
     # No arbitrary base drift, even when the PR head has not moved. Every policy
     # file must be the exact snapshot loaded by this normally installed source.
@@ -164,7 +171,7 @@ def fetch_contract_packet(owner, repo, number, head, base):
                 return result.stdout
             git('init', '--bare', '-q')
             git('fetch', '--no-tags', '--filter=blob:none',
-                'https://github.com/rupret007/bob-ops-dashboard.git', head, APPROVED.baseline, base)
+                'https://github.com/rupret007/bob-ops-dashboard.git', head, APPROVED.baseline, ADMITTED_BASE, base)
             return _prove(base, git)
     except (OSError, ValueError, SyntaxError, UnicodeError, subprocess.SubprocessError):
         raise ContractUnavailable('Exact test-contract objects unavailable') from None
