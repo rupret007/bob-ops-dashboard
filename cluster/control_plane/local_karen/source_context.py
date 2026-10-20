@@ -54,7 +54,16 @@ def safe_source_path(path):
 
 
 class PinnedSourceContext:
+    def __new__(cls, pr):
+        from .diff_context import ContextualPRInfo
+        cached = pr.pinned_source_context if type(pr) is ContextualPRInfo else None
+        if (type(cached) is cls and cached.identity == (pr.owner, pr.repo, pr.head_sha)):
+            return cached
+        return super().__new__(cls)
+
     def __init__(self, pr):
+        if getattr(pr, 'pinned_source_context', None) is self:
+            return  # Enrichment and later reviewers share all original budgets.
         self.identity = (pr.owner, pr.repo, pr.head_sha)
         self.calls, self.bytes = 0, 0
         self.tree, self.tree_sha, self.sources = None, None, {}
@@ -86,7 +95,7 @@ class PinnedSourceContext:
         finally:
             self.seconds -= max(0, time.monotonic() - started)
 
-    def fetch(self, pr, path):
+    def _metadata(self, pr, path, full_source):
         owner, repo, head = self.identity
         if ((pr.owner, pr.repo, pr.head_sha) != self.identity
                 or not isinstance(owner, str) or not isinstance(repo, str)
@@ -95,8 +104,6 @@ class PinnedSourceContext:
                 or repo in ('.', '..')
                 or not isinstance(head, str) or not re.fullmatch(r'[0-9a-f]{40}', head) or not safe_source_path(path)):
             raise SourceUnavailable('source_identity_or_path')
-        if path in self.sources:
-            return self.sources[path]
         if self.tree is None:
             commit = self._json('commits/' + head, 65536)
             tree_sha = commit.get('tree', {}).get('sha') if isinstance(commit.get('tree'), dict) else None
@@ -127,12 +134,26 @@ class PinnedSourceContext:
             raise SourceUnavailable('source_metadata', metadata_reason='source_type_or_mode')
         if type(size) is not int or size < 0:
             raise SourceUnavailable('source_metadata', metadata_reason='source_size_invalid')
-        if size > MAX_FILE_BYTES:
+        if full_source and size > MAX_FILE_BYTES:
             raise SourceUnavailable('source_metadata', metadata_reason='source_file_limit')
-        if self.bytes + size > MAX_SOURCE_BYTES:
+        if full_source and self.bytes + size > MAX_SOURCE_BYTES:
             raise SourceUnavailable('source_metadata', metadata_reason='source_total_limit')
         if not isinstance(sha, str) or not re.fullmatch(r'[0-9a-f]{40}', sha):
             raise SourceUnavailable('source_metadata', metadata_reason='source_blob_sha')
+        return dict(path=path, head_sha=head, tree_sha=self.tree_sha, blob_sha=sha,
+                    bytes=size, mode=entry['mode'])
+
+    def describe(self, pr, path):
+        """Authenticate metadata only; large-file contents remain unavailable."""
+        return self._metadata(pr, path, full_source=False)
+
+    def fetch(self, pr, path):
+        # Validate identity/path even for a cached successful response.
+        if ((pr.owner, pr.repo, pr.head_sha) == self.identity
+                and safe_source_path(path) and path in self.sources):
+            return self.sources[path]
+        info = self._metadata(pr, path, full_source=True)
+        head, size, sha = info['head_sha'], info['bytes'], info['blob_sha']
         blob = self._json('blobs/' + sha, MAX_FILE_BYTES * 2 + 2048)
         if blob.get('sha') != sha or type(blob.get('size')) is not int or blob['size'] != size or blob.get('encoding') != 'base64':
             raise SourceUnavailable('blob_identity')

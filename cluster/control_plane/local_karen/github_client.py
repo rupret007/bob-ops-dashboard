@@ -162,7 +162,7 @@ def fetch_pr_info(owner: str, repo: str, pr_number: int) -> PRInfo:
             if current_file not in deleted_files:
                 deleted_files.append(current_file)
 
-    return PRInfo(
+    pr = PRInfo(
         owner=owner,
         repo=repo,
         number=pr_number,
@@ -176,6 +176,12 @@ def fetch_pr_info(owner: str, repo: str, pr_number: int) -> PRInfo:
         deleted_files=deleted_files,
         description=pr_data.get("body", ""),
     )
+    from .diff_context import prepare_context
+    from .git_context import fetch_context
+    enriched = prepare_context(pr, pr_data.get("baseRefOid", ""), fetch_context)
+    if enriched is not pr and not verify_sha_current(owner, repo, pr_number, head_sha):
+        raise GitHubError("PR head changed while fetching context; retry")
+    return enriched
 
 
 def verify_sha_current(owner: str, repo: str, pr_number: int, expected_sha: str) -> bool:

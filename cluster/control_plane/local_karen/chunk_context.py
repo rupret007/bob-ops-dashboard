@@ -204,6 +204,10 @@ def requested_file_diff(pr: PRInfo, path: str,
         return None
     if path not in {item["path"] for item in file_manifest(pr)}:
         return None
+    from .diff_context import lookup_context
+    supplemental = lookup_context(pr, path)
+    if supplemental is not None:
+        return supplemental
     sections = [pr.diff[item["start"]:item["end"]]
                 for item in _file_sections(pr.diff) if item["path"] == path]
     return "".join(sections) if sections else None
@@ -241,6 +245,9 @@ def automatic_complement(pr: PRInfo, chunks: Sequence[str], index: int):
     missing = partial or [item['path'] for item in manifest if any(
         s['path'] == item['path'] and not (start <= s['start'] and s['end'] <= end)
         for s in sections)]
+    from .diff_context import lookup_context
+    expanded = [item['path'] for item in manifest if lookup_context(pr, item['path']) is not None]
+    missing = list(dict.fromkeys(partial + expanded + missing))
     if len(missing) > MAX_CONTEXT_FILES:
         return [], 'partial_file' if partial else 'context_budget'
     entries = []
@@ -258,15 +265,18 @@ def automatic_complement(pr: PRInfo, chunks: Sequence[str], index: int):
         # diffs first, keeping the required partial file and one free request
         # slot. Nothing here fetches source or increases the cumulative budget.
         other = []
+        seeded = {item['path'] for item in entries}
         for item in manifest:
             path = item['path']
-            if path in partial or not any(s['path'] == path and
+            if path in seeded or not any(s['path'] == path and
                     not (start <= s['start'] and s['end'] <= end) for s in sections):
                 continue
             supplied = requested_file_diff(pr, path, pr.head_sha)
             if supplied is not None:
                 other.append(dict(path=path, diff=supplied))
-        if len(other) > 1:
+        # Verified expansions are already part of this packet. Seed any
+        # remaining small integration while still reserving the fourth slot.
+        if len(other) > 1 or expanded:
             for item in sorted(other, key=lambda item: (len(item['diff']), item['path'])):
                 if len(entries) >= MAX_CONTEXT_FILES - 1:
                     break
