@@ -73,17 +73,32 @@ class BoundedGit:
         except subprocess.TimeoutExpired:
             raise ContextUnavailable('time_budget') from None
         finally:
-            if child is not None:
-                if not completed:
-                    # Only this fresh, owned transport process group.
+            try:
+                if child is not None:
                     try:
-                        os.killpg(child.pid, signal.SIGKILL)
-                    except ProcessLookupError:
-                        pass
-                child.wait()
-                child.stdout.close()
-                child.stderr.close()
-            self.shared.seconds -= max(0, time.monotonic() - started)
+                        if not completed and child.poll() is None:
+                            # Signal only the still-running session created by
+                            # this Popen. Darwin may report EPERM after exit.
+                            try:
+                                if os.getpgid(child.pid) != child.pid:
+                                    raise ContextUnavailable('git_read')
+                                os.killpg(child.pid, signal.SIGKILL)
+                            except ProcessLookupError:
+                                pass
+                            except PermissionError:
+                                if child.poll() is None:
+                                    raise
+                        try:
+                            child.wait(timeout=min(1, max(.001, timeout -
+                                (time.monotonic() - started))))
+                        except subprocess.TimeoutExpired:
+                            raise ContextUnavailable('time_budget') from None
+                    finally:
+                        child.stdout.close()
+                        child.stderr.close()
+            finally:
+                # A cleanup failure cannot restore consumed review time.
+                self.shared.seconds -= max(0, time.monotonic() - started)
 
 
 def _entry(git, revision, path):

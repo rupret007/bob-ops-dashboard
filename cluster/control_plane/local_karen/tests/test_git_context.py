@@ -3,6 +3,8 @@ from pathlib import Path
 from types import SimpleNamespace
 import os
 import subprocess
+import socket
+import threading
 
 import pytest
 
@@ -41,18 +43,47 @@ def test_git_hashes_same_verified_blob_and_has_finite_output_bound(packet):
         git.run('cat-file', 'blob', sha, maximum=10)
 
 
+def _https_connection_observed(packet, network):
+    *_, native_git, directory = packet
+    # Only this disposable fixture's config changes. No credential helper or
+    # proxy is needed for a loopback transport-denial probe.
+    native_git('config', 'credential.helper', '')
+    native_git('config', 'http.proxy', '')
+    connected = threading.Event()
+    with socket.socket() as listener:
+        listener.bind(('127.0.0.1', 0))
+        listener.listen(1)
+        listener.settimeout(1)
+        port = listener.getsockname()[1]
+        def accept_once():
+            try:
+                client, _ = listener.accept()
+            except socket.timeout:
+                return
+            with client:
+                connected.set()
+        server = threading.Thread(target=accept_once)
+        server.start()
+        try:
+            git = g.BoundedGit(directory, SimpleNamespace(seconds=3))
+            with pytest.raises(g.ContextUnavailable, match='git_read'):
+                git.run('fetch', 'https://127.0.0.1:{}/never.git'.format(port),
+                        'a' * 40, network=network)
+        finally:
+            server.join(timeout=2)
+        assert not server.is_alive()
+    # Both invocations fail because the peer is no Git server. The observable
+    # connection distinguishes protocol denial from a refused/invalid peer.
+    # The allowed case is a real positive control for this same Git transport.
+    return connected.is_set()
+
+
 def test_network_is_denied_even_when_git_command_requests_https(packet):
-    *_, directory = packet
-    git = g.BoundedGit(directory, SimpleNamespace(seconds=30))
-    with pytest.raises(g.ContextUnavailable, match='git_read'):
-        git.run('fetch', 'https://127.0.0.1:1/never.git', 'a' * 40)
-    # A network attempt to this port would report connection refused. Prove
-    # Git refused the protocol before invoking the HTTPS transport instead.
-    env = dict(git.environment, GIT_NO_LAZY_FETCH='1')
-    result = subprocess.run(['git', '-c', 'protocol.allow=never', '-c', 'protocol.https.allow=never',
-                             'fetch', 'https://127.0.0.1:1/never.git'],
-                            cwd=directory, env=env, capture_output=True, timeout=2)
-    assert b"transport 'https' not allowed" in result.stderr
+    assert _https_connection_observed(packet, False) is False
+
+
+def test_explicitly_admitted_prefetch_reaches_the_same_https_peer(packet):
+    assert _https_connection_observed(packet, True) is True
 
 
 def test_expired_time_budget_never_starts_a_transport(packet, monkeypatch):
