@@ -63,7 +63,7 @@ REPOS = [
     "rupret007/Cursor-OpenClaw-Integration",
 ]
 
-IMPLEMENTED_PROVIDERS = frozenset({"codex"})
+IMPLEMENTED_PROVIDERS = frozenset({"codex", "cursor"})
 
 PROVIDER_RULES = {
     "codex": {
@@ -77,6 +77,7 @@ PROVIDER_RULES = {
     },
     "cursor": {
         "machines": ["mini", "nucbox"],
+        "qualified_machines": ["nucbox"],
         "max_concurrent": None,
         "weekly_cap_pct": None,
     },
@@ -340,6 +341,15 @@ class Dispatcher:
 
         if self.machine not in rules["machines"]:
             return False, f"{provider} not allowed on {self.machine}"
+
+        if provider == 'cursor':
+            if self.machine not in rules['qualified_machines']:
+                return False, 'cursor runtime is not qualified on this machine'
+            from .cursor_worker import available
+            if not hasattr(self, '_cursor_available'):
+                self._cursor_available = available()
+            if not self._cursor_available:
+                return False, 'cursor CLI is unavailable or unauthenticated'
         
         max_concurrent = rules.get("max_concurrent_by_machine", {}).get(
             self.machine, rules.get("max_concurrent"))
@@ -427,7 +437,7 @@ class Dispatcher:
         active_lanes: dict[str, int]
     ) -> Optional[str]:
         """Only select providers with an executable worker implementation."""
-        provider_order = ["codex"]
+        provider_order = ["codex", "cursor"]
 
         for provider in provider_order:
             allowed, _ = self.check_provider_allowed(provider, active_lanes)
@@ -446,6 +456,7 @@ class Dispatcher:
             List of dispatch decisions made.
         """
         decisions = []
+        self.__dict__.pop('_cursor_available', None)
         
         # Reconcile even during maintenance; draining must not hide dead workers.
         self.ledger.expire_stale_leases()

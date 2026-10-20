@@ -23,12 +23,14 @@ from .local_karen.config import KarenConfig
 from .local_karen.verdict import load_verdict
 from .worker_runtime import (qualified_runtime, RuntimeUnqualified, MODULE_RUNNER,
                              test_files, outside_standard_tests)
+from . import cursor_worker
 
 
 CODEX_EFFORT = 'xhigh'
 _lease = ContextVar('cluster_lease', default=None)
 _job_deadline = ContextVar('worker_job_deadline', default=None)
 _failure_stage = ContextVar('worker_failure_stage', default='supervisor')
+_provider = ContextVar('worker_provider', default='codex')
 JOB_SECONDS = 45 * 60
 
 
@@ -65,6 +67,8 @@ def codex_args():
 
 
 def model_label():
+    if _provider.get() == 'cursor':
+        return 'cursor default'
     return '{} {}'.format(codex_model() or 'default', CODEX_EFFORT)
 
 
@@ -194,8 +198,11 @@ def _private_workspace():
 
 def _fix_pr(repo, pr_number, head_sha, findings):
     _stage('provider')
-    codex = _find_codex()
-    if not codex:
+    cursor = _provider.get() == 'cursor'
+    codex = None if cursor else _find_codex()
+    if cursor and not cursor_worker.available():
+        raise RuntimeError('Cursor worker unavailable')
+    if not cursor and not codex:
         raise RuntimeError('codex CLI not found (expected ~/bin/codex)')
     _stage('git')
     pr = json.loads(run(['gh', 'pr', 'view', str(pr_number), '--repo', repo,
@@ -244,6 +251,8 @@ def _fix_pr(repo, pr_number, head_sha, findings):
                    'The supervisor runs every Git-tracked tests/test_*.py module in Git order '
                    'in fresh isolated processes before committing or pushing; '
                    'leave that full-suite run to the supervisor.'))
+        if cursor:
+            prompt += '\nUse file tools only; shell, MCP and web fetch are denied. The supervisor runs tests and returns failures for iteration.'
         test_env = {**os.environ,
             'STORYPOOL_JOBS_DIR': str(Path(temp) / 'test-jobs'),
             'STORYPOOL_METRICS_DIR': str(Path(temp) / 'test-metrics'),
@@ -257,8 +266,13 @@ def _fix_pr(repo, pr_number, head_sha, findings):
         attempt_prompt = prompt
         for attempt in range(1, MAX_FIX_ATTEMPTS + 1):
             _stage('provider')
-            run([str(codex)] + codex_args(), tree, input=attempt_prompt,
-                **({'env': test_env} if runtime is not None else {}))
+            if cursor:
+                with cursor_worker.policy(tree) as model_env:
+                    cursor_worker.validate_reply(run(cursor_worker.command(), tree,
+                        input=attempt_prompt, env=model_env))
+            else:
+                run([str(codex)] + codex_args(), tree, input=attempt_prompt,
+                    **({'env': test_env} if runtime is not None else {}))
             if runtime is not None:
                 _stage('test-setup')
                 current = qualified_runtime(repo, head_sha, tree)
@@ -343,7 +357,12 @@ def execute(job_id):
     lease = None
     deadline_token = _job_deadline.set(started + JOB_SECONDS)
     stage_token = _failure_stage.set('coordination')
+    provider_token = _provider.set(job.provider)
     try:
+        if job.provider not in ('codex', 'cursor'):
+            raise RuntimeError('Worker provider is not implemented')
+        if job.provider == 'cursor' and (job.machine != 'nucbox' or sys.platform != 'linux'):
+            raise RuntimeError('Cursor worker requires its qualified Nuc runtime')
         from .coordination import ClaimClient, Lease
         lease = Lease(ClaimClient.from_env(), job.cluster_claim)
         lease.__enter__()
@@ -389,6 +408,7 @@ def execute(job_id):
               duration_ms=round((time.monotonic() - started) * 1000))
         return 1
     finally:
+        _provider.reset(provider_token)
         _job_deadline.reset(deadline_token)
         _failure_stage.reset(stage_token)
         if lease_token is not None:
