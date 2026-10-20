@@ -1481,21 +1481,21 @@ def split_review_diff(diff: str, limit: int = REVIEW_DIFF_LIMIT) -> List[str]:
 
 
 def _diff_line_locations(pr):
-    from . import review_evidence
+    from . import review_context
     import sys
-    return review_evidence._diff_line_locations(sys.modules[__name__], pr)
+    return review_context._diff_line_locations(sys.modules[__name__], pr)
 
 
 def _grounded_chunk_failure(result, original_pr):
-    from . import review_evidence
+    from . import review_context
     import sys
-    return review_evidence._grounded_chunk_failure(sys.modules[__name__], result, original_pr)
+    return review_context._grounded_chunk_failure(sys.modules[__name__], result, original_pr)
 
 
 def _validate_chunk_result(result, original_pr):
-    from . import review_evidence
+    from . import review_context
     import sys
-    return review_evidence._validate_chunk_result(sys.modules[__name__], result, original_pr)
+    return review_context._validate_chunk_result(sys.modules[__name__], result, original_pr)
 
 
 def _context_resolution(result, code, counts):
