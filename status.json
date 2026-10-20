@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-10-20T00:50:09.030627-05:00",
-  "generated_at_display": "Tue Oct 20, 2026 \u00b7 12:50 AM CDT",
+  "generated_at": "2026-10-20T01:05:08.633250-05:00",
+  "generated_at_display": "Tue Oct 20, 2026 \u00b7 1:05 AM CDT",
   "timezone": "America/Chicago",
   "owner": "rupret007",
   "dashboard": "bob-ops-dashboard",
@@ -299,8 +299,8 @@
           "tip_sha": "76b7bc8",
           "tip_date": "2026-10-17T09:14:30Z",
           "open_prs": 9,
-          "open_pr_url": "https://github.com/rupret007/Turdanoid/pull/69",
-          "open_pr_number": 69,
+          "open_pr_url": "https://github.com/rupret007/Turdanoid/pull/71",
+          "open_pr_number": 71,
           "open_pr_draft": false,
           "open_pr_stack": [],
           "pr_listing_complete": true,
@@ -495,8 +495,8 @@
           "status": "yellow",
           "chip": "Yellow",
           "default_branch": "main",
-          "tip_sha": "6847b5a",
-          "tip_date": "2026-10-20T05:35:20Z",
+          "tip_sha": "2c74c4f",
+          "tip_date": "2026-10-20T05:50:24Z",
           "open_prs": 11,
           "open_pr_url": "https://github.com/rupret007/bob-ops-dashboard/pull/88",
           "open_pr_number": 88,
@@ -900,7 +900,7 @@
     "barker"
   ],
   "publish_notes": "Public board -- no secrets or customer paths. Private repositories stay high-level; AI Music Vault stays private-content-boundary only.",
-  "refresh_started_ms": 1792475368934,
+  "refresh_started_ms": 1792476270573,
   "agents_source": "file:stale->unknown",
   "agents": [
     {
@@ -1099,7 +1099,7 @@
     }
   ],
   "llm_work_now_freshness": {
-    "generated_at": "2026-10-20 00:50 CT",
+    "generated_at": "2026-10-20 01:05 CT",
     "warn_ttl_sec": 1200,
     "warnings": [],
     "ok": true
@@ -1130,7 +1130,7 @@
     ],
     "scorecards": {
       "v": "scorecards/v1",
-      "generated_at": "2026-10-20T05:50:10.685723+00:00",
+      "generated_at": "2026-10-20T06:05:10.085495+00:00",
       "windows": {
         "24h": {
           "providers": {
