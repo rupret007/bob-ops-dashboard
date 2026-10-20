@@ -251,4 +251,25 @@ def automatic_complement(pr: PRInfo, chunks: Sequence[str], index: int):
         entries.append(dict(path=path, diff=supplied))
         if max(context_size(entries)) > MAX_CONTEXT_SIZE:
             return [], 'partial_file' if partial else 'context_budget'
+    if partial:
+        # One other file can be obtained in the existing single follow-up.
+        # Multiple integrations can otherwise be discovered sequentially, with
+        # the last still only a summary after that follow-up. Seed small complete
+        # diffs first, keeping the required partial file and one free request
+        # slot. Nothing here fetches source or increases the cumulative budget.
+        other = []
+        for item in manifest:
+            path = item['path']
+            if path in partial or not any(s['path'] == path and
+                    not (start <= s['start'] and s['end'] <= end) for s in sections):
+                continue
+            supplied = requested_file_diff(pr, path, pr.head_sha)
+            if supplied is not None:
+                other.append(dict(path=path, diff=supplied))
+        if len(other) > 1:
+            for item in sorted(other, key=lambda item: (len(item['diff']), item['path'])):
+                if len(entries) >= MAX_CONTEXT_FILES - 1:
+                    break
+                if max(context_size(entries + [item])) <= MAX_CONTEXT_SIZE:
+                    entries.append(item)
     return entries, ('partial_file_supplied' if partial else 'supplied') if entries else 'not_needed'
