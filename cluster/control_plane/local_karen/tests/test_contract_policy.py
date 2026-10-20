@@ -223,17 +223,16 @@ def test_other_gates_still_reject_the_proved_packet(packet):
     assert by_name['not_draft'].failed and by_name['ci_green'].failed
 
 
-def test_normal_module_copy_uses_installed_documentation_snapshot(tmp_path):
-    module, install = tmp_path / 'module', tmp_path / 'install'
+def test_normal_module_copy_contains_the_complete_policy_snapshot(tmp_path):
+    module = tmp_path / 'module'
     for path in p.POLICY_FILES:
-        root = install if path.startswith('docs/') else module
-        target = root / path
+        target = module / path
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text('approved snapshot ' + path)
-    snapshot = p._snapshot_policy(module, install)
+    snapshot = p._snapshot_policy(module)
     assert set(snapshot) == p.POLICY_FILES
     assert not (module / 'docs').exists()
-    assert p._snapshot_policy(module, tmp_path / 'missing-install') == {}
+    assert p._snapshot_policy(tmp_path / 'missing-module') == {}
 
 
 def test_fetch_is_bounded_isolated_and_rejects_invalid_git_output(packet, monkeypatch):
@@ -286,3 +285,15 @@ def test_complete_fetch_path_proves_immutable_objects_without_a_checkout(packet,
     assert [f['path'] for f in files] == pr.changed_files
     assert any('merge-base' in args for args in commands)
     assert any('show' in args for args in commands)
+
+
+def test_policy_files_do_not_add_pages_publication_paths(monkeypatch):
+    paths = sorted(p.POLICY_FILES)
+    assert all(not path.startswith('docs/') for path in paths)
+    diff = ''.join('diff --git a/{0} b/{0}\n'.format(path) for path in paths)
+    pr = checks.PRInfo('rupret007', 'bob-ops-dashboard', 106, 'a' * 40,
+                       'Policy', 'author', False, diff, {}, paths, [])
+    pages = Mock(side_effect=AssertionError('operational note must stay outside the Pages tree'))
+    monkeypatch.setattr(checks, '_pages_source', pages)
+    assert checks.check_pages_exposure(pr, KarenConfig()).passed
+    pages.assert_not_called()

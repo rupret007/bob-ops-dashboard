@@ -49,24 +49,22 @@ POLICY_FILES = frozenset({
     'cluster/control_plane/local_karen/github_client.py',
     'cluster/control_plane/local_karen/contract_policy.py',
     'cluster/control_plane/local_karen/tests/test_contract_policy.py',
-    'docs/architecture/pr104-test-contract-policy.md',
+    'cluster/control_plane/local_karen/PR104_CONTRACT_POLICY.md',
 })
 _ROOT = Path(__file__).resolve().parents[3]
 
 
-def _snapshot_policy(module_root, install_root):
-    # The normal module copy contains cluster/, while documentation remains in
-    # the installed checkout. Missing evidence must not break unrelated reviews.
+def _snapshot_policy(module_root):
+    # All policy files travel in the normal module copy. Missing evidence must
+    # not break unrelated reviews.
     try:
-        return {p: ((install_root if p.startswith('docs/') else module_root) / p).read_bytes()
-                for p in POLICY_FILES}
+        return {p: (module_root / p).read_bytes() for p in POLICY_FILES}
     except OSError:
         return {}
 
 
 # Snapshot before any updater can replace files beneath this process.
-_LOADED_FILES = _snapshot_policy(
-    _ROOT, Path(os.environ.get('STORYPOOL_INSTALL_DIR', '~/storypool-install')).expanduser())
+_LOADED_FILES = _snapshot_policy(_ROOT)
 _SHA = re.compile(r'[0-9a-f]{40}')
 _DIFF_ARGS = ('diff', '--full-index', '--no-ext-diff', '--no-textconv',
               '--no-renames', '--binary', '--no-color', '--no-relative',

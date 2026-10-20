@@ -30,6 +30,9 @@ before reopening #104. Do not merge another change into its target first;
 that changes this proof's permitted baseline transition and requires a new
 reviewed decision. No unreviewed runtime overlay qualifies.
 
+This operational note stays beside the gate code and travels with the normal
+module copy. It does not add a document to the Pages publication directory.
+
 The typed proof discharges only one removed assertion. The checker continues
 to inspect every other assertion, removed test/file/decorator and added skip.
 All other deterministic checks, independent reviewers, CI, signatures, delivery,
