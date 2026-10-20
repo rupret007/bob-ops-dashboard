@@ -194,5 +194,5 @@ def qualified_runtime(repo, head_sha, tree=None):
 
 
 def _qualified_runtime(head_sha, tree):
-    from . import worker_runtime, worker_runtime_validation
-    return worker_runtime_validation._qualified_runtime(worker_runtime, head_sha, tree)
+    from . import worker_runtime_validation
+    return worker_runtime_validation._qualified_runtime(globals(), head_sha, tree)
