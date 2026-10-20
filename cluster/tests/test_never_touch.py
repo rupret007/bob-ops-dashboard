@@ -6,6 +6,9 @@ unless explicitly approved. The tests verify fail-closed behavior.
 
 import time
 import unittest
+import json
+from types import SimpleNamespace
+from unittest.mock import patch
 
 from cluster.never_touch import (
     GatePassReceipt,
@@ -118,6 +121,15 @@ class GuardPrCreateTests(unittest.TestCase):
 
 
 class GuardPrMergeTests(unittest.TestCase):
+    def setUp(self):
+        # These original cases exercise repository policy with an unheld head.
+        metadata = dict(number=159, state='OPEN', isDraft=False,
+                        headRefOid='a' * 40, title='Release fixture', labels=[])
+        request = patch('cluster.control_plane.github_reads.run', return_value=SimpleNamespace(
+            returncode=0, stdout=json.dumps(metadata)))
+        request.start()
+        self.addCleanup(request.stop)
+
     def test_merge_on_never_touch_always_blocked(self):
         """Never-touch repos are ALWAYS blocked for automation, regardless of gate_pass."""
         with self.assertRaises(NeverTouchViolation) as ctx:

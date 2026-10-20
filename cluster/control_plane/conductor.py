@@ -46,7 +46,7 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, Optional
 
-from ..never_touch import check_merge_allowed, is_never_touch, NEVER_TOUCH_REPOS
+from ..never_touch import check_merge_allowed, is_never_touch, NEVER_TOUCH_REPOS, guard_pr_merge
 from .coordination import ClaimClient, CoordinationError, Lease
 from .budget_tracker import BudgetTracker
 from .dispatcher import REPOS
@@ -58,6 +58,7 @@ from .guards import MachineGuards, mini_guards_pass, nucbox_guards_pass
 from .reporting_telemetry import machine_guard_snapshot, lane_budget_snapshot, format_budget, format_machine
 from .metrics import MetricsTracker
 from .pr_ci import ci_status_from_pr as _ci_status_from_pr
+from .release_holds import explicitly_held
 
 CONDUCTOR_LOG_DIR = Path(
     os.environ.get("STORYPOOL_CONDUCTOR_LOG_DIR", "~/.local/share/storypool/conductor")
@@ -1055,6 +1056,8 @@ class Conductor:
             if not pr_details:
                 return ValidatedAction(action, False, "RAIL: Cannot fetch PR details")
             if pr_details:
+                if explicitly_held(pr_details):
+                    return ValidatedAction(action, False, "RAIL: PR has an explicit release hold")
                 if pr_details.get("state") in ("MERGED", "CLOSED"):
                     return ValidatedAction(action, False, "RAIL: PR is no longer open")
                 current_sha = pr_details.get("headRefOid", "")
@@ -1136,6 +1139,13 @@ class Conductor:
                         validated.execution_result = "deferred: main CI " + main_status
                         return validated
                     lease.renew()
+                    # Main-CI checks may take time; re-read the current hold and
+                    # full head under ownership immediately before release.
+                    try:
+                        guard_pr_merge(action.repo, action.pr_number, action.head_sha)
+                    except PermissionError:
+                        validated.execution_result = "deferred: current release admission refused"
+                        return validated
                     merge_start = time.time()
                 
                     subprocess.run(
@@ -1419,6 +1429,7 @@ class Conductor:
                 break
             repo, number, sha = pr.get("repo", ""), pr.get("number"), pr.get("headRefOid", "")
             if (not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", repo)
+                    or explicitly_held(pr)
                     or is_never_touch(repo) or type(number) is not int or number < 1
                     or not re.fullmatch(r"[0-9a-f]{40}", sha)
                     or (pr.get("isDraft") and repo.lower() in MANUAL_READINESS_REPOS)):
@@ -1455,6 +1466,8 @@ class Conductor:
                                     or details.get("headRefOid") != sha
                                     or not ci or any(state != "success" for state in ci.values())):
                                 raise ValueError("Current head or green CI changed; review deferred")
+                            if explicitly_held(details):
+                                raise ValueError("PR has an explicit release hold")
                             return details
 
                         details = fresh_head()
