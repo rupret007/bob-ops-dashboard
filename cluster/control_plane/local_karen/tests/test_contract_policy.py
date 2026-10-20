@@ -43,8 +43,13 @@ def packet(tmp_path, monkeypatch):
     (tmp_path / 'approved-base-change.txt').write_text('separately reviewed base advance\n')
     git('add', '.')
     git('commit', '-qm', 'separately reviewed admitted base fixture')
+    first_base = git('rev-parse', 'HEAD').decode().strip()
+    (tmp_path / 'second-approved-base-change.txt').write_text('second separately reviewed advancement\n')
+    git('add', '.')
+    git('commit', '-qm', 'second separately reviewed admitted base fixture')
     admitted_base = git('rev-parse', 'HEAD').decode().strip()
     monkeypatch.setattr(p, 'ADMITTED_BASE', admitted_base)
+    monkeypatch.setattr(p, 'BASE_ADVANCEMENTS', ((first_base, baseline), (admitted_base, first_base)))
     loaded = {f: ('# loaded policy fixture: ' + f + '\n').encode() for f in p.POLICY_FILES}
     for f, content in loaded.items():
         dest = tmp_path / f
@@ -61,7 +66,7 @@ def packet(tmp_path, monkeypatch):
                        'Correction', 'author', False, raw, {'test': 'success'},
                        [f['path'] for f in files], [], base_sha=base, test_contract_proof=proof)
     return dict(pr=pr, git=git, root=tmp_path, baseline=baseline, base=base, admitted_base=admitted_base,
-                head=head, runtime=runtime, loaded=loaded, record=record)
+                head=head, runtime=runtime, loaded=loaded, record=record, first_base=first_base)
 
 
 def test_only_the_proved_exact_packet_discharges_the_removed_assertion(packet):
@@ -318,4 +323,24 @@ def test_only_the_explicit_reviewed_base_advancement_is_admitted(packet, monkeyp
                 else: parents[1] = 'b' * 40
                 return (' '.join(parents) + '\n').encode()
             return original(*args)
+    with pytest.raises(p.ContractUnavailable): p._prove(packet['base'], git)
+
+
+@pytest.mark.parametrize('change', ['first-parent', 'first-extra-parent', 'gap', 'reversed', 'omitted', 'empty'])
+def test_every_pinned_advancement_edge_is_required(packet, monkeypatch, change):
+    git = packet['git']
+    if change in ('first-parent', 'first-extra-parent'):
+        original = git
+        def git(*args):
+            if args == ('rev-list', '--parents', '-n', '1', packet['first_base']):
+                parents = [packet['first_base'], packet['baseline']]
+                if change == 'first-parent': parents[1] = 'b' * 40
+                else: parents.append('a' * 40)
+                return (' '.join(parents) + '\n').encode()
+            return original(*args)
+    else:
+        chain = p.BASE_ADVANCEMENTS
+        changes = {'gap': ((packet['admitted_base'], packet['baseline']),),
+                   'reversed': tuple(reversed(chain)), 'omitted': chain[:-1], 'empty': ()}
+        monkeypatch.setattr(p, 'BASE_ADVANCEMENTS', changes[change])
     with pytest.raises(p.ContractUnavailable): p._prove(packet['base'], git)

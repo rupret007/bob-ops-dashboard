@@ -16,8 +16,8 @@ must match the approved digest; any changed packet needs a new decision.
 
 ## Frozen baseline and advancing target
 
-The head/base merge base must remain the frozen baseline. One explicit
-separately reviewed base advancement is admitted:
+The head/base merge base must remain the frozen baseline. Two explicit
+separately reviewed base advancements are admitted. The first is
 `c3374b769820408edd43cdd4abf1eed5efb0e65b`, the human merge of PR #100,
 with sole parent `c5650be27329e507fe73ef5fc7a3905b64991469`.
 Its reviewed head is `62c64bdd27da4fcd1a07ac9b3be43d60663f86b0`; the
@@ -27,7 +27,19 @@ Revalidation found nine deterministic passes and four independent Gemini/
 MiniMax PASS votes accepted by the existing normal approval predicate.
 No verdict copy, signing-key provision or public-label inference was used.
 
-The admitted commit must be an ancestor of the live base. The live base must equal the installed
+The second is PR #107's human-merged commit
+`21242f72725cd64065b37656e6c269676793f7aa`, with sole parent c337 above.
+Its reviewed head is `a0fe6d8f780105c4ec6f667d7be90ec680e75b5a`.
+The Nuc-native exact-head COMPLETE/PASS artifact SHA-256 is
+`8ba0d6a4796a4f355a50f7c76f3a1fdb638e3a253e056a6bde92cecf11e24763`;
+normal authority revalidation found nine checks and six Gemini/MiniMax PASS
+votes accepted by the existing approval predicate. GitHub confirmed green
+CI on that head and its actual merged release at 2026-10-20 02:34 UTC.
+Every sole-parent edge from the frozen baseline to this explicit admitted
+commit is proved from immutable objects. Missing, reversed, skipped or
+additional-parent transitions fail; no later unlisted release is permitted.
+
+The final admitted commit must be an ancestor of the live base. The live base must equal the installed
 and loaded source revision, verified by the existing runtime source check.
 Its complete tree difference from that admitted commit must contain exactly the five
 policy files listed in the module, each with regular-file mode and content

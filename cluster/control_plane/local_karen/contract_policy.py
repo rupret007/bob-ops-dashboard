@@ -44,10 +44,13 @@ APPROVED = Contract(
     185, '5012f4fa1be0aaf9d271cf210961c600caa20b57509d08ddbee1cf17a40fe956',
 )
 
-# PR100's separately reviewed and human-merged release commit. The #104 packet
-# remains frozen at APPROVED.baseline; this is an explicit base advancement,
-# not permission for arbitrary later target changes.
-ADMITTED_BASE = 'c3374b769820408edd43cdd4abf1eed5efb0e65b'
+# Separately reviewed and human-merged PR100 and PR107. Every ancestry edge is
+# pinned; this is not a live-base wildcard. The #104 packet remains unchanged.
+BASE_ADVANCEMENTS = (
+    ('c3374b769820408edd43cdd4abf1eed5efb0e65b', 'c5650be27329e507fe73ef5fc7a3905b64991469'),
+    ('21242f72725cd64065b37656e6c269676793f7aa', 'c3374b769820408edd43cdd4abf1eed5efb0e65b'),
+)
+ADMITTED_BASE = '21242f72725cd64065b37656e6c269676793f7aa'
 
 POLICY_FILES = frozenset({
     'cluster/control_plane/local_karen/checks.py',
@@ -122,8 +125,13 @@ def _prove(base, git):
              and runtime.get('installed_head') == runtime.get('loaded_head') == base)
     _require(set(_LOADED_FILES) == POLICY_FILES)
     _require(git('merge-base', base, APPROVED.head).decode().strip() == APPROVED.baseline)
-    _require(git('rev-list', '--parents', '-n', '1', ADMITTED_BASE).decode().split()
-             == [ADMITTED_BASE, APPROVED.baseline])
+    previous = APPROVED.baseline
+    _require(type(BASE_ADVANCEMENTS) is tuple and bool(BASE_ADVANCEMENTS))
+    for commit, parent in BASE_ADVANCEMENTS:
+        _require(parent == previous and isinstance(commit, str) and _SHA.fullmatch(commit) is not None)
+        _require(git('rev-list', '--parents', '-n', '1', commit).decode().split() == [commit, parent])
+        previous = commit
+    _require(previous == ADMITTED_BASE)
     _require(git('merge-base', ADMITTED_BASE, base).decode().strip() == ADMITTED_BASE)
     changed_base = git('diff', '--name-only', '--no-renames', '-z', ADMITTED_BASE, base)
     paths = changed_base.decode().rstrip('\0').split('\0') if changed_base else []
@@ -171,7 +179,8 @@ def fetch_contract_packet(owner, repo, number, head, base):
                 return result.stdout
             git('init', '--bare', '-q')
             git('fetch', '--no-tags', '--filter=blob:none',
-                'https://github.com/rupret007/bob-ops-dashboard.git', head, APPROVED.baseline, ADMITTED_BASE, base)
+                'https://github.com/rupret007/bob-ops-dashboard.git', head, APPROVED.baseline,
+                *(commit for commit, parent in BASE_ADVANCEMENTS), base)
             return _prove(base, git)
     except (OSError, ValueError, SyntaxError, UnicodeError, subprocess.SubprocessError):
         raise ContractUnavailable('Exact test-contract objects unavailable') from None
