@@ -1480,7 +1480,11 @@ class Conductor:
                                 raise ValueError("Karen label failed; retry admission next cycle")
                         result.executed = True
                         result.execution_result = "queued for Karen at " + sha
-                except (CoordinationError, GitHubDeferred, subprocess.SubprocessError,
+                except GitHubDeferred:
+                    # Account-wide admission applies to the rest of this cycle,
+                    # not just this candidate. Lease exits before propagation.
+                    raise
+                except (CoordinationError, subprocess.SubprocessError,
                         OSError, ValueError) as exc:
                     result.execution_result = "deferred: " + str(exc)
             self._write_log({"action": "deterministic_review", "proposal": action.to_dict(),
@@ -1509,6 +1513,26 @@ class Conductor:
         return results
 
     def run(self, live: bool = False) -> dict:
+        """Stop this cycle on GitHub admission deferral without a false PR failure."""
+        try:
+            return self._run_cycle(live=live)
+        except GitHubDeferred as exc:
+            # Earlier actions may already have completed. Preserve their logs;
+            # unknown partial totals must not become zero executions/rejections.
+            summary = {
+                'timestamp': _now_iso(), 'live': live, 'deferred': True,
+                'deferred_reason': 'GitHub API admission deferred',
+                'deferred_code': exc.code, 'retry_after': exc.retry_after,
+                'counts_complete': False, 'llm_available': None,
+                'llm_unavailable_reason': 'GitHub API admission deferred; cycle incomplete',
+                'proposals_count': None, 'validated_count': None,
+                'rejected_count': None, 'executed_count': None, 'anomalies': None,
+            }
+            self._write_status(summary)
+            self._write_log({'action': 'cycle_deferred', 'summary': summary})
+            return summary
+
+    def _run_cycle(self, live: bool = False) -> dict:
         """Run a conductor cycle.
         
         1. Build state snapshot
@@ -1621,6 +1645,8 @@ class Conductor:
         summary = {
             "timestamp": _now_iso(),
             "live": live,
+            "counts_complete": True,
+            "deferred": False,
             "llm_available": proposals is not None,
             "llm_unavailable_reason": llm_unavailable_reason if proposals is None else "",
             "proposals_count": len(proposals.get("proposed_actions", [])) if proposals else 0,
