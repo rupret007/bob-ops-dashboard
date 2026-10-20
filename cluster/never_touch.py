@@ -199,3 +199,5 @@ def guard_pr_merge(
     For other repos with gate_required=True (future), requires valid gate_pass.
     """
     assert_not_never_touch(repo, f"merge PR #{pr_number}")
+    from .control_plane.release_holds import guard_current_release
+    guard_current_release(normalize_repo(repo), pr_number, head_sha)
