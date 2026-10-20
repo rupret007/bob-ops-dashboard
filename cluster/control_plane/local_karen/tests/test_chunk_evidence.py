@@ -29,12 +29,17 @@ def vote(verdict=r.ReviewVerdict.PASS, defect=None, requests=None):
     return result
 
 
-def run(primary, second=None):
+def run(primary, second=None, source_objects=None):
+    from cluster.control_plane.local_karen import source_context
+    from cluster.control_plane.local_karen.tests.test_source_context import Objects
+    objects = source_objects or Objects(b'return unsafe(user_input)\n')
+    objects.tree['tree'] = [dict(objects.tree['tree'][0], path='app.py')]
     reviewer = Mock(review=Mock(side_effect=primary))
     with patch.object(r, 'get_available_reviewers', return_value=[('codex', reviewer)]), \
          patch.object(r.MiniMaxReviewer, 'is_available', return_value=(True, 'ok')), \
          patch.object(r.MiniMaxReviewer, 'review_as_second_judge',
-                      side_effect=second or (lambda *args: replace(vote(), reviewer='minimax'))):
+                       side_effect=second or (lambda *args: replace(vote(), reviewer='minimax'))), \
+         patch.object(source_context, 'budgeted_gh', side_effect=objects.read):
         outcome, reviews = r.run_review_chain(pr_info(), KarenConfig())
     return outcome, reviews, reviewer
 
@@ -112,8 +117,7 @@ def test_requested_file_is_supplied_at_exact_head_then_two_passes_required():
         assert len(supplied) == 1 and 'return unsafe(user_input)' in supplied[0]['diff']
         assert pr.review_scope.data['head_sha'] == pr.head_sha == pr_info().head_sha
         return vote()
-    with patch.object(source_context, 'budgeted_gh', side_effect=objects.read):
-        result, reviews, reviewer = run(review)
+    result, reviews, reviewer = run(review, source_objects=objects)
     assert result.passed
     assert all(item.verdict == r.ReviewVerdict.PASS for item in reviews)
     assert any((item.scope or {}).get('context_attempts') for item in reviews)
