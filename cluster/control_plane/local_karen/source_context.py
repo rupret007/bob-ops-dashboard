@@ -9,6 +9,7 @@ import time
 
 from ..github_reads import run as budgeted_gh
 from .checks import SECRET_PATTERNS
+from .verified_source_cache import VerifiedSourceSnapshots
 from .deadline import remaining_timeout
 
 MAX_FILE_BYTES = 16000
@@ -57,7 +58,7 @@ class PinnedSourceContext:
     def __init__(self, pr):
         self.identity = (pr.owner, pr.repo, pr.head_sha)
         self.pr_number = getattr(pr, 'number', None)
-        self._verified = {}
+        self._snapshots = VerifiedSourceSnapshots(self.identity, self.pr_number)
         self.calls, self.bytes = 0, 0
         self.tree, self.tree_sha, self.sources = None, None, {}
         self.seconds = 30.0
@@ -69,11 +70,7 @@ class PinnedSourceContext:
         snapshots. Another PR, repository or revision cannot reuse this cache.
         This performs no IO and cannot replenish source/API budgets.
         """
-        if (type(self.pr_number) is not int or self.pr_number <= 0
-                or (pr.owner, pr.repo, pr.head_sha) != self.identity
-                or getattr(pr, 'number', None) != self.pr_number):
-            return []
-        return [dict(snapshot) for snapshot in self._verified.values()]
+        return self._snapshots.for_pr(pr)
 
     def _json(self, suffix, maximum):
         from .gate import review_checkpoint
@@ -168,5 +165,5 @@ class PinnedSourceContext:
         self.bytes += size
         source = dict(path=path, head_sha=head, tree_sha=self.tree_sha, blob_sha=sha, bytes=size, source=text)
         self.sources[path] = source
-        self._verified[path] = tuple(source.items())
+        self._snapshots.remember(source)
         return source
