@@ -53,7 +53,7 @@ def test_missing_findings_and_retry_exhaustion_do_not_blame_providers(tmp_path):
     assert report['extra']['considered_candidates'] == 19
     assert report['extra']['blocked_candidates'] == {
         'missing-reviewed-findings': 18, 'retry-blocked': 1}
-    assert report['extra']['implemented_providers'] == ['codex']
+    assert report['extra']['implemented_providers'] == ['codex', 'cursor']
     assert summary['skipped'] == 19 and summary['dispatched'] == 0
     assert ledger._load_jobs() == []
     spawn.assert_not_called()
@@ -65,7 +65,8 @@ def test_provider_rejection_explains_quota_failure_without_creating_jobs(tmp_pat
     summary, ledger, client, spawn = _cycle(tmp_path, no_provider=True)
     assert summary['decisions'][-1]['extra']['blocked_candidates'] == {'provider-unavailable': 19}
     assert summary['decisions'][0]['extra']['provider_rejections'] == {
-        'codex': 'codex weekly plan quota unknown; fresh rate-limit observation required'}
+        'codex': 'codex weekly plan quota unknown; fresh rate-limit observation required',
+        'cursor': 'codex weekly plan quota unknown; fresh rate-limit observation required'}
     assert summary['skipped'] == 19 and ledger._load_jobs() == []
     client.acquire.assert_not_called()
     spawn.assert_not_called()
