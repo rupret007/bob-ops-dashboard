@@ -15,6 +15,7 @@ from dataclasses import dataclass
 from typing import Optional
 
 from .checks import PRInfo
+from .contract_policy import is_candidate, fetch_contract_packet, ContractUnavailable
 from ..github_reads import run as budgeted_gh
 from ..github_budget import GitHubDeferred
 
@@ -121,15 +122,30 @@ def fetch_pr_info(owner: str, repo: str, pr_number: int) -> PRInfo:
     if not head_sha:
         raise GitHubError(f"Could not get head SHA for PR #{pr_number}")
 
+    proof = None
     try:
-        diff = _run_gh([
-            "pr", "diff", str(pr_number), "--repo", f"{owner}/{repo}",
-        ], timeout=60)
+        if is_candidate(owner, repo, pr_number, head_sha):
+            diff, files_data, proof = fetch_contract_packet(
+                owner, repo, pr_number, head_sha, pr_data.get("baseRefOid", ""))
+            pr_data["files"] = files_data
+        else:
+            diff = _run_gh([
+                "pr", "diff", str(pr_number), "--repo", f"{owner}/{repo}",
+            ], timeout=60)
+    except ContractUnavailable as exc:
+        raise GitHubError(str(exc)) from None
     except GitHubError as exc:
         if "406" not in str(exc) and "too_large" not in str(exc):
             raise
         diff, files_data = fetch_git_diff(owner, repo, head_sha, pr_data.get("baseRefOid", ""))
         pr_data["files"] = files_data
+    if proof is not None:
+        refs = json.loads(_run_gh([
+            "pr", "view", str(pr_number), "--repo", f"{owner}/{repo}",
+            "--json", "headRefOid,baseRefOid",
+        ]))
+        if (refs.get('headRefOid'), refs.get('baseRefOid')) != (head_sha, proof.base):
+            raise GitHubError("PR head/base changed while proving test contract; retry")
     if not verify_sha_current(owner, repo, pr_number, head_sha):
         raise GitHubError("PR head changed while fetching diff; retry")
 
@@ -175,6 +191,8 @@ def fetch_pr_info(owner: str, repo: str, pr_number: int) -> PRInfo:
         changed_files=changed_files,
         deleted_files=deleted_files,
         description=pr_data.get("body", ""),
+        base_sha=pr_data.get("baseRefOid", ""),
+        test_contract_proof=proof,
     )
 
 
