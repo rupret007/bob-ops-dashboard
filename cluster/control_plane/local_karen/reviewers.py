@@ -1618,6 +1618,19 @@ def _review_with_requested_context(invoke, part, original_pr, source_context=Non
         return error, [error]
     initial = result
     original_pr = original_pr or part
+    if ((part.owner, part.repo, part.number, part.head_sha) !=
+            (original_pr.owner, original_pr.repo, original_pr.number, original_pr.head_sha)
+            or part.diff not in original_pr.diff):
+        result = _context_resolution(result, 'changed_unavailable', counts)
+        return result, [result]
+    # A complete patch already visible in this invocation cannot add context
+    # when repeated. Supply its implementation through the normal pinned-source
+    # verifier instead; the original patch and model request remain unchanged.
+    upgraded_changed = []
+    for path in dict.fromkeys(result.requested_files):
+        supplied = requested_file_diff(original_pr, path, head_sha=part.head_sha)
+        if supplied and supplied in part.diff:
+            upgraded_changed.append(path)
     # Changed and immutable source evidence are distinct entries even for one
     # path. Deduplicate overlaps without granting a second four-file/48k budget.
     keys = {('diff', item['path']) for item in context}
@@ -1638,13 +1651,16 @@ def _review_with_requested_context(invoke, part, original_pr, source_context=Non
                 diff = requested_file_diff(original_pr, path, head_sha=part.head_sha)
                 if diff is not None:
                     source_diffs[path] = diff
-    wanted = list(dict.fromkeys([('diff', path) for path in result.requested_files] +
+    wanted = list(dict.fromkeys([('source' if path in upgraded_changed else 'diff', path)
+                                for path in result.requested_files] +
                                [('diff' if path in source_diffs else 'source', path)
                                 for path in result.requested_source_files]))
     if len(keys | set(wanted)) > MAX_CONTEXT_FILES:
         result = _context_resolution(result, 'context_budget', counts)
         return result, [result]
     for path in result.requested_files:
+        if path in upgraded_changed:
+            continue
         if ('diff', path) in keys:
             continue
         supplied = requested_file_diff(original_pr, path, head_sha=part.head_sha)
@@ -1656,11 +1672,11 @@ def _review_with_requested_context(invoke, part, original_pr, source_context=Non
         if max(context_size(context)) > MAX_CONTEXT_SIZE:
             result = _context_resolution(result, 'context_budget', counts)
             return result, [result]
-    if result.requested_source_files:
+    if result.requested_source_files or upgraded_changed:
         from .source_context import PinnedSourceContext, SourceUnavailable
         resolver = source_context or PinnedSourceContext(original_pr)
         try:
-            for path in result.requested_source_files:
+            for path in dict.fromkeys(upgraded_changed + result.requested_source_files):
                 if path in source_diffs:
                     if ('diff', path) not in keys:
                         context.append({'path': path, 'diff': source_diffs[path]})
@@ -1700,9 +1716,12 @@ def _review_with_requested_context(invoke, part, original_pr, source_context=Non
         logger.info('Source requests routed to changed diffs: count=%s', len(source_diffs))
     result = _validate_chunk_result(invoke(followup), original_pr)
     scope = dict(result.scope or {}, initial_context=automatic)
+    if upgraded_changed:
+        scope['changed_requests_answered_with_source'] = len(upgraded_changed)
+        logger.info('Changed requests supplied with immutable source: count=%s', len(upgraded_changed))
     if source_diffs:
         scope['source_requests_answered_with_diff'] = len(source_diffs)
-    if initial.requested_source_files:
+    if initial.requested_source_files or upgraded_changed:
         scope['source_context'] = [{k: v for k, v in item.items() if k != 'source'}
                                    for item in context if 'source' in item]
     scope["context_attempts"] = [{"requested_files": initial.requested_files,

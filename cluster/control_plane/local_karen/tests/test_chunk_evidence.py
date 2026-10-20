@@ -88,15 +88,32 @@ def test_concrete_early_defect_does_not_hide_remaining_chunks():
 
 
 def test_requested_file_is_supplied_at_exact_head_then_two_passes_required():
+    from cluster.control_plane.local_karen import source_context
+    from cluster.control_plane.local_karen.tests.test_source_context import Objects
+    objects = Objects(b'return unsafe(user_input)\n')
+    objects.tree['tree'] = [dict(objects.tree['tree'][0], path='app.py')]
     def review(pr, *args):
         assert pr.description == pr_info().description
         if pr.review_material is None or pr.review_material.phase != 'requested':
             return vote(r.ReviewVerdict.BORDERLINE, requests=['app.py'])
         supplied = [item for item in pr.review_material.entries if item.get('path') == 'app.py']
+        assert len(supplied) == 1
+        if 'source' in supplied[0]:
+            assert supplied[0]['source'] == objects.raw.decode()
+            assert supplied[0]['head_sha'] == pr.head_sha
+            assert supplied[0]['blob_sha'] == objects.sha
+            assert supplied[0]['bytes'] == len(objects.raw)
+            # The patch is already in this chunk; check that exact visible
+            # evidence with the original assertion, alongside the new proof.
+            from cluster.control_plane.local_karen.chunk_context import requested_file_diff
+            visible = requested_file_diff(pr, 'app.py', pr.head_sha)
+            assert visible == requested_file_diff(pr_info(), 'app.py', pr.head_sha)
+            supplied = [{'path': 'app.py', 'diff': visible}]
         assert len(supplied) == 1 and 'return unsafe(user_input)' in supplied[0]['diff']
         assert pr.review_scope.data['head_sha'] == pr.head_sha == pr_info().head_sha
         return vote()
-    result, reviews, reviewer = run(review)
+    with patch.object(source_context, 'budgeted_gh', side_effect=objects.read):
+        result, reviews, reviewer = run(review)
     assert result.passed
     assert all(item.verdict == r.ReviewVerdict.PASS for item in reviews)
     assert any((item.scope or {}).get('context_attempts') for item in reviews)
@@ -105,6 +122,7 @@ def test_requested_file_is_supplied_at_exact_head_then_two_passes_required():
     verdict = create_verdict(pr_info(), [], reviews, True, result.reason, result.reviewer)
     assert reviewed(verdict)
     assert reviewer.review.call_count == 2 * len(r.split_review_diff(pr_info().diff))
+    assert len(objects.calls) == 3
 
 
 def test_unknown_context_request_never_reads_or_approves():
