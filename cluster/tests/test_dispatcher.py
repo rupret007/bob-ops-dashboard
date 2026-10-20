@@ -62,10 +62,11 @@ class TestProviderRules(unittest.TestCase):
         self.assertEqual(rules["machines"], ["nucbox"])
         self.assertEqual(rules["weekly_cap_pct"], 75.0)
 
-    def test_cursor_requires_nucbox_qualification(self):
-        """Only the native Nuc Cursor worker is qualified."""
+    def test_cursor_allowed_everywhere(self):
+        """Cursor is allowed on both mini and nucbox."""
         rules = PROVIDER_RULES["cursor"]
-        self.assertEqual(["nucbox"], rules["machines"])
+        self.assertIn("mini", rules["machines"])
+        self.assertIn("nucbox", rules["machines"])
         self.assertIsNone(rules["max_concurrent"])
 
     def test_claude_one_lane_max(self):

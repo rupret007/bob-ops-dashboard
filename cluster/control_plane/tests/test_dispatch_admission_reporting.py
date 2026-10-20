@@ -7,7 +7,7 @@ from cluster.control_plane.coordination import ClaimClient
 from cluster.control_plane.job_ledger import JobLedger
 
 
-def _cycle(tmp_path, *, no_provider=False, all_leased=False, spawn_failure=False, no_capacity=False):
+def _cycle(tmp_path, *, no_provider=False, all_leased=False, spawn_failure=False, no_capacity=False, implemented=('codex',)):
     ledger = JobLedger(tmp_path / 'jobs')
     worker = dispatcher.Dispatcher('nucbox', tmp_path / 'dispatch', job_ledger=ledger,
                                    budget_tracker=MagicMock())
@@ -27,6 +27,7 @@ def _cycle(tmp_path, *, no_provider=False, all_leased=False, spawn_failure=False
             ((worker, 'check_provider_allowed'), {'return_value': (False, 'codex weekly plan quota unknown; fresh rate-limit observation required')}),
             ((ledger, 'has_active_lease'), {'return_value': all_leased}),
             ((dispatcher, 'REPOS'), {'new': ['owner/repo']}),
+            ((dispatcher, 'IMPLEMENTED_PROVIDERS'), {'new': frozenset(implemented)}),
             ((dispatcher, '_get_open_prs'), {'return_value': prs}),
             ((dispatcher, '_get_active_lanes'), {'return_value': {}}),
             ((dispatcher, '_has_codex_work_queued'), {'return_value': False}),
@@ -53,7 +54,7 @@ def test_missing_findings_and_retry_exhaustion_do_not_blame_providers(tmp_path):
     assert report['extra']['considered_candidates'] == 19
     assert report['extra']['blocked_candidates'] == {
         'missing-reviewed-findings': 18, 'retry-blocked': 1}
-    assert report['extra']['implemented_providers'] == ['codex', 'cursor']
+    assert report['extra']['implemented_providers'] == ['codex']
     assert summary['skipped'] == 19 and summary['dispatched'] == 0
     assert ledger._load_jobs() == []
     spawn.assert_not_called()
@@ -65,8 +66,7 @@ def test_provider_rejection_explains_quota_failure_without_creating_jobs(tmp_pat
     summary, ledger, client, spawn = _cycle(tmp_path, no_provider=True)
     assert summary['decisions'][-1]['extra']['blocked_candidates'] == {'provider-unavailable': 19}
     assert summary['decisions'][0]['extra']['provider_rejections'] == {
-        'codex': 'codex weekly plan quota unknown; fresh rate-limit observation required',
-        'cursor': 'codex weekly plan quota unknown; fresh rate-limit observation required'}
+        'codex': 'codex weekly plan quota unknown; fresh rate-limit observation required'}
     assert summary['skipped'] == 19 and ledger._load_jobs() == []
     client.acquire.assert_not_called()
     spawn.assert_not_called()
@@ -99,3 +99,8 @@ def test_no_lane_capacity_is_distinct_from_missing_provider_or_findings(tmp_path
     assert summary['dispatched'] == 0 and ledger._load_jobs() == []
     client.acquire.assert_not_called()
     spawn.assert_not_called()
+
+
+def test_report_lists_both_supervised_implementations(tmp_path):
+    summary, _, _, _ = _cycle(tmp_path, implemented=('codex', 'cursor'))
+    assert summary['decisions'][-1]['extra']['implemented_providers'] == ['codex', 'cursor']

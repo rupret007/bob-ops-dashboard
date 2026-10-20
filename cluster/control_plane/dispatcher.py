@@ -76,7 +76,8 @@ PROVIDER_RULES = {
         "reserved_when_queued": 2,
     },
     "cursor": {
-        "machines": ["nucbox"],
+        "machines": ["mini", "nucbox"],
+        "qualified_machines": ["nucbox"],
         "max_concurrent": None,
         "weekly_cap_pct": None,
     },
@@ -342,6 +343,8 @@ class Dispatcher:
             return False, f"{provider} not allowed on {self.machine}"
 
         if provider == 'cursor':
+            if self.machine not in rules['qualified_machines']:
+                return False, 'cursor runtime is not qualified on this machine'
             from .cursor_worker import available
             if not hasattr(self, '_cursor_available'):
                 self._cursor_available = available()
