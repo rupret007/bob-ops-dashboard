@@ -2,6 +2,8 @@
 import concurrent.futures
 import subprocess
 import threading
+import json
+from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
 import pytest
@@ -35,6 +37,8 @@ def test_two_conductors_only_one_merge_command(client, tmp_path):
         assert finish.wait(5)
         return subprocess.CompletedProcess(args, 0)
     with patch.object(ClaimClient, 'from_env', return_value=client), \
+         patch.object(c.github_reads, 'run', return_value=SimpleNamespace(returncode=0, stdout=json.dumps(
+             dict(number=7, state='OPEN', isDraft=False, headRefOid='a'*40, title='Ready', labels=[])))), \
          patch.object(c.subprocess, 'run', side_effect=merge) as command, \
          patch.object(c.time, 'sleep'), \
          patch('cluster.control_plane.main_ci.merged_pr', return_value={}), \
