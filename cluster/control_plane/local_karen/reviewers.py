@@ -1610,7 +1610,14 @@ def _review_with_requested_context(invoke, part, original_pr, source_context=Non
                      raw_size=raw, serialized_size=serialized)
     logger.info('Initial review context: code=%s; changed_files=%s; raw_size=%s; serialized_size=%s',
                 automatic_code, len(context), raw, serialized)
-    supplied_part = _context_part(part, context, 'Supplemental changed-file context') if context else part
+    from .cached_material import initial_cached_material
+    context = initial_cached_material(part, original_pr, context, source_context)
+    if context and 'source' in context[0]:
+        automatic.update(cached_source_files=len(context), raw_size=context_size(context)[0],
+                         serialized_size=context_size(context)[1])
+    label = ('Supplemental cached immutable source' if context and 'source' in context[0]
+             else 'Supplemental changed-file context')
+    supplied_part = _context_part(part, context, label) if context else part
     result = _validate_chunk_result(invoke(supplied_part), original_pr)
     result = replace(result, scope=dict(result.scope or {}, initial_context=automatic))
     counts = tuple(len(paths) if isinstance(paths, list) else None
@@ -1631,7 +1638,7 @@ def _review_with_requested_context(invoke, part, original_pr, source_context=Non
     original_pr = original_pr or part
     # Changed and immutable source evidence are distinct entries even for one
     # path. Deduplicate overlaps without granting a second four-file/48k budget.
-    keys = {('diff', item['path']) for item in context}
+    keys = {('source' if 'source' in item else 'diff', item['path']) for item in context}
     # A source request for another changed file may be answered with new diff
     # evidence. Never claim that a changed-file diff is complete source, repeat
     # already supplied evidence, or bypass the immutable-source privacy guard.
