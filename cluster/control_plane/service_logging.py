@@ -76,7 +76,7 @@ class DiagnosticWriteError(OSError):
 class _PrivateHandlerErrors:
     def handleError(self, record):
         # logging's default fallback prints chained exceptions and record arguments.
-        # Report a fixed failure to the caller, regardless of logging.raiseExceptions.
+        # Report a fixed failure to event(), regardless of logging.raiseExceptions.
         raise DiagnosticWriteError('Structured diagnostic write failed') from None
 
 
@@ -94,7 +94,8 @@ class RetainedRotatingHandler(_PrivateHandlerErrors, RotatingFileHandler):
                 path.unlink(missing_ok=True)
 
 
-def event(service, name, level=logging.INFO, exc_info=None, **fields):
+def event(service, name, level=logging.INFO, exc_info=None, *, raise_on_error=False, **fields):
+    """Handler failures are nonfatal unless a guarded caller opts into propagation."""
     root = Path(os.environ.get('STORYPOOL_LOG_DIR') or
                 str(Path(os.environ.get('STORYPOOL_DATA_DIR', str(Path.home() / '.local/share/storypool'))) / 'logs'))
     root.mkdir(parents=True, exist_ok=True)
@@ -116,7 +117,11 @@ def event(service, name, level=logging.INFO, exc_info=None, **fields):
         stream = PrivateStreamHandler(sys.stderr)
         stream.setFormatter(formatter)
         logger.addHandler(stream)
-    logger.log(level, name, extra={'fields': fields}, exc_info=exc_info)
+    try:
+        logger.log(level, name, extra={'fields': fields}, exc_info=exc_info)
+    except DiagnosticWriteError:
+        if raise_on_error:
+            raise
 
 
 def failing_tests(output):

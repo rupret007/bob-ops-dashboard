@@ -185,6 +185,7 @@ def fix_pr(repo, pr_number, head_sha, findings):
         # The structured formatter excludes its message, locals and CLI output.
         try:
             event('fix-worker', 'operation_failed', level=logging.ERROR, exc_info=True,
+                  raise_on_error=True,
                   failure_code=code, failure_stage=stage,
                   error_type=type(exc).__name__)
         except Exception:
