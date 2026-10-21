@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-10-21T16:40:34.196218-05:00",
-  "generated_at_display": "Wed Oct 21, 2026 \u00b7 4:40 PM CDT",
+  "generated_at": "2026-10-21T16:55:45.936849-05:00",
+  "generated_at_display": "Wed Oct 21, 2026 \u00b7 4:55 PM CDT",
   "timezone": "America/Chicago",
   "owner": "rupret007",
   "dashboard": "bob-ops-dashboard",
@@ -296,11 +296,11 @@
           "status": "yellow",
           "chip": "Yellow",
           "default_branch": "main",
-          "tip_sha": "8631d88",
-          "tip_date": "2026-10-21T21:22:02Z",
-          "open_prs": 8,
-          "open_pr_url": "https://github.com/rupret007/Turdanoid/pull/93",
-          "open_pr_number": 93,
+          "tip_sha": "a03ef31",
+          "tip_date": "2026-10-21T21:40:48Z",
+          "open_prs": 7,
+          "open_pr_url": "https://github.com/rupret007/Turdanoid/pull/87",
+          "open_pr_number": 87,
           "open_pr_draft": false,
           "open_pr_stack": [],
           "pr_listing_complete": true,
@@ -309,9 +309,9 @@
             "name": "CI",
             "conclusion": "success",
             "branch": "main",
-            "sha": "8631d88",
-            "created": "2026-10-21T21:22:06Z",
-            "html_url": "https://github.com/rupret007/Turdanoid/actions/runs/39678204364"
+            "sha": "a03ef31",
+            "created": "2026-10-21T21:40:52Z",
+            "html_url": "https://github.com/rupret007/Turdanoid/actions/runs/39680737659"
           },
           "release": null,
           "release_sha": null,
@@ -495,8 +495,8 @@
           "status": "yellow",
           "chip": "Yellow",
           "default_branch": "main",
-          "tip_sha": "4da2bb0",
-          "tip_date": "2026-10-21T21:25:51Z",
+          "tip_sha": "d30760a",
+          "tip_date": "2026-10-21T21:40:49Z",
           "open_prs": 27,
           "open_pr_url": "https://github.com/rupret007/bob-ops-dashboard/pull/128",
           "open_pr_number": 128,
@@ -900,7 +900,7 @@
     "barker"
   ],
   "publish_notes": "Public board -- no secrets or customer paths. Private repositories stay high-level; AI Music Vault stays private-content-boundary only.",
-  "refresh_started_ms": 1792618805044,
+  "refresh_started_ms": 1792619710187,
   "agents_source": "file:stale->unknown",
   "agents": [
     {
@@ -1099,7 +1099,7 @@
     }
   ],
   "llm_work_now_freshness": {
-    "generated_at": "2026-10-21 16:40 CT",
+    "generated_at": "2026-10-21 16:55 CT",
     "warn_ttl_sec": 1200,
     "warnings": [],
     "ok": true
@@ -1130,7 +1130,7 @@
     ],
     "scorecards": {
       "v": "scorecards/v1",
-      "generated_at": "2026-10-21T21:40:35.878168+00:00",
+      "generated_at": "2026-10-21T21:55:47.321004+00:00",
       "windows": {
         "24h": {
           "providers": {
