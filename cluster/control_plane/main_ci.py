@@ -202,11 +202,7 @@ def reconcile_recent():
 
 
 def _unresolved_prs(records):
-    """Discovery age is not evidence that a receiving commit recovered.
-
-    Reuse only canonical saved identities. An empty row is an unattempted
-    tail from a partial batch; it also needs an authoritative observation.
-    """
+    """Retain unresolved receiving commits, including a partial batch's unattempted tail."""
     pending = []
     for key, row in records.items():
         identity = re.fullmatch(r'([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)#([1-9][0-9]*)', key)
