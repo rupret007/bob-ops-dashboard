@@ -68,3 +68,42 @@ def test_nucbox_does_not_use_mini_swap_policy():
     result = MachineGuards("nucbox", swap_fn=lambda: 100.0).check_swap()
     assert result.passed
     assert result.reason == "swap check not applicable"
+
+
+def _alternate_namespace(monkeypatch, source, suffix):
+    import importlib.util
+    import sys
+    alias = "cluster.control_plane.dashboard._policy_alias_" + suffix
+    spec = importlib.util.spec_from_file_location(alias, source.__file__)
+    module = importlib.util.module_from_spec(spec)
+    monkeypatch.setitem(sys.modules, alias, module)
+    spec.loader.exec_module(module)
+    monkeypatch.delitem(sys.modules, alias)
+    return module
+
+
+def test_alternate_collector_retains_live_bindings_after_alias_removal(tmp_path, monkeypatch):
+    from functools import partial
+    from cluster.control_plane.dashboard import data_collector
+    module = _alternate_namespace(monkeypatch, data_collector, "collector")
+    monkeypatch.setattr(module, "GuardValues", partial(data_collector.GuardValues, swap_limit=85.0))
+    monkeypatch.setattr("os.getloadavg", lambda: (2.0, 2.0, 2.0))
+    monkeypatch.setattr("cluster.control_plane.guards.get_swap_pct", lambda: 84.0)
+    monkeypatch.setattr("shutil.disk_usage", lambda _: SimpleNamespace(free=30 * 1024**3))
+    collector = module.DataCollector(data_dir=tmp_path)
+    collector.machine = "mini"
+    observed = collector._collect_guards()
+    assert observed.swap_limit == 85.0
+    assert observed.guards_passed
+    assert data_collector.GuardValues(machine="mini", load=0.0, load_limit=10.0).swap_limit == 90.0
+
+
+def test_alternate_renderer_retains_live_bindings_after_alias_removal(monkeypatch):
+    from cluster.control_plane.dashboard import server
+    module = _alternate_namespace(monkeypatch, server, "renderer")
+    monkeypatch.setattr(module, "_escape", lambda value: "ALIAS:" + str(value))
+    service = SimpleNamespace(status="running", name="widget", last_run_ago="now", error_count=0)
+    rendered = module._render_services(SimpleNamespace(machine="mini", services=[service]))
+    assert "ALIAS:widget" in rendered
+    assert "ALIAS:now" in rendered
+    assert server._escape("widget") == "widget"
