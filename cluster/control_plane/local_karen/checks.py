@@ -8,11 +8,13 @@ from __future__ import annotations
 
 import re
 import subprocess
+import time
 from dataclasses import dataclass
 from enum import Enum
 from typing import Optional, Any, Dict, Tuple
 
 from .config import KarenConfig
+from . import pages_publication
 
 try:
     from cluster.never_touch import is_never_touch, NeverTouchViolation
@@ -973,57 +975,106 @@ _UNSET = object()
 _UNKNOWN = "unknown"
 
 
-def _pages_source(owner: str, repo: str):
-    """Pages publish path ("/" or "/docs"), None if Pages is off, or _UNKNOWN."""
-    try:
-        result = subprocess.run(
-            ["gh", "api", f"repos/{owner}/{repo}/pages", "-q", ".source.path"],
-            capture_output=True, text=True, timeout=30,
-        )
-    except (OSError, subprocess.SubprocessError):
-        return _UNKNOWN
-    if result.returncode == 0:
-        path = result.stdout.strip()
-        return path if path in ("/", "/docs") else _UNKNOWN
-    if "404" in (result.stdout + result.stderr):
-        return None
-    return _UNKNOWN
+def _pages_source(owner: str, repo: str, *, deadline=None):
+    """Settings classification; Actions publication needs a separate proof."""
+    return pages_publication.pages_source(owner, repo, deadline=deadline)
+
+
+def _pages_changed_paths(pr):
+    """Use pinned metadata and both Git header paths, including rename sources."""
+    from .chunk_context import _decode_path, _file_sections
+    if not isinstance(pr.changed_files, list) or not isinstance(pr.deleted_files, list):
+        raise ValueError('Incomplete changed paths')
+    if not isinstance(pr.diff, str) or any(line.startswith('diff --') and not line.startswith('diff --git ')
+                                          for line in pr.diff.splitlines()):
+        raise ValueError('Unrecognized diff header')
+    paths = list(pr.changed_files) + list(pr.deleted_files)
+    escaped_docs = []
+    nonregular_changed = False
+    for section in _file_sections(pr.diff):
+        raw = pr.diff[section['start']:section['end']]
+        header = raw.split('\n', 1)[0][len('diff --git '):]
+        metadata = raw.split('\n@@ ', 1)[0].splitlines()[1:]
+        if any(re.fullmatch(r'(?:new file|deleted file|old|new) mode (?:120000|160000)', line)
+               or re.fullmatch(r'index [0-9a-f]{4,40}\.\.[0-9a-f]{4,40} (?:120000|160000)', line)
+               for line in metadata):
+            nonregular_changed = True
+        expected = [None, None]
+        for index, prefix in enumerate(('--- ', '+++ ')):
+            value = next((line[len(prefix):] for line in metadata if line.startswith(prefix)), '')
+            if value:
+                decoded = _decode_path(value)
+                if decoded != '/dev/null':
+                    if not decoded.startswith(('a/', 'b/')):
+                        raise ValueError('Unrecognized metadata path')
+                    expected[index] = decoded[2:]
+        for source, destination in (('rename from ', 'rename to '), ('copy from ', 'copy to ')):
+            values = [next((line[len(prefix):] for line in metadata if line.startswith(prefix)), '')
+                      for prefix in (source, destination)]
+            if any(values):
+                if not all(values):
+                    raise ValueError('Incomplete move paths')
+                expected = [_decode_path(value) for value in values]
+        if '"' in header:
+            tokens = re.findall(r'"(?:[^"\\]|\\.)*"|\S+', header)
+            candidates = [tuple(_decode_path(value) for value in tokens)] if len(tokens) == 2 else []
+        else:
+            candidates = [(header[:m.start()], header[m.start() + 1:]) for m in re.finditer(' b/', header)]
+        pairs = []
+        for candidate in candidates:
+            if len(candidate) != 2 or not candidate[0].startswith('a/') or not candidate[1].startswith('b/'):
+                continue
+            pair = tuple(value[2:] for value in candidate)
+            if all(wanted is None or actual == wanted for actual, wanted in zip(pair, expected)):
+                pairs.append(pair)
+        if len(pairs) != 1:
+            raise ValueError('Unrecognized or ambiguous diff header')
+        before, after = pairs[0]
+        paths.extend((before, after))
+        if before.lower().startswith('docs/') and not after.startswith('docs/'):
+            escaped_docs.append((before, after))
+    paths = list(dict.fromkeys(paths))
+    for path in paths:
+        pages_publication._path(path)
+    return paths, escaped_docs, nonregular_changed
 
 
 def check_pages_exposure(pr: PRInfo, config: KarenConfig) -> CheckResult:
-    """Check for accidental GitHub Pages exposure.
-
-    Looks for:
-    - Changes to docs/ or gh-pages branch patterns
-    - Jekyll config files
-    - CNAME files (custom domain setup)
-    """
+    """Reject exposure or unverified publication; trusted proof covers docs only."""
     issues = []
-    current_file = None
     pages_source = _UNSET
-
-    for line in pr.diff.split("\n"):
-        if line.startswith("diff --git"):
-            match = re.search(r"b/(.+)$", line)
-            if match:
-                current_file = match.group(1)
-
-            if current_file:
-                if current_file.lower().startswith("docs/"):
-                    if pages_source is _UNSET:
-                        pages_source = _pages_source(pr.owner, pr.repo)
-                    # Only a repo that publishes Pages from / or /docs can
-                    # expose docs/ files. Unknown state fails closed.
-                    if pages_source is None:
-                        pass
-                    elif pages_source in ("/", "/docs") or pages_source == _UNKNOWN:
-                        issues.append(f"Changes to published docs/ folder: {current_file}"
-                                      + ("" if pages_source != _UNKNOWN
-                                         else " (Pages status unknown; fail closed)"))
-                if "_config.yml" in current_file.lower():
-                    issues.append(f"Jekyll config modified: {current_file}")
-                if current_file.upper() == "CNAME":
-                    issues.append(f"CNAME file changed: {current_file}")
+    workflow_verified = False
+    deadline = time.monotonic() + pages_publication.CHECK_SECONDS
+    try:
+        paths, escaped_docs, nonregular_changed = _pages_changed_paths(pr)
+    except (ValueError, TypeError, KeyError, UnicodeError):
+        return CheckResult('pages_exposure', CheckVerdict.FAIL,
+                           'Pages exposure cannot be verified: malformed changed paths')
+    publication_changed = nonregular_changed or any(pages_publication.publication_input(path) for path in paths)
+    if publication_changed or any(path.lower().startswith('docs/') for path in paths):
+        pages_source = _pages_source(pr.owner, pr.repo, deadline=deadline)
+        if pages_source == pages_publication.WORKFLOW:
+            workflow_verified = pages_publication.approved_docs_exclusion(
+                pr.owner, pr.repo, pr.head_sha, deadline=deadline)
+    if pages_source is not None:
+        for before, after in escaped_docs:
+            issues.append(f'Document moved/copied outside the approved docs/ exclusion: {before} -> {after}')
+    if publication_changed and pages_source is not None and not workflow_verified:
+        issues.append('Recognized publication inputs changed; artifact boundary is unverified')
+    for current_file in paths:
+        if current_file.lower().startswith('docs/'):
+            if pages_source is None:
+                pass
+            elif pages_source == pages_publication.WORKFLOW:
+                if not workflow_verified or not current_file.startswith('docs/'):
+                    issues.append(f'Workflow artifact publication is unverified for docs/: {current_file}')
+            else:
+                issues.append(f'Changes to published docs/ folder: {current_file}'
+                              + (' (Pages status unknown; fail closed)' if pages_source not in ('/', '/docs') else ''))
+        if '_config.yml' in current_file.lower():
+            issues.append(f'Jekyll config modified: {current_file}')
+        if current_file.upper() == 'CNAME':
+            issues.append(f'CNAME file changed: {current_file}')
 
     if issues:
         return CheckResult(
