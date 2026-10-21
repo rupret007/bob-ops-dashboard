@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-10-21T09:39:43.808888-05:00",
-  "generated_at_display": "Wed Oct 21, 2026 \u00b7 9:39 AM CDT",
+  "generated_at": "2026-10-21T09:54:44.192750-05:00",
+  "generated_at_display": "Wed Oct 21, 2026 \u00b7 9:54 AM CDT",
   "timezone": "America/Chicago",
   "owner": "rupret007",
   "dashboard": "bob-ops-dashboard",
@@ -299,8 +299,8 @@
           "tip_sha": "76b7bc8",
           "tip_date": "2026-10-17T09:14:30Z",
           "open_prs": 10,
-          "open_pr_url": "https://github.com/rupret007/Turdanoid/pull/70",
-          "open_pr_number": 70,
+          "open_pr_url": "https://github.com/rupret007/Turdanoid/pull/87",
+          "open_pr_number": 87,
           "open_pr_draft": false,
           "open_pr_stack": [],
           "pr_listing_complete": true,
@@ -495,8 +495,8 @@
           "status": "yellow",
           "chip": "Yellow",
           "default_branch": "main",
-          "tip_sha": "8dd837c",
-          "tip_date": "2026-10-21T14:24:50Z",
+          "tip_sha": "b8b2385",
+          "tip_date": "2026-10-21T14:39:59Z",
           "open_prs": 23,
           "open_pr_url": "https://github.com/rupret007/bob-ops-dashboard/pull/113",
           "open_pr_number": 113,
@@ -900,7 +900,7 @@
     "barker"
   ],
   "publish_notes": "Public board -- no secrets or customer paths. Private repositories stay high-level; AI Music Vault stays private-content-boundary only.",
-  "refresh_started_ms": 1792593542741,
+  "refresh_started_ms": 1792594445501,
   "agents_source": "file:stale->unknown",
   "agents": [
     {
@@ -1099,7 +1099,7 @@
     }
   ],
   "llm_work_now_freshness": {
-    "generated_at": "2026-10-21 09:39 CT",
+    "generated_at": "2026-10-21 09:54 CT",
     "warn_ttl_sec": 1200,
     "warnings": [],
     "ok": true
@@ -1130,7 +1130,7 @@
     ],
     "scorecards": {
       "v": "scorecards/v1",
-      "generated_at": "2026-10-21T14:39:45.477861+00:00",
+      "generated_at": "2026-10-21T14:54:46.321333+00:00",
       "windows": {
         "24h": {
           "providers": {
