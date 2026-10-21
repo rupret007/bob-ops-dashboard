@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-10-20T20:03:24.898058-05:00",
-  "generated_at_display": "Tue Oct 20, 2026 \u00b7 8:03 PM CDT",
+  "generated_at": "2026-10-20T20:07:33.046725-05:00",
+  "generated_at_display": "Tue Oct 20, 2026 \u00b7 8:07 PM CDT",
   "timezone": "America/Chicago",
   "owner": "rupret007",
   "dashboard": "bob-ops-dashboard",
@@ -495,8 +495,8 @@
           "status": "yellow",
           "chip": "Yellow",
           "default_branch": "main",
-          "tip_sha": "b354bd1",
-          "tip_date": "2026-10-21T00:52:53Z",
+          "tip_sha": "8087dda",
+          "tip_date": "2026-10-21T01:03:40Z",
           "open_prs": 21,
           "open_pr_url": "https://github.com/rupret007/bob-ops-dashboard/pull/121",
           "open_pr_number": 121,
@@ -900,7 +900,7 @@
     "barker"
   ],
   "publish_notes": "Public board -- no secrets or customer paths. Private repositories stay high-level; AI Music Vault stays private-content-boundary only.",
-  "refresh_started_ms": 1792544568940,
+  "refresh_started_ms": 1792544826803,
   "agents_source": "file:stale->unknown",
   "agents": [
     {
@@ -1099,7 +1099,7 @@
     }
   ],
   "llm_work_now_freshness": {
-    "generated_at": "2026-10-20 20:03 CT",
+    "generated_at": "2026-10-20 20:07 CT",
     "warn_ttl_sec": 1200,
     "warnings": [],
     "ok": true
@@ -1130,7 +1130,7 @@
     ],
     "scorecards": {
       "v": "scorecards/v1",
-      "generated_at": "2026-10-21T01:03:26.342713+00:00",
+      "generated_at": "2026-10-21T01:07:33.952102+00:00",
       "windows": {
         "24h": {
           "providers": {
