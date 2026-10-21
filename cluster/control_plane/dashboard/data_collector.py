@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import Optional, List, Dict, Any
 
 from ..codex_quota import read_codex_quota
+from ..guards import MINI_SWAP_LIMIT_PCT
 
 try:
     from ..job_ledger import JobLedger, Job, JobState
@@ -100,7 +101,7 @@ class GuardValues:
     load: float
     load_limit: float
     swap_pct: float = 0.0
-    swap_limit: float = 80.0
+    swap_limit: float = MINI_SWAP_LIMIT_PCT
     disk_gb: float = 0.0
     disk_min: float = 15.0
     lanes_active: int = 0

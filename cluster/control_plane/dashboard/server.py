@@ -285,7 +285,7 @@ def _render_guards(data: DashboardData) -> str:
     ]
     
     if data.machine == "mini":
-        swap_class = "ok" if g.swap_pct < 60 else ("warning" if g.swap_pct < 80 else "error")
+        swap_class = "ok" if g.swap_pct < 60 else ("warning" if g.swap_pct < g.swap_limit else "error")
         metrics.append(f"""<div class="metric">
             <span class="metric-label">Swap</span>
             <span class="metric-value">{g.swap_pct:.1f}%</span>
