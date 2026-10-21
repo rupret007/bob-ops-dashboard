@@ -8,7 +8,7 @@ OUTCOME-VERIFIED: Dispatch is tracked in the job ledger.
 - Dispatch actually spawns the Codex/Cursor worker process
 
 Provider allocation rules:
-- Mini: load < 10, swap < 90%, disk >= 15GB
+- Mini: load < 10, swap < 80%, disk >= 15GB
 - NucBox: load < 12, up to 7 lanes with 2 reserved for Codex when Codex work queued
 - Codex: NucBox-only, stops new lanes at 75% weekly spend
 - Cursor: used fully (no artificial cap)
