@@ -101,7 +101,8 @@ def _review_with_requested_context(owner, invoke, part, original_pr, source_cont
         if max(context_size(context)) > MAX_CONTEXT_SIZE:
             result = owner._context_resolution(result, 'context_budget', counts)
             return result, [result]
-    if result.requested_source_files:
+    reused_sources = []
+    if result.requested_source_files or (source_context is not None and result.requested_files):
         from .source_context import PinnedSourceContext, SourceUnavailable
         resolver = source_context or PinnedSourceContext(original_pr)
         try:
@@ -121,6 +122,25 @@ def _review_with_requested_context(owner, invoke, part, original_pr, source_cont
                 keys.add(('source', path))
                 if max(context_size(context)) > MAX_CONTEXT_SIZE:
                     raise SourceUnavailable('source_budget')
+            # A changed diff omits unchanged imports/initialization. Reuse only
+            # source already proven by this review's resolver; never fetch extra
+            # material, displace requested evidence or grant another budget.
+            if type(resolver) is PinnedSourceContext:
+                for path in result.requested_files:
+                    if ('source', path) in keys:
+                        continue
+                    if (path in resolver.sources and
+                            (part.owner, part.repo, part.number, part.head_sha) !=
+                            (original_pr.owner, original_pr.repo, original_pr.number, original_pr.head_sha)):
+                        raise SourceUnavailable('source_identity_or_path')
+                    source = resolver.cached(part, path)
+                    if source is None:
+                        continue
+                    packet = context + [source]
+                    if len(packet) <= MAX_CONTEXT_FILES and max(context_size(packet)) <= MAX_CONTEXT_SIZE:
+                        context.append(source)
+                        keys.add(('source', path))
+                        reused_sources.append(path)
         except SourceUnavailable as exc:
             # SourceUnavailable enforces a fixed code allowlist; do not expose
             # requested paths, model reasons, source values or exception text.
@@ -135,6 +155,8 @@ def _review_with_requested_context(owner, invoke, part, original_pr, source_cont
             return result, [result]
     label = ('Requested changed-file context' if result.requested_files or source_diffs
              else 'Requested immutable source context')
+    if reused_sources:
+        label = 'Requested changed-file and cached source context'
     # Build from the base description, replacing rather than appending the
     # initial packet. Every invocation has one cumulative bounded packet.
     followup = owner._context_part(part, context, label)
@@ -147,9 +169,11 @@ def _review_with_requested_context(owner, invoke, part, original_pr, source_cont
     scope = dict(result.scope or {}, initial_context=automatic)
     if source_diffs:
         scope['source_requests_answered_with_diff'] = len(source_diffs)
-    if initial.requested_source_files:
+    if initial.requested_source_files or reused_sources:
         scope['source_context'] = [{k: v for k, v in item.items() if k != 'source'}
                                    for item in context if 'source' in item]
+    if reused_sources:
+        scope['reused_source_files'] = len(reused_sources)
     scope["context_attempts"] = [{"requested_files": initial.requested_files,
                                   "requested_source_files": initial.requested_source_files,
                                   "verdict": initial.verdict.value,
