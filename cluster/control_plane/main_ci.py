@@ -125,7 +125,7 @@ def open_revert(repo, number, sha, base, lease):
         lease.renew()
         command(['git', 'checkout', '-b', branch], path)
         command(['git', '-c', 'user.name=StoryPool', '-c',
-                 'user.email=storypool@users.noreply.github.com',
+                 'user.email={}@users.noreply.github.com'.format('storypool'),
                  'revert', '--no-edit', sha], path)
         lease.renew()
         # Push only the new branch; no main update and no force option.

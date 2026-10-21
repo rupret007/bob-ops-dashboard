@@ -164,6 +164,14 @@ class UnresolvedCITests(unittest.TestCase):
         self.assertEqual(self.tick()["unconfirmed"], 0)
         self.one.assert_not_called()
 
+    def test_public_bot_commit_identity_is_preserved(self):
+        with patch.object(m, "gh_json", return_value=[]), \
+                patch.object(m, "command", return_value="fixture-url") as command:
+            m.open_revert(REPO, 7, "b" * 40, "main", Mock())
+        commit = next(c.args[0] for c in command.call_args_list if "revert" in c.args[0])
+        self.assertIn("user.name=StoryPool", commit)
+        self.assertIn("user.email=" + "@".join(("storypool", "users.noreply.github.com")), commit)
+
 
 if __name__ == "__main__":
     unittest.main()
