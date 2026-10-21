@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-10-21T17:40:48.443188-05:00",
-  "generated_at_display": "Wed Oct 21, 2026 \u00b7 5:40 PM CDT",
+  "generated_at": "2026-10-21T17:55:51.109336-05:00",
+  "generated_at_display": "Wed Oct 21, 2026 \u00b7 5:55 PM CDT",
   "timezone": "America/Chicago",
   "owner": "rupret007",
   "dashboard": "bob-ops-dashboard",
@@ -293,25 +293,25 @@
           "url": "https://github.com/rupret007/Turdanoid",
           "repo_url": "https://github.com/rupret007/Turdanoid",
           "private": false,
-          "status": "yellow",
-          "chip": "Yellow",
+          "status": "red",
+          "chip": "Red",
           "default_branch": "main",
-          "tip_sha": "a03ef31",
-          "tip_date": "2026-10-21T21:40:48Z",
-          "open_prs": 8,
-          "open_pr_url": "https://github.com/rupret007/Turdanoid/pull/94",
-          "open_pr_number": 94,
+          "tip_sha": "073918d",
+          "tip_date": "2026-10-21T22:43:02Z",
+          "open_prs": 7,
+          "open_pr_url": "https://github.com/rupret007/Turdanoid/pull/87",
+          "open_pr_number": 87,
           "open_pr_draft": false,
           "open_pr_stack": [],
           "pr_listing_complete": true,
           "agent_url": "https://cursor.com/agents/bc-61d5fce3-5c7c-5e61-953d-bf055f389dd0",
           "ci": {
             "name": "CI",
-            "conclusion": "success",
+            "conclusion": "failure",
             "branch": "main",
-            "sha": "a03ef31",
-            "created": "2026-10-21T21:40:52Z",
-            "html_url": "https://github.com/rupret007/Turdanoid/actions/runs/39680737659"
+            "sha": "073918d",
+            "created": "2026-10-21T22:43:05Z",
+            "html_url": "https://github.com/rupret007/Turdanoid/actions/runs/39688493921"
           },
           "release": null,
           "release_sha": null,
@@ -495,8 +495,8 @@
           "status": "yellow",
           "chip": "Yellow",
           "default_branch": "main",
-          "tip_sha": "dc6b07f",
-          "tip_date": "2026-10-21T22:25:56Z",
+          "tip_sha": "c985b2e",
+          "tip_date": "2026-10-21T22:41:03Z",
           "open_prs": 27,
           "open_pr_url": "https://github.com/rupret007/bob-ops-dashboard/pull/119",
           "open_pr_number": 119,
@@ -900,7 +900,7 @@
     "barker"
   ],
   "publish_notes": "Public board -- no secrets or customer paths. Private repositories stay high-level; AI Music Vault stays private-content-boundary only.",
-  "refresh_started_ms": 1792622413701,
+  "refresh_started_ms": 1792623315327,
   "agents_source": "file:stale->unknown",
   "agents": [
     {
@@ -1099,7 +1099,7 @@
     }
   ],
   "llm_work_now_freshness": {
-    "generated_at": "2026-10-21 17:40 CT",
+    "generated_at": "2026-10-21 17:55 CT",
     "warn_ttl_sec": 1200,
     "warnings": [],
     "ok": true
@@ -1130,7 +1130,7 @@
     ],
     "scorecards": {
       "v": "scorecards/v1",
-      "generated_at": "2026-10-21T22:40:49.651128+00:00",
+      "generated_at": "2026-10-21T22:55:52.838118+00:00",
       "windows": {
         "24h": {
           "providers": {
