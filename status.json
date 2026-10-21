@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-10-20T19:22:39.282368-05:00",
-  "generated_at_display": "Tue Oct 20, 2026 \u00b7 7:22 PM CDT",
+  "generated_at": "2026-10-20T19:37:37.289771-05:00",
+  "generated_at_display": "Tue Oct 20, 2026 \u00b7 7:37 PM CDT",
   "timezone": "America/Chicago",
   "owner": "rupret007",
   "dashboard": "bob-ops-dashboard",
@@ -495,11 +495,11 @@
           "status": "yellow",
           "chip": "Yellow",
           "default_branch": "main",
-          "tip_sha": "106c125",
-          "tip_date": "2026-10-21T00:07:54Z",
-          "open_prs": 20,
-          "open_pr_url": "https://github.com/rupret007/bob-ops-dashboard/pull/119",
-          "open_pr_number": 119,
+          "tip_sha": "4104b09",
+          "tip_date": "2026-10-21T00:22:54Z",
+          "open_prs": 21,
+          "open_pr_url": "https://github.com/rupret007/bob-ops-dashboard/pull/121",
+          "open_pr_number": 121,
           "open_pr_draft": false,
           "open_pr_stack": [],
           "pr_listing_complete": true,
@@ -900,7 +900,7 @@
     "barker"
   ],
   "publish_notes": "Public board -- no secrets or customer paths. Private repositories stay high-level; AI Music Vault stays private-content-boundary only.",
-  "refresh_started_ms": 1792542122074,
+  "refresh_started_ms": 1792543025227,
   "agents_source": "file:stale->unknown",
   "agents": [
     {
@@ -957,21 +957,21 @@
       "checked_at": null
     },
     {
-      "id": "bc-3de82b4d-aab0-5122-a574-81ce16a2c612",
-      "name": "PR #86",
-      "state": "unknown",
-      "detail": "feat: Local Karen ship gate for Mac mini/NucBox",
-      "url": "https://cursor.com/agents/bc-3de82b4d-aab0-5122-a574-81ce16a2c612",
-      "pr_url": "https://github.com/rupret007/bob-ops-dashboard/pull/86",
-      "checked_at": null
-    },
-    {
       "id": "bc-2df62653-9354-58fd-96fb-4038fc7c812a",
       "name": "PR #372",
       "state": "unknown",
       "detail": "First-run usability: a musician or artist can start and join without docs",
       "url": "https://cursor.com/agents/bc-2df62653-9354-58fd-96fb-4038fc7c812a",
       "pr_url": "https://github.com/rupret007/webjam/pull/372",
+      "checked_at": null
+    },
+    {
+      "id": "bc-e1afa0c0-54fc-513b-af6f-70a87deef44e",
+      "name": "PR #101",
+      "state": "unknown",
+      "detail": "feat(social): Phase 1 approve-and-post with local files and LLM captions",
+      "url": "https://cursor.com/agents/bc-e1afa0c0-54fc-513b-af6f-70a87deef44e",
+      "pr_url": "https://github.com/rupret007/StoryBoard/pull/101",
       "checked_at": null
     }
   ],
@@ -1099,7 +1099,7 @@
     }
   ],
   "llm_work_now_freshness": {
-    "generated_at": "2026-10-20 19:22 CT",
+    "generated_at": "2026-10-20 19:37 CT",
     "warn_ttl_sec": 1200,
     "warnings": [],
     "ok": true
@@ -1130,7 +1130,7 @@
     ],
     "scorecards": {
       "v": "scorecards/v1",
-      "generated_at": "2026-10-21T00:22:40.672529+00:00",
+      "generated_at": "2026-10-21T00:37:38.312444+00:00",
       "windows": {
         "24h": {
           "providers": {
