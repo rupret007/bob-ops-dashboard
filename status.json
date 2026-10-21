@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-10-21T18:25:48.663852-05:00",
-  "generated_at_display": "Wed Oct 21, 2026 \u00b7 6:25 PM CDT",
+  "generated_at": "2026-10-21T18:40:53.902534-05:00",
+  "generated_at_display": "Wed Oct 21, 2026 \u00b7 6:40 PM CDT",
   "timezone": "America/Chicago",
   "owner": "rupret007",
   "dashboard": "bob-ops-dashboard",
@@ -298,9 +298,9 @@
           "default_branch": "main",
           "tip_sha": "88036eb",
           "tip_date": "2026-10-21T23:07:10Z",
-          "open_prs": 7,
-          "open_pr_url": "https://github.com/rupret007/Turdanoid/pull/87",
-          "open_pr_number": 87,
+          "open_prs": 8,
+          "open_pr_url": "https://github.com/rupret007/Turdanoid/pull/96",
+          "open_pr_number": 96,
           "open_pr_draft": false,
           "open_pr_stack": [],
           "pr_listing_complete": true,
@@ -495,8 +495,8 @@
           "status": "yellow",
           "chip": "Yellow",
           "default_branch": "main",
-          "tip_sha": "7ed591f",
-          "tip_date": "2026-10-21T23:11:13Z",
+          "tip_sha": "c39c1b9",
+          "tip_date": "2026-10-21T23:26:05Z",
           "open_prs": 27,
           "open_pr_url": "https://github.com/rupret007/bob-ops-dashboard/pull/119",
           "open_pr_number": 119,
@@ -900,7 +900,7 @@
     "barker"
   ],
   "publish_notes": "Public board -- no secrets or customer paths. Private repositories stay high-level; AI Music Vault stays private-content-boundary only.",
-  "refresh_started_ms": 1792625119666,
+  "refresh_started_ms": 1792626021921,
   "agents_source": "file:stale->unknown",
   "agents": [
     {
@@ -1099,7 +1099,7 @@
     }
   ],
   "llm_work_now_freshness": {
-    "generated_at": "2026-10-21 18:25 CT",
+    "generated_at": "2026-10-21 18:40 CT",
     "warn_ttl_sec": 1200,
     "warnings": [],
     "ok": true
@@ -1130,7 +1130,7 @@
     ],
     "scorecards": {
       "v": "scorecards/v1",
-      "generated_at": "2026-10-21T23:25:49.800209+00:00",
+      "generated_at": "2026-10-21T23:40:55.065524+00:00",
       "windows": {
         "24h": {
           "providers": {
