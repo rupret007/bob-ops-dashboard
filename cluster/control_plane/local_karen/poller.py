@@ -244,14 +244,24 @@ def poll_and_run(
 
     try:
         queue = ReviewQueue(config)
+        from .review_deferrals import ReviewDeferrals, REASON
+        deferrals = ReviewDeferrals(config)
+        deferrals.reconcile(candidates, scan.observed_repos if scan is not None else set(repos))
+        eligible = []
+        for candidate in candidates:
+            if deferrals.blocked(candidate):
+                results.append({'repo': candidate.repo, 'pr': candidate.pr['number'],
+                                'sha': candidate.pr['headRefOid'], 'skipped': True, 'reason': REASON})
+            else:
+                eligible.append(candidate)
         if scan is None:
-            enrich(candidates)
+            enrich(eligible)
         else:
             # One optional batch, aged work first. Unsampled candidates remain
             # unknown and still require the normal exact-head gate checks.
-            metadata_order = sorted(candidates, key=lambda item: (-queue.deferred.get(item.key, 0), item.key))
+            metadata_order = sorted(eligible, key=lambda item: (-queue.deferred.get(item.key, 0), item.key))
             enrich(metadata_order, max_batches=1)
-        ordered = queue.order(candidates)
+        ordered = queue.order(eligible)
         queue.begin(candidates, observed_repos=scan.observed_repos if scan is not None else None)
     except GitHubDeferred:
         logger.warning("Review queue deferred by shared GitHub API budget")
@@ -297,6 +307,7 @@ def poll_and_run(
         logger.info(f"Running gate on {owner}/{repo}#{pr_number}")
 
         diagnostics = []
+        deferral_write_failed = False
         try:
             result = run_gate(
                 owner=owner,
@@ -306,6 +317,11 @@ def poll_and_run(
                 post_comment=post_comment,
                 expected_sha=pr_data.get("headRefOid", ""),
             )
+            try:
+                deferrals.observe(candidate, result)
+            except OSError:
+                logger.error('Context deferral state unavailable; no further review admission')
+                deferral_write_failed = True
 
             if result.error or not result.sha_verified or not result.verdict_path:
                 diagnostics = sanitize_context_diagnostics(getattr(result, 'context_diagnostics', None))
@@ -362,6 +378,9 @@ def poll_and_run(
             if diagnostics:
                 error_record['context_diagnostics'] = diagnostics
             results.append(error_record)
+
+        if deferral_write_failed:
+            return results  # Preserve this gate outcome, then stop new model work.
 
     return results
 
