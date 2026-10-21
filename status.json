@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-10-21T12:09:58.132286-05:00",
-  "generated_at_display": "Wed Oct 21, 2026 \u00b7 12:09 PM CDT",
+  "generated_at": "2026-10-21T12:25:14.080138-05:00",
+  "generated_at_display": "Wed Oct 21, 2026 \u00b7 12:25 PM CDT",
   "timezone": "America/Chicago",
   "owner": "rupret007",
   "dashboard": "bob-ops-dashboard",
@@ -299,8 +299,8 @@
           "tip_sha": "98e6fd8",
           "tip_date": "2026-10-21T16:08:48Z",
           "open_prs": 7,
-          "open_pr_url": "https://github.com/rupret007/Turdanoid/pull/87",
-          "open_pr_number": 87,
+          "open_pr_url": "https://github.com/rupret007/Turdanoid/pull/88",
+          "open_pr_number": 88,
           "open_pr_draft": false,
           "open_pr_stack": [],
           "pr_listing_complete": true,
@@ -495,8 +495,8 @@
           "status": "yellow",
           "chip": "Yellow",
           "default_branch": "main",
-          "tip_sha": "0d8a972",
-          "tip_date": "2026-10-21T17:05:12Z",
+          "tip_sha": "2cbfe6f",
+          "tip_date": "2026-10-21T17:10:15Z",
           "open_prs": 24,
           "open_pr_url": "https://github.com/rupret007/bob-ops-dashboard/pull/125",
           "open_pr_number": 125,
@@ -900,7 +900,7 @@
     "barker"
   ],
   "publish_notes": "Public board -- no secrets or customer paths. Private repositories stay high-level; AI Music Vault stays private-content-boundary only.",
-  "refresh_started_ms": 1792602567210,
+  "refresh_started_ms": 1792603471781,
   "agents_source": "file:stale->unknown",
   "agents": [
     {
@@ -1099,7 +1099,7 @@
     }
   ],
   "llm_work_now_freshness": {
-    "generated_at": "2026-10-21 12:09 CT",
+    "generated_at": "2026-10-21 12:25 CT",
     "warn_ttl_sec": 1200,
     "warnings": [],
     "ok": true
@@ -1130,7 +1130,7 @@
     ],
     "scorecards": {
       "v": "scorecards/v1",
-      "generated_at": "2026-10-21T17:09:59.755112+00:00",
+      "generated_at": "2026-10-21T17:25:15.832403+00:00",
       "windows": {
         "24h": {
           "providers": {
