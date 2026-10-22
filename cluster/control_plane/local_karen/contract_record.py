@@ -7,7 +7,7 @@ configuration and model votes cannot supply authority. Every other deterministic
 check, deletion/skip/decorator rule, credential rule, context/budget limit, claim,
 reviewer, signature/delivery, CI and human-only merge requirement remains.
 
-BASE_ADVANCEMENTS pins fourteen separately reviewed source edges from the frozen
+BASE_ADVANCEMENTS pins fifteen separately reviewed source edges from the frozen
 baseline through ADMITTED_BASE. Each merged commit must have exactly its stated
 sole parent. The reviewed/merged patch identities and native exact-head verdicts
 are recorded in the PR's provenance evidence; no live-base wildcard is allowed.
@@ -74,10 +74,11 @@ BASE_ADVANCEMENTS = (
     ('02b6f8e7137df8c72a408c54809c958360415560', 'fafdb38fb964a59449fc20807c54c68daed5aad2'),
     ('469feba9579e04fe240d22306af92735d25ee65c', '02b6f8e7137df8c72a408c54809c958360415560'),
     ('ae87e802837d453de6e0ed394c2a4564a25efc98', '469feba9579e04fe240d22306af92735d25ee65c'),
+    ('a59dd53773bca832783d97215a7dd8fb25b8213d', 'ae87e802837d453de6e0ed394c2a4564a25efc98'),
 )
 
 
-ADMITTED_BASE = 'ae87e802837d453de6e0ed394c2a4564a25efc98'
+ADMITTED_BASE = 'a59dd53773bca832783d97215a7dd8fb25b8213d'
 
 
 POLICY_FILES = frozenset({
