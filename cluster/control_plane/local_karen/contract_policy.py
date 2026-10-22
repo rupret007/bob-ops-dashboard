@@ -13,7 +13,7 @@ semantic-yellow admission to rejection. Its full canonical diff digest must
 match APPROVED. Complete immutable old/new source must prove the unique direct
 assertion in the exact test. Changed packets require a new decision.
 
-Nine separately reviewed source advancements are explicitly pinned:
+Ten separately reviewed source advancements are explicitly pinned:
 
 PR | reviewed head | sole-parent merged commit | Nuc native COMPLETE/PASS SHA256
 100 | 62c64bdd27da4fcd1a07ac9b3be43d60663f86b0 | c3374b769820408edd43cdd4abf1eed5efb0e65b | e1df7fe6ed9fb78e0a9dab4decc208c624da82f60eac30f7bb49f28677b2dd6b
@@ -25,6 +25,7 @@ PR | reviewed head | sole-parent merged commit | Nuc native COMPLETE/PASS SHA256
 128 | 2f0059e556f4e92df8c31f0af12d17d9fafad4e9 | 4042b8998234699fcf0a1882c26e6b7a202837ef | fe1b1dfa78b71ce4297c499770601c7ee79b3f17e10000d687e1a615253df0fa
 129 | 78519f4bbaca3984153aa5f83ca9e1778ef05d6a | 12e4d8c3c01f81bbc528fb77ab973769b376a7ea | 3ca8a9619f18b9d76f5de3c727f1618040ceb738d3f8206440bd37f8b9285247
 131 | 6005a9252752a2d22a3d91ef35a2a707e9abbf0d | 33b0ddcf2fdbc4dfb2c6cff2c9d30d6cbb0df1f6 | d308bc9a023b2c53600e8d44eb7bf8d964dbf9bc6ff81ce70e152178b5c0825b
+134 | 075dbcec2d8dbcc1d74d242d23476fc45c125c26 | 47dc0f25171f02713d85a67799f2f889895bc411 | 4af45a4365877cf785ea9a39c679d291d62c66544b795cc2ae6f2c0bd4b54197
 
 Each merge's sole parent is the preceding row, starting at the frozen baseline.
 Missing/reversed/skipped edges, extra parents and unlisted later changes fail.
@@ -40,10 +41,8 @@ PR129 reviewed/merged diff SHA256:
 Receiving12e4 tree:bfa795f6bbcf3baf57606aee573facaed06224da.
 PR131 reviewed/merged tree:17b01ac79a279b2ffb1f1912b2ed5f184ed28999.
 
-Native Nuc COMPLETE/PASS, canonical/LATEST identity and normal reviewed predicate
-are recorded for these immutable heads.128/129 have nine checks each and9/3
-Codex/Gemini/MiniMax votes;131 has nine checks/three votes. Budgeted GitHub reads
-confirm their merges and CI; original-owner receiving qualification is separate.
+Native exact-head verdicts and immutable reviewed/merged correspondence are recorded.
+Original-owner receiving qualification remains separate.
 Resource limits and release holds remain unchanged; this record grants no authority.
 
 The head/base merge base must remain the frozen baseline. ADMITTED_BASE must be
@@ -122,8 +121,9 @@ BASE_ADVANCEMENTS = (
     ('4042b8998234699fcf0a1882c26e6b7a202837ef', '3905ca1ad5f3f581a8c8d1d64bda0b52db679ea7'),
     ('12e4d8c3c01f81bbc528fb77ab973769b376a7ea', '4042b8998234699fcf0a1882c26e6b7a202837ef'),
     ('33b0ddcf2fdbc4dfb2c6cff2c9d30d6cbb0df1f6', '12e4d8c3c01f81bbc528fb77ab973769b376a7ea'),
+    ('47dc0f25171f02713d85a67799f2f889895bc411', '33b0ddcf2fdbc4dfb2c6cff2c9d30d6cbb0df1f6'),
 )
-ADMITTED_BASE = '33b0ddcf2fdbc4dfb2c6cff2c9d30d6cbb0df1f6'
+ADMITTED_BASE = '47dc0f25171f02713d85a67799f2f889895bc411'
 
 POLICY_FILES = frozenset({
     'cluster/control_plane/local_karen/checks.py',
