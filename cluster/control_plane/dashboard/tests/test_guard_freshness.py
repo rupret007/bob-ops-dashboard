@@ -5,6 +5,11 @@ from cluster.control_plane.dashboard.data_collector import DataCollector
 
 
 def test_current_guard_measurements_survive_old_dispatch_snapshot(tmp_path, monkeypatch):
+    # Isolate telemetry freshness from policy changes; production90 is tested separately.
+    from functools import partial
+    from cluster.control_plane.dashboard.data_collector import GuardValues
+    monkeypatch.setattr("cluster.control_plane.dashboard.data_collector.GuardValues",
+                        partial(GuardValues, swap_limit=80.0))
     old = tmp_path / 'dispatch' / 'dispatch-status.json'
     old.parent.mkdir()
     old.write_text(json.dumps({'timestamp': '2020-01-01T00:00:00Z', 'summary': {
