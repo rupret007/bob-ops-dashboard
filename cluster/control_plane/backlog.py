@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
@@ -511,7 +512,7 @@ def label_queued_prs(repos=None, dry_run=True):
                 continue
             state = get_pr_state(pr)
             from .ci_review_refresh import refresh_candidate, queue_refresh
-            ci_refresh = (state == 'failed' and verdict_dir is not None
+            ci_refresh = (state in ('failed', 'queued') and verdict_dir is not None
                           and refresh_candidate(repo, pr, verdict_dir))
             if ci_refresh:
                 state = 'queued'
@@ -522,8 +523,19 @@ def label_queued_prs(repos=None, dry_run=True):
                 state = "queued"
             if state != "queued":
                 continue
-            
+
+            # Completion is local exact-head evidence, independent of labels.
+            # Changed external CI still takes the existing claimed refresh path.
+            head = pr.get('headRefOid')
             pr_num = pr.get("number")
+            if (not ci_refresh and verdict_dir is not None
+                    and isinstance(repo, str)
+                    and re.fullmatch(r'[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+', repo)
+                    and type(pr_num) is int and pr_num > 0
+                    and isinstance(head, str) and re.fullmatch(r'[0-9a-f]{40}', head)
+                    and _has_verdict_for_head(verdict_dir, repo, pr)):
+                continue
+
             if not pr_num:
                 continue
             
