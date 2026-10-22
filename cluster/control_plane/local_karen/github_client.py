@@ -15,8 +15,11 @@ from dataclasses import dataclass
 from typing import Optional
 
 from .checks import PRInfo
+from .contract_policy import is_candidate, fetch_contract_packet, ContractUnavailable, runtime_base_matches, bind_startup_base
 from ..github_reads import run as budgeted_gh
 from ..github_budget import GitHubDeferred
+
+bind_startup_base()
 
 
 class GitHubError(Exception):
@@ -30,7 +33,8 @@ def _run_gh(args: list[str], timeout: int = 30, allowed_codes=(0,)) -> str:
     Raises GitHubError on failure.
     """
     try:
-        result = budgeted_gh(args, timeout=timeout)
+        options = {'resource': 'graphql'} if args[:2] == ['api', 'graphql'] else {}
+        result = budgeted_gh(args, timeout=timeout, **options)
         if result.returncode not in allowed_codes:
             raise GitHubError(f"gh {' '.join(args)} failed: {result.stderr}")
 
@@ -104,6 +108,26 @@ def _parse_ci_status(ci_data: list[dict]) -> dict[str, str]:
     return ci_status
 
 
+def _contract_refs(owner, repo, number):
+    branch = 'cursor/storypool-all-in-one-47c7'
+    query = ('{repository(owner:' + json.dumps(owner) + ',name:' + json.dumps(repo)
+        + '){ref(qualifiedName:' + json.dumps('refs/heads/' + branch)
+        + '){target{oid __typename}}pullRequest(number:' + str(number)
+        + '){headRefOid baseRefOid baseRefName baseRef{target{oid __typename}}}}}')
+    try:
+        value = json.loads(_run_gh(['api', 'graphql', '-f', 'query=' + query]))
+        repository = value['data']['repository']; pr = repository['pullRequest']
+        named = repository['ref']['target']; target = pr['baseRef']['target']
+        result = (pr['headRefOid'], pr['baseRefOid'], named['oid'])
+        if (value.get('errors') or pr['baseRefName'] != branch or target != named
+                or named['__typename'] != 'Commit'
+                or not all(isinstance(x, str) and re.fullmatch('[0-9a-f]{40}', x) for x in result)):
+            raise ValueError('Invalid contract refs')
+        return result
+    except (KeyError, TypeError, ValueError):
+        raise GitHubError('Test-contract refs unavailable') from None
+
+
 def fetch_pr_info(owner: str, repo: str, pr_number: int) -> PRInfo:
     """Fetch PR information from GitHub.
 
@@ -121,15 +145,30 @@ def fetch_pr_info(owner: str, repo: str, pr_number: int) -> PRInfo:
     if not head_sha:
         raise GitHubError(f"Could not get head SHA for PR #{pr_number}")
 
+    proof = None; initial_refs = None
     try:
-        diff = _run_gh([
-            "pr", "diff", str(pr_number), "--repo", f"{owner}/{repo}",
-        ], timeout=60)
+        if is_candidate(owner, repo, pr_number, head_sha):
+            initial_refs = _contract_refs(owner, repo, pr_number)
+            if initial_refs[:2] != (head_sha, pr_data.get('baseRefOid')):
+                raise GitHubError('PR head/base changed while proving test contract; retry')
+            diff, files_data, proof = fetch_contract_packet(
+                owner, repo, pr_number, head_sha, initial_refs[2])
+            pr_data["files"] = files_data
+        else:
+            diff = _run_gh([
+                "pr", "diff", str(pr_number), "--repo", f"{owner}/{repo}",
+            ], timeout=60)
+    except ContractUnavailable as exc:
+        raise GitHubError(str(exc)) from None
     except GitHubError as exc:
         if "406" not in str(exc) and "too_large" not in str(exc):
             raise
         diff, files_data = fetch_git_diff(owner, repo, head_sha, pr_data.get("baseRefOid", ""))
         pr_data["files"] = files_data
+    if proof is not None:
+        if (_contract_refs(owner, repo, pr_number) != initial_refs
+                or proof.base != initial_refs[2]):
+            raise GitHubError("PR head/base changed while proving test contract; retry")
     if not verify_sha_current(owner, repo, pr_number, head_sha):
         raise GitHubError("PR head changed while fetching diff; retry")
 
@@ -175,6 +214,8 @@ def fetch_pr_info(owner: str, repo: str, pr_number: int) -> PRInfo:
         changed_files=changed_files,
         deleted_files=deleted_files,
         description=pr_data.get("body", ""),
+        base_sha=proof.base if proof is not None else pr_data.get("baseRefOid", ""),
+        test_contract_proof=proof,
     )
 
 
@@ -183,6 +224,9 @@ def verify_sha_current(owner: str, repo: str, pr_number: int, expected_sha: str)
 
     Returns True if the SHA matches, False if it has changed.
     """
+    if is_candidate(owner, repo, pr_number, expected_sha):
+        head, snapshot, live = _contract_refs(owner, repo, pr_number)
+        return head == expected_sha and runtime_base_matches(live)
     pr_json = _run_gh([
         "pr", "view", str(pr_number),
         "--repo", f"{owner}/{repo}",
