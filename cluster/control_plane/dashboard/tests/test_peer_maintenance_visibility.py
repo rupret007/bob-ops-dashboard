@@ -104,3 +104,23 @@ def test_invalid_peer_reply_is_unknown_without_claiming_a_network_outage(tmp_pat
     row = machine_health(tmp_path, 'nucbox', now)['mini']
     assert row['state'] == 'yellow' and row['connectivity'] == 'unknown'
     assert 'failed' in row['detail'].lower() and 'unreachable' not in row['detail'].lower()
+
+
+@pytest.mark.parametrize('state', ['red', 'yellow'])
+def test_legacy_control_ack_keeps_underlying_display_and_engine_health(tmp_path, monkeypatch, state):
+    now = time.time()
+    monkeypatch.setenv('STORYPOOL_DATA_DIR', str(tmp_path))
+    monkeypatch.setenv('STORYPOOL_STATE_DIR', str(tmp_path))
+    monkeypatch.setattr(tachometer, 'read_codex_quota',
+                        lambda *a, **k: {'status': 'unknown', 'weekly_pct': None})
+    stamp = datetime.fromtimestamp(now, timezone.utc).isoformat()
+    atomic_json(tmp_path / 'machines/mini/engine.json', dict(synced_at=stamp,
+                control=dict(maintenance=True, reason='Operator maintenance')))
+    if state == 'red':
+        atomic_json(tmp_path / 'machines/mini/watchdog.log', dict(timestamp=stamp,
+                    checks=[dict(name='dashboard_http', passed=False)]))
+    result = tachometer.EngineCollector(tmp_path, tmp_path / 'karen', 'nucbox').collect()
+    peer = result['machines']['mini']
+    assert peer['state'] == 'maintenance' and peer['maintenance'] is True
+    assert peer['display_state'] == state and result['engine'] == state
+    assert 'maintenance requested' in peer['detail']
