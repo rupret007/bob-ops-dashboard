@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-10-22T00:11:37.318079-05:00",
-  "generated_at_display": "Thu Oct 22, 2026 \u00b7 12:11 AM CDT",
+  "generated_at": "2026-10-22T00:26:39.991363-05:00",
+  "generated_at_display": "Thu Oct 22, 2026 \u00b7 12:26 AM CDT",
   "timezone": "America/Chicago",
   "owner": "rupret007",
   "dashboard": "bob-ops-dashboard",
@@ -307,7 +307,7 @@
           "agent_url": "https://cursor.com/agents/bc-61d5fce3-5c7c-5e61-953d-bf055f389dd0",
           "ci": {
             "name": "CI",
-            "conclusion": "in_progress",
+            "conclusion": "success",
             "branch": "main",
             "sha": "5374a29",
             "created": "2026-10-22T05:04:29Z",
@@ -495,11 +495,11 @@
           "status": "yellow",
           "chip": "Yellow",
           "default_branch": "main",
-          "tip_sha": "f6774ab",
-          "tip_date": "2026-10-22T04:56:51Z",
-          "open_prs": 27,
-          "open_pr_url": "https://github.com/rupret007/bob-ops-dashboard/pull/132",
-          "open_pr_number": 132,
+          "tip_sha": "22cfdeb",
+          "tip_date": "2026-10-22T05:11:49Z",
+          "open_prs": 28,
+          "open_pr_url": "https://github.com/rupret007/bob-ops-dashboard/pull/133",
+          "open_pr_number": 133,
           "open_pr_draft": false,
           "open_pr_stack": [],
           "pr_listing_complete": true,
@@ -900,7 +900,7 @@
     "barker"
   ],
   "publish_notes": "Public board -- no secrets or customer paths. Private repositories stay high-level; AI Music Vault stays private-content-boundary only.",
-  "refresh_started_ms": 1792645865121,
+  "refresh_started_ms": 1792646767109,
   "agents_source": "file:stale->unknown",
   "agents": [
     {
@@ -1099,7 +1099,7 @@
     }
   ],
   "llm_work_now_freshness": {
-    "generated_at": "2026-10-22 00:11 CT",
+    "generated_at": "2026-10-22 00:26 CT",
     "warn_ttl_sec": 1200,
     "warnings": [],
     "ok": true
@@ -1130,7 +1130,7 @@
     ],
     "scorecards": {
       "v": "scorecards/v1",
-      "generated_at": "2026-10-22T05:11:38.622204+00:00",
+      "generated_at": "2026-10-22T05:26:41.006116+00:00",
       "windows": {
         "24h": {
           "providers": {
