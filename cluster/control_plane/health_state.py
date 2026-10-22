@@ -220,7 +220,8 @@ def machine_health(root, machine, now):
     if not authoritative(root):
         return None
     status = read_status(root)
-    peer = status.get('groups', {}).get('peer', {}).get('details', {})
+    peer_group = status.get('groups', {}).get('peer', {})
+    peer = peer_group.get('details', {})
     health = {}
     for name in ('mini', 'nucbox'):
         value = status if name == machine else peer.get('health', {})
@@ -237,7 +238,19 @@ def machine_health(root, machine, now):
                                if isinstance(timestamp, (int, float)) else None)
         result['reported_state'] = result['state']
         result['sync_age_seconds'] = max(0, int(now - peer.get('received_at', 0))) if name != machine else None
-        if name != machine and not 0 <= now - peer.get('received_at', 0) <= 390:
-            result.update(state='yellow', detail='peer sync stale; health unconfirmed')
+        if name != machine:
+            probe_failed = peer_group.get('error') or any(
+                check.get('execution_error') for check in peer_group.get('checks', []))
+            result['connectivity'] = 'unknown'
+            if probe_failed:
+                result.update(state='yellow', detail='Peer health probe failed; health unconfirmed')
+                if peer_group.get('error') in ('URLError', 'TimeoutExpired', 'TimeoutError',
+                        'ConnectionError', 'ConnectionRefusedError', 'ConnectionResetError'):
+                    result.update(connectivity='unreachable',
+                                  detail='Peer health endpoint unreachable; health unconfirmed')
+            elif not 0 <= now - peer.get('received_at', 0) <= 390:
+                result.update(state='yellow', detail='peer sync stale; health unconfirmed')
+            elif value.get('machine') == name:
+                result['connectivity'] = 'reachable'
         health[name] = result
     return health
