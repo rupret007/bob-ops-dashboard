@@ -244,7 +244,9 @@ def machine_health(root, machine, now):
             result['connectivity'] = 'unknown'
             if probe_failed:
                 result.update(state='yellow', detail='Peer health probe failed; health unconfirmed')
-                if peer_group.get('error') in ('URLError', 'TimeoutExpired', 'TimeoutError',
+                if not 0 <= now - peer_group.get('finished_at', 0) <= peer_group.get('period', 120) + 90:
+                    result['detail'] = 'Peer health probe stale; health unconfirmed'
+                elif peer_group.get('error') in ('URLError', 'TimeoutExpired', 'TimeoutError',
                         'ConnectionError', 'ConnectionRefusedError', 'ConnectionResetError'):
                     result.update(connectivity='unreachable',
                                   detail='Peer health endpoint unreachable; health unconfirmed')

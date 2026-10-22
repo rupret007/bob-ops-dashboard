@@ -11,7 +11,8 @@ def report(machine, now, passed=True):
                     checks=[dict(name='dashboard_http', passed=passed)])})
 
 
-def project(tmp_path, *, error=None, received_age=0, peer_offset=0, local_passed=True):
+def project(tmp_path, *, error=None, received_age=0, peer_offset=0, local_passed=True,
+            probe_age=0):
     now = 10000
     remote = report('mini', now + peer_offset)
     remote['observation'] = dict(nonce='fixture-nonce', served_at=now + peer_offset)
@@ -21,7 +22,7 @@ def project(tmp_path, *, error=None, received_age=0, peer_offset=0, local_passed
     local['groups']['peer'] = dict(finished_at=now, period=120, details=details,
         checks=[dict(name='peer_freshness', passed=True)])
     if error:
-        local['groups']['peer'] = dict(finished_at=now, period=120, error=error,
+        local['groups']['peer'] = dict(finished_at=now - probe_age, period=120, error=error,
             checks=[dict(name='peer_execution', passed=False, execution_error=True)])
     atomic_json(tmp_path / 'health-status.json', local)
     return machine_health(tmp_path, 'nucbox', now)
@@ -29,10 +30,19 @@ def project(tmp_path, *, error=None, received_age=0, peer_offset=0, local_passed
 
 @pytest.mark.parametrize('error', ['URLError', 'TimeoutExpired', 'TimeoutError',
     'ConnectionError', 'ConnectionRefusedError', 'ConnectionResetError'])
-def test_transport_failure_is_unreachable_and_unconfirmed(tmp_path, error):
-    peer = project(tmp_path, error=error)['mini']
+@pytest.mark.parametrize('probe_age', [0, 210])
+def test_transport_failure_is_unreachable_and_unconfirmed(tmp_path, error, probe_age):
+    peer = project(tmp_path, error=error, probe_age=probe_age)['mini']
     assert peer['state'] == 'yellow' and peer['connectivity'] == 'unreachable'
     assert 'unreachable' in peer['detail'].lower()
+    assert 'unconfirmed' in peer['detail'].lower()
+
+
+@pytest.mark.parametrize('probe_age', [211, 1000, -1])
+def test_expired_or_future_transport_failure_is_unknown(tmp_path, probe_age):
+    peer = project(tmp_path, error='URLError', probe_age=probe_age)['mini']
+    assert peer['state'] == 'yellow' and peer['connectivity'] == 'unknown'
+    assert 'stale' in peer['detail'].lower()
     assert 'unconfirmed' in peer['detail'].lower()
 
 
