@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-10-22T10:43:19.769915-05:00",
-  "generated_at_display": "Thu Oct 22, 2026 \u00b7 10:43 AM CDT",
+  "generated_at": "2026-10-22T10:58:14.827895-05:00",
+  "generated_at_display": "Thu Oct 22, 2026 \u00b7 10:58 AM CDT",
   "timezone": "America/Chicago",
   "owner": "rupret007",
   "dashboard": "bob-ops-dashboard",
@@ -58,14 +58,7 @@
           "open_pr_stack": [],
           "pr_listing_complete": true,
           "agent_url": "https://cursor.com/agents/bc-2df62653-9354-58fd-96fb-4038fc7c812a",
-          "ci": {
-            "name": "Web Join browser tests",
-            "conclusion": "success",
-            "branch": "master",
-            "sha": "5606106",
-            "created": "2026-10-19T19:49:06Z",
-            "html_url": "https://github.com/rupret007/webjam/actions/runs/39314124291"
-          },
+          "ci": null,
           "release": "v0.29.0",
           "release_sha": "7aa74be",
           "release_url": "https://github.com/rupret007/webjam/releases/tag/v0.29.0",
@@ -172,7 +165,14 @@
           "open_pr_stack": [],
           "pr_listing_complete": true,
           "agent_url": null,
-          "ci": null,
+          "ci": {
+            "name": "Release integrity",
+            "conclusion": "success",
+            "branch": "main",
+            "sha": "a95c31a",
+            "created": "2026-09-06T05:39:00Z",
+            "html_url": "https://github.com/rupret007/Rad-Dad-Merch/actions/runs/34014510698"
+          },
           "release": null,
           "release_sha": null,
           "release_url": null,
@@ -243,14 +243,7 @@
           "open_pr_stack": [],
           "pr_listing_complete": true,
           "agent_url": null,
-          "ci": {
-            "name": "leftover-honesty",
-            "conclusion": "success",
-            "branch": "main",
-            "sha": "61ad95c",
-            "created": "2026-10-17T06:06:17Z",
-            "html_url": "https://github.com/rupret007/rad-dad-show-night/actions/runs/39008671084"
-          },
+          "ci": null,
           "release": null,
           "release_sha": null,
           "release_url": null,
@@ -459,14 +452,7 @@
           "open_pr_stack": [],
           "pr_listing_complete": true,
           "agent_url": null,
-          "ci": {
-            "name": "Pull request integration",
-            "conclusion": "success",
-            "branch": "main",
-            "sha": "ead5b3a",
-            "created": "2026-10-18T19:48:42Z",
-            "html_url": "https://github.com/rupret007/Cursor-OpenClaw-Integration/actions/runs/39160456211"
-          },
+          "ci": null,
           "release": null,
           "release_sha": null,
           "release_url": null,
@@ -488,11 +474,11 @@
           "status": "yellow",
           "chip": "Yellow",
           "default_branch": "main",
-          "tip_sha": "be44e3d",
-          "tip_date": "2026-10-22T15:28:22Z",
+          "tip_sha": "13be5bc",
+          "tip_date": "2026-10-22T15:43:36Z",
           "open_prs": 26,
-          "open_pr_url": "https://github.com/rupret007/bob-ops-dashboard/pull/139",
-          "open_pr_number": 139,
+          "open_pr_url": "https://github.com/rupret007/bob-ops-dashboard/pull/141",
+          "open_pr_number": 141,
           "open_pr_draft": false,
           "open_pr_stack": [],
           "pr_listing_complete": true,
@@ -893,7 +879,7 @@
     "barker"
   ],
   "publish_notes": "Public board -- no secrets or customer paths. Private repositories stay high-level; AI Music Vault stays private-content-boundary only.",
-  "refresh_started_ms": 1792683755929,
+  "refresh_started_ms": 1792684660215,
   "agents_source": "file:stale->unknown",
   "agents": [
     {
@@ -1092,7 +1078,7 @@
     }
   ],
   "llm_work_now_freshness": {
-    "generated_at": "2026-10-22 10:43 CT",
+    "generated_at": "2026-10-22 10:58 CT",
     "warn_ttl_sec": 1200,
     "warnings": [],
     "ok": true
@@ -1123,7 +1109,7 @@
     ],
     "scorecards": {
       "v": "scorecards/v1",
-      "generated_at": "2026-10-22T15:43:21.685112+00:00",
+      "generated_at": "2026-10-22T15:58:16.119362+00:00",
       "windows": {
         "24h": {
           "providers": {
