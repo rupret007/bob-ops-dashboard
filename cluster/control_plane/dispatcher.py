@@ -44,6 +44,7 @@ from .guards import MachineGuards
 from .job_ledger import JobLedger, get_ledger, Job, JobState
 from .github_budget import GitHubDeferred
 from .github_reads import GitHubReadError
+from .release_holds import explicitly_held
 from .worker_runtime import qualified_runtime, RuntimeUnqualified, REASON as RUNTIME_REASON
 
 DISPATCH_LOG_DIR = Path(
@@ -507,6 +508,16 @@ class Dispatcher:
             repo = pr.get("_repo", "")
             pr_number = pr.get("number")
             head_sha = pr.get("headRefOid", "")
+
+            if explicitly_held(pr):
+                decision = DispatchDecision(
+                    timestamp=_now_iso(), action="skip", machine=self.machine, live=live,
+                    repo=repo, pr_number=pr_number, head_sha=head_sha,
+                    reason="PR has an explicit release hold",
+                    extra={"reason_code": "release-held"})
+                self._write_decision(decision)
+                decisions.append(decision)
+                continue
             
             if self.ledger.has_active_lease(repo, pr_number):
                 decision = DispatchDecision(

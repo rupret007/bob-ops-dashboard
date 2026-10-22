@@ -12,7 +12,7 @@ def test_fix_runs_tests_before_commit_push_and_label(tmp_path):
         if args[0] == str(tmp_path / 'codex'):
             codex_inputs.append(kwargs.get('input'))
         if args[:3] == ['gh', 'pr', 'view']:
-            return json.dumps(dict(headRefName='fix/one', headRefOid='before', isCrossRepository=False, state='OPEN'))
+            return json.dumps(dict(headRefName='fix/one', headRefOid='before', isCrossRepository=False, state='OPEN', title='Ready', labels=[]))
         if args[:3] == ['git', 'worktree', 'add']:
             tree = __import__('pathlib').Path(args[-2])
             tree.mkdir(parents=True)
@@ -43,7 +43,7 @@ def test_fix_runs_tests_before_commit_push_and_label(tmp_path):
 
 def test_protected_branch_and_never_touch_cannot_run_codex(tmp_path):
     with patch('cluster.control_plane.fix_worker._find_codex', return_value=tmp_path/'codex'), patch('cluster.control_plane.fix_worker.run') as run:
-        run.return_value = json.dumps(dict(headRefName='main', headRefOid='before', isCrossRepository=False, state='OPEN'))
+        run.return_value = json.dumps(dict(headRefName='main', headRefOid='before', isCrossRepository=False, state='OPEN', title='Ready', labels=[]))
         with pytest.raises(RuntimeError, match='protected'):
             fix_pr('owner/repo', 1, 'before', ['repair'])
         assert run.call_count == 1
@@ -102,7 +102,7 @@ def test_node_worker_installs_locked_dependencies_and_generates_prisma(tmp_path)
     def command(args, cwd=None, **kwargs):
         calls.append(args)
         if args[:3] == ['gh', 'pr', 'view']:
-            return json.dumps(dict(headRefName='fix/one', headRefOid='before', isCrossRepository=False, state='OPEN'))
+            return json.dumps(dict(headRefName='fix/one', headRefOid='before', isCrossRepository=False, state='OPEN', title='Ready', labels=[]))
         if args[:3] == ['git', 'worktree', 'add']:
             tree = __import__('pathlib').Path(args[-2])
             tree.mkdir(parents=True)
@@ -139,7 +139,7 @@ def test_failed_tests_feed_output_back_to_codex_then_succeed(tmp_path):
             if len(test_runs) == 1:
                 raise subprocess.CalledProcessError(1, args, output='E ImportError: missing_name', stderr='')
         if args[:3] == ['gh', 'pr', 'view']:
-            return json.dumps(dict(headRefName='fix/one', headRefOid='before', isCrossRepository=False, state='OPEN'))
+            return json.dumps(dict(headRefName='fix/one', headRefOid='before', isCrossRepository=False, state='OPEN', title='Ready', labels=[]))
         if args[:3] == ['git', 'worktree', 'add']:
             tree = __import__('pathlib').Path(args[-2])
             tree.mkdir(parents=True)
@@ -166,7 +166,7 @@ def test_tests_failing_every_attempt_never_commit(tmp_path):
         if '-m' in args and 'pytest' in args:
             raise subprocess.CalledProcessError(1, args, output='still broken', stderr='')
         if args[:3] == ['gh', 'pr', 'view']:
-            return json.dumps(dict(headRefName='fix/one', headRefOid='before', isCrossRepository=False, state='OPEN'))
+            return json.dumps(dict(headRefName='fix/one', headRefOid='before', isCrossRepository=False, state='OPEN', title='Ready', labels=[]))
         if args[:3] == ['git', 'worktree', 'add']:
             tree = __import__('pathlib').Path(args[-2])
             tree.mkdir(parents=True)

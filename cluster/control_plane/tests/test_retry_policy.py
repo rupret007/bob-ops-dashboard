@@ -21,7 +21,7 @@ def test_missing_lockfile_retains_real_ledger_reason_and_never_calls_model(tmp_p
     def command(args, cwd=None, **kwargs):
         if args[:3] == ['gh', 'pr', 'view']:
             return json.dumps(dict(headRefName='fix/one', headRefOid='a' * 40,
-                                   isCrossRepository=False, state='OPEN'))
+                                   isCrossRepository=False, state='OPEN', title='Ready', labels=[]))
         if args[:3] == ['git', 'worktree', 'add']:
             tree = __import__('pathlib').Path(args[-2]); tree.mkdir(parents=True)
             (tree / 'package.json').write_text(json.dumps({'scripts': {'test': 'jest'}}))
@@ -176,7 +176,7 @@ def test_dashboard_shows_fixed_reason_and_clears_it_for_a_newer_head(tmp_path):
 ])
 def test_actual_pr_preflights_are_nonretryable_before_checkout(tmp_path, change, code):
     from cluster.control_plane.retry_policy import PreflightFailure
-    pr = dict(headRefName='fix/one', headRefOid='a'*40, state='OPEN', isCrossRepository=False)
+    pr = dict(headRefName='fix/one', headRefOid='a'*40, state='OPEN', isCrossRepository=False, title='Ready', labels=[])
     pr.update(change)
     with patch.object(fix_worker, '_find_codex', return_value='codex'), \
          patch.object(fix_worker, 'run', return_value=json.dumps(pr)) as command:

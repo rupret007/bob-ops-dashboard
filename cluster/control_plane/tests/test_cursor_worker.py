@@ -85,7 +85,7 @@ def test_cursor_retains_supervisor_test_and_publication_gates(tmp_path, failure)
     def run(args, cwd=None, **kwargs):
         calls.append(args)
         if args[:3] == ['gh', 'pr', 'view']:
-            return json.dumps(dict(headRefName='fix/one', headRefOid='before', isCrossRepository=False, state='OPEN'))
+            return json.dumps(dict(headRefName='fix/one', headRefOid='before', isCrossRepository=False, state='OPEN', title='Ready', labels=[]))
         if args[:3] == ['git', 'worktree', 'add']:
             tree = Path(args[-2]); tree.mkdir(parents=True); (tree / 'test_real.py').write_text('def test_real(): assert True\n')
         if args[0] == 'fixture-cursor':

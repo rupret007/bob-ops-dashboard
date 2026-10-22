@@ -42,7 +42,7 @@ def execute_fixture(tmp_path, boundary, error=None):
             raise error
         if args[:3] == ['gh','pr','view']:
             return json.dumps(dict(headRefName='fix/one',headRefOid=HEAD,
-                                   isCrossRepository=False,state='OPEN'))
+                                   isCrossRepository=False,state='OPEN', title='Ready', labels=[]))
         if args[:3] == ['git','worktree','add']:
             tree=Path(args[-2]);tree.mkdir(parents=True)
             (tree/'package.json').write_text(json.dumps({'scripts':{'test':'fixture'}}))
