@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-10-22T05:42:21.885376-05:00",
-  "generated_at_display": "Thu Oct 22, 2026 \u00b7 5:42 AM CDT",
+  "generated_at": "2026-10-22T05:57:24.313485-05:00",
+  "generated_at_display": "Thu Oct 22, 2026 \u00b7 5:57 AM CDT",
   "timezone": "America/Chicago",
   "owner": "rupret007",
   "dashboard": "bob-ops-dashboard",
@@ -495,15 +495,15 @@
           "status": "yellow",
           "chip": "Yellow",
           "default_branch": "main",
-          "tip_sha": "36407c8",
-          "tip_date": "2026-10-22T10:27:46Z",
-          "open_prs": 31,
-          "open_pr_url": "https://github.com/rupret007/bob-ops-dashboard/pull/85",
-          "open_pr_number": 85,
+          "tip_sha": "bd4a286",
+          "tip_date": "2026-10-22T10:42:36Z",
+          "open_prs": 30,
+          "open_pr_url": "https://github.com/rupret007/bob-ops-dashboard/pull/88",
+          "open_pr_number": 88,
           "open_pr_draft": false,
           "open_pr_stack": [],
           "pr_listing_complete": true,
-          "agent_url": "https://cursor.com/agents/bc-2c8313e4-b404-5cf6-8df2-e2ed5f1b3b10",
+          "agent_url": "https://cursor.com/agents/bc-8010dd7e-0b0b-5074-a351-0faafe9a47c7",
           "ci": null,
           "release": null,
           "release_sha": null,
@@ -900,7 +900,7 @@
     "barker"
   ],
   "publish_notes": "Public board -- no secrets or customer paths. Private repositories stay high-level; AI Music Vault stays private-content-boundary only.",
-  "refresh_started_ms": 1792665711428,
+  "refresh_started_ms": 1792666613626,
   "agents_source": "file:stale->unknown",
   "agents": [
     {
@@ -1099,7 +1099,7 @@
     }
   ],
   "llm_work_now_freshness": {
-    "generated_at": "2026-10-22 05:42 CT",
+    "generated_at": "2026-10-22 05:57 CT",
     "warn_ttl_sec": 1200,
     "warnings": [],
     "ok": true
@@ -1130,7 +1130,7 @@
     ],
     "scorecards": {
       "v": "scorecards/v1",
-      "generated_at": "2026-10-22T10:42:23.022707+00:00",
+      "generated_at": "2026-10-22T10:57:25.426232+00:00",
       "windows": {
         "24h": {
           "providers": {
