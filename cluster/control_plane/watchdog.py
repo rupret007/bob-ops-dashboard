@@ -48,8 +48,8 @@ HEAD_LAG_ALERT_MINUTES = 30
 REQUIRED_LABELS = ["needs-karen", "karen-pass", "karen-fail"]
 
 SERVICE_LOG_FILES = {
-    "shadow": LOG_DIR / "shadow" / "shadow.log",
-    "dispatch": LOG_DIR / "dispatch" / "dispatch.log",
+    "shadow": LOG_DIR / "shadow",
+    "dispatch": LOG_DIR / "dispatch",
     "conductor": LOG_DIR / "conductor",
     "poller": Path("~/.local/share/karen/poller.log").expanduser(),
     "dashboard": LOG_DIR / "dashboard.log",
