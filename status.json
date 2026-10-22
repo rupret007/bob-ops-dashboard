@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-10-22T10:28:06.322856-05:00",
-  "generated_at_display": "Thu Oct 22, 2026 \u00b7 10:28 AM CDT",
+  "generated_at": "2026-10-22T10:43:19.769915-05:00",
+  "generated_at_display": "Thu Oct 22, 2026 \u00b7 10:43 AM CDT",
   "timezone": "America/Chicago",
   "owner": "rupret007",
   "dashboard": "bob-ops-dashboard",
@@ -66,9 +66,9 @@
             "created": "2026-10-19T19:49:06Z",
             "html_url": "https://github.com/rupret007/webjam/actions/runs/39314124291"
           },
-          "release": null,
-          "release_sha": null,
-          "release_url": null,
+          "release": "v0.29.0",
+          "release_sha": "7aa74be",
+          "release_url": "https://github.com/rupret007/webjam/releases/tag/v0.29.0",
           "notes": "Making room. Latest is the published test candidate; source can be ahead.",
           "accessible": true,
           "coord": {
@@ -134,7 +134,14 @@
           "open_pr_stack": [],
           "pr_listing_complete": true,
           "agent_url": "https://cursor.com/agents/bc-e1afa0c0-54fc-513b-af6f-70a87deef44e",
-          "ci": null,
+          "ci": {
+            "name": "Quality",
+            "conclusion": "success",
+            "branch": "main",
+            "sha": "2b6d2af",
+            "created": "2026-10-14T02:18:47Z",
+            "html_url": "https://github.com/rupret007/StoryBoard/actions/runs/38500366208"
+          },
           "release": null,
           "release_sha": null,
           "release_url": null,
@@ -165,14 +172,7 @@
           "open_pr_stack": [],
           "pr_listing_complete": true,
           "agent_url": null,
-          "ci": {
-            "name": "Release integrity",
-            "conclusion": "success",
-            "branch": "main",
-            "sha": "a95c31a",
-            "created": "2026-09-06T05:39:00Z",
-            "html_url": "https://github.com/rupret007/Rad-Dad-Merch/actions/runs/34014510698"
-          },
+          "ci": null,
           "release": null,
           "release_sha": null,
           "release_url": null,
@@ -270,7 +270,9 @@
           "chip": "Yellow",
           "notes": "Private catalog spine for StoryBoard / Show Night. Do not publish catalog content.",
           "accessible": true,
-          "ci": {},
+          "ci": {
+            "conclusion": "success"
+          },
           "coord": {
             "repo": "AI-Music-Vault",
             "agent": "none",
@@ -486,9 +488,9 @@
           "status": "yellow",
           "chip": "Yellow",
           "default_branch": "main",
-          "tip_sha": "3af0d77",
-          "tip_date": "2026-10-22T15:13:22Z",
-          "open_prs": 27,
+          "tip_sha": "be44e3d",
+          "tip_date": "2026-10-22T15:28:22Z",
+          "open_prs": 26,
           "open_pr_url": "https://github.com/rupret007/bob-ops-dashboard/pull/139",
           "open_pr_number": 139,
           "open_pr_draft": false,
@@ -515,7 +517,9 @@
           "chip": "Yellow",
           "notes": "Private macOS virtual-display / Cast prototype. Software validation only; Screen Recording and device steps stay owner-only.",
           "accessible": true,
-          "ci": {}
+          "ci": {
+            "conclusion": "success"
+          }
         },
         {
           "name": "OpenClaw Runtime",
@@ -665,8 +669,8 @@
           "url": "https://github.com/rupret007/Andrea_NanoBot",
           "repo_url": "https://github.com/rupret007/Andrea_NanoBot",
           "private": false,
-          "status": "yellow",
-          "chip": "Yellow",
+          "status": "red",
+          "chip": "Red",
           "default_branch": "main",
           "tip_sha": "3e83ed2",
           "tip_date": "2026-10-17T08:20:08Z",
@@ -677,7 +681,14 @@
           "open_pr_stack": [],
           "pr_listing_complete": true,
           "agent_url": null,
-          "ci": null,
+          "ci": {
+            "name": "Security",
+            "conclusion": "failure",
+            "branch": "main",
+            "sha": "3e83ed2",
+            "created": "2026-10-19T14:14:17Z",
+            "html_url": "https://github.com/rupret007/Andrea_NanoBot/actions/runs/39267132686"
+          },
           "release": null,
           "release_sha": null,
           "release_url": null,
@@ -882,7 +893,7 @@
     "barker"
   ],
   "publish_notes": "Public board -- no secrets or customer paths. Private repositories stay high-level; AI Music Vault stays private-content-boundary only.",
-  "refresh_started_ms": 1792682852931,
+  "refresh_started_ms": 1792683755929,
   "agents_source": "file:stale->unknown",
   "agents": [
     {
@@ -1081,7 +1092,7 @@
     }
   ],
   "llm_work_now_freshness": {
-    "generated_at": "2026-10-22 10:28 CT",
+    "generated_at": "2026-10-22 10:43 CT",
     "warn_ttl_sec": 1200,
     "warnings": [],
     "ok": true
@@ -1112,7 +1123,7 @@
     ],
     "scorecards": {
       "v": "scorecards/v1",
-      "generated_at": "2026-10-22T15:28:07.837451+00:00",
+      "generated_at": "2026-10-22T15:43:21.685112+00:00",
       "windows": {
         "24h": {
           "providers": {
