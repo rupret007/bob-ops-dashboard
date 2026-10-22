@@ -11,6 +11,29 @@ import pytest
 from cluster.control_plane import watchdog
 
 
+def test_peer_health_requires_configured_url():
+    with mock.patch.dict(watchdog.PEER_URLS, {"nucbox": ""}), \
+            mock.patch("urllib.request.urlopen") as request:
+        assert watchdog.sync_peer_health("mini") is False
+        request.assert_not_called()
+
+
+def test_peer_health_uses_configured_url_and_preserves_timestamp(tmp_path):
+    timestamp = "2026-10-22T00:00:00+00:00"
+    response = mock.MagicMock()
+    response.__enter__.return_value.read.return_value = json.dumps({
+        "machines": {"nucbox": {"timestamp": timestamp, "state": "green", "detail": "Healthy"}}
+    }).encode()
+    with mock.patch.dict(watchdog.PEER_URLS, {"nucbox": "http://peer.example.invalid:8790/"}), \
+            mock.patch.object(watchdog, "LOG_DIR", tmp_path), \
+            mock.patch("urllib.request.urlopen", return_value=response) as request:
+        assert watchdog.sync_peer_health("mini") is True
+        request.assert_called_once_with("http://peer.example.invalid:8790/api/engine", timeout=5)
+    row = json.loads((tmp_path / "machines/nucbox/watchdog.log").read_text())
+    assert row["timestamp"] == timestamp
+    assert row["checks"][0]["passed"] is True
+
+
 class TestHealthChecks:
     """Tests for individual health check functions."""
 

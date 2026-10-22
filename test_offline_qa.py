@@ -151,6 +151,40 @@ class OfflineQaTests(unittest.TestCase):
                 with patch("offline_qa_fixtures.tempfile.gettempdir", return_value=env["TMPDIR"]):
                     self.assertEqual(require_temporary_child(Path(system_tmp)), Path(system_tmp).resolve())
 
+    def test_temp_root_sentinel_is_distinct_from_repository_metadata(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp).resolve()
+            child = base / "output"
+            child.mkdir()
+            marker = base / ".git"
+            marker.mkdir()
+            with patch("offline_qa_fixtures.tempfile.gettempdir", return_value=str(base)):
+                self.assertEqual(require_temporary_child(child), child)
+                self.assertEqual(qa.validate_output_directory(str(child)), child)
+                (marker / "HEAD").write_text("ref: refs/heads/main\n", encoding="utf-8")
+                with self.assertRaisesRegex(ValueError, "repository"):
+                    require_temporary_child(child)
+                with self.assertRaisesRegex(ValueError, "repository"):
+                    qa.validate_output_directory(str(child))
+                (marker / "HEAD").unlink()
+                marker.rmdir()
+                marker.write_text("gitdir: /synthetic/worktree\n", encoding="utf-8")
+                with self.assertRaisesRegex(ValueError, "repository"):
+                    require_temporary_child(child)
+
+    def test_nested_temp_root_does_not_hide_repository_ancestor(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp).resolve()
+            (base / ".git").mkdir()
+            temp = base / "scratch"
+            output = temp / "output"
+            output.mkdir(parents=True)
+            with patch("offline_qa_fixtures.tempfile.gettempdir", return_value=str(temp)):
+                with self.assertRaisesRegex(ValueError, "repository"):
+                    require_temporary_child(output)
+                with self.assertRaisesRegex(ValueError, "repository"):
+                    qa.validate_output_directory(str(output))
+
     def test_preserved_fixture_is_explicitly_labeled_synthetic_and_not_publishable(self):
         with tempfile.TemporaryDirectory() as tmp:
             generator = Path(tmp)

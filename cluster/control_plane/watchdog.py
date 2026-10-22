@@ -138,9 +138,10 @@ def _escalate_to_jeff(issue: str, details: str) -> None:
     logger.warning("Escalated to NEEDS_JEFF.md: %s", issue)
 
 
+# Set private peer endpoints in the service environment; absent means no sync.
 PEER_URLS = {
-    "mini": os.environ.get("STORYPOOL_MINI_URL", "http://100.67.108.113:8790"),
-    "nucbox": os.environ.get("STORYPOOL_NUCBOX_URL", "http://100.93.165.1:8790"),
+    "mini": os.environ.get("STORYPOOL_MINI_URL", ""),
+    "nucbox": os.environ.get("STORYPOOL_NUCBOX_URL", ""),
 }
 
 
@@ -162,8 +163,11 @@ def sync_peer_health(machine: str) -> bool:
     """
     import urllib.request
     peer = "nucbox" if machine == "mini" else "mini"
+    peer_url = PEER_URLS.get(peer, "").strip().rstrip("/")
+    if not peer_url:
+        return False
     try:
-        with urllib.request.urlopen(PEER_URLS[peer] + "/api/engine", timeout=5) as resp:
+        with urllib.request.urlopen(peer_url + "/api/engine", timeout=5) as resp:
             data = json.loads(resp.read().decode("utf-8"))
         info = data.get("machines", {}).get(peer, {})
         if not info.get("timestamp"):
