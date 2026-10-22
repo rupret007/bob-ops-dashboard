@@ -125,7 +125,7 @@ def open_revert(repo, number, sha, base, lease):
         lease.renew()
         command(['git', 'checkout', '-b', branch], path)
         command(['git', '-c', 'user.name=StoryPool', '-c',
-                 'user.email=storypool@users.noreply.github.com',
+                 'user.email={}@users.noreply.github.com'.format('storypool'),
                  'revert', '--no-edit', sha], path)
         lease.renew()
         # Push only the new branch; no main update and no force option.
@@ -201,6 +201,24 @@ def reconcile_recent():
     return [reconcile_one(client, pr) for pr in recent_prs()]
 
 
+def _unresolved_prs(records):
+    """Retain unresolved receiving commits, including a partial batch's unattempted tail."""
+    pending = []
+    for key, row in records.items():
+        identity = re.fullmatch(r'([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)#([1-9][0-9]*)', key)
+        if identity is None or not isinstance(row, dict):
+            raise ValueError('Invalid follow-up progress identity')
+        repo, number = identity[1], int(identity[2])
+        if row and (row.get('repo') != repo or type(row.get('pr')) is not int
+                    or row['pr'] != number or row.get('main_ci') not in
+                    ('success', 'recovered', 'ineligible', 'failure', 'unknown', 'pending', 'deferred')):
+            raise ValueError('Follow-up progress does not match its identity')
+        if (row.get('main_ci') not in ('success', 'recovered', 'ineligible')
+                and check_merge_allowed(repo)[0]):
+            pending.append(dict(number=number, repository=dict(nameWithOwner=repo)))
+    return pending
+
+
 def reconcile_batch(root):
     """Bound probe work, persisting scheduling progress rather than approval.
 
@@ -211,12 +229,18 @@ def reconcile_batch(root):
     from .health_peer import number
     path = Path(root) / 'main-ci-progress.json'
     try:
-        saved = json.loads(path.read_text()) if path.stat().st_size <= 1024 * 1024 else {}
-        records = saved.get('records', {}) if isinstance(saved, dict) else {}
-        if not isinstance(records, dict):
-            records = {}
+        if path.stat().st_size > 1024 * 1024:
+            raise ValueError('Follow-up progress exceeds the bounded input size')
+        saved = json.loads(path.read_text())
+        if not isinstance(saved, dict) or not isinstance(saved.get('records', {}), dict):
+            raise ValueError('Invalid follow-up progress')
+        records = saved.get('records', {})
+        unresolved = _unresolved_prs(records)
+    except FileNotFoundError:
+        records, unresolved = {}, []
     except (OSError, ValueError):
-        records = {}
+        # An unreadable journal is not proof that all old failures recovered.
+        return dict(results=[], attempted=0, total=0, unconfirmed=1, progress_unavailable=True)
 
     token = _deadline.set(time.monotonic() + 120)
     try:
@@ -231,6 +255,8 @@ def reconcile_batch(root):
                 return dict(results=[], attempted=0, total=len(records),
                             unconfirmed=max(1, len(records)), discovery_deferred=True)
         key = lambda pr: '{}#{}'.format(pr['repository']['nameWithOwner'], pr['number'])
+        discovered = {key(pr) for pr in prs}
+        prs = [*prs, *(pr for pr in unresolved if key(pr) not in discovered)]
         records = {key(pr): records.get(key(pr), {}) for pr in prs}
         def checked(pr):
             row = records[key(pr)]
