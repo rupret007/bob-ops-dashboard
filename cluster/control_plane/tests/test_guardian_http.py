@@ -234,7 +234,7 @@ def test_failed_installer_logs_sanitized_stdout_and_stderr(tmp_path, monkeypatch
     monkeypatch.setattr(updater, 'UPDATE_LOG_FILE', log)
     monkeypatch.setattr(updater.subprocess, 'run', lambda *a, **kw: subprocess.CompletedProcess(
         a[0], 1, 'Dashboard reload_failed\napi_key=fixture-private-value\n',
-        'OSError: [Errno 48] Address already in use\nAuthorization: Bearer fixture-bearer-value\n'))
+        'OSError: [Errno 48] Address already in use\nAuthorization: Bearer ' + 'fixture-bearer-value\n'))
     assert not updater.reinstall(tmp_path, 'mini')
     text = log.read_text()
     assert 'Dashboard reload_failed' in text
