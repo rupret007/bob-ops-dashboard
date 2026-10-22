@@ -13,6 +13,7 @@ from enum import Enum
 from typing import Optional, Any, Dict, Tuple
 
 from .config import KarenConfig
+from .contract_policy import VerifiedContract, authorized_assertion
 
 try:
     from cluster.never_touch import is_never_touch, NeverTouchViolation
@@ -76,6 +77,8 @@ class PRInfo:
     description: str = ""  # PR body/description
     review_scope: Optional[ReviewScope] = None
     review_material: Optional[ReviewMaterial] = None
+    base_sha: str = ""
+    test_contract_proof: Optional[VerifiedContract] = None
 
 
 SECRET_PATTERNS = [
@@ -330,6 +333,7 @@ def check_tests_not_weakened(pr: PRInfo, config: KarenConfig) -> CheckResult:
     renamed_headers = _renamed_js_test_headers(pr.diff)
     additions = list(_added_lines(pr.diff))
     equivalent_additions = set()
+    contract = authorized_assertion(pr)
 
     test_function_patterns = [
         r"^\s*def\s+test_",
@@ -367,6 +371,10 @@ def check_tests_not_weakened(pr: PRInfo, config: KarenConfig) -> CheckResult:
                 replacement = next((i for i, (path, _, added) in enumerate(additions)
                                     if i not in equivalent_additions and path == filepath and
                                     filepath.endswith('.py') and _literal_equivalent_line(line, added)), None)
+                if replacement is None and contract and (filepath, number, line) == contract[:3]:
+                    replacement = next((i for i, (path, added_number, added) in enumerate(additions)
+                                        if i not in equivalent_additions
+                                        and (path, added_number, added) == (contract[0], contract[3], contract[4])), None)
                 if replacement is None:
                     issues.append(f"Removed assertion in {filepath}:{number} (removed source; value redacted)")
                 else:
