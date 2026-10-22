@@ -15,7 +15,7 @@ from dataclasses import dataclass
 from typing import Callable, Optional
 
 MINI_LOAD_LIMIT = 10.0
-MINI_SWAP_LIMIT_PCT = 90.0
+MINI_SWAP_LIMIT_PCT = 80.0
 MINI_DISK_MIN_GB = 15.0
 NUCBOX_LOAD_LIMIT = 12.0
 NUCBOX_MAX_LANES = 7
