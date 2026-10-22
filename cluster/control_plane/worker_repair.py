@@ -77,7 +77,7 @@ def _fix_pr(_worker_bindings, repo, pr_number, head_sha, findings):
                         input=attempt_prompt, env=model_env))
             else:
                 _worker_bindings['run']([str(codex)] + _worker_bindings['codex_args'](), tree, input=attempt_prompt,
-                    **({'env': test_env} if runtime is not None else {}))
+                    env=test_env)
             if runtime is not None:
                 _worker_bindings['_stage']('test-setup')
                 current = _worker_bindings['qualified_runtime'](repo, head_sha, tree)
