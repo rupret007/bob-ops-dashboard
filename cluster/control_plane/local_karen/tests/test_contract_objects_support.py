@@ -10,6 +10,9 @@ from cluster.control_plane.local_karen import checks, contract_objects as object
 from cluster.control_plane.local_karen.config import KarenConfig
 
 
+FROZEN_CONTRACT = objects.APPROVED
+
+
 @pytest.fixture
 def packet(tmp_path, monkeypatch):
     env = {key: value for key, value in os.environ.items() if not key.startswith('GIT_')}
@@ -51,6 +54,19 @@ def test_exact_objects_are_data_and_do_not_authorize_the_checker(packet):
     record = objects.APPROVED
     pr = checks.PRInfo(record.owner, record.repo, record.number, record.head,
         'Correction', 'author', False, value.diff, {'test': 'success'}, [record.path], [])
+    pr.test_contract_proof = value
+    assert checks.check_tests_not_weakened(pr, KarenConfig()).failed
+
+
+def test_packet_cannot_authorize_even_the_real_frozen_pr_identity(packet):
+    git, _ = packet
+    value = prove(git)
+    # Capture the real code-owned identity before the disposable reader fixture.
+    # This packet data still supplies no installed-source or runtime proof.
+    record = FROZEN_CONTRACT
+    pr = checks.PRInfo(record.owner, record.repo, record.number, record.head,
+        'Correction', 'author', False, value.diff, {'test': 'success'}, [record.path], [])
+    assert checks.check_tests_not_weakened(pr, KarenConfig()).failed
     pr.test_contract_proof = value
     assert checks.check_tests_not_weakened(pr, KarenConfig()).failed
 
