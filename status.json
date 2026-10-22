@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-10-22T11:13:28.541221-05:00",
-  "generated_at_display": "Thu Oct 22, 2026 \u00b7 11:13 AM CDT",
+  "generated_at": "2026-10-22T11:28:24.135579-05:00",
+  "generated_at_display": "Thu Oct 22, 2026 \u00b7 11:28 AM CDT",
   "timezone": "America/Chicago",
   "owner": "rupret007",
   "dashboard": "bob-ops-dashboard",
@@ -58,14 +58,7 @@
           "open_pr_stack": [],
           "pr_listing_complete": true,
           "agent_url": "https://cursor.com/agents/bc-2df62653-9354-58fd-96fb-4038fc7c812a",
-          "ci": {
-            "name": "Web Join browser tests",
-            "conclusion": "success",
-            "branch": "master",
-            "sha": "5606106",
-            "created": "2026-10-19T19:49:06Z",
-            "html_url": "https://github.com/rupret007/webjam/actions/runs/39314124291"
-          },
+          "ci": null,
           "release": null,
           "release_sha": null,
           "release_url": null,
@@ -96,7 +89,14 @@
           "open_pr_stack": [],
           "pr_listing_complete": true,
           "agent_url": null,
-          "ci": null,
+          "ci": {
+            "name": "CI",
+            "conclusion": "success",
+            "branch": "main",
+            "sha": "f1abcc7",
+            "created": "2026-09-07T11:32:00Z",
+            "html_url": "https://github.com/rupret007/StoryLiner/actions/runs/34117103039"
+          },
           "release": null,
           "release_sha": null,
           "release_url": null,
@@ -127,7 +127,14 @@
           "open_pr_stack": [],
           "pr_listing_complete": true,
           "agent_url": "https://cursor.com/agents/bc-e1afa0c0-54fc-513b-af6f-70a87deef44e",
-          "ci": null,
+          "ci": {
+            "name": "Quality",
+            "conclusion": "success",
+            "branch": "main",
+            "sha": "2b6d2af",
+            "created": "2026-10-14T02:18:47Z",
+            "html_url": "https://github.com/rupret007/StoryBoard/actions/runs/38500366208"
+          },
           "release": null,
           "release_sha": null,
           "release_url": null,
@@ -481,8 +488,8 @@
           "status": "yellow",
           "chip": "Yellow",
           "default_branch": "main",
-          "tip_sha": "95e4070",
-          "tip_date": "2026-10-22T15:58:33Z",
+          "tip_sha": "4eaab4c",
+          "tip_date": "2026-10-22T16:13:45Z",
           "open_prs": 26,
           "open_pr_url": "https://github.com/rupret007/bob-ops-dashboard/pull/141",
           "open_pr_number": 141,
@@ -662,8 +669,8 @@
           "url": "https://github.com/rupret007/Andrea_NanoBot",
           "repo_url": "https://github.com/rupret007/Andrea_NanoBot",
           "private": false,
-          "status": "yellow",
-          "chip": "Yellow",
+          "status": "red",
+          "chip": "Red",
           "default_branch": "main",
           "tip_sha": "3e83ed2",
           "tip_date": "2026-10-17T08:20:08Z",
@@ -674,7 +681,14 @@
           "open_pr_stack": [],
           "pr_listing_complete": true,
           "agent_url": null,
-          "ci": null,
+          "ci": {
+            "name": "Security",
+            "conclusion": "failure",
+            "branch": "main",
+            "sha": "3e83ed2",
+            "created": "2026-10-19T14:14:17Z",
+            "html_url": "https://github.com/rupret007/Andrea_NanoBot/actions/runs/39267132686"
+          },
           "release": null,
           "release_sha": null,
           "release_url": null,
@@ -879,7 +893,7 @@
     "barker"
   ],
   "publish_notes": "Public board -- no secrets or customer paths. Private repositories stay high-level; AI Music Vault stays private-content-boundary only.",
-  "refresh_started_ms": 1792685563349,
+  "refresh_started_ms": 1792686462178,
   "agents_source": "file:stale->unknown",
   "agents": [
     {
@@ -1078,7 +1092,7 @@
     }
   ],
   "llm_work_now_freshness": {
-    "generated_at": "2026-10-22 11:13 CT",
+    "generated_at": "2026-10-22 11:28 CT",
     "warn_ttl_sec": 1200,
     "warnings": [],
     "ok": true
@@ -1109,7 +1123,7 @@
     ],
     "scorecards": {
       "v": "scorecards/v1",
-      "generated_at": "2026-10-22T16:13:30.741001+00:00",
+      "generated_at": "2026-10-22T16:28:25.566902+00:00",
       "windows": {
         "24h": {
           "providers": {
