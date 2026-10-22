@@ -6,6 +6,7 @@ import json
 import os
 from pathlib import Path
 import selectors
+import shlex
 import subprocess
 import sys
 
@@ -205,3 +206,27 @@ def test_symlink_git_objects_are_not_materialized(source):
     with pytest.raises(artifacts.ArtifactError, match='unsupported'):
         artifacts.build(repo, git(repo, 'rev-parse','HEAD'), store, allowed=lambda: True)
     assert not list(store.glob('.stage-*'))
+
+
+def test_partial_clone_never_invokes_a_promisor_fetch(source, tmp_path, monkeypatch):
+    repo, head, store = source
+    upstream = tmp_path/'upstream.git'
+    git(repo, 'clone', '--bare', '--no-local', str(repo), str(upstream))
+    git(upstream, 'config', 'uploadpack.allowFilter', 'true')
+    partial = tmp_path/'partial'
+    git(repo, 'clone', '--filter=blob:none', '--no-checkout', upstream.as_uri(), str(partial))
+    assert git(partial, 'config', '--get', 'remote.origin.promisor') == 'true'
+    # A local helper observes a lazy fetch without contacting any network or
+    # credentials. Only fixture preparation clones; the builder must not fetch.
+    marker = tmp_path/'fetch-attempted'
+    directory = tmp_path/'owned-bin'; directory.mkdir()
+    helper = directory/'git-remote-artifact-probe'
+    helper.write_text('#!/bin/sh\nprintf attempted > '+shlex.quote(str(marker))+'\nexit 1\n')
+    helper.chmod(0o755)
+    git(partial, 'config', 'remote.origin.url', 'artifact-probe::probe')
+    git(partial, 'config', 'protocol.artifact-probe.allow', 'always')
+    monkeypatch.setenv('PATH', str(directory)+os.pathsep+os.environ['PATH'])
+    with pytest.raises(artifacts.ArtifactError):
+        artifacts.build(partial.resolve(), head, store, allowed=lambda: True)
+    assert not marker.exists(), 'Source preparation invoked a promisor fetch'
+    assert not (store/head).exists() and not list(store.glob('.stage-*'))

@@ -96,19 +96,26 @@ def _unique(pairs):
     return result
 
 
-def _git(repo, args, *, data=None):
+def _git(repo, args, *, data=None, missing_config=False):
     # Object reads do not apply checkout filters, archive substitutions or
     # hooks. Ignore replace refs and inherited configuration injection.
     env = {k:v for k,v in os.environ.items() if not k.startswith('GIT_')}
     env.update(GIT_CONFIG_NOSYSTEM='1', GIT_CONFIG_GLOBAL=os.devnull,
-               GIT_NO_REPLACE_OBJECTS='1', GIT_ATTR_NOSYSTEM='1', GIT_TERMINAL_PROMPT='0')
+               GIT_NO_REPLACE_OBJECTS='1', GIT_NO_LAZY_FETCH='1',
+               GIT_ATTR_NOSYSTEM='1', GIT_TERMINAL_PROMPT='0')
     result = subprocess.run(['git', '-c', 'core.hooksPath='+os.devnull,
         '-C', str(repo), *args], input=data, env=env, capture_output=True, timeout=30)
-    _require(result.returncode == 0 and not result.stderr.strip(), 'Release object read failed')
+    absent = missing_config and result.returncode == 1 and not result.stdout
+    _require((result.returncode == 0 or absent) and not result.stderr.strip(), 'Release object read failed')
     return result.stdout
 
 
 def _objects(repo, head):
+    # Older Git versions ignore GIT_NO_LAZY_FETCH. Reject every documented
+    # promisor configuration before an object lookup can trigger a fetch.
+    _require(not _git(repo, ['config', '--name-only', '--get-regexp',
+        r'^(extensions\.partialclone|remote\..*\.(promisor|partialclonefilter))$'],
+        missing_config=True), 'Partial repository object reads are unsupported')
     _require(_git(repo, ['rev-parse', '--verify', head+'^{commit}']).decode().strip() == head,
              'Release head is not its exact commit')
     tree = _git(repo, ['rev-parse', head+'^{tree}']).decode().strip()
