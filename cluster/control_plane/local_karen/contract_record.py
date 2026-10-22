@@ -1,30 +1,14 @@
-"""One exact test-contract correction, proved from immutable Git objects.
+"""Code-owned frozen #104 identity and the complete loaded policy snapshot.
 
-Only the code-owned APPROVED repository/PR/full head/frozen baseline/file/test
-and assertion pair can discharge its unique removed-assertion finding. The full
-canonical diff and complete old/new source must match. PR prose, labels,
-configuration and model votes cannot supply authority. Every other deterministic
-check, deletion/skip/decorator rule, credential rule, context/budget limit, claim,
-reviewer, signature/delivery, CI and human-only merge requirement remains.
+Only the complete verifier and normal installed assertion hook may consume this
+record. Every source file in POLICY_FILES must exist, match immutable Git and
+loaded snapshot bytes, and the runtime base must be bound at startup. An empty
+snapshot must never authorize a proof. All original test/fixture assertions and
+other identity, source, diff, deletion/skip, reviewer, CI, signature/delivery,
+qualified installation and release/maintenance requirements remain unchanged.
 
-BASE_ADVANCEMENTS pins nineteen reviewed source steps from the frozen baseline
-through ADMITTED_BASE. Every commit must have its exact stated parent list;
-the141 merge records both ordered parents, including its reviewed side head. The reviewed/merged patch identities and native exact-head verdicts
-are recorded in the PR's provenance evidence; no live-base wildcard is allowed.
-Missing/reversed/skipped edges or unlisted source changes refuse.
-
-The live policy base must descend from ADMITTED_BASE with an exact tree delta
-of POLICY_FILES, each a regular100644 file matching the loaded snapshot. It must
-match the normally installed and loaded runtime source. The review client binds
-that base once at import; missing startup evidence never gains authority later.
-Named live branch and saved PR base are observed separately and rechecked; final
-head verification also requires the bound runtime base.
-
-This policy needs normal review, merge and qualified owner installation before
-frozen104 receives its own normal review. The original106 rejection is retained.
-New source outside this exact policy delta requires another proved, normally
-reviewed policy update. Private tests grant no review, admission or recovery
-qualification and no current lock, hold or resource limit is changed.
+This private complete candidate is not review or installation authority; #104
+still requires its own normal review before #105 may merge.
 """
 from __future__ import annotations
 
@@ -87,22 +71,23 @@ ADMITTED_BASE = '330baa66c69c6dbad29ec85a8123d4475c078111'
 
 
 POLICY_FILES = frozenset({
-    'cluster/control_plane/local_karen/tests/contract_policy/test_contract_primitives.py',
-    'cluster/control_plane/local_karen/tests/contract_policy/test_contract_refs.py',
-    'cluster/control_plane/local_karen/tests/contract_policy/observations.py',
-    'cluster/control_plane/local_karen/tests/contract_policy/__init__.py',
-    'cluster/control_plane/local_karen/contract_record.py',
-    'cluster/control_plane/local_karen/tests/contract_policy/test_contract_merge.py',
-    'cluster/control_plane/local_karen/tests/contract_policy/test_contract_runtime.py',
-    'cluster/control_plane/local_karen/tests/contract_policy/test_contract_fetch.py',
-    'cluster/control_plane/local_karen/tests/contract_policy/test_contract_ancestry.py',
     'cluster/control_plane/local_karen/assertion_policy.py',
     'cluster/control_plane/local_karen/check_types.py',
-    'cluster/control_plane/local_karen/github_client.py',
     'cluster/control_plane/local_karen/contract_policy.py',
+    'cluster/control_plane/local_karen/contract_record.py',
+    'cluster/control_plane/local_karen/github_client.py',
+    'cluster/control_plane/local_karen/tests/contract_policy/__init__.py',
     'cluster/control_plane/local_karen/tests/contract_policy/conftest.py',
+    'cluster/control_plane/local_karen/tests/contract_policy/observations.py',
+    'cluster/control_plane/local_karen/tests/contract_policy/test_contract_ancestry.py',
     'cluster/control_plane/local_karen/tests/contract_policy/test_contract_client.py',
+    'cluster/control_plane/local_karen/tests/contract_policy/test_contract_fetch.py',
+    'cluster/control_plane/local_karen/tests/contract_policy/test_contract_merge.py',
     'cluster/control_plane/local_karen/tests/contract_policy/test_contract_objects.py',
+    'cluster/control_plane/local_karen/tests/contract_policy/test_contract_primitives.py',
+    'cluster/control_plane/local_karen/tests/contract_policy/test_contract_refs.py',
+    'cluster/control_plane/local_karen/tests/contract_policy/test_contract_runtime.py',
+    'cluster/control_plane/local_karen/tests/test_contract_record.py',
 })
 
 

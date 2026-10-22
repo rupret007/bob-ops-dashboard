@@ -57,7 +57,7 @@ def is_candidate(owner, repo, number, head):
 
 def runtime_base_matches(base):
     runtime = deployment_status()
-    return (isinstance(base, str) and _SHA.fullmatch(base) is not None
+    return (bool(POLICY_FILES) and isinstance(base, str) and _SHA.fullmatch(base) is not None
             and base == _LOADED_BASE and set(_LOADED_FILES) == POLICY_FILES
             and runtime.get('source_matches') is True
             and runtime.get('installed_head') == runtime.get('loaded_head') == base)
@@ -88,7 +88,7 @@ def _prove(base, git):
     runtime = deployment_status()
     _require(runtime.get('source_matches') is True
              and runtime.get('installed_head') == runtime.get('loaded_head') == base)
-    _require(set(_LOADED_FILES) == POLICY_FILES)
+    _require(bool(POLICY_FILES) and set(_LOADED_FILES) == POLICY_FILES)
     _require(git('merge-base', base, APPROVED.head).decode().strip() == APPROVED.baseline)
     previous = APPROVED.baseline
     _require(type(BASE_ADVANCEMENTS) is tuple and bool(BASE_ADVANCEMENTS))
