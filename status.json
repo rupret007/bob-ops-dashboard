@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-10-22T11:43:31.241206-05:00",
-  "generated_at_display": "Thu Oct 22, 2026 \u00b7 11:43 AM CDT",
+  "generated_at": "2026-10-22T11:58:29.605419-05:00",
+  "generated_at_display": "Thu Oct 22, 2026 \u00b7 11:58 AM CDT",
   "timezone": "America/Chicago",
   "owner": "rupret007",
   "dashboard": "bob-ops-dashboard",
@@ -165,14 +165,7 @@
           "open_pr_stack": [],
           "pr_listing_complete": true,
           "agent_url": null,
-          "ci": {
-            "name": "Release integrity",
-            "conclusion": "success",
-            "branch": "main",
-            "sha": "a95c31a",
-            "created": "2026-09-06T05:39:00Z",
-            "html_url": "https://github.com/rupret007/Rad-Dad-Merch/actions/runs/34014510698"
-          },
+          "ci": null,
           "release": null,
           "release_sha": null,
           "release_url": null,
@@ -204,14 +197,7 @@
           "open_pr_stack": [],
           "pr_listing_complete": true,
           "agent_url": null,
-          "ci": {
-            "name": "Test, Package, and Deploy Site",
-            "conclusion": "success",
-            "branch": "main",
-            "sha": "704ec6b",
-            "created": "2026-10-14T12:42:01Z",
-            "html_url": "https://github.com/rupret007/RadDadSite/actions/runs/38565816220"
-          },
+          "ci": null,
           "release": null,
           "release_sha": null,
           "release_url": null,
@@ -243,14 +229,7 @@
           "open_pr_stack": [],
           "pr_listing_complete": true,
           "agent_url": null,
-          "ci": {
-            "name": "leftover-honesty",
-            "conclusion": "success",
-            "branch": "main",
-            "sha": "61ad95c",
-            "created": "2026-10-17T06:06:17Z",
-            "html_url": "https://github.com/rupret007/rad-dad-show-night/actions/runs/39008671084"
-          },
+          "ci": null,
           "release": null,
           "release_sha": null,
           "release_url": null,
@@ -481,11 +460,11 @@
           "status": "yellow",
           "chip": "Yellow",
           "default_branch": "main",
-          "tip_sha": "edf7d21",
-          "tip_date": "2026-10-22T16:28:39Z",
+          "tip_sha": "1c1126a",
+          "tip_date": "2026-10-22T16:43:44Z",
           "open_prs": 26,
-          "open_pr_url": "https://github.com/rupret007/bob-ops-dashboard/pull/141",
-          "open_pr_number": 141,
+          "open_pr_url": "https://github.com/rupret007/bob-ops-dashboard/pull/142",
+          "open_pr_number": 142,
           "open_pr_draft": false,
           "open_pr_stack": [],
           "pr_listing_complete": true,
@@ -886,7 +865,7 @@
     "barker"
   ],
   "publish_notes": "Public board -- no secrets or customer paths. Private repositories stay high-level; AI Music Vault stays private-content-boundary only.",
-  "refresh_started_ms": 1792687364639,
+  "refresh_started_ms": 1792688274488,
   "agents_source": "file:stale->unknown",
   "agents": [
     {
@@ -1085,7 +1064,7 @@
     }
   ],
   "llm_work_now_freshness": {
-    "generated_at": "2026-10-22 11:43 CT",
+    "generated_at": "2026-10-22 11:58 CT",
     "warn_ttl_sec": 1200,
     "warnings": [],
     "ok": true
@@ -1116,7 +1095,7 @@
     ],
     "scorecards": {
       "v": "scorecards/v1",
-      "generated_at": "2026-10-22T16:43:32.986206+00:00",
+      "generated_at": "2026-10-22T16:58:31.031486+00:00",
       "windows": {
         "24h": {
           "providers": {
