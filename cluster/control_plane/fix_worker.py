@@ -272,7 +272,7 @@ def _fix_pr(repo, pr_number, head_sha, findings):
                         input=attempt_prompt, env=model_env))
             else:
                 run([str(codex)] + codex_args(), tree, input=attempt_prompt,
-                    **({'env': test_env} if runtime is not None else {}))
+                    env=test_env)
             if runtime is not None:
                 _stage('test-setup')
                 current = qualified_runtime(repo, head_sha, tree)
