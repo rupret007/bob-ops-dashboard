@@ -11,6 +11,29 @@ import pytest
 from cluster.control_plane import watchdog
 
 
+def test_peer_health_requires_configured_url():
+    with mock.patch.object(watchdog, "PEER_URLS", {"nucbox": ""}), \
+            mock.patch("urllib.request.urlopen") as request:
+        assert watchdog.sync_peer_health("mini") is False
+        request.assert_not_called()
+
+
+def test_peer_health_uses_configured_url_and_preserves_timestamp(tmp_path):
+    timestamp = "2026-10-22T00:00:00+00:00"
+    response = mock.MagicMock()
+    response.__enter__.return_value.read.return_value = json.dumps({
+        "machines": {"nucbox": {"timestamp": timestamp, "state": "green", "detail": "Healthy"}}
+    }).encode()
+    with mock.patch.object(watchdog, "PEER_URLS", {"nucbox": "http://peer.example.invalid:8790/"}), \
+            mock.patch.object(watchdog, "LOG_DIR", tmp_path), \
+            mock.patch("urllib.request.urlopen", return_value=response) as request:
+        assert watchdog.sync_peer_health("mini") is True
+        request.assert_called_once_with("http://peer.example.invalid:8790/api/engine", timeout=5)
+    row = json.loads((tmp_path / "machines/nucbox/watchdog.log").read_text())
+    assert row["timestamp"] == timestamp
+    assert row["checks"][0]["passed"] is True
+
+
 class TestHealthChecks:
     """Tests for individual health check functions."""
 
@@ -391,3 +414,21 @@ def isolated_github_admission(tmp_path, monkeypatch):
     monkeypatch.setenv('STORYPOOL_DATA_DIR', str(tmp_path))
     monkeypatch.setattr(github_budget, 'reserve', lambda resource='core': None)
     monkeypatch.setattr(github_budget, 'observe', lambda *args, **kwargs: None)
+
+
+def test_peer_health_preserves_lazy_endpoint_discovery(tmp_path):
+    from cluster.control_plane import peer_endpoints
+    response = mock.MagicMock()
+    response.__enter__.return_value.read.return_value = json.dumps({
+        "machines": {"nucbox": {"timestamp": "2026-10-22T00:00:00+00:00",
+                                "state": "green", "detail": "Healthy"}}
+    }).encode()
+    urls = ["http://first.example.invalid:8790", "http://second.example.invalid:8790"]
+    with mock.patch.object(peer_endpoints, "peer_url", side_effect=urls) as resolve, \
+            mock.patch.object(watchdog, "PEER_URLS", peer_endpoints.PeerURLs()), \
+            mock.patch.object(watchdog, "LOG_DIR", tmp_path), \
+            mock.patch("urllib.request.urlopen", return_value=response) as request:
+        assert watchdog.sync_peer_health("mini") is True
+        assert watchdog.sync_peer_health("mini") is True
+    assert resolve.call_args_list == [mock.call("nucbox"), mock.call("nucbox")]
+    assert request.call_args_list == [mock.call(url + "/api/engine", timeout=5) for url in urls]

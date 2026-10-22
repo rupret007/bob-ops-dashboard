@@ -14,6 +14,7 @@ from offline_qa_fixtures import (
     assert_fixture_calls,
     fixture_environment,
     prepare_generator,
+    require_temporary_child,
 )
 
 
@@ -28,8 +29,9 @@ def validate_output_directory(value: str | None) -> Path | None:
     temp_roots = {Path(tempfile.gettempdir()).resolve(), Path("/tmp").resolve()}
     if not any(output != temp_root and output.is_relative_to(temp_root) for temp_root in temp_roots):
         raise ValueError("--output-dir must be a child of a system temporary directory")
-    if output.is_relative_to(ROOT) or any((parent / ".git").exists() for parent in (output, *output.parents)):
+    if output.is_relative_to(ROOT):
         raise ValueError("--output-dir must not be inside a repository")
+    require_temporary_child(output)
     if output.exists() and (not output.is_dir() or any(output.iterdir())):
         raise ValueError("--output-dir must be absent or an empty temporary directory")
     if not output.parent.is_dir():

@@ -58,7 +58,33 @@ class PinnedSourceContext:
         self.identity = (pr.owner, pr.repo, pr.head_sha)
         self.calls, self.bytes = 0, 0
         self.tree, self.tree_sha, self.sources = None, None, {}
+        self._source_proofs = {}
         self.seconds = 30.0
+
+    def cached_changed_paths(self, pr):
+        """Expose only previously proven paths that belong to this PR's change."""
+        if self.identity != (pr.owner, pr.repo, pr.head_sha):
+            raise SourceUnavailable('source_identity_or_path')
+        return tuple(path for path in self._source_proofs if path in pr.changed_files)
+
+    def cached(self, pr, path):
+        """Return only unchanged, previously verified source for this identity."""
+        if not isinstance(path, str):
+            raise SourceUnavailable('source_identity_or_path')
+        if path not in self.sources:
+            return None
+        if (self.identity != (pr.owner, pr.repo, pr.head_sha) or not safe_source_path(path)):
+            raise SourceUnavailable('source_identity_or_path')
+        try:
+            source = self.sources[path]
+            if type(source) is not dict:
+                raise SourceUnavailable('blob_identity')
+            digest = hashlib.sha256(json.dumps(source, sort_keys=True).encode()).hexdigest()
+            if self._source_proofs[path] != (self.identity, self.tree_sha, digest):
+                raise SourceUnavailable('blob_identity')
+        except (KeyError, TypeError, ValueError):
+            raise SourceUnavailable('blob_identity') from None
+        return dict(source)
 
     def _json(self, suffix, maximum):
         from .gate import review_checkpoint
@@ -96,7 +122,7 @@ class PinnedSourceContext:
                 or not isinstance(head, str) or not re.fullmatch(r'[0-9a-f]{40}', head) or not safe_source_path(path)):
             raise SourceUnavailable('source_identity_or_path')
         if path in self.sources:
-            return self.sources[path]
+            return self.cached(pr, path)
         if self.tree is None:
             commit = self._json('commits/' + head, 65536)
             tree_sha = commit.get('tree', {}).get('sha') if isinstance(commit.get('tree'), dict) else None
@@ -153,4 +179,6 @@ class PinnedSourceContext:
         self.bytes += size
         source = dict(path=path, head_sha=head, tree_sha=self.tree_sha, blob_sha=sha, bytes=size, source=text)
         self.sources[path] = source
-        return source
+        self._source_proofs[path] = (self.identity, self.tree_sha,
+            hashlib.sha256(json.dumps(source, sort_keys=True).encode()).hexdigest())
+        return dict(source)
