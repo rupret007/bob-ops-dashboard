@@ -87,6 +87,8 @@ ADMITTED_BASE = '330baa66c69c6dbad29ec85a8123d4475c078111'
 
 
 POLICY_FILES = frozenset({
+    'cluster/control_plane/local_karen/tests/contract_policy/test_contract_primitives.py',
+    'cluster/control_plane/local_karen/tests/contract_policy/test_contract_refs.py',
     'cluster/control_plane/local_karen/tests/contract_policy/observations.py',
     'cluster/control_plane/local_karen/tests/contract_policy/__init__.py',
     'cluster/control_plane/local_karen/contract_record.py',

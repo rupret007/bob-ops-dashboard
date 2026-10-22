@@ -5,8 +5,6 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Optional, Any, Dict, Tuple
 
-from .contract_record import VerifiedContract
-
 
 class CheckVerdict(Enum):
     """Verdict from a single check."""
@@ -67,5 +65,3 @@ class PRInfo:
     description: str = ""  # PR body/description
     review_scope: Optional[ReviewScope] = None
     review_material: Optional[ReviewMaterial] = None
-    base_sha: str = ""
-    test_contract_proof: Optional[VerifiedContract] = None
