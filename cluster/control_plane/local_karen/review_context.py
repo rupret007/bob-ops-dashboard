@@ -39,9 +39,31 @@ def _review_with_requested_context(owner, invoke, part, original_pr, source_cont
         context, automatic_code = [], 'changed_unavailable'
     if len(context) > MAX_CONTEXT_FILES or max(context_size(context)) > MAX_CONTEXT_SIZE:
         context, automatic_code = [], 'context_budget'
+    initial_sources = 0
+    if source_context is not None:
+        from .source_context import PinnedSourceContext, SourceUnavailable, MAX_FILE_BYTES
+        if type(source_context) is PinnedSourceContext:
+            original = original_pr or part
+            if ((part.owner, part.repo, part.number, part.head_sha) !=
+                    (original.owner, original.repo, original.number, original.head_sha)):
+                raise SourceUnavailable('source_identity_or_path')
+            # Share already proven implementation facts before a judge decides;
+            # never fetch extra source or share another judge's answer. Reserve
+            # one entry and a complete-file allowance for a subsequent request.
+            for path in source_context.cached_changed_paths(original):
+                source = source_context.cached(part, path)
+                if source is None:
+                    continue
+                packet = context + [source]
+                if (len(packet) < MAX_CONTEXT_FILES and
+                        max(context_size(packet)) <= MAX_CONTEXT_SIZE - MAX_FILE_BYTES):
+                    context.append(source)
+                    initial_sources += 1
     raw, serialized = context_size(context)
-    automatic = dict(code=automatic_code, changed_files=len(context),
+    automatic = dict(code=automatic_code, changed_files=sum('diff' in item for item in context),
                      raw_size=raw, serialized_size=serialized)
+    if initial_sources:
+        automatic['cached_source_files'] = initial_sources
     owner.logger.info('Initial review context: code=%s; changed_files=%s; raw_size=%s; serialized_size=%s',
                 automatic_code, len(context), raw, serialized)
     supplied_part = owner._context_part(part, context, 'Supplemental changed-file context') if context else part
@@ -65,7 +87,7 @@ def _review_with_requested_context(owner, invoke, part, original_pr, source_cont
     original_pr = original_pr or part
     # Changed and immutable source evidence are distinct entries even for one
     # path. Deduplicate overlaps without granting a second four-file/48k budget.
-    keys = {('diff', item['path']) for item in context}
+    keys = {('source' if 'source' in item else 'diff', item['path']) for item in context}
     # A source request for another changed file may be answered with new diff
     # evidence. Never claim that a changed-file diff is complete source, repeat
     # already supplied evidence, or bypass the immutable-source privacy guard.
