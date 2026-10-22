@@ -124,7 +124,7 @@ def _objects(repo, head):
              'Release head is not its exact commit')
     tree = _git(repo, ['rev-parse', head+'^{tree}'], limit=41).decode().strip()
     _require(_hex(tree, 40), 'Release tree is invalid')
-    from .release_object_auth import authenticate_commit, authenticate_tree, ObjectIdentityError
+    from .release_object_io import authenticate_commit, authenticate_tree, ObjectIdentityError
     try:
         authenticate_commit(head, tree, _git(repo, ['cat-file', 'commit', head], limit=MAX_FILE))
     except ObjectIdentityError as error:
