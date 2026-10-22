@@ -94,7 +94,7 @@
      }catch(e){status.textContent=name+': change unconfirmed; node may be unreachable. Check its dashboard.';}finally{button.disabled=false;}
     };controls.append(button);
    });}
-   controls.querySelectorAll('button').forEach(button=>{const name=button.dataset.machine;const draining=data.machines[name]?.state==='maintenance';button.dataset.maintenance=String(!draining);button.textContent=name+': '+(draining?'Return to service':'Take out of service');});
+   controls.querySelectorAll('button').forEach(button=>{const name=button.dataset.machine;const draining=data.machines[name]?.maintenance===true||data.machines[name]?.state==='maintenance';button.dataset.maintenance=String(!draining);button.textContent=name+': '+(draining?'Return to service':'Take out of service');});
    document.getElementById('control-audit').textContent=(data.audit||[]).join('\n');
    renderJobs(data.jobs);renderLlm(data.llm);
    const blocked=document.getElementById('engine-blocked');blocked.replaceChildren();

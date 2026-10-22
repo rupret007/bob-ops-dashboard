@@ -375,8 +375,12 @@ class EngineCollector:
         for name in health:
             peer = read_json(self.data_dir / 'machines' / name / 'engine.json') or {}
             node = control if name == self.machine else peer.get('control', {})
-            if node.get('maintenance'):
-                health[name].update(state='maintenance', detail=node.get('reason', 'Operator maintenance'))
+            health[name]['maintenance'] = node.get('maintenance') is True
+            if health[name]['maintenance']:
+                if health[name]['state'] == 'green':
+                    health[name].update(state='maintenance', detail=node.get('reason', 'Operator maintenance'))
+                else:
+                    health[name]['detail'] += '; maintenance requested'
         overall = 'red' if any(v['state'] == 'red' for v in health.values()) else ('green' if all(v['state'] in ('green', 'maintenance') for v in health.values()) else 'yellow')
         admission = {'state': 'unknown', 'reason': 'Work admission has no recent dispatcher report.'}
         if isinstance(dispatch, dict) and now.timestamp() - 900 <= stamp(dispatch.get('timestamp')) <= now.timestamp() + 60:
