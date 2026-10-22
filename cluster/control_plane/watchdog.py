@@ -21,6 +21,7 @@ import os
 import re
 import shutil
 import subprocess
+import sys
 import time
 from collections import deque
 from concurrent.futures import ThreadPoolExecutor
@@ -28,6 +29,10 @@ from dataclasses import dataclass, field, asdict
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from typing import Optional, List, Dict, Any
+
+from . import watchdog_io as _watchdog_io
+from . import watchdog_repo_checks as _watchdog_repo_checks
+from . import watchdog_log_checks as _watchdog_log_checks
 
 from .github_budget import GitHubDeferred
 from .github_reads import GitHubReadError
@@ -110,40 +115,12 @@ def _get_machine() -> str:
 
 def _write_watchdog_log(entry: dict, followup: bool = False) -> None:
     """Append entry to watchdog log."""
-    LOG_DIR.mkdir(parents=True, exist_ok=True)
-    log_path = LOG_DIR / "main-ci.jsonl" if followup else WATCHDOG_LOG
-    with open(log_path, "a") as f:
-        f.write(json.dumps(entry) + "\n")
+    return _watchdog_io._write_watchdog_log(sys.modules[__name__], entry, followup)
 
 
 def _escalate_to_jeff(issue: str, details: str) -> None:
     """Write issue to NEEDS_JEFF.md."""
-    NEEDS_JEFF_FILE.parent.mkdir(parents=True, exist_ok=True)
-    
-    now = datetime.now(timezone.utc)
-    
-    existing = ""
-    if NEEDS_JEFF_FILE.is_file():
-        existing = NEEDS_JEFF_FILE.read_text()
-    
-    entry = f"""## {now.strftime('%Y-%m-%d %H:%M UTC')} - Watchdog
-
-**Issue:** {issue}
-
-**Details:** {details}
-
-**Action needed:** Manual review required
-
----
-
-"""
-    
-    header = "# NEEDS_JEFF\n\nIssues requiring human intervention.\n\n---\n\n"
-    if not existing.startswith("# NEEDS_JEFF"):
-        existing = header + existing
-    
-    NEEDS_JEFF_FILE.write_text(entry + existing)
-    logger.warning("Escalated to NEEDS_JEFF.md: %s", issue)
+    return _watchdog_io._escalate_to_jeff(sys.modules[__name__], issue, details)
 
 
 from .peer_endpoints import PeerURLs, PeerUnavailable
@@ -153,13 +130,7 @@ PEER_URLS = PeerURLs()
 
 def _dashboard_alive(timeout: float = 3.0) -> bool:
     """An idle dashboard writes no logs; a live /health answer means it is not stuck."""
-    import urllib.request
-    port = os.environ.get("STORYPOOL_DASHBOARD_PORT", "8790")
-    try:
-        with urllib.request.urlopen(f"http://127.0.0.1:{port}/health", timeout=timeout) as resp:
-            return resp.status == 200
-    except Exception:
-        return False
+    return _watchdog_io._dashboard_alive(sys.modules[__name__], timeout)
 
 
 def store_peer_engine(peer: str, data: dict) -> bool:
@@ -167,49 +138,11 @@ def store_peer_engine(peer: str, data: dict) -> bool:
 
     Only the peer's own (source=local) section is kept, so data never echoes back.
     """
-    jobs = (data.get("jobs") or {}).get(peer) if isinstance(data, dict) else None
-    if not isinstance(jobs, dict) or jobs.get("source") != "local":
-        return False
-    snapshot = {"synced_at": datetime.now(timezone.utc).isoformat(), "machine": peer,
-                "peer_timestamp": data.get("timestamp"), "control": data.get("control", {}),
-                "guardian": data.get("machines", {}).get(peer, {}).get("guardian", {}),
-                "jobs": dict(jobs, running=list(jobs.get("running") or [])[:50]),
-                "llm_local": [g for g in (data.get("llm_local") or []) if isinstance(g, dict)][:20]}
-    resources = data.get("resources")
-    if (isinstance(resources, dict) and resources.get("machine") == peer
-            and resources.get("source") == "local"):
-        snapshot["resources"] = resources
-    flow = data.get('flow_local')
-    if isinstance(flow, dict) and flow.get('machine') == peer:
-        snapshot['flow_local'] = {key: flow.get(key) for key in (
-            'machine', 'last_verdict_at', 'last_success_at', 'stale_alerts')}
-    out = LOG_DIR / "machines" / peer / "engine.json"
-    out.parent.mkdir(parents=True, exist_ok=True)
-    tmp = out.with_suffix(".json.tmp")
-    tmp.write_text(json.dumps(snapshot))
-    tmp.replace(out)
-    return True
+    return _watchdog_io.store_peer_engine(sys.modules[__name__], peer, data)
 
 
 def _peer_sync_status(peer, ok, failure_kind=None):
-    path = LOG_DIR / 'machines' / peer / 'sync-status.json'
-    path.parent.mkdir(parents=True, exist_ok=True)
-    value = {'timestamp': _now_iso(), 'ok': ok,
-             'detail': 'Peer sync verified' if ok else
-                       'Peer sync failed; check private endpoint configuration and connectivity'}
-    if failure_kind:
-        value['failure_kind'] = failure_kind
-        action = {
-            'address-unavailable': 'peer address unavailable; configure private peers.json',
-            'discovery-unavailable': 'check Tailscale CLI access or configure private peers.json',
-            'identity-missing': 'peer hostname not recognized; configure private peers.json',
-            'identity-ambiguous': 'multiple matching hosts; select one peer in private peers.json',
-        }.get(failure_kind)
-        if action:
-            value['detail'] += '; ' + action
-    temporary = path.with_suffix('.tmp')
-    temporary.write_text(json.dumps(value))
-    temporary.replace(path)
+    return _watchdog_io._peer_sync_status(sys.modules[__name__], peer, ok, failure_kind)
 
 
 def sync_peer_health(machine: str) -> bool:
@@ -217,248 +150,32 @@ def sync_peer_health(machine: str) -> bool:
 
     The row keeps the peer's own watchdog timestamp, so stale peers still show stale.
     """
-    import urllib.request
-    peer = "nucbox" if machine == "mini" else "mini"
-    try:
-        peer_url = PEER_URLS[peer].strip().rstrip("/")
-        if not peer_url:
-            _peer_sync_status(peer, False)
-            return False
-        with urllib.request.urlopen(peer_url + "/api/engine", timeout=5) as resp:
-            data = json.loads(resp.read().decode("utf-8"))
-        store_peer_engine(peer, data)
-        info = data.get("machines", {}).get(peer, {})
-        if not info.get("timestamp"):
-            _peer_sync_status(peer, False)
-            return False
-        row = {"timestamp": info["timestamp"], "machine": peer, "source": "peer-sync",
-               "checks": [{"name": "peer_reported_health", "passed": info.get("state") != "red",
-                           "message": str(info.get("detail", ""))[:200]}]}
-        out = LOG_DIR / "machines" / peer / "watchdog.log"
-        out.parent.mkdir(parents=True, exist_ok=True)
-        with out.open("a") as f:
-            f.write(json.dumps(row) + "\n")
-        _peer_sync_status(peer, True)
-        return True
-    except Exception as exc:
-        _peer_sync_status(peer, False, exc.kind if isinstance(exc, PeerUnavailable) else "transport-or-response")
-        logger.warning("peer health sync for %s failed; check private endpoint configuration and connectivity", peer)
-        return False
+    return _watchdog_io.sync_peer_health(sys.modules[__name__], machine)
 
 
 def check_service_stuck(service: str, log_path: Path) -> HealthCheck:
     """Check if a service has logged recently."""
-    if service == "dashboard" and _dashboard_alive():
-        return HealthCheck(name="dashboard_stuck", passed=True,
-                           message="dashboard answering /health")
-    if not log_path.exists():
-        return HealthCheck(
-            name=f"{service}_stuck", passed=True,
-            message=f"Log file not found: {log_path}",
-        )
-    if log_path.is_dir():
-        log_files = list(log_path.glob("*.jsonl")) + list(log_path.glob("*.log"))
-        if not log_files:
-            return HealthCheck(
-                name=f"{service}_stuck", passed=True,
-                message=f"No log files yet for {service}",
-            )
-        log_path = max(log_files, key=lambda p: p.stat().st_mtime)
-    
-    try:
-        mtime = datetime.fromtimestamp(log_path.stat().st_mtime, tz=timezone.utc)
-        age_minutes = (datetime.now(timezone.utc) - mtime).total_seconds() / 60
-        
-        threshold = 75 if service == "conductor" else STUCK_THRESHOLD_MINUTES
-        if age_minutes > threshold:
-            return HealthCheck(
-                name=f"{service}_stuck",
-                passed=False,
-                message=f"{service} log not updated in {int(age_minutes)} minutes",
-                can_repair=True,
-                repair_action="restart_service",
-            )
-        
-        return HealthCheck(
-            name=f"{service}_stuck",
-            passed=True,
-            message=f"{service} last active {int(age_minutes)} min ago",
-        )
-    except OSError as e:
-        return HealthCheck(
-            name=f"{service}_stuck",
-            passed=True,
-            message=f"Could not check {service}: {e}",
-        )
+    return _watchdog_log_checks.check_service_stuck(sys.modules[__name__], service, log_path)
 
 
 def check_tracebacks(service: str, log_path: Path) -> HealthCheck:
     """Check for repeated tracebacks in service logs."""
-    if not log_path.exists():
-        return HealthCheck(
-            name=f"{service}_tracebacks",
-            passed=True,
-            message="No log file to check",
-        )
-    
-    if log_path.is_dir():
-        log_files = list(log_path.glob("*.jsonl")) + list(log_path.glob("*.log"))
-        if not log_files:
-            return HealthCheck(
-                name=f"{service}_tracebacks",
-                passed=True,
-                message="No log files",
-            )
-        log_path = max(log_files, key=lambda p: p.stat().st_mtime)
-    
-    try:
-        cutoff = datetime.now(timezone.utc) - timedelta(hours=1)
-        traceback_count = 0
-        
-        with open(log_path, "r") as f:
-            # Quiet services can retain historical, untimestamped stderr for days.
-            # An unchanged file cannot contain a new failure in this hour. Fresh
-            # or future-dated logs still use the existing conservative threshold.
-            if os.fstat(f.fileno()).st_mtime < cutoff.timestamp():
-                return HealthCheck(
-                    name=f"{service}_tracebacks",
-                    passed=True,
-                    message="0 new tracebacks: log unchanged for more than one hour",
-                    can_repair=False,
-                )
-            lines = deque(f, maxlen=500)
-            for line in lines:
-                if "Traceback" in line or "Error:" in line or "Exception:" in line:
-                    traceback_count += 1
-        
-        if traceback_count > MAX_TRACEBACKS_PER_HOUR:
-            return HealthCheck(
-                name=f"{service}_tracebacks",
-                passed=False,
-                message=f"{traceback_count} tracebacks/errors in recent logs",
-                can_repair=True,
-                repair_action="restart_service",
-            )
-        
-        return HealthCheck(
-            name=f"{service}_tracebacks",
-            passed=True,
-            message=f"{traceback_count} tracebacks in recent logs",
-        )
-    except OSError as e:
-        return HealthCheck(
-            name=f"{service}_tracebacks",
-            passed=True,
-            message=f"Could not check: {e}",
-        )
+    return _watchdog_log_checks.check_tracebacks(sys.modules[__name__], service, log_path)
 
 
 def check_gh_in_path() -> HealthCheck:
     """Check if gh CLI is available."""
-    gh_path = shutil.which("gh")
-    if gh_path:
-        return HealthCheck(
-            name="gh_available",
-            passed=True,
-            message=f"gh found at {gh_path}",
-        )
-    
-    common_paths = [
-        "/opt/homebrew/bin/gh",
-        "/usr/local/bin/gh",
-        "/usr/bin/gh",
-    ]
-    for path in common_paths:
-        if os.path.isfile(path) and os.access(path, os.X_OK):
-            return HealthCheck(
-                name="gh_available",
-                passed=False,
-                message=f"gh found at {path} but not in PATH",
-                can_repair=False,
-                repair_action="fix_path",
-            )
-    
-    return HealthCheck(
-        name="gh_available",
-        passed=False,
-        message="gh CLI not found",
-        can_repair=False,
-    )
+    return _watchdog_repo_checks.check_gh_in_path(sys.modules[__name__])
 
 
 def check_codex_in_path() -> HealthCheck:
     """Check if codex CLI is available."""
-    codex_path = shutil.which("codex")
-    if codex_path:
-        return HealthCheck(
-            name="codex_available",
-            passed=True,
-            message=f"codex found at {codex_path}",
-        )
-    
-    home = Path.home()
-    common_paths = [
-        home / "bin" / "codex",
-        home / ".local" / "bin" / "codex",
-        Path("/usr/local/bin/codex"),
-    ]
-    for path in common_paths:
-        if path.is_file() and os.access(path, os.X_OK):
-            return HealthCheck(
-                name="codex_available",
-                passed=True,
-                message=f"codex found at {path} (may not be in PATH)",
-            )
-    
-    machine = _get_machine()
-    if machine == "mini":
-        return HealthCheck(
-            name="codex_available",
-            passed=True,
-            message="codex not local (Mini uses NucBox via SSH)",
-        )
-    
-    return HealthCheck(
-        name="codex_available",
-        passed=False,
-        message="codex CLI not found on NucBox",
-        can_repair=False,
-    )
+    return _watchdog_repo_checks.check_codex_in_path(sys.modules[__name__])
 
 
 def check_labels_exist(repo: str) -> HealthCheck:
     """Check if required labels exist in a repo."""
-    try:
-        from .github_reads import labels as read_labels
-        labels = read_labels(repo)
-        label_names = {lbl.get("name", "") for lbl in labels}
-        
-        missing = [lbl for lbl in REQUIRED_LABELS if lbl not in label_names]
-        
-        if missing:
-            return HealthCheck(
-                name=f"labels_{repo.replace('/', '_')}",
-                passed=False,
-                message=f"Missing labels: {', '.join(missing)}",
-                can_repair=True,
-                repair_action="create_labels",
-            )
-        
-        return HealthCheck(
-            name=f"labels_{repo.replace('/', '_')}",
-            passed=True,
-            message="All required labels exist",
-        )
-    except GitHubDeferred:
-        logger.warning("GitHub label check deferred by API budget/backoff")
-        return HealthCheck(name=f"labels_{repo.replace('/', '_')}", passed=True,
-                           can_repair=False, message="WARNING: label check deferred by GitHub API budget; labels unverified")
-    except (OSError, subprocess.SubprocessError, json.JSONDecodeError, GitHubReadError):
-        return HealthCheck(
-            name=f"labels_{repo.replace('/', '_')}",
-            passed=False, can_repair=False, execution_error=True,
-            message="Could not execute label check",
-        )
+    return _watchdog_repo_checks.check_labels_exist(sys.modules[__name__], repo)
 
 
 def check_head_lag() -> HealthCheck:
@@ -466,120 +183,12 @@ def check_head_lag() -> HealthCheck:
     
     This detects when self-update is failing silently.
     """
-    try:
-        from .self_update import check_head_lag as _check_lag, UPDATE_LOG_FILE
-    except ImportError:
-        return HealthCheck(
-            name="head_lag",
-            passed=True,
-            message="self_update module not available",
-        )
-    
-    lag_info = _check_lag()
-    
-    if lag_info.get("error"):
-        return HealthCheck(
-            name="head_lag",
-            passed=False, can_repair=False, execution_error=True,
-            message="Could not execute install head check",
-        )
-    
-    if not lag_info.get("lagging"):
-        return HealthCheck(
-            name="head_lag",
-            passed=True,
-            message=f"HEAD {lag_info['local_head']} is current",
-        )
-    
-    commits_behind = lag_info.get("commits_behind", 0)
-    
-    last_update_time = None
-    if UPDATE_LOG_FILE.is_file():
-        try:
-            lines = UPDATE_LOG_FILE.read_text().strip().split("\n")
-            if lines:
-                last_entry = json.loads(lines[-1])
-                last_update_time = datetime.fromisoformat(
-                    last_entry.get("timestamp", "").replace("Z", "+00:00")
-                )
-        except (json.JSONDecodeError, ValueError, OSError):
-            pass
-    
-    lag_minutes = 0
-    if last_update_time:
-        lag_minutes = (datetime.now(timezone.utc) - last_update_time).total_seconds() / 60
-    
-    if commits_behind > 0 and lag_minutes > HEAD_LAG_ALERT_MINUTES:
-        return HealthCheck(
-            name="head_lag",
-            passed=False,
-            message=f"HEAD {lag_info['local_head']} is {commits_behind} commits behind origin/{lag_info['remote_head']} for {int(lag_minutes)}m",
-            can_repair=False,
-        )
-    
-    return HealthCheck(
-        name="head_lag",
-        passed=True,
-        message=f"HEAD {lag_info['local_head']} ({commits_behind} commits behind, last check {int(lag_minutes)}m ago)",
-    )
+    return _watchdog_repo_checks.check_head_lag(sys.modules[__name__])
 
 
 def check_install_stale() -> HealthCheck:
     """Check if install is behind origin."""
-    install_dir = Path(os.environ.get("STORYPOOL_INSTALL_DIR", "~/storypool-install")).expanduser()
-    
-    if not install_dir.is_dir():
-        return HealthCheck(
-            name="install_stale",
-            passed=True,
-            message="Install dir not found",
-        )
-    
-    try:
-        result = subprocess.run(
-            ["git", "fetch", "origin", "--dry-run"],
-            cwd=install_dir,
-            capture_output=True,
-            text=True,
-            timeout=30,
-        )
-        if result.returncode:
-            return HealthCheck('install_stale', False, 'Install fetch check failed',
-                               can_repair=False, execution_error=True)
-        
-        result = subprocess.run(
-            ["git", "rev-list", "--count", "HEAD..origin/cursor/storypool-all-in-one-47c7"],
-            cwd=install_dir,
-            capture_output=True,
-            text=True,
-            timeout=10,
-        )
-        
-        if result.returncode == 0:
-            behind = int(result.stdout.strip() or "0")
-            if behind > 0:
-                return HealthCheck(
-                    name="install_stale",
-                    passed=False,
-                    message=f"Install is {behind} commits behind origin",
-                    can_repair=True,
-                    repair_action="self_update",
-                )
-        
-        if result.returncode:
-            return HealthCheck('install_stale', False, 'Install revision check failed',
-                               can_repair=False, execution_error=True)
-        return HealthCheck(
-            name="install_stale",
-            passed=True,
-            message="Install is up to date",
-        )
-    except (OSError, subprocess.SubprocessError, ValueError):
-        return HealthCheck(
-            name="install_stale",
-            passed=False, can_repair=False, execution_error=True,
-            message="Could not execute install revision check",
-        )
+    return _watchdog_repo_checks.check_install_stale(sys.modules[__name__])
 
 
 @serialized_recovery
