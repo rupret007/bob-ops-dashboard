@@ -124,6 +124,11 @@ def _objects(repo, head):
              'Release head is not its exact commit')
     tree = _git(repo, ['rev-parse', head+'^{tree}'], limit=41).decode().strip()
     _require(_hex(tree, 40), 'Release tree is invalid')
+    from .release_object_auth import authenticate_commit, authenticate_tree, ObjectIdentityError
+    try:
+        authenticate_commit(head, tree, _git(repo, ['cat-file', 'commit', head], limit=MAX_FILE))
+    except ObjectIdentityError as error:
+        raise ArtifactError(str(error)) from None
     listing = _git(repo, ['ls-tree', '-r', '-l', '-z', '--full-tree', head])
     _require(0 < len(listing) <= 4*1024*1024 and listing.endswith(b'\0'),
              'Release inventory exceeds limit')
@@ -139,6 +144,10 @@ def _objects(repo, head):
         total += int(size)
         _require(len(files) <= MAX_FILES and total <= MAX_TOTAL, 'Release inventory exceeds limit')
     _require(bool(files), 'Release inventory is empty')
+    try:
+        authenticate_tree(tree, files, maximum=MAX_FILES)
+    except ObjectIdentityError as error:
+        raise ArtifactError(str(error)) from None
     return tree, files
 
 
