@@ -44,9 +44,7 @@ Native Nuc COMPLETE/PASS, canonical/LATEST identity and normal reviewed predicat
 are recorded for these immutable heads.128/129 have nine checks each and9/3
 Codex/Gemini/MiniMax votes;131 has nine checks/three votes. Budgeted GitHub reads
 confirm their merges and CI; original-owner receiving qualification is separate.
-The latest owner direction retains90% Mini admission; this policy changes no
-resource limit, pending decision or release hold. No copied verdict, private-key
-access, fresh signature claim or synthetic human approval grants authority.
+Resource limits and release holds remain unchanged; this record grants no authority.
 
 The head/base merge base must remain the frozen baseline. ADMITTED_BASE must be
 an ancestor of the live base. Live base must equal BOTH installed and loaded
@@ -57,7 +55,7 @@ permits the separately reviewed policy merge without arbitrary base drift or
 a stale/unreviewed runtime overlay. Missing immutable objects, source mismatch,
 packet drift or unproved advancement refuses before paid review.
 
-The process captures its loaded base once at policy import. Later source-head
+The review client captures its loaded base once at import. Later source-head
 reporting cannot relabel unchanged Karen files as a newly installed release.
 The client proves the named live branch separately from the PR's saved base OID
 and rechecks both observations. Normal final SHA verification also requires this
@@ -150,9 +148,28 @@ def _snapshot_policy(module_root):
 # Snapshot before any updater can replace files beneath this process.
 _LOADED_FILES = _snapshot_policy(_ROOT)
 _SHA = re.compile(r'[0-9a-f]{40}')
-_STARTUP_STATUS = deployment_status()
-_LOADED_BASE = (_STARTUP_STATUS.get('loaded_head')
-                if _STARTUP_STATUS.get('source_matches') is True else None)
+
+
+def _startup_base():
+    try:
+        runtime = deployment_status()
+        if not isinstance(runtime, dict): return None
+        head = runtime.get('loaded_head')
+        return head if (runtime.get('source_matches') is True
+                        and isinstance(head, str) and _SHA.fullmatch(head)) else None
+    except (OSError, ValueError, TypeError, subprocess.SubprocessError):
+        return None
+
+
+_UNSET = object()
+_LOADED_BASE = _UNSET
+
+
+def bind_startup_base():
+    global _LOADED_BASE
+    if _LOADED_BASE is _UNSET: _LOADED_BASE = _startup_base()
+
+
 _DIFF_ARGS = ('diff', '--full-index', '--no-ext-diff', '--no-textconv',
               '--no-renames', '--binary', '--no-color', '--no-relative',
               '--diff-algorithm=myers', '--indent-heuristic', '--unified=3',

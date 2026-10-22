@@ -15,9 +15,11 @@ from dataclasses import dataclass
 from typing import Optional
 
 from .checks import PRInfo
-from .contract_policy import is_candidate, fetch_contract_packet, ContractUnavailable, runtime_base_matches
+from .contract_policy import is_candidate, fetch_contract_packet, ContractUnavailable, runtime_base_matches, bind_startup_base
 from ..github_reads import run as budgeted_gh
 from ..github_budget import GitHubDeferred
+
+bind_startup_base()
 
 
 class GitHubError(Exception):

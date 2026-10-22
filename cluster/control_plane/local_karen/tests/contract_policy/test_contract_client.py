@@ -209,3 +209,25 @@ def test_missing_or_other_startup_base_is_not_recovered_from_runtime(packet, mon
     monkeypatch.setattr(p, '_LOADED_BASE', loaded)
     assert not p.runtime_base_matches(packet['base'])
     with pytest.raises(p.ContractUnavailable): p._prove(packet['base'], packet['git'])
+
+
+@pytest.mark.parametrize('failure', [OSError, TypeError, ValueError, subprocess.SubprocessError])
+def test_recovered_telemetry_cannot_authorize_a_failed_startup(packet, monkeypatch, failure):
+    def unavailable(): raise failure('startup telemetry unavailable')
+    monkeypatch.setattr(p, 'deployment_status', unavailable)
+    monkeypatch.setattr(p, '_LOADED_BASE', p._UNSET)
+    p.bind_startup_base()
+    monkeypatch.setattr(p, 'deployment_status', lambda: dict(packet['runtime']))
+    p.bind_startup_base()
+    assert not p.runtime_base_matches(packet['base'])
+    with pytest.raises(p.ContractUnavailable): p._prove(packet['base'], packet['git'])
+
+
+def test_review_client_startup_binding_cannot_be_replaced(packet, monkeypatch):
+    monkeypatch.setattr(p, '_LOADED_BASE', p._UNSET)
+    observed = Mock(side_effect=[packet['base'], 'f' * 40])
+    monkeypatch.setattr(p, '_startup_base', observed)
+    p.bind_startup_base()
+    p.bind_startup_base()
+    assert p.runtime_base_matches(packet['base'])
+    observed.assert_called_once_with()
