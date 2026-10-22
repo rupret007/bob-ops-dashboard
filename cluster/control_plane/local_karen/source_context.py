@@ -61,6 +61,12 @@ class PinnedSourceContext:
         self._source_proofs = {}
         self.seconds = 30.0
 
+    def cached_changed_paths(self, pr):
+        """Expose only previously proven paths that belong to this PR's change."""
+        if self.identity != (pr.owner, pr.repo, pr.head_sha):
+            raise SourceUnavailable('source_identity_or_path')
+        return tuple(path for path in self._source_proofs if path in pr.changed_files)
+
     def cached(self, pr, path):
         """Return only unchanged, previously verified source for this identity."""
         if not isinstance(path, str):

@@ -126,7 +126,10 @@ def _review_with_requested_context(owner, invoke, part, original_pr, source_cont
             # source already proven by this review's resolver; never fetch extra
             # material, displace requested evidence or grant another budget.
             if type(resolver) is PinnedSourceContext:
-                for path in result.requested_files:
+                # Independent judges share verified source facts, never votes.
+                # Requested material is already present and cannot be displaced.
+                paths = dict.fromkeys(result.requested_files + list(resolver.cached_changed_paths(original_pr)))
+                for path in paths:
                     if ('source', path) in keys:
                         continue
                     if (path in resolver.sources and
