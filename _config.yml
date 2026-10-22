@@ -1,0 +1,7 @@
+# Pages serves the public dashboard and StoryPool documentation only.
+exclude:
+  - cluster
+  - docs/design
+  - docs/research
+  - .config
+  - .local

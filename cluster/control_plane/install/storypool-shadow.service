@@ -1,0 +1,29 @@
+# StoryPool Shadow Mode Runner - systemd user service
+#
+# Runs every 15 minutes to evaluate what the control plane WOULD do.
+# Logs decisions to JSONL files for comparison with Grok-based system.
+#
+# TAKES NO ACTIONS: no merges, no pushes, no sends, no NATS publishes.
+#
+# Install with: install-shadow-nucbox.sh
+# Check status: systemctl --user status storypool-shadow.timer
+
+[Unit]
+Description=StoryPool Shadow Mode Runner
+After=network.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=__REPO_PATH__
+Environment=PYTHONPATH=__REPO_PATH__
+Environment=STORYPOOL_MACHINE=nucbox
+Environment=PATH=/usr/local/bin:/usr/bin:/bin
+ExecStart=/usr/bin/python3 -m cluster.control_plane.shadow_runner --machine nucbox
+Nice=10
+
+# Don't restart on failure - timer will handle next run
+Restart=no
+
+# Resource limits
+MemoryMax=512M
+CPUQuota=50%

@@ -52,6 +52,11 @@ PINNED_CLUSTER_STEPS = [
         "env": {"PYTHONPATH": ".", "BOB_REQUIRE_NATS": "1"},
         "run": "python3 -m cluster.tests.run_strict",
     },
+    {
+        "name": "Run control plane regression tests",
+        "env": {"PYTHONPATH": ".", "BOB_REQUIRE_NATS": "1"},
+        "run": "python3 -m pytest -q cluster/tests/test_control_plane_regressions.py",
+    },
 ]
 
 
