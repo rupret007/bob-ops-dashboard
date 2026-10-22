@@ -220,7 +220,11 @@ def sync_peer_health(machine: str) -> bool:
     import urllib.request
     peer = "nucbox" if machine == "mini" else "mini"
     try:
-        with urllib.request.urlopen(PEER_URLS[peer] + "/api/engine", timeout=5) as resp:
+        peer_url = PEER_URLS[peer].strip().rstrip("/")
+        if not peer_url:
+            _peer_sync_status(peer, False)
+            return False
+        with urllib.request.urlopen(peer_url + "/api/engine", timeout=5) as resp:
             data = json.loads(resp.read().decode("utf-8"))
         store_peer_engine(peer, data)
         info = data.get("machines", {}).get(peer, {})

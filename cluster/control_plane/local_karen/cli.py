@@ -21,10 +21,12 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from dataclasses import replace
 from pathlib import Path
 
 from .config import KarenConfig
 from .gate import run_gate, GateRunResult
+from .context_diagnostics import sanitize_context_diagnostics
 
 
 def parse_repo_arg(arg: str) -> tuple[str, str]:
@@ -154,7 +156,19 @@ def main() -> int:
     )
 
     if args.json_output:
-        print(result.verdict.to_json())
+        if result.verdict.status == 'ERROR':
+            # Keep the error factory's repository/head/time and fixed gate
+            # metadata. Remove free-text evidence before dataclass copying;
+            # detailed internal errors and Verdict serialization stay intact.
+            data = replace(result.verdict,
+                           reason='Review did not produce a verified artifact',
+                           check_results=[], review_results=[]).to_dict()
+            diagnostics = sanitize_context_diagnostics(getattr(result, 'context_diagnostics', None))
+            if diagnostics:
+                data['context_diagnostics'] = diagnostics
+            print(json.dumps(data, indent=2))
+        else:
+            print(result.verdict.to_json())
     else:
         print_verdict(result, verbose=args.verbose)
 

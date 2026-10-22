@@ -22,7 +22,12 @@ def verify(job, config):
     if not (job.created_at and job.start_time and job.state == 'done'
             and job.outcome == 'commit_pushed' and job.outcome_verified
             and job.outcome_sha and job.outcome_sha != job.head_sha):
-        raise PipelineFinding('Latest job has not completed queued -> running -> pushed')
+        # Stage details exclude arbitrary worker output and subprocess arguments.
+        raise PipelineFinding(
+            f'Job {job.job_id} ({job.repo}#{job.pr_number}) has not completed '
+            f'queued -> running -> pushed: state={job.state}, '
+            f'outcome={job.outcome or "none"}, verified={job.outcome_verified}. '
+            'Inspect its worker log; a fresh verified push is required.')
     current = json.loads(run(['gh', 'pr', 'view', str(job.pr_number), '--repo', job.repo,
                               '--json', 'headRefOid']))['headRefOid']
     if current != job.outcome_sha:
@@ -63,6 +68,10 @@ def main():
             owner, repo = args.repo.split('/')
             run_gate(owner=owner, repo=repo, pr_number=args.pr, config=config, post_comment=True)
             jobs = ledger.get_jobs_for_pr(args.repo, args.pr)
+            # A concurrent dispatch must not replace the job we just ran.
+            jobs = [candidate for candidate in jobs if candidate.job_id == job.job_id]
+            if not jobs:
+                raise PipelineFinding(f'Smoke job {job.job_id} missing from ledger after execution')
         else:
             jobs = ledger.get_recent_jobs(hours=24)
         if not jobs:

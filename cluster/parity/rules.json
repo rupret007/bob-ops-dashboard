@@ -71,9 +71,9 @@
   },
   {
     "id": "R12",
-    "rule": "Guards: Mini load<10, swap<80%, disk>=15GB; NucBox load<12, <=7 lanes, 2 reserved for Codex.",
+    "rule": "Guards: Mini load<10, swap<90%, disk>=15GB; NucBox load<12, <=7 lanes, 2 reserved for Codex.",
     "status": "missing",
-    "scenario": "Mini at load 10, swap 80%, disk below 15GB; NucBox at load 12 or seven lanes: no dispatch. Verify two Codex reservations."
+    "scenario": "Mini at load 10, swap 90%, disk below 15GB; NucBox at load 12 or seven lanes: no dispatch. Verify two Codex reservations."
   },
   {
     "id": "R13",
