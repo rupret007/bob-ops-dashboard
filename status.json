@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-10-22T09:43:05.648404-05:00",
-  "generated_at_display": "Thu Oct 22, 2026 \u00b7 9:43 AM CDT",
+  "generated_at": "2026-10-22T09:58:14.462718-05:00",
+  "generated_at_display": "Thu Oct 22, 2026 \u00b7 9:58 AM CDT",
   "timezone": "America/Chicago",
   "owner": "rupret007",
   "dashboard": "bob-ops-dashboard",
@@ -172,14 +172,7 @@
           "open_pr_stack": [],
           "pr_listing_complete": true,
           "agent_url": null,
-          "ci": {
-            "name": "Release integrity",
-            "conclusion": "success",
-            "branch": "main",
-            "sha": "a95c31a",
-            "created": "2026-09-06T05:39:00Z",
-            "html_url": "https://github.com/rupret007/Rad-Dad-Merch/actions/runs/34014510698"
-          },
+          "ci": null,
           "release": null,
           "release_sha": null,
           "release_url": null,
@@ -211,14 +204,7 @@
           "open_pr_stack": [],
           "pr_listing_complete": true,
           "agent_url": null,
-          "ci": {
-            "name": "Test, Package, and Deploy Site",
-            "conclusion": "success",
-            "branch": "main",
-            "sha": "704ec6b",
-            "created": "2026-10-14T12:42:01Z",
-            "html_url": "https://github.com/rupret007/RadDadSite/actions/runs/38565816220"
-          },
+          "ci": null,
           "release": null,
           "release_sha": null,
           "release_url": null,
@@ -250,14 +236,7 @@
           "open_pr_stack": [],
           "pr_listing_complete": true,
           "agent_url": null,
-          "ci": {
-            "name": "leftover-honesty",
-            "conclusion": "success",
-            "branch": "main",
-            "sha": "61ad95c",
-            "created": "2026-10-17T06:06:17Z",
-            "html_url": "https://github.com/rupret007/rad-dad-show-night/actions/runs/39008671084"
-          },
+          "ci": null,
           "release": null,
           "release_sha": null,
           "release_url": null,
@@ -277,9 +256,7 @@
           "chip": "Yellow",
           "notes": "Private catalog spine for StoryBoard / Show Night. Do not publish catalog content.",
           "accessible": true,
-          "ci": {
-            "conclusion": "success"
-          },
+          "ci": {},
           "coord": {
             "repo": "AI-Music-Vault",
             "agent": "none",
@@ -305,14 +282,7 @@
           "open_pr_stack": [],
           "pr_listing_complete": true,
           "agent_url": "https://cursor.com/agents/bc-61d5fce3-5c7c-5e61-953d-bf055f389dd0",
-          "ci": {
-            "name": "CI",
-            "conclusion": "success",
-            "branch": "main",
-            "sha": "5374a29",
-            "created": "2026-10-22T05:04:29Z",
-            "html_url": "https://github.com/rupret007/Turdanoid/actions/runs/39725933833"
-          },
+          "ci": null,
           "release": null,
           "release_sha": null,
           "release_url": null,
@@ -495,8 +465,8 @@
           "status": "yellow",
           "chip": "Yellow",
           "default_branch": "main",
-          "tip_sha": "f0b3c7b",
-          "tip_date": "2026-10-22T14:28:19Z",
+          "tip_sha": "60e7b05",
+          "tip_date": "2026-10-22T14:43:25Z",
           "open_prs": 26,
           "open_pr_url": "https://github.com/rupret007/bob-ops-dashboard/pull/140",
           "open_pr_number": 140,
@@ -524,9 +494,7 @@
           "chip": "Yellow",
           "notes": "Private macOS virtual-display / Cast prototype. Software validation only; Screen Recording and device steps stay owner-only.",
           "accessible": true,
-          "ci": {
-            "conclusion": "success"
-          }
+          "ci": {}
         },
         {
           "name": "OpenClaw Runtime",
@@ -900,7 +868,7 @@
     "barker"
   ],
   "publish_notes": "Public board -- no secrets or customer paths. Private repositories stay high-level; AI Music Vault stays private-content-boundary only.",
-  "refresh_started_ms": 1792680150544,
+  "refresh_started_ms": 1792681050790,
   "agents_source": "file:stale->unknown",
   "agents": [
     {
@@ -1099,7 +1067,7 @@
     }
   ],
   "llm_work_now_freshness": {
-    "generated_at": "2026-10-22 09:43 CT",
+    "generated_at": "2026-10-22 09:58 CT",
     "warn_ttl_sec": 1200,
     "warnings": [],
     "ok": true
@@ -1130,7 +1098,7 @@
     ],
     "scorecards": {
       "v": "scorecards/v1",
-      "generated_at": "2026-10-22T14:43:07.497389+00:00",
+      "generated_at": "2026-10-22T14:58:15.975483+00:00",
       "windows": {
         "24h": {
           "providers": {
