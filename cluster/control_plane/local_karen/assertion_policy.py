@@ -1,4 +1,4 @@
-"""The existing literal test-integrity policy, with no exception mechanism.
+"""Literal test integrity with one code-owned, provenance-verified contract pair.
 
 Kept as complete bounded source so normal reviewers can read the entire guard
 without increasing immutable-source context limits. Public checks.py exports
@@ -9,6 +9,7 @@ from __future__ import annotations
 import re
 
 from .config import KarenConfig
+from .contract_policy import authorized_assertion
 from .check_types import CheckVerdict, CheckResult, PRInfo
 
 
@@ -170,6 +171,7 @@ def check_tests_not_weakened(pr: PRInfo, config: KarenConfig) -> CheckResult:
     renamed_headers = _renamed_js_test_headers(pr.diff)
     additions = list(_added_lines(pr.diff))
     equivalent_additions = set()
+    contract = authorized_assertion(pr)
 
     test_function_patterns = [
         r"^\s*def\s+test_",
@@ -207,6 +209,10 @@ def check_tests_not_weakened(pr: PRInfo, config: KarenConfig) -> CheckResult:
                 replacement = next((i for i, (path, _, added) in enumerate(additions)
                                     if i not in equivalent_additions and path == filepath and
                                     filepath.endswith('.py') and _literal_equivalent_line(line, added)), None)
+                if replacement is None and contract and (filepath, number, line) == contract[:3]:
+                    replacement = next((i for i, (path, added_number, added) in enumerate(additions)
+                                        if i not in equivalent_additions
+                                        and (path, added_number, added) == (contract[0], contract[3], contract[4])), None)
                 if replacement is None:
                     issues.append(f"Removed assertion in {filepath}:{number} (removed source; value redacted)")
                 else:
