@@ -1,72 +1,30 @@
 """One exact test-contract correction, proved from immutable Git objects.
 
-Code-owned policy only; configuration, labels, PR prose and model votes cannot
-supply an exception. Repository/PR/full head/frozen baseline/file/function and
-exact assertion pair are bound below. Only that unique removed assertion is
-discharged. Every other deletion, decorator, skip, credential, reviewer, CI,
-signature, delivery, current-head and human-merge requirement remains unchanged.
+Only the code-owned APPROVED repository/PR/full head/frozen baseline/file/test
+and assertion pair can discharge its unique removed-assertion finding. The full
+canonical diff and complete old/new source must match. PR prose, labels,
+configuration and model votes cannot supply authority. Every other deterministic
+check, deletion/skip/decorator rule, credential rule, context/budget limit, claim,
+reviewer, signature/delivery, CI and human-only merge requirement remains.
 
-Frozen packet: rupret007/bob-ops-dashboard#104, head
-1f45a6f87a5ff8588bb4c4cb5b58a5690cc4b582, baseline
-c5650be27329e507fe73ef5fc7a3905b64991469. The named direct assertion changes
-semantic-yellow admission to rejection. Its full canonical diff digest must
-match APPROVED. Complete immutable old/new source must prove the unique direct
-assertion in the exact test. Changed packets require a new decision.
+BASE_ADVANCEMENTS pins thirteen separately reviewed source edges from the frozen
+baseline through ADMITTED_BASE. Each merged commit must have exactly its stated
+sole parent. The reviewed/merged patch identities and native exact-head verdicts
+are recorded in the PR's provenance evidence; no live-base wildcard is allowed.
+Missing/reversed/skipped edges or unlisted source changes refuse.
 
-Ten separately reviewed source advancements are explicitly pinned:
+The live policy base must descend from ADMITTED_BASE with an exact tree delta
+of POLICY_FILES, each a regular100644 file matching the loaded snapshot. It must
+match the normally installed and loaded runtime source. The review client binds
+that base once at import; missing startup evidence never gains authority later.
+Named live branch and saved PR base are observed separately and rechecked; final
+head verification also requires the bound runtime base.
 
-PR | reviewed head | sole-parent merged commit | Nuc native COMPLETE/PASS SHA256
-100 | 62c64bdd27da4fcd1a07ac9b3be43d60663f86b0 | c3374b769820408edd43cdd4abf1eed5efb0e65b | e1df7fe6ed9fb78e0a9dab4decc208c624da82f60eac30f7bb49f28677b2dd6b
-107 | a0fe6d8f780105c4ec6f667d7be90ec680e75b5a | 21242f72725cd64065b37656e6c269676793f7aa | 8ba0d6a4796a4f355a50f7c76f3a1fdb638e3a253e056a6bde92cecf11e24763
-108 | 330d9a91c77b8efbdc21743633910f4d18f01d10 | 079d0a184895556f64e8aa9806211c13a39fa1c8 | 38d4944e8464f42b923d0977d7e6c3f8c4ab6e438824dc14bc296f60991d2015
-109 | 3b926929292274aea028c4d9fc86428884f32ab4 | 26384733115ce9803a61298e8fb49c4eb3b8780a | bd7883ad52cbdc2c607d968aaa9090805bba102d709f21ba805b260674641c04
-116 | 0bb497e951f68bf2314b06ce2351d5b222ea3cc5 | 85f411af86dd8ceb2f829c24801538217d4ff071 | 03dbc253a0e63107a4d9d786aa02ffe3362ad745ce72442bb922060f02c5cc36
-123 | 92ee51bfd18a22179623cf6832e90396078fd647 | 3905ca1ad5f3f581a8c8d1d64bda0b52db679ea7 | 21737214201b385ee01e426edc19bcc653aae6881a1bf15a7f51941fb7f67d37
-128 | 2f0059e556f4e92df8c31f0af12d17d9fafad4e9 | 4042b8998234699fcf0a1882c26e6b7a202837ef | fe1b1dfa78b71ce4297c499770601c7ee79b3f17e10000d687e1a615253df0fa
-129 | 78519f4bbaca3984153aa5f83ca9e1778ef05d6a | 12e4d8c3c01f81bbc528fb77ab973769b376a7ea | 3ca8a9619f18b9d76f5de3c727f1618040ceb738d3f8206440bd37f8b9285247
-131 | 6005a9252752a2d22a3d91ef35a2a707e9abbf0d | 33b0ddcf2fdbc4dfb2c6cff2c9d30d6cbb0df1f6 | d308bc9a023b2c53600e8d44eb7bf8d964dbf9bc6ff81ce70e152178b5c0825b
-134 | 075dbcec2d8dbcc1d74d242d23476fc45c125c26 | 47dc0f25171f02713d85a67799f2f889895bc411 | 4af45a4365877cf785ea9a39c679d291d62c66544b795cc2ae6f2c0bd4b54197
-
-Each merge's sole parent is the preceding row, starting at the frozen baseline.
-Missing/reversed/skipped edges, extra parents and unlisted later changes fail.
-Squash ancestry is not assumed: reviewed/merged objects and exact diffs are proved.
-PR109 tree:2d444c51919451be3d725b602295964ff333dff3;
-PR116 tree:54f9f490d4ed6b8d2e77f93ed4c43c52273bbc31;
-PR123 tree:6a1c35fd36e3d0b585a31022f8a83c8cea8c587d.
-PR128 reviewed/merged tree:8003c9606f1de396add0e0c1d07b1dc55dfce55d.
-PR129 was reviewed on3905, tree7d5f7610bf83fa951da0bf1d464cddb88e77a354.
-Its exact full-index diff equals4042->12e4, retaining the separately reviewed128.
-PR129 reviewed/merged diff SHA256:
-3f3077b752786e62f3fe8f6dc6dd48bd75aadc8d23b2627d29d89b8bcc9393a8.
-Receiving12e4 tree:bfa795f6bbcf3baf57606aee573facaed06224da.
-PR131 reviewed/merged tree:17b01ac79a279b2ffb1f1912b2ed5f184ed28999.
-
-Native exact-head verdicts and immutable reviewed/merged correspondence are recorded.
-Original-owner receiving qualification remains separate.
-Resource limits and release holds remain unchanged; this record grants no authority.
-
-The head/base merge base must remain the frozen baseline. ADMITTED_BASE must be
-an ancestor of the live base. Live base must equal BOTH installed and loaded
-source revisions with the ordinary runtime source check passing. Its complete
-tree difference from ADMITTED_BASE must contain exactly POLICY_FILES,
-each regular100644 and byte-identical to this loaded policy snapshot. This
-permits the separately reviewed policy merge without arbitrary base drift or
-a stale/unreviewed runtime overlay. Missing immutable objects, source mismatch,
-packet drift or unproved advancement refuses before paid review.
-
-The review client captures its loaded base once at import. Later source-head
-reporting cannot relabel unchanged Karen files as a newly installed release.
-The client proves the named live branch separately from the PR's saved base OID
-and rechecks both observations. Normal final SHA verification also requires this
-same loaded base, so a branch/install change during review refuses.
-
-This policy head needs normal exact-head Karen/CI/signature/delivery and the
-human-only merge process, then qualified existing-owner installation before104
-can reopen for its OWN normal review. The original106 rejection remains.
-Existing review byte limits still apply; no cap waiver is implemented here.
-No new source may merge into the target before104 without a separately proved,
-normally reviewed policy update. Neither this record nor private tests grant
-review, admission, healthy deployment or recovery authority.
+This policy needs normal review, merge and qualified owner installation before
+frozen104 receives its own normal review. The original106 rejection is retained.
+New source outside this exact policy delta requires another proved, normally
+reviewed policy update. Private tests grant no review, admission or recovery
+qualification and no current lock, hold or resource limit is changed.
 """
 from __future__ import annotations
 
@@ -122,8 +80,11 @@ BASE_ADVANCEMENTS = (
     ('12e4d8c3c01f81bbc528fb77ab973769b376a7ea', '4042b8998234699fcf0a1882c26e6b7a202837ef'),
     ('33b0ddcf2fdbc4dfb2c6cff2c9d30d6cbb0df1f6', '12e4d8c3c01f81bbc528fb77ab973769b376a7ea'),
     ('47dc0f25171f02713d85a67799f2f889895bc411', '33b0ddcf2fdbc4dfb2c6cff2c9d30d6cbb0df1f6'),
+    ('fafdb38fb964a59449fc20807c54c68daed5aad2', '47dc0f25171f02713d85a67799f2f889895bc411'),
+    ('02b6f8e7137df8c72a408c54809c958360415560', 'fafdb38fb964a59449fc20807c54c68daed5aad2'),
+    ('469feba9579e04fe240d22306af92735d25ee65c', '02b6f8e7137df8c72a408c54809c958360415560'),
 )
-ADMITTED_BASE = '47dc0f25171f02713d85a67799f2f889895bc411'
+ADMITTED_BASE = '469feba9579e04fe240d22306af92735d25ee65c'
 
 POLICY_FILES = frozenset({
     'cluster/control_plane/local_karen/checks.py',
