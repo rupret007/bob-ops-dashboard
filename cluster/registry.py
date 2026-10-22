@@ -27,7 +27,7 @@ REGISTRY_VERSION = 1
 JOIN_PREFIX = "bobjoin1:"
 DEFAULT_TTL_S = 30 * 60
 MAX_TTL_S = 24 * 3600
-RESERVED_NAMES = frozenset({"mini", "nucbox", "macbook", "dashboard", "joind", "guestops", "sys", "operator"})
+RESERVED_NAMES = frozenset({"mini", "nucbox", "macbook", "dashboard", "joind", "guestops", "sys", "operator", "coord", "coordop"})
 LEGACY_USERS = ("mini", "nucbox", "macbook", "dashboard")
 PENDING_PREFIX = "join-"
 ROLES = ("member", "guest")
@@ -446,6 +446,11 @@ def render_conf(reg: dict[str, Any], store_dir: str, port: int = 4222, http: str
         elif n["role"] == "guest":
             guest.append(_user_block(name, n["pw"], guest_permissions(name, caps)))
     svc = reg.get("service") or {}
+    # Existing account-based installs use the same bucket registry/ACL policy.
+    from cluster.nats_acl import coord_permissions
+    for identity in ('coord', 'coordop'):
+        if svc.get(identity):
+            bob.append(_user_block(identity, svc[identity], coord_permissions(identity == 'coordop')))
     if svc.get("guestops"):
         guest.append(_user_block("guestops", svc["guestops"], GUESTOPS_PERMS))
     if svc.get("joind"):

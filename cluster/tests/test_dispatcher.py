@@ -229,12 +229,12 @@ class TestDispatcher(unittest.TestCase):
         self.assertGreater(score_karen, score_no_label)
 
     def test_select_provider_never_selects_unimplemented_worker(self):
-        """Mini must wait; NucBox routes fixes only to implemented Codex."""
+        """Mini waits; an unauthenticated Cursor cannot replace Codex."""
         pr = {"isDraft": False}
         provider = self.dispatcher.select_provider(pr, {})
         self.assertIsNone(provider)
         self.dispatcher.machine = "nucbox"
-        with patch.object(self.dispatcher.budget, "weekly_pct", return_value=0), patch.object(self.dispatcher.budget, "can_use", return_value=(True, "ok")):
+        with patch.object(self.dispatcher.budget, "weekly_pct", return_value=0), patch.object(self.dispatcher.budget, "can_use", return_value=(True, "ok")), patch('cluster.control_plane.cursor_worker.available', return_value=False):
             self.assertEqual(self.dispatcher.select_provider(pr, {}), "codex")
             self.assertIsNone(self.dispatcher.select_provider(pr, {"codex": 2}))
         for provider in ("cursor", "claude", "gemini", "minimax"):

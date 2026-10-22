@@ -25,3 +25,16 @@ def test_optional_fix_import_failure_does_not_disable_updates(tmp_path):
         'assert callable(self_update); assert BACKLOG_AVAILABLE; assert not FIX_DISPATCH_AVAILABLE'],
         cwd=tmp_path, env={**os.environ, 'PYTHONPATH': str(tmp_path / 'module')}, capture_output=True, text=True)
     assert result.returncode == 0, result.stderr
+
+
+def test_installed_coordination_and_reporting_dependency_closure(tmp_path):
+    root = Path(__file__).resolve().parents[3]
+    assert copy_karen_module(root, tmp_path / 'module')
+    result = subprocess.run([sys.executable, '-c',
+        'from cluster.control_plane.coordination import ClaimClient; '
+        'from cluster.submit import load_token; '
+        'from cluster.control_plane.conductor import Conductor; '
+        'from cluster.control_plane.reporting_telemetry import machine_guard_snapshot; '
+        'assert callable(load_token); assert callable(machine_guard_snapshot)'],
+        cwd=tmp_path, env={**os.environ, 'PYTHONPATH': str(tmp_path / 'module')}, capture_output=True, text=True)
+    assert result.returncode == 0, result.stderr

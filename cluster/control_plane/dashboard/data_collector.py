@@ -15,6 +15,8 @@ from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from typing import Optional, List, Dict, Any
 
+from ..codex_quota import read_codex_quota
+
 try:
     from ..job_ledger import JobLedger, Job, JobState
     LEDGER_AVAILABLE = True
@@ -197,9 +199,9 @@ class NeedsJeffItem:
 class ProviderBudget:
     """Budget usage for a provider."""
     name: str
-    weekly_pct: float
-    daily_spend_usd: float
-    weekly_spend_usd: float
+    weekly_pct: Optional[float]
+    daily_spend_usd: Optional[float]
+    weekly_spend_usd: Optional[float]
     cap_pct: float
     status: str  # "ok", "warning", "capped", "conserve"
 
@@ -303,6 +305,21 @@ class DataCollector:
     def _collect_services(self) -> List[ServiceHealth]:
         """Collect service health status."""
         services = []
+        from ..health_state import authoritative, read_status
+        if authoritative(self.data_dir):
+            snapshot = read_status(self.data_dir)
+            for name, group in snapshot.get('groups', {}).items():
+                completed = group.get('finished_at', 0)
+                age = datetime.now(timezone.utc).timestamp() - completed
+                checks = group.get('checks', [])
+                failed = sum(not c.get('passed') for c in checks)
+                services.append(ServiceHealth(
+                    name=name, status='unknown' if group.get('error') or age > group.get('period', 120) + 90
+                    else 'error' if failed else 'running',
+                    last_run=datetime.fromtimestamp(completed, timezone.utc).isoformat(),
+                    last_run_ago='{}s ago'.format(max(0, int(age))),
+                    error_count=failed, log_file=str(self.data_dir / 'health-status.json')))
+            return services
         
         service_dirs = {
             "shadow": self.data_dir / "shadow",
@@ -374,24 +391,9 @@ class DataCollector:
             pass
         
         if self.machine == "mini":
-            try:
-                with open("/proc/meminfo", "r") as f:
-                    vals = {}
-                    for line in f:
-                        parts = line.split()
-                        if len(parts) >= 2 and parts[0].endswith(":"):
-                            key = parts[0][:-1]
-                            try:
-                                vals[key] = int(parts[1])
-                            except ValueError:
-                                pass
-                    total = vals.get("SwapTotal", 0)
-                    free = vals.get("SwapFree", 0)
-                    if total > 0:
-                        guards.swap_pct = ((total - free) / total) * 100
-            except OSError:
-                pass
-            
+            from ..guards import get_swap_pct
+            guards.swap_pct = get_swap_pct()
+
             try:
                 import shutil
                 usage = shutil.disk_usage("/")
@@ -403,9 +405,8 @@ class DataCollector:
         if dispatch_status:
             guard_vals = dispatch_status.get("summary", {}).get("decisions", [{}])[0].get("guard_values", {})
             if guard_vals:
-                guards.load = guard_vals.get("load", guards.load)
-                guards.swap_pct = guard_vals.get("swap", guards.swap_pct)
-                guards.disk_gb = guard_vals.get("disk", guards.disk_gb)
+                # Dispatch decisions are historical context, not current
+                # host load or disk telemetry.
                 guards.lanes_active = int(guard_vals.get("lanes", 0))
         
         guards.guards_passed = (
@@ -587,7 +588,8 @@ class DataCollector:
                     error=job.error,
                 ))
             
-            for job in ledger.get_recent_jobs(24)[:20]:
+            for job in sorted(ledger.get_recent_jobs(24),
+                              key=lambda j: j.end_time or j.start_time or j.created_at, reverse=True)[:20]:
                 recent.append(JobRecord(
                     job_id=job.job_id,
                     repo=job.repo,
@@ -614,7 +616,13 @@ class DataCollector:
         events = []
         
         watchdog_log = self.data_dir / "watchdog.log"
-        entries = _parse_jsonl(watchdog_log, 20)
+        from ..health_state import authoritative, read_status
+        if authoritative(self.data_dir):
+            group = read_status(self.data_dir).get('groups', {}).get('watchdog', {})
+            entries = [dict(timestamp=datetime.fromtimestamp(group.get('finished_at', 0), timezone.utc).isoformat(),
+                            checks=group.get('checks', []))]
+        else:
+            entries = _parse_jsonl(watchdog_log, 20)
         
         for entry in entries:
             for check in entry.get("checks", []):
@@ -632,6 +640,14 @@ class DataCollector:
     def _collect_needs_jeff(self) -> List[NeedsJeffItem]:
         """Collect NEEDS_JEFF items."""
         items = []
+        from ..health_state import authoritative, read_status
+        if authoritative(self.data_dir):
+            for issue in read_status(self.data_dir).get('incidents', {}).values():
+                if issue.get('notify') and issue.get('state') == 'firing':
+                    items.append(NeedsJeffItem(
+                        timestamp=datetime.fromtimestamp(issue['first_seen'], timezone.utc).isoformat(),
+                        issue='Health: {} / {}'.format(issue['machine'], issue['name']),
+                        details='Inspect unified health details and health logs.'))
         
         needs_jeff = self.data_dir / "conductor" / "NEEDS_JEFF.md"
         if not needs_jeff.is_file():
@@ -682,11 +698,13 @@ class DataCollector:
         
         for name, config in provider_configs.items():
             pdata = data.get(name, {})
-            weekly_pct = pdata.get("weekly_pct", 0.0)
+            weekly_pct = read_codex_quota()['weekly_pct'] if name == 'codex' else pdata.get("weekly_pct", 0.0)
             
             status = config["status"]
             if name != "grok":
-                if weekly_pct >= config["cap_pct"]:
+                if weekly_pct is None:
+                    status = "unknown"
+                elif weekly_pct >= config["cap_pct"]:
                     status = "capped"
                 elif weekly_pct >= config["cap_pct"] * 0.9:
                     status = "warning"
@@ -694,8 +712,8 @@ class DataCollector:
             providers.append(ProviderBudget(
                 name=name,
                 weekly_pct=weekly_pct,
-                daily_spend_usd=pdata.get("daily_usd", 0.0),
-                weekly_spend_usd=pdata.get("weekly_usd", 0.0),
+                daily_spend_usd=None if name == 'codex' else pdata.get("daily_usd", 0.0),
+                weekly_spend_usd=None if name == 'codex' else pdata.get("weekly_usd", 0.0),
                 cap_pct=config["cap_pct"],
                 status=status,
             ))

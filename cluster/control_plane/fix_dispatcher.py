@@ -147,14 +147,28 @@ def save_fix_state(state: FixState) -> None:
 def extract_findings_from_verdict(verdict: dict) -> List[str]:
     """Extract actionable findings from a Karen verdict."""
     findings = []
+    # Secrets require Jeff; never send credential evidence to an auto-fixer.
+    if any(check.get('verdict') == 'FAIL'
+           and check.get('check') in ('no_secrets', 'no_secrets_in_diff')
+           for check in verdict.get('check_results', [])):
+        return findings
     
     for check in verdict.get("check_results", []):
         if check.get("verdict") == "FAIL":
             findings.append(f"[CHECK] {check.get('check', 'unknown')}: {check.get('reason', '')}")
+            details = check.get('details')
+            if isinstance(details, str) and details.strip():
+                findings.append('[CHECK EVIDENCE] ' + details[:4000])
     
     for review in verdict.get("review_results", []):
-        if review.get("verdict") == "FAIL":
+        if (review.get("verdict") == "FAIL"
+                and not (review.get('scope') or {}).get('context_incomplete')):
             findings.append(f"[REVIEW] {review.get('reviewer', 'unknown')}: {review.get('reason', '')}")
+            structured = review.get('findings') or {}
+            for category in ('functional_issues', 'test_coverage_issues', 'code_quality_issues'):
+                for defect in structured.get(category, []):
+                    if isinstance(defect, str) and defect.strip():
+                        findings.append('[REVIEW EVIDENCE] ' + defect[:4000])
     
     return findings
 
@@ -173,11 +187,18 @@ def classify_fix_difficulty(verdict: dict) -> str:
         return "high"
     
     for check in verdict.get("check_results", []):
+        if check.get('verdict') != 'FAIL':
+            continue
         reason = (check.get("reason") or "").lower()
         if any(word in reason for word in ("security", "auth", "secret", "credential", "injection")):
             return "security"
     
     for review in verdict.get("review_results", []):
+        if (review.get('verdict') != 'FAIL'
+                or (review.get('scope') or {}).get('context_incomplete')):
+            continue
+        if (review.get('findings') or {}).get('security_issues'):
+            return 'security'
         reason = (review.get("reason") or "").lower()
         if any(word in reason for word in ("security", "auth", "secret", "credential", "injection")):
             return "security"

@@ -94,16 +94,21 @@ class TestShadowRunnerOutput(unittest.TestCase):
         
         log_dir = tempfile.TemporaryDirectory()
         self.addCleanup(log_dir.cleanup)
+        fixture_home = Path(log_dir.name) / "home"
+        fixture_home.mkdir()
         result = subprocess.run(
-            ["python3", "-m", "cluster.control_plane.shadow_runner", "--machine", "mini", "--json", "--log-dir", log_dir.name],
+            [sys.executable, "-m", "cluster.control_plane.shadow_runner", "--machine", "mini", "--json", "--log-dir", log_dir.name],
             capture_output=True,
             text=True,
             cwd=repo_root,
-            env={"PYTHONPATH": str(repo_root)},
+            env={"PYTHONPATH": str(repo_root), "HOME": str(fixture_home),
+                 "XDG_CONFIG_HOME": str(fixture_home / ".config"),
+                 "STORYPOOL_DATA_DIR": str(Path(log_dir.name) / "data")},
             timeout=30,
         )
         
         self.assertEqual(result.returncode, 0, f"Shadow runner failed: {result.stderr}")
+        self.assertTrue((Path(log_dir.name) / "data").is_dir())
         
         try:
             data = json.loads(result.stdout)

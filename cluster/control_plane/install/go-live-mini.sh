@@ -15,6 +15,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
+source "$SCRIPT_DIR/launchd-reload.sh"
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -142,7 +143,7 @@ run_self_check() {
     local conductor_exit
     (cd "$REPO_ROOT" && PYTHONPATH="$REPO_ROOT" python3 -m cluster.control_plane.conductor --json > "$conductor_tmp" 2>&1)
     conductor_exit=$?
-    if [[ $conductor_exit -eq 0 ]] && python3 -c "import json,sys; json.load(open(sys.argv[1]))" "$conductor_tmp" 2>/dev/null; then
+    if [[ $conductor_exit -eq 0 ]] && python3 -c "import json,sys; s=json.load(open(sys.argv[1])); sys.exit(0 if isinstance(s,dict) and s.get('counts_complete') is True and s.get('deferred') is False else 1)" "$conductor_tmp" 2>/dev/null; then
         log_pass "conductor tick ran successfully"
     else
         log_fail "conductor tick failed (exit $conductor_exit)"
@@ -160,8 +161,6 @@ enable_live_mode() {
     local conductor_plist="$HOME/Library/LaunchAgents/com.storypool.conductor.plist"
     local live_marker="$HOME/.config/storypool/live"
     
-    launchctl unload "$dispatch_plist" 2>/dev/null || true
-    launchctl unload "$conductor_plist" 2>/dev/null || true
     
     sed -i '' 's|<!-- <string>--live</string> -->|<string>--live</string>|g' "$dispatch_plist" 2>/dev/null || true
     sed -i '' 's|<!--<string>--live</string>-->|<string>--live</string>|g' "$dispatch_plist" 2>/dev/null || true
@@ -176,8 +175,8 @@ enable_live_mode() {
         sed -i '' 's|</array>|<string>--live</string>\n</array>|' "$conductor_plist"
     fi
     
-    launchctl load "$dispatch_plist"
-    launchctl load "$conductor_plist"
+    storypool_reload_agent "$dispatch_plist"
+    storypool_reload_agent "$conductor_plist"
     
     # Persist live marker so install/self-update won't strip --live
     mkdir -p "$(dirname "$live_marker")"
@@ -193,8 +192,7 @@ load_karen_poller() {
     local poller_plist_dst="$HOME/Library/LaunchAgents/com.storypool.karen-poller.plist"
     
     if [[ -f "$poller_plist_dst" ]]; then
-        launchctl unload "$poller_plist_dst" 2>/dev/null || true
-        launchctl load "$poller_plist_dst"
+        storypool_reload_agent "$poller_plist_dst"
         
         log_pass "Karen poller loaded (polls every 10 min)"
     else

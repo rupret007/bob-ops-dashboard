@@ -1,0 +1,40 @@
+name: Control plane retry regressions
+
+on:
+  pull_request:
+  push:
+
+permissions:
+  contents: read
+
+jobs:
+  retries:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ['3.9', '3.14']
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - run: python -m pip install -r cluster/requirements.txt pytest
+      - name: Install temporary test broker
+        run: |
+          set -euo pipefail
+          NAT_DIR="${RUNNER_TEMP}/nats-bin"
+          mkdir -p "${NAT_DIR}"
+          bash cluster/install-nats.sh --ci "${NAT_DIR}"
+          echo "${NAT_DIR}" >> "${GITHUB_PATH}"
+      - name: Check exact-head admission, real races, worker safety and dashboard
+        env:
+          BOB_REQUIRE_NATS: '1'
+        run: |
+          python -m pytest -q cluster/control_plane/local_karen/tests/test_rule_literals.py cluster/control_plane/local_karen/tests/test_scanner_precision.py cluster/control_plane/local_karen/tests/test_secret_verdicts.py
+          python -m pytest -q cluster/control_plane/tests/test_health_deadlines.py cluster/control_plane/tests/test_ops_doctor.py cluster/control_plane/tests/test_doctor_coordination.py cluster/control_plane/tests/test_smoke.py
+          python -m cluster.nats_acl --check cluster/nats.conf.template
+          python -m compileall -q cluster
+          python -m pytest -q cluster/control_plane/tests/test_retry_policy.py cluster/control_plane/tests/test_fix_worker.py cluster/control_plane/tests/test_coordination.py cluster/control_plane/tests/test_coordination_permissions.py cluster/control_plane/tests/test_claim_expiry_errors.py cluster/control_plane/tests/test_peer_endpoints.py cluster/control_plane/tests/test_peer_identity.py cluster/control_plane/tests/test_watchdog.py cluster/control_plane/tests/test_node_control.py cluster/control_plane/tests/test_service_logging.py cluster/control_plane/dashboard/tests cluster/tests/test_conductor.py cluster/tests/test_dispatcher.py cluster/tests/test_job_ledger.py cluster/tests/test_python39.py cluster/tests/test_python39_runtime.py cluster/control_plane/tests/test_worker_runtime.py cluster/control_plane/local_karen/tests/test_auto_complement.py cluster/control_plane/tests/test_conductor_budget_defer.py cluster/control_plane/tests/test_cursor_worker.py cluster/control_plane/tests/test_release_holds.py

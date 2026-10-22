@@ -1,20 +1,69 @@
 <style>
-#engine-panel{margin-bottom:1.5rem;padding:1rem;border:1px solid #30363d;border-radius:12px;background:linear-gradient(135deg,#172330,#0b1119)}
+#node-controls{display:flex;flex-wrap:wrap;gap:.6rem;margin:1rem 0}#node-controls button{min-height:44px;max-width:100%;padding:.6rem;background:#263241;color:#c9d1d9;border:1px solid #8b949e;border-radius:6px}#control-audit{white-space:pre-wrap;overflow-wrap:anywhere}#engine-panel{min-width:0;overflow-wrap:anywhere;margin-bottom:1.5rem;padding:1rem;border:1px solid #30363d;border-radius:12px;background:linear-gradient(135deg,#172330,#0b1119)}
 #engine-panel header{display:flex;gap:1rem;flex-wrap:wrap;align-items:center} .engine-light{display:inline-block;width:14px;height:14px;border-radius:50%;background:#d29922;box-shadow:0 0 12px currentColor}
-#engine-gauges{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:1rem;margin:1rem 0}.dial{text-align:center}.dial svg{width:100%;max-width:190px;overflow:visible}.dial line{transition:transform 1s ease-in-out;transform-origin:90px 90px}.dial strong{display:block;font:600 1.3rem monospace}.dial small{color:#8b949e}
+#engine-gauges{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,150px),1fr));gap:1rem;margin:1rem 0}.dial{text-align:center}.dial svg{width:100%;max-width:190px;overflow:visible}.dial line{transition:transform 1s ease-in-out;transform-origin:90px 90px}.dial strong{display:block;font:600 1.3rem monospace}.dial small{color:#8b949e}
 #engine-activity{max-height:9rem;overflow:auto;font:0.8rem monospace;padding:0.5rem 1.5rem}#engine-monitor{padding:.7rem;border-top:1px solid #30363d;white-space:pre-wrap}#engine-notes{color:#8b949e;font-size:.75rem}
-@media(prefers-reduced-motion:reduce){.dial line{transition:none}}
+#engine-machine-jobs{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,260px),1fr));gap:.8rem;margin:1rem 0}.mjobs{border:1px solid #30363d;border-radius:10px;padding:.7rem;background:#0d1520}.mjobs h4{margin:0 0 .4rem;display:flex;justify-content:space-between;align-items:baseline}.mjobs .count{font:700 2rem monospace;color:#58a6ff}.mjobs ul{list-style:none;margin:0;padding:0;font:.8rem monospace}.mjobs li{padding:.25rem 0;border-top:1px dashed #263241;display:flex;justify-content:space-between;gap:.5rem;flex-wrap:wrap}.mjobs .model{color:#f6c45a}.mjobs .muted,.speedo .muted{color:#8b949e}
+#engine-llm{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,150px),1fr));gap:.8rem;margin:1rem 0}.speedo{text-align:center;border:1px solid #30363d;border-radius:10px;padding:.5rem;background:radial-gradient(circle at 50% 70%,#1b2a3a,#0b1119)}.speedo.conserve{border-color:#a371f7;box-shadow:0 0 10px #a371f755}.speedo svg{width:100%;max-width:200px}.speedo .needle{transition:transform 1.2s cubic-bezier(.3,1.35,.5,1);transform-origin:100px 100px}.speedo strong{display:block;font:600 1.15rem monospace}.speedo small{display:block;font-size:.72rem;color:#8b949e}.speedo .lanes{font:.8rem monospace}
+@media(max-width:520px){#engine-llm{grid-template-columns:repeat(2,minmax(0,1fr))}#engine-machine-jobs{grid-template-columns:1fr}}
+@media(prefers-reduced-motion:reduce){.dial line,.speedo .needle{transition:none}}
 </style>
 <section id="engine-panel" aria-label="Live StoryPool tachometer">
 <header><h2><span id="engine-light" class="engine-light"></span> StoryPool engine</h2><span id="engine-state">Connecting…</span><span id="engine-machines"></span></header>
-<div id="engine-gauges"></div><p id="engine-monitor" aria-live="polite">Loading monitor status…</p>
+<p id="engine-admission" role="status"></p>
+<p id="engine-reason" role="status"></p>
+<p id="engine-review-evidence" role="status"></p>
+<p id="engine-github" role="status">GitHub API quota unverified.</p>
+<p id="engine-runtime" aria-live="polite">Karen loaded version is unverified.</p><p id="engine-security-evidence" role="status"></p>
+<div id="node-controls" aria-label="Node maintenance controls"></div><p id="control-result" role="status"></p><details><summary>Operator audit · America/Chicago</summary><pre id="control-audit"></pre></details><h3>Jobs running now</h3><div id="engine-machine-jobs"></div><h3>Fixes needing attention</h3><ul id="engine-blocked" aria-live="polite"></ul><h3>LLM usage · live</h3><div id="engine-llm"></div><div id="engine-gauges"></div><p id="engine-monitor" aria-live="polite">Loading monitor status…</p>
 <p id="engine-parity">Parity audit unavailable</p><h3>Live activity</h3><ol id="engine-activity" aria-live="polite"></ol><p id="engine-notes"></p>
 </section>
 <script>
 (()=>{
  const root=document.getElementById('engine-gauges');
- const colors={green:'#3fb950',yellow:'#d29922',red:'#f85149'};
+ const colors={green:'#3fb950',yellow:'#d29922',red:'#f85149',maintenance:'#8b949e'};
  let lastActivity='';
+ const svcColor={codex:'#3fb950',claude:'#d2a8ff',gemini:'#58a6ff',minimax:'#39c5cf',cursor:'#f0883e',grok:'#a371f7'};
+ function el(tag,cls,text){const e=document.createElement(tag);if(cls)e.className=cls;if(text!=null)e.textContent=text;return e;}
+ function dur(s){if(s==null)return '—';const h=Math.floor(s/3600),m=Math.floor(s%3600/60);return h?h+'h '+m+'m':m+'m '+(s%60)+'s';}
+ function renderJobs(jobs){
+  const root=document.getElementById('engine-machine-jobs');root.replaceChildren();
+  Object.entries(jobs||{}).forEach(([name,m])=>{
+   const card=el('div','mjobs');const h=el('h4');h.append(el('span',null,name));
+   const cap=m.capacity!=null?' / '+m.capacity+' lanes':'';
+   h.append(el('span','count',m.count==null?'—':String(m.count)));card.append(h);
+   card.append(el('div','muted',m.source==='unavailable'?'no data'+(m.synced_at?' · last sync '+new Date(m.synced_at).toLocaleTimeString():''):(m.source==='peer-sync'?'synced '+new Date(m.synced_at).toLocaleTimeString():'live')+cap+(m.reserved_codex?' · '+m.reserved_codex+' reserved for Codex':'')));
+   const list=el('ul');
+   (m.running||[]).forEach(r=>{const li=el('li');li.append(el('span',null,(r.repo||'').split('/').pop()+' #'+(r.pr_number??'?')));
+    li.append(el('span','model',(r.provider||'unknown')+' · '+(r.model||'model not recorded')));
+    li.append(el('span','muted',dur(r.elapsed_sec)+(r.process===false?' · process gone':'')));list.append(li);});
+   if(!(m.running||[]).length&&m.source!=='unavailable')list.append(el('li','muted','idle'));
+   card.append(list);root.append(card);});
+ }
+ function renderLlm(llm){
+  const root=document.getElementById('engine-llm');
+  (llm||[]).forEach((g,i)=>{
+   let d=root.children[i];
+   if(!d){d=el('div','speedo');let ticks='';for(let t=0;t<=10;t++){const a=Math.PI*(1-t/10),r1=t%5?72:66;ticks+='<line x1="'+(100+r1*Math.cos(a)).toFixed(1)+'" y1="'+(100-r1*Math.sin(a)).toFixed(1)+'" x2="'+(100+78*Math.cos(a)).toFixed(1)+'" y2="'+(100-78*Math.sin(a)).toFixed(1)+'" stroke="#8b949e" stroke-width="'+(t%5?1:2)+'"/>';}
+    d.innerHTML='<svg viewBox="0 0 200 118" role="img"><path d="M22 100 A78 78 0 0 1 178 100" fill="none" stroke="#263241" stroke-width="10"/><path class="arc" d="M22 100 A78 78 0 0 1 178 100" fill="none" stroke-width="10" pathLength="100" stroke-dasharray="0 100"/><path class="week" d="M44 100 A56 56 0 0 1 156 100" fill="none" stroke-width="4" pathLength="100" stroke-dasharray="0 100" stroke="#d29922"/><line class="cap" stroke="#f85149" stroke-width="3" x1="0" y1="0" x2="0" y2="0"/>'+ticks+'<polygon class="needle" points="100,96 100,104 28,100" fill="#f6c45a"/><circle cx="100" cy="100" r="7" fill="#c9d1d9"/><text class="scale" x="100" y="116" text-anchor="middle" fill="#8b949e" font-size="9"></text></svg><strong></strong><div class="lanes"></div><small class="calls"></small><small class="weekly"></small>';root.append(d);}
+   d.classList.toggle('conserve',!!g.conserve);
+   const color=g.conserve?'#a371f7':(svcColor[g.service]||'#58a6ff');
+   const v=g.calls_hour,scale=Math.max(10,Math.ceil((v||0)/10)*10),frac=v==null?0:Math.min(1,v/scale);
+   d.querySelector('.needle').style.transform='rotate('+(frac*180)+'deg)';
+   d.querySelector('.needle').setAttribute('fill',v==null?'#484f58':color);
+   const arc=d.querySelector('.arc');arc.setAttribute('stroke',color);arc.setAttribute('stroke-dasharray',(frac*100).toFixed(1)+' 100');
+   const wk=d.querySelector('.week'),cap=d.querySelector('.cap');
+   if(g.weekly_pct!=null){wk.setAttribute('stroke-dasharray',Math.min(100,g.weekly_pct).toFixed(1)+' 100');wk.setAttribute('stroke',g.weekly_cap_pct&&g.weekly_pct>=g.weekly_cap_pct?'#f85149':'#d29922');}else wk.setAttribute('stroke-dasharray','0 100');
+   if(g.weekly_cap_pct){const a=Math.PI*(1-g.weekly_cap_pct/100);cap.setAttribute('x1',(100+50*Math.cos(a)).toFixed(1));cap.setAttribute('y1',(100-50*Math.sin(a)).toFixed(1));cap.setAttribute('x2',(100+62*Math.cos(a)).toFixed(1));cap.setAttribute('y2',(100-62*Math.sin(a)).toFixed(1));}else{cap.setAttribute('x2','0');cap.setAttribute('x1','0');}
+   d.querySelector('.scale').textContent=v==null?'no data':'0–'+scale+' calls/hr';
+   d.querySelector('strong').textContent=g.service.charAt(0).toUpperCase()+g.service.slice(1)+(g.conserve?' · conserve':'');
+   d.querySelector('.lanes').textContent='active '+(g.active==null?'no data':g.active+(g.max_concurrent!=null?'/'+g.max_concurrent:''))+' lanes';
+   d.querySelector('.calls').textContent=v==null?'calls/hr: no data':v+' calls/hr ('+(g.jobs_hour??'—')+' jobs · '+(g.reviews_hour??'—')+' reviews)';
+   d.querySelector('.weekly').textContent=(g.weekly_pct!=null?'week '+g.weekly_pct+'%':(g.weekly_calls!=null?'week '+g.weekly_calls+' calls':'week: no data'))+(g.weekly_cap_pct?' · stop '+g.weekly_cap_pct+'%':(g.conserve?' · chat only':''));
+   d.querySelector('svg').setAttribute('aria-label',g.service+': '+(v==null?'no data':v+' calls per hour'));
+  });
+ }
+
  async function refresh(){
   try{
    const response=await fetch('/api/engine',{cache:'no-store',signal:AbortSignal.timeout ? AbortSignal.timeout(4000) : undefined});
@@ -22,8 +71,35 @@
    const data=await response.json();
    document.getElementById('engine-light').style.background=colors[data.engine];
    document.getElementById('engine-state').textContent=data.engine.toUpperCase()+' · '+new Date(data.timestamp).toLocaleTimeString();
+   document.getElementById('engine-admission').textContent=data.admission?.reason||'Work admission status unavailable.';
+   document.getElementById('engine-reason').textContent=data.engine_reason||'Work-flow evidence unavailable.';
+   document.getElementById('engine-review-evidence').textContent=data.review_evidence?.reason||'Karen verdict evidence is unavailable.';
+   document.getElementById('engine-security-evidence').textContent=data.security_evidence?.reason||'Security scan evidence is unavailable.';
+   const api=data.github_api;
+   document.getElementById('engine-github').textContent=api?.updated_at?'GitHub API · '+(api.status==='ok'?'budget ready':api.status||'unverified')+' · '+['core','graphql'].map(name=>{const q=api.resources?.[name];const age=q?.observed_at?Math.max(0,Math.floor(Date.now()/1000-q.observed_at)):null;return (name==='core'?'REST':'GraphQL')+' '+(q?.remaining??'unverified')+'/'+(q?.limit??'—')+(age!=null?' · quota observed '+Math.floor(age/60)+'m ago':' · quota unverified')+(age!=null&&age>600?' · stale':'')+(q?.blocked_until>Date.now()/1000?' · deferred':'');}).join(' · '):'GitHub API quota unverified; waiting for a budgeted read.';
+   const runtime=data.karen_runtime;
+   document.getElementById('engine-runtime').textContent=runtime?.fresh&&runtime?.source_matches&&runtime?.loaded_head?'Karen startup source '+runtime.loaded_head.slice(0,12)+' · receipt '+runtime.observed_at:'Karen loaded version is unverified; wait for a fresh poller receipt.';
    const machines=document.getElementById('engine-machines');machines.replaceChildren();
-   Object.entries(data.machines).forEach(([name,health])=>{const badge=document.createElement('span');badge.textContent=name+': '+health.detail+'  ';badge.style.color=colors[health.state];badge.title=health.timestamp||'No synced evidence';machines.append(badge);});
+   Object.entries(data.machines).forEach(([name,health])=>{const badge=document.createElement('span');badge.textContent=name+': '+health.detail+(health.sync_issue&&!health.detail.startsWith(health.sync_issue)?' · '+health.sync_issue:'')+(health.sync_issue&&health.peer_sync?.detail?' · '+health.peer_sync.detail:'')+(health.sync_age_seconds!=null?' · last peer contact '+Math.floor(health.sync_age_seconds/60)+'m ago':'')+(health.guardian?.dashboard?.ok===true?' · Dashboard HTTP verified':health.guardian?.dashboard?.ok===false?' · Dashboard HTTP failed':' · Dashboard HTTP not checked')+(health.guardian?.reloads!=null?' · guardian recoveries '+health.guardian.reloads:'')+'  ';badge.style.color=colors[health.state];badge.title=health.timestamp?'Last machine health report: '+health.timestamp:'No synced machine health report';machines.append(badge);});
+   const controls=document.getElementById('node-controls');
+   if(!controls.children.length){['mini','nucbox'].forEach(name=>{
+    const button=el('button',null,name);button.dataset.machine=name;
+    button.onclick=async()=>{
+     const maintenance=button.dataset.maintenance==='true';
+     if(!window.confirm((maintenance?'Take ':'Return ')+name+(maintenance?' out of service? Running jobs will finish.':' to service?')))return;
+     button.disabled=true;
+     const status=document.getElementById('control-result');
+     try{const response=await fetch('/api/control/node',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({machine:name,maintenance,confirm:true})});
+      if(!response.ok)throw Error('unavailable');status.textContent=name+': '+(maintenance?'maintenance confirmed':'returned to service');
+     }catch(e){status.textContent=name+': change unconfirmed; node may be unreachable. Check its dashboard.';}finally{button.disabled=false;}
+    };controls.append(button);
+   });}
+   controls.querySelectorAll('button').forEach(button=>{const name=button.dataset.machine;const draining=data.machines[name]?.state==='maintenance';button.dataset.maintenance=String(!draining);button.textContent=name+': '+(draining?'Return to service':'Take out of service');});
+   document.getElementById('control-audit').textContent=(data.audit||[]).join('\n');
+   renderJobs(data.jobs);renderLlm(data.llm);
+   const blocked=document.getElementById('engine-blocked');blocked.replaceChildren();
+   (data.blocked_fixes||[]).forEach(b=>blocked.append(el('li',null,b.repo+' #'+b.pr_number+' @'+(b.head_sha||'').slice(0,12)+' · '+b.reason)));
+   if(!(data.blocked_fixes||[]).length)blocked.append(el('li',null,'No blocked fixes reported.'));
    data.gauges.forEach((g,i)=>{
     let dial=root.children[i];
     if(!dial){dial=document.createElement('div');dial.className='dial';dial.innerHTML='<svg viewBox="0 0 180 108" role="img"><path d="M20 90 A70 70 0 0 1 160 90" fill="none" stroke="#303d4d" stroke-width="12"/><path d="M20 90 A70 70 0 0 1 160 90" fill="none" stroke="#58a6ff" stroke-width="3"/><line x1="90" y1="90" x2="24" y2="90" stroke="#f6c45a" stroke-width="3"/><circle cx="90" cy="90" r="5" fill="#c9d1d9"/></svg><strong></strong><span></span><br><small></small>';root.append(dial);}

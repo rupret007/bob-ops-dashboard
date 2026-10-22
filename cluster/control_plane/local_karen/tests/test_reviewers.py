@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import tempfile
 import unittest
 from pathlib import Path
@@ -189,9 +190,11 @@ class TestCodexReviewer(unittest.TestCase):
             self.assertFalse(ok)
             self.assertIn("not found", reason)
 
-    def test_not_available_over_budget(self):
+    @patch('cluster.control_plane.local_karen.reviewers.read_codex_quota',
+           return_value={'weekly_pct': 80.0})
+    def test_not_available_over_budget(self, quota):
         tmpdir = tempfile.mkdtemp()
-        config = KarenConfig(state_dir=tmpdir, codex_weekly_cap_pct=75.0)
+        config = KarenConfig(state_dir=tmpdir, codex_host='local', codex_weekly_cap_pct=75.0)
 
         state_file = Path(tmpdir) / "codex_weekly_usage.json"
         state_file.write_text(json.dumps({
@@ -206,6 +209,21 @@ class TestCodexReviewer(unittest.TestCase):
             ok, reason = reviewer.is_available(config)
             self.assertFalse(ok)
             self.assertIn("80.0%", reason)
+
+    def test_real_quota_boundary_and_unknown_block_even_with_old_zero_estimate(self):
+        reviewer = CodexReviewer()
+        config = KarenConfig(codex_host='local', codex_weekly_cap_pct=90.0)
+        for pct, expected in ((74.99, True), (75.0, False), (None, False)):
+            with self.subTest(pct=pct), \
+                    patch.object(reviewer, '_codex_available_locally', return_value=True), \
+                    patch('cluster.control_plane.local_karen.reviewers.read_codex_quota',
+                          return_value={'weekly_pct': pct}):
+                self.assertEqual(reviewer.is_available(config)[0], expected)
+                if not expected:
+                    with patch('subprocess.run') as run:
+                        result = reviewer.review(None, ReviewTier.LOW, config)
+                    self.assertEqual(result.verdict, ReviewVerdict.ERROR)
+                    run.assert_not_called()
 
 
 class TestClaudeReviewer(unittest.TestCase):
@@ -383,8 +401,9 @@ class TestReviewChain(unittest.TestCase):
                         with patch.object(MiniMaxReviewer, "is_available", return_value=(False, "no key")):
                             result, all_results = run_review_chain(pr, config, require_two_pass=True)
 
-                            self.assertEqual(result.verdict, ReviewVerdict.FAIL)
-                            self.assertIn("FAIL-CLOSED", result.reason)
+                            self.assertEqual(result.verdict, ReviewVerdict.ERROR)
+                            self.assertFalse(result.passed)
+                            self.assertIn("MiniMax", result.reason)
                             self.assertEqual(len(all_results), 2)
 
     def test_second_judge_on_borderline(self):
@@ -429,7 +448,9 @@ class TestCodexArgs(unittest.TestCase):
 
         self.assertIn("--skip-git-repo-check", args)
 
-        self.assertIn("-o", args)
+        self.assertIn("--ephemeral", args)
+        self.assertIn("--ignore-user-config", args)
+        self.assertEqual(args[args.index("-m") + 1], "gpt-6-astra")
 
         self.assertNotIn("--effort", args)
         self.assertNotIn("--quiet", args)
@@ -451,12 +472,11 @@ class TestCodexArgs(unittest.TestCase):
         args = reviewer._build_codex_args("low")
 
         expected = [
-            "codex", "exec",
+            "codex", "exec", "--ignore-user-config", "--ephemeral",
+            "-m", "gpt-6-astra",
             "-c", 'model_reasoning_effort="low"',
             "--sandbox", "read-only",
-            "--skip-git-repo-check",
-            "-o",
-            "-",
+            "--skip-git-repo-check", "-",
         ]
         self.assertEqual(args, expected)
 
@@ -478,6 +498,7 @@ class TestGeminiConfig(unittest.TestCase):
         model = reviewer._get_model(config)
         self.assertEqual(model, "gemini-2.5-pro")
 
+    @patch.dict(os.environ, {"GEMINI_API_KEY": ""})
     def test_gemini_skips_without_key(self):
         """Verify Gemini skips without making HTTP call when no key."""
         tmpdir = tempfile.mkdtemp()
@@ -495,6 +516,16 @@ class TestGeminiConfig(unittest.TestCase):
 
 class TestCodexSSH(unittest.TestCase):
     """Tests for Codex SSH to remote host."""
+
+    def setUp(self):
+        quota = patch('cluster.control_plane.local_karen.reviewers.read_codex_quota',
+                      return_value={'weekly_pct': 21.0})
+        quota.start()
+        self.addCleanup(quota.stop)
+        remote = patch('cluster.control_plane.local_karen.reviewers.read_remote_codex_quota',
+                       return_value={'weekly_pct': 21.0})
+        remote.start()
+        self.addCleanup(remote.stop)
 
     def test_uses_ssh_when_host_configured(self):
         """Verify SSH is used when codex_host is set and reachable."""

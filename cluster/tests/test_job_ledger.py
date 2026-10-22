@@ -85,7 +85,11 @@ class TestJobModel(unittest.TestCase):
         self.assertTrue(job.is_process_running())
         
         job.pid = 999999999
-        self.assertFalse(job.is_process_running())
+        # A sandbox may not see host PIDs or its user manager. Establish the
+        # supervisor's answer rather than depending on the test host's bus.
+        with patch('cluster.control_plane.job_ledger._systemd_job_unit_state', return_value='inactive') as supervisor:
+            self.assertFalse(job.is_process_running())
+            supervisor.assert_called_once_with('test_4')
 
 
 class TestJobLedger(unittest.TestCase):

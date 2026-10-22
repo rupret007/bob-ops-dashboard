@@ -6,11 +6,17 @@ Enforces all invariants: fail closed, never merge/push/sudo, SHA pinning.
 
 from __future__ import annotations
 
+import os
+import re
 import time
-from dataclasses import dataclass
+from contextvars import ContextVar
+
+from dataclasses import dataclass, field
 from typing import Optional
 
+from ..coordination import ClaimClient, CoordinationError, Lease
 from .config import KarenConfig
+from .deadline import review_budget, remaining_timeout
 from .checks import PRInfo, run_all_checks, all_checks_pass, get_failed_checks, CheckResult
 from .reviewers import (
     run_review_chain,
@@ -20,12 +26,24 @@ from .reviewers import (
 )
 from .verdict import Verdict, create_verdict, save_verdict
 from .github_client import fetch_pr_info, verify_sha_current, GitHubError
+from .context_diagnostics import collect_context_diagnostics
 
 try:
     from ..metrics import MetricsTracker
     _metrics = MetricsTracker()
 except ImportError:
     _metrics = None  # type: ignore
+
+
+_review_lease = ContextVar("karen_review_lease", default=None)
+
+
+def review_checkpoint():
+    """Fence provider calls and publication when a review owns a shared lease."""
+    remaining_timeout(1200)
+    lease = _review_lease.get()
+    if lease is not None:
+        lease.renew()
 
 
 @dataclass
@@ -36,6 +54,7 @@ class GateRunResult:
     verdict_path: Optional[str]
     sha_verified: bool
     error: Optional[str] = None
+    context_diagnostics: list[dict] = field(default_factory=list)
 
 
 class GateRunner:
@@ -56,6 +75,7 @@ class GateRunner:
         repo: str,
         pr_number: int,
         post_comment: bool = False,
+        expected_sha: Optional[str] = None,
     ) -> GateRunResult:
         """Run the gate on a PR.
 
@@ -84,30 +104,60 @@ class GateRunner:
             )
 
         pinned_sha = pr.head_sha
+        if expected_sha is not None and (not isinstance(expected_sha, str) or not re.fullmatch(r"[0-9a-f]{40}", expected_sha)
+                                         or pinned_sha != expected_sha):
+            return self._fail_closed(owner, repo, pr_number, pinned_sha,
+                                     "Requested review head changed; retry discovery")
 
+        if self.config.is_blocked_repo(owner, repo):
+            return self._fail_closed(owner, repo, pr_number, pinned_sha, "never-touch repository")
+        if pr.is_draft:
+            return self._fail_closed(owner, repo, pr_number, pinned_sha, "Draft PR awaits author")
+        try:
+            client = ClaimClient.from_env()
+            claim = client.acquire(f"{owner}/{repo}", pr_number, pinned_sha,
+                                   os.environ.get("STORYPOOL_MACHINE", "mini"))
+            with Lease(client, claim) as lease:
+                token = _review_lease.set(lease)
+                try:
+                    with review_budget():
+                        return self._run_claimed(pr, post_comment, start_time)
+                finally:
+                    _review_lease.reset(token)
+        except CoordinationError as exc:
+            return self._fail_closed(owner, repo, pr_number, pinned_sha, str(exc))
+
+    def _run_claimed(self, pr, post_comment, start_time):
+        owner, repo, pr_number, pinned_sha = pr.owner, pr.repo, pr.number, pr.head_sha
         check_results = run_all_checks(pr, self.config)
 
-        if not all_checks_pass(check_results):
-            failed = get_failed_checks(check_results)
-            reason = "; ".join(f.reason for f in failed[:3])
+        errors = [r.reason for r in check_results if r.verdict.value == "ERROR"]
+        if errors:
+            return self._fail_closed(owner, repo, pr_number, pinned_sha, "; ".join(errors), check_results)
+
+        failed = get_failed_checks(check_results)
+        # Draft/blocked repositories remain deferred, without a published verdict.
+        deferred = [r for r in failed if r.check_name in ("blocked_repo", "not_draft")]
+        if deferred:
+            return self._fail_closed(owner, repo, pr_number, pinned_sha,
+                                     "; ".join(r.reason for r in deferred), check_results)
+
+        secrets = [r for r in failed if r.check_name == "no_secrets"]
+        if secrets:
+            # A concrete security finding is a FAIL, not a provider outage. Never
+            # send suspected credentials to models; publish only redacted locations.
             verdict = create_verdict(
-                pr=pr,
-                check_results=check_results,
-                review_results=[],
-                final_passed=False,
-                final_reason=f"Deterministic checks failed: {reason}",
-                final_reviewer="checks",
+                pr, [r for r in check_results if r.check_name == "no_secrets"], [],
+                False, "; ".join(r.reason + ": " + (r.details or "") for r in secrets),
+                "deterministic_security",
             )
-            if _metrics:
-                _metrics.record_karen_review(
-                    passed=False,
-                    first_try=True,
-                    caught_by_pre_llm=True,
-                )
+            verdict.tier = "high"
             return self._finalize(verdict, pr, post_comment, start_time)
 
         try:
+            review_checkpoint()
             review_result, all_reviews = run_review_chain(pr, self.config)
+            review_checkpoint()
         except Exception as e:
             return self._fail_closed(
                 owner, repo, pr_number, pinned_sha,
@@ -115,18 +165,14 @@ class GateRunner:
                 check_results=check_results,
             )
 
-        if review_result.verdict == ReviewVerdict.ERROR:
-            verdict = create_verdict(
-                pr=pr,
-                check_results=check_results,
-                review_results=all_reviews,
-                final_passed=False,
-                final_reason=f"Review error (fail closed): {review_result.reason}",
-                final_reviewer=review_result.reviewer,
-            )
-            return self._finalize(verdict, pr, post_comment, start_time)
+        if (review_result.verdict == ReviewVerdict.ERROR or
+                (review_result.scope or {}).get("context_incomplete")):
+            result = self._fail_closed(owner, repo, pr_number, pinned_sha,
+                                       "Review error: " + review_result.reason, check_results)
+            result.context_diagnostics = collect_context_diagnostics(all_reviews)
+            return result
 
-        final_passed = review_result.verdict == ReviewVerdict.PASS
+        final_passed = review_result.verdict == ReviewVerdict.PASS and not failed
 
         if review_result.verdict == ReviewVerdict.BORDERLINE:
             final_passed = False
@@ -136,7 +182,8 @@ class GateRunner:
             check_results=check_results,
             review_results=all_reviews,
             final_passed=final_passed,
-            final_reason=review_result.reason,
+            final_reason=("Deterministic checks failed: " + "; ".join(r.reason + (": " + r.details if r.details else "") for r in failed)
+                          + "; Review: " + review_result.reason) if failed else review_result.reason,
             final_reviewer=review_result.reviewer,
         )
 
@@ -161,31 +208,26 @@ class GateRunner:
         verdict.duration_sec = time.time() - start_time
 
         try:
-            verdict_path = save_verdict(verdict, self.config)
-        except Exception as e:
-            verdict_path = None
-
-        try:
-            sha_verified = verify_sha_current(
-                pr.owner, pr.repo, pr.number, pr.head_sha
-            )
-        except GitHubError:
-            sha_verified = False
-
+            sha_verified = verify_sha_current(pr.owner, pr.repo, pr.number, pr.head_sha)
+        except GitHubError as exc:
+            return self._fail_closed(pr.owner, pr.repo, pr.number, pr.head_sha,
+                                     "SHA verification unavailable: " + str(exc))
         if not sha_verified:
-            verdict.passed = False
-            verdict.reason = f"SHA changed during gate run (was {pr.head_sha[:12]})"
-
-            try:
-                verdict_path = save_verdict(verdict, self.config)
-            except Exception:
-                pass
+            return self._fail_closed(pr.owner, pr.repo, pr.number, pr.head_sha,
+                                     "SHA changed during gate run; retry current head")
+        try:
+            review_checkpoint()
+            verdict_path = save_verdict(verdict, self.config)
+        except Exception as exc:
+            return self._fail_closed(pr.owner, pr.repo, pr.number, pr.head_sha,
+                                     "Verdict persistence failed: " + type(exc).__name__)
 
         if post_comment:
             try:
                 from .verdict import format_verdict_comment
                 from .github_client import post_verdict_comment
 
+                review_checkpoint()
                 comment = format_verdict_comment(verdict)
                 post_verdict_comment(pr.owner, pr.repo, pr.number, comment)
             except Exception:
@@ -206,7 +248,7 @@ class GateRunner:
         reason: str,
         check_results: Optional[list[CheckResult]] = None,
     ) -> GateRunResult:
-        """Create a FAIL verdict for any error (fail closed)."""
+        """Return a fail-closed diagnostic; errors never become durable verdicts."""
         verdict = Verdict(
             owner=owner,
             repo=repo,
@@ -233,10 +275,8 @@ class GateRunner:
         from datetime import datetime, timezone
         verdict.timestamp = datetime.now(timezone.utc).isoformat()
 
-        try:
-            verdict_path = save_verdict(verdict, self.config)
-        except Exception:
-            verdict_path = None
+        verdict.status = "ERROR"
+        verdict_path = None
 
         return GateRunResult(
             verdict=verdict,
@@ -252,7 +292,8 @@ def run_gate(
     pr_number: int,
     config: Optional[KarenConfig] = None,
     post_comment: bool = False,
+    expected_sha: Optional[str] = None,
 ) -> GateRunResult:
     """Convenience function to run the gate on a PR."""
     runner = GateRunner(config)
-    return runner.run(owner, repo, pr_number, post_comment)
+    return runner.run(owner, repo, pr_number, post_comment, expected_sha=expected_sha)

@@ -25,4 +25,4 @@ Nice=15
 MemoryMax=256M
 CPUQuota=25%
 
-TimeoutStartSec=120
+TimeoutStartSec=600

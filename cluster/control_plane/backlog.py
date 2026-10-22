@@ -14,6 +14,10 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import List, Dict, Optional, Any
 
+from . import github_reads
+from .github_budget import GitHubDeferred
+from .coordination import CoordinationError
+
 logger = logging.getLogger(__name__)
 
 EXCLUDED_REPOS = frozenset([
@@ -38,19 +42,17 @@ def _run_gh(args, default=None):
     # type: (List[str], Any) -> Any
     """Run gh CLI and return parsed JSON."""
     try:
-        result = subprocess.run(
-            ["gh"] + args,
-            capture_output=True,
-            text=True,
-            timeout=60,
-        )
+        if args[:2] == ["repo", "list"]:
+            return github_reads.active_repos(args[2])
+        result = github_reads.run(args, timeout=60)
         if result.returncode != 0:
-            logger.warning("gh %s failed: %s", " ".join(args[:3]), result.stderr[:100])
-            return default
+            raise github_reads.GitHubReadError('GitHub backlog read unavailable')
         return json.loads(result.stdout)
-    except (subprocess.SubprocessError, json.JSONDecodeError, FileNotFoundError) as e:
-        logger.warning("gh command error: %s", e)
-        return default
+    except GitHubDeferred:
+        raise  # Unknown admission is not an empty repository or backlog.
+    except (subprocess.SubprocessError, json.JSONDecodeError, FileNotFoundError,
+            github_reads.GitHubReadError):
+        raise github_reads.GitHubReadError('GitHub backlog read unavailable') from None
 
 
 def discover_repos(owner="rupret007"):
@@ -92,7 +94,9 @@ def get_open_prs(repo):
         "--limit", "50",
     ], default=[])
     
-    return prs if isinstance(prs, list) else []
+    if not isinstance(prs, list) or any(not isinstance(pr, dict) for pr in prs):
+        raise github_reads.GitHubReadError('GitHub backlog response unavailable')
+    return prs
 
 
 def is_ci_all_green(pr):
@@ -334,33 +338,28 @@ def ensure_label_exists(repo, label, color="d4c5f9", description=""):
     Returns True if label was created, False if it already existed or failed.
     """
     try:
-        result = subprocess.run(
-            ["gh", "label", "list", "--repo", repo, "--json", "name"],
-            capture_output=True,
-            text=True,
-            timeout=30,
-        )
-        if result.returncode == 0:
-            labels = json.loads(result.stdout)
-            if any(l.get("name", "").lower() == label.lower() for l in labels):
-                return False
-    except (subprocess.SubprocessError, json.JSONDecodeError):
-        pass
-    
+        labels = github_reads.labels(repo)
+        if any(l.get("name", "").lower() == label.lower() for l in labels):
+            return False
+    except GitHubDeferred:
+        raise
+    except (subprocess.SubprocessError, json.JSONDecodeError,
+            github_reads.GitHubReadError):
+        # Never attempt a write when existence could not be established.
+        logger.warning("Label check deferred; no label mutation attempted")
+        return False
+
     try:
         args = ["gh", "label", "create", label, "--repo", repo, "--color", color]
         if description:
             args.extend(["--description", description])
-        result = subprocess.run(
-            args,
-            capture_output=True,
-            text=True,
-            timeout=30,
-        )
+        result = github_reads.run(args[1:], timeout=30)
         if result.returncode == 0:
             logger.info("Created label '%s' in %s", label, repo)
             return True
         return False
+    except GitHubDeferred:
+        raise
     except subprocess.SubprocessError:
         return False
 
@@ -432,12 +431,7 @@ def undraft_green_prs(repos=None, dry_run=True, max_undrafts=None):
                 continue
             
             try:
-                result = subprocess.run(
-                    ["gh", "pr", "ready", str(pr_num), "--repo", repo],
-                    capture_output=True,
-                    text=True,
-                    timeout=30,
-                )
+                result = github_reads.run(["pr", "ready", str(pr_num), "--repo", repo], timeout=30)
                 if result.returncode != 0:
                     logger.warning("Failed to undraft %s#%d: %s", repo, pr_num, result.stderr[:100])
                     continue
@@ -452,12 +446,7 @@ def undraft_green_prs(repos=None, dry_run=True, max_undrafts=None):
                     )
                     labels_ensured.add(repo)
                 
-                label_result = subprocess.run(
-                    ["gh", "pr", "edit", str(pr_num), "--repo", repo, "--add-label", "needs-karen"],
-                    capture_output=True,
-                    text=True,
-                    timeout=30,
-                )
+                label_result = github_reads.run(["pr", "edit", str(pr_num), "--repo", repo, "--add-label", "needs-karen"], timeout=30)
                 if label_result.returncode == 0:
                     logger.info("Labeled %s#%d with needs-karen after undraft", repo, pr_num)
                 else:
@@ -466,11 +455,37 @@ def undraft_green_prs(repos=None, dry_run=True, max_undrafts=None):
                 
                 undrafted.append(pr_info)
                 
+            except GitHubDeferred:
+                raise
             except subprocess.SubprocessError as e:
                 logger.warning("Failed to undraft %s#%d: %s", repo, pr_num, e)
                 continue
     
     return undrafted
+
+
+def _local_verdict_dir():
+    # type: () -> Optional[Path]
+    try:
+        from .local_karen.config import KarenConfig
+        path = KarenConfig.load().get_verdict_dir()
+    except Exception:
+        return None
+    return path if path.is_dir() else None
+
+
+def _has_verdict_for_head(verdict_dir, repo, pr):
+    # type: (Path, str, Dict) -> bool
+    sha = pr.get("headRefOid", "") or ""
+    if len(sha) < 12 or "/" not in repo:
+        return True  # cannot tell; keep the label decision
+    owner, name = repo.split("/", 1)
+    from .local_karen.verdict import load_verdict
+    from .local_karen.config import KarenConfig
+    from .local_karen.verdict_push import completed_for_delivery
+    verdict = load_verdict(owner, name, pr.get("number"), sha,
+                           KarenConfig(verdict_dir=str(verdict_dir)))
+    return completed_for_delivery(verdict)
 
 
 def label_queued_prs(repos=None, dry_run=True):
@@ -485,12 +500,26 @@ def label_queued_prs(repos=None, dry_run=True):
     
     labeled = []  # type: List[Dict]
     labels_ensured = set()  # type: set
+    verdict_dir = _local_verdict_dir()
     
     for repo in repos:
         prs = get_open_prs(repo)
         
         for pr in prs:
+            if any(isinstance(label, dict) and label.get('name') == 'needs-karen'
+                   for label in pr.get('labels', [])):
+                continue
             state = get_pr_state(pr)
+            from .ci_review_refresh import refresh_candidate, queue_refresh
+            ci_refresh = (state == 'failed' and verdict_dir is not None
+                          and refresh_candidate(repo, pr, verdict_dir))
+            if ci_refresh:
+                state = 'queued'
+            if state in ("passed", "failed") and not pr.get("isDraft") \
+                    and (verdict_dir is None or not _has_verdict_for_head(verdict_dir, repo, pr)):
+                # A karen-pass/karen-fail label from an older commit must not
+                # stand in for a verdict at the current head: re-gate it.
+                state = "queued"
             if state != "queued":
                 continue
             
@@ -501,7 +530,7 @@ def label_queued_prs(repos=None, dry_run=True):
             if dry_run:
                 logger.info("[DRY-RUN] Would label %s#%d with needs-karen", repo, pr_num)
             else:
-                if repo not in labels_ensured:
+                if repo not in labels_ensured and not ci_refresh:
                     ensure_label_exists(
                         repo, "needs-karen", 
                         color="d4c5f9", 
@@ -510,19 +539,21 @@ def label_queued_prs(repos=None, dry_run=True):
                     labels_ensured.add(repo)
                 
                 try:
-                    result = subprocess.run(
-                        ["gh", "pr", "edit", str(pr_num), "--repo", repo, "--add-label", "needs-karen"],
-                        capture_output=True,
-                        text=True,
-                        timeout=30,
-                    )
-                    if result.returncode == 0:
+                    if ci_refresh:
+                        queued = queue_refresh(repo, pr_num, pr.get('headRefOid'), verdict_dir)
+                    else:
+                        result = github_reads.run(["pr", "edit", str(pr_num), "--repo", repo, "--add-label", "needs-karen"], timeout=30)
+                        queued = result.returncode == 0
+                    if queued:
                         logger.info("Labeled %s#%d with needs-karen", repo, pr_num)
                     else:
-                        logger.warning("Failed to label %s#%d: %s", repo, pr_num, result.stderr[:100])
+                        logger.warning("Label deferred for %s#%d", repo, pr_num)
                         continue
-                except subprocess.SubprocessError as e:
-                    logger.warning("Failed to label %s#%d: %s", repo, pr_num, e)
+                except GitHubDeferred:
+                    raise
+                except (subprocess.SubprocessError, github_reads.GitHubReadError,
+                        CoordinationError, OSError, ValueError) as e:
+                    logger.warning("Label deferred for %s#%d: %s", repo, pr_num, type(e).__name__)
                     continue
             
             labeled.append({

@@ -38,6 +38,9 @@ class KarenConfig:
         default_factory=lambda: list(DEFAULT_REVIEWER_ORDER)
     )
     codex_host: str = "nuc"
+    codex_ssh_user: str = ""
+    codex_ssh_port: Optional[int] = None
+    codex_ssh_identity_file: str = ""
     codex_effort_default: str = "low"
     codex_effort_high_risk: str = "high"
     codex_weekly_cap_pct: float = CODEX_WEEKLY_BUDGET_PCT

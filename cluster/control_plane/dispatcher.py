@@ -27,6 +27,7 @@ Safety invariants:
 from __future__ import annotations
 
 import json
+import hashlib
 import os
 import re
 import subprocess
@@ -41,6 +42,9 @@ from ..never_touch import is_never_touch
 from .budget_tracker import BudgetTracker
 from .guards import MachineGuards
 from .job_ledger import JobLedger, get_ledger, Job, JobState
+from .github_budget import GitHubDeferred
+from .github_reads import GitHubReadError
+from .worker_runtime import qualified_runtime, RuntimeUnqualified, REASON as RUNTIME_REASON
 
 DISPATCH_LOG_DIR = Path(
     os.environ.get("STORYPOOL_DISPATCH_LOG_DIR", "~/.local/share/storypool/dispatch")
@@ -59,17 +63,21 @@ REPOS = [
     "rupret007/Cursor-OpenClaw-Integration",
 ]
 
-IMPLEMENTED_PROVIDERS = frozenset({"codex"})
+IMPLEMENTED_PROVIDERS = frozenset({"codex", "cursor"})
 
 PROVIDER_RULES = {
     "codex": {
-        "machines": ["nucbox"],
+        "machines": ["nucbox"],  # Mini re-enabled once cross-machine PR claims exist
         "max_concurrent": 2,
+        # The Mini also runs Karen; give it one fix lane, still behind its
+        # load/swap/disk guards.
+        "max_concurrent_by_machine": {"mini": 1},
         "weekly_cap_pct": 75.0,
         "reserved_when_queued": 2,
     },
     "cursor": {
         "machines": ["mini", "nucbox"],
+        "qualified_machines": ["nucbox"],
         "max_concurrent": None,
         "weekly_cap_pct": None,
     },
@@ -142,7 +150,7 @@ def _run_gh(args: list[str], default=None):
 def _get_open_prs(repo: str) -> list[dict]:
     """Get open PRs for a repository."""
     prs = _run_gh(
-        ["pr", "list", "--repo", repo, "--state", "open", "--json",
+        ["pr", "list", "--repo", repo, "--state", "open", "--limit", "1000", "--json",
          "number,title,author,headRefOid,isDraft,url,reviewDecision,statusCheckRollup,labels"],
         default=[]
     )
@@ -206,12 +214,17 @@ def _spawn_worker(
         subprocess.run(
             ["systemd-run", "--user", f"--unit=storypool-job-{job_id}",
              "--collect", "--property=Type=exec",
+             "--property=RuntimeMaxSec=2700", "--property=TimeoutStopSec=10",
+             "--property=KillMode=control-group",
              f"--working-directory={repo_dir}",
              f"--property=StandardOutput=append:{worker_log}",
              "--property=StandardError=inherit",
              f"--setenv=STORYPOOL_JOBS_DIR={jobs_dir}",
              f"--setenv=PYTHONPATH={repo_dir}",
              f"--setenv=PATH={os.environ.get('PATH', '/usr/bin:/bin')}",
+             *[f"--setenv={key}={os.environ[key]}" for key in
+               ('STORYPOOL_COORD_URL', 'STORYPOOL_COORD_USER', 'STORYPOOL_COORD_TOKEN_FILE')
+               if key in os.environ],
              sys.executable, "-m", "cluster.control_plane.fix_worker", job_id],
             check=True, capture_output=True, text=True, timeout=30,
         )
@@ -257,6 +270,28 @@ class Dispatcher:
         self.decisions.append(decision)
         with open(self._log_file(), "a", encoding="utf-8") as f:
             f.write(json.dumps(decision.to_dict(), sort_keys=True) + "\n")
+        # A durable display projection survives daily log rollover and bounded
+        # dashboard tails. Only live observations can change a persisted block.
+        if decision.live and decision.repo and decision.pr_number and decision.head_sha:
+            directory = self.log_dir / 'blocked-fixes'
+            directory.mkdir(exist_ok=True)
+            key = hashlib.sha256('{}#{}'.format(decision.repo, decision.pr_number).encode()).hexdigest()
+            path = directory / (key + '.json')
+            if decision.action == 'skip_blocked':
+                value = dict(repo=decision.repo, pr_number=decision.pr_number,
+                             head_sha=decision.head_sha, reason=decision.reason,
+                             timestamp=decision.timestamp)
+                # Each dispatcher process has its own temporary path.
+                temporary = path.with_suffix('.{}.tmp'.format(os.getpid()))
+                temporary.write_text(json.dumps(value))
+                temporary.replace(path)
+            elif path.exists():
+                try:
+                    previous = json.loads(path.read_text())
+                except (OSError, ValueError):
+                    previous = {}
+                if previous.get('head_sha') != decision.head_sha or decision.action == 'dispatch':
+                    path.unlink(missing_ok=True)
     
     def _status_file(self) -> Path:
         """Get the status file path."""
@@ -273,6 +308,9 @@ class Dispatcher:
     
     def check_machine_guards(self) -> tuple[bool, str, dict]:
         """Check if this machine can accept work."""
+        from .node_control import is_draining
+        if is_draining(self.machine):
+            return False, "Node in maintenance; running jobs may finish", {}
         guards = MachineGuards(self.machine)
         result = guards.check_all()
         guard_values = {
@@ -303,8 +341,18 @@ class Dispatcher:
 
         if self.machine not in rules["machines"]:
             return False, f"{provider} not allowed on {self.machine}"
+
+        if provider == 'cursor':
+            if self.machine not in rules['qualified_machines']:
+                return False, 'cursor runtime is not qualified on this machine'
+            from .cursor_worker import available
+            if not hasattr(self, '_cursor_available'):
+                self._cursor_available = available()
+            if not self._cursor_available:
+                return False, 'cursor CLI is unavailable or unauthenticated'
         
-        max_concurrent = rules.get("max_concurrent")
+        max_concurrent = rules.get("max_concurrent_by_machine", {}).get(
+            self.machine, rules.get("max_concurrent"))
         if max_concurrent is not None:
             current = active_lanes.get(provider, 0)
             if current >= max_concurrent:
@@ -313,6 +361,8 @@ class Dispatcher:
         weekly_cap = rules.get("weekly_cap_pct")
         if weekly_cap is not None and weekly_cap > 0:
             pct = self.budget.weekly_pct(provider)
+            if pct is None:
+                return False, f"{provider} weekly plan quota unknown; fresh rate-limit observation required"
             if pct >= weekly_cap:
                 return False, f"{provider} at {pct:.1f}% of weekly cap (limit {weekly_cap}%)"
         
@@ -387,7 +437,7 @@ class Dispatcher:
         active_lanes: dict[str, int]
     ) -> Optional[str]:
         """Only select providers with an executable worker implementation."""
-        provider_order = ["codex"]
+        provider_order = ["codex", "cursor"]
 
         for provider in provider_order:
             allowed, _ = self.check_provider_allowed(provider, active_lanes)
@@ -406,7 +456,10 @@ class Dispatcher:
             List of dispatch decisions made.
         """
         decisions = []
+        self.__dict__.pop('_cursor_available', None)
         
+        # Reconcile even during maintenance; draining must not hide dead workers.
+        self.ledger.expire_stale_leases()
         guards_ok, guards_reason, guard_values = self.check_machine_guards()
         if not guards_ok:
             decision = DispatchDecision(
@@ -436,6 +489,7 @@ class Dispatcher:
                 candidates.append(pr)
         
         candidates.sort(key=lambda p: -p.get("_score", 0))
+        ci_preflight_deadline = time.monotonic() + 30
         
         dispatched = 0
         max_dispatch = 3
@@ -444,9 +498,9 @@ class Dispatcher:
             remaining_capacity = self.get_nucbox_lane_capacity(active_lanes)
             max_dispatch = min(max_dispatch, remaining_capacity)
         
-        self.ledger.expire_stale_leases()
-        
-        for pr in candidates[:15]:
+        # Leased, blocked, or unreviewed PRs consume no lane. Keep looking
+        # through the ordered backlog until the existing dispatch cap is met.
+        for pr in candidates:
             if dispatched >= max_dispatch:
                 break
             
@@ -466,6 +520,7 @@ class Dispatcher:
                     repo=repo,
                     head_sha=head_sha,
                     guard_values=guard_values,
+                    extra={"reason_code": "active-lease"},
                 )
                 self._write_decision(decision)
                 decisions.append(decision)
@@ -473,6 +528,23 @@ class Dispatcher:
             
             provider = self.select_provider(pr, active_lanes)
             if not provider:
+                # Preserve the actual admission reason rather than silently
+                # blaming all idle work on provider filters at the end.
+                rejections = {}
+                for candidate_provider in sorted(IMPLEMENTED_PROVIDERS):
+                    allowed, reason = self.check_provider_allowed(candidate_provider, active_lanes)
+                    if not allowed:
+                        rejections[candidate_provider] = reason
+                decision = DispatchDecision(
+                    timestamp=_now_iso(), action="skip",
+                    reason="No implemented provider currently available",
+                    machine=self.machine, live=live, repo=repo,
+                    pr_number=pr_number, head_sha=head_sha,
+                    extra={"reason_code": "provider-unavailable",
+                           "provider_rejections": rejections},
+                )
+                self._write_decision(decision)
+                decisions.append(decision)
                 continue
             
             if live:
@@ -486,6 +558,36 @@ class Dispatcher:
                         timestamp=_now_iso(), action="skip", reason="No Karen findings available",
                         machine=self.machine, live=True, repo=repo, pr_number=pr_number,
                         head_sha=head_sha, provider=provider,
+                        extra={"reason_code": "missing-reviewed-findings"},
+                    )
+                    self._write_decision(decision)
+                    decisions.append(decision)
+                    continue
+                try:
+                    qualified_runtime(repo, head_sha)
+                except RuntimeUnqualified:
+                    decision = DispatchDecision(
+                        timestamp=_now_iso(), action='skip', machine=self.machine, live=True,
+                        repo=repo, pr_number=pr_number, head_sha=head_sha, provider=provider,
+                        reason=RUNTIME_REASON,
+                        extra={'reason_code': 'test-runtime-unqualified'})
+                    self._write_decision(decision)
+                    decisions.append(decision)
+                    continue
+                from .ci_review_refresh import repair_preflight
+                try:
+                    ci_preflight = repair_preflight(repo, pr_number, head_sha, ci_preflight_deadline)
+                except (OSError, subprocess.SubprocessError, ValueError, GitHubDeferred, GitHubReadError):
+                    ci_preflight = 'unknown'
+                if ci_preflight != 'repair':
+                    needs_review = ci_preflight == 'green'
+                    decision = DispatchDecision(
+                        timestamp=_now_iso(), action='skip', machine=self.machine, live=True,
+                        repo=repo, pr_number=pr_number, head_sha=head_sha, provider=provider,
+                        reason=('Current exact-head CI is green; fresh Karen review required'
+                                if needs_review else 'CI-only repair evidence requires a current terminal CI result'),
+                        extra={'reason_code': 'review-needed' if needs_review else 'ci-preflight-deferred',
+                               'ci_observation': ci_preflight},
                     )
                     self._write_decision(decision)
                     decisions.append(decision)
@@ -494,9 +596,40 @@ class Dispatcher:
             job = None
             pid = 0
             spawn_error = ""
+            claim = None
+            coordinator = None
             
             if live:
+                from .node_control import is_draining
+                if is_draining(self.machine):
+                    break
                 try:
+                    from .coordination import ClaimClient
+                    coordinator = ClaimClient.from_env()
+                    claim = coordinator.acquire(repo, pr_number, head_sha, self.machine)
+                    from .retry_policy import reserve, REASONS
+                    history = [j for j in self.ledger._load_jobs()
+                               if (j.repo, j.pr_number, j.head_sha) == (repo, pr_number, head_sha)]
+                    local_block = next((j for j in history if not j.retryable), None)
+                    already_fixed = any(j.state == JobState.DONE.value and j.outcome_verified
+                                        for j in history)
+                    previous = coordinator.retry_state(claim)
+                    state, blocked = reserve(previous, len(history))
+                    if already_fixed:
+                        blocked = REASONS['already-fixed']
+                    elif local_block is not None:
+                        blocked = REASONS.get(local_block.failure_code, 'blocked: needs Jeff')
+                    if blocked:
+                        decision = DispatchDecision(timestamp=_now_iso(), action='skip_blocked',
+                            reason=blocked, machine=self.machine, live=True, repo=repo,
+                            pr_number=pr_number, head_sha=head_sha, provider=provider,
+                            extra={"reason_code": "retry-blocked"})
+                        self._write_decision(decision)
+                        decisions.append(decision)
+                        coordinator.call('release', claim)
+                        claim = None
+                        continue
+                    coordinator.retry_state(claim, state)
                     job = self.ledger.create_job(
                         repo=repo,
                         pr_number=pr_number,
@@ -504,6 +637,7 @@ class Dispatcher:
                         provider=provider,
                         machine=self.machine,
                     )
+                    self.ledger.attach_cluster_claim(job.job_id, claim)
                     
                     pid = _spawn_worker(
                         repo=repo,
@@ -531,6 +665,15 @@ class Dispatcher:
                     spawn_error = f"spawn failed: {e}"
                     if job:
                         self.ledger.fail_job(job.job_id, spawn_error)
+                finally:
+                    if spawn_error and job is not None:
+                        self.ledger.fail_job(job.job_id, spawn_error)
+                    if spawn_error and claim is not None:
+                        from .coordination import CoordinationError
+                        try:
+                            coordinator.call('release', claim)
+                        except CoordinationError:
+                            pass  # Claim TTL handles broker outage.
             
             decision = DispatchDecision(
                 timestamp=_now_iso(),
@@ -545,7 +688,8 @@ class Dispatcher:
                 provider=provider,
                 priority_score=pr.get("_score"),
                 guard_values=guard_values,
-                extra={"job_id": job.job_id if job else None, "pid": pid} if live else None,
+                extra={"job_id": job.job_id if job else None, "pid": pid,
+                       **({"reason_code": "spawn-failed"} if spawn_error else {})} if live else None,
             )
             
             self._write_decision(decision)
@@ -554,15 +698,26 @@ class Dispatcher:
             active_lanes[provider] = active_lanes.get(provider, 0) + 1
             dispatched += 1
         
-        if dispatched == 0 and candidates:
+        if candidates and not any(d.action in ("dispatch", "would_dispatch") for d in decisions):
+            blocked_counts = {}
+            for candidate_decision in decisions:
+                code = (candidate_decision.extra or {}).get("reason_code")
+                if code:
+                    blocked_counts[code] = blocked_counts.get(code, 0) + 1
+            if max_dispatch == 0:
+                blocked_counts["lane-capacity-unavailable"] = len(candidates)
             decision = DispatchDecision(
                 timestamp=_now_iso(),
                 action="skip",
-                reason="No candidates passed provider filters",
+                reason="No work dispatched; see candidate admission reasons",
                 machine=self.machine,
                 live=live,
                 guard_values=guard_values,
-                extra={"candidate_count": len(candidates)},
+                extra={"reason_code": "no-dispatch-summary",
+                       "candidate_count": len(candidates),
+                       "considered_candidates": sum(d.pr_number is not None for d in decisions),
+                       "blocked_candidates": blocked_counts,
+                       "implemented_providers": sorted(IMPLEMENTED_PROVIDERS)},
             )
             self._write_decision(decision)
             decisions.append(decision)
@@ -596,7 +751,9 @@ class Dispatcher:
             "machine": self.machine,
             "live": live,
             "dispatched": sum(1 for d in decisions if d.action in ("dispatch", "would_dispatch")),
-            "skipped": sum(1 for d in decisions if d.action == "skip"),
+            "skipped": sum(1 for d in decisions
+                           if d.action in ("skip", "skip_leased", "skip_blocked")
+                           and (d.extra or {}).get("reason_code") != "no-dispatch-summary"),
             "decisions": [d.to_dict() for d in decisions],
         }
         

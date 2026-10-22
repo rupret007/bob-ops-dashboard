@@ -14,6 +14,9 @@ Each tick:
 
 from __future__ import annotations
 
+# Snapshot before loading any local review modules that an update could replace.
+from .runtime_status import record_runtime
+
 import json
 import logging
 import os
@@ -25,13 +28,16 @@ from pathlib import Path
 from typing import Optional, List, Any
 
 from .config import KarenConfig
+from .review_queue import (Candidate, ReviewQueue, enrich, ADMISSION_SECONDS, MAX_REVIEWS_PER_CYCLE)
+from .repo_scan import RepoScan, RepoScanError
+from ..github_budget import GitHubDeferred
+from ..github_reads import GitHubReadError
 from .gate import run_gate
+from .context_diagnostics import sanitize_context_diagnostics
 from .github_client import (
     list_prs_with_label,
     remove_label,
     add_label,
-    check_pr_mergeable,
-    update_pr_branch,
     GitHubError,
 )
 
@@ -88,7 +94,7 @@ def _ensure_result_label(repo, label):
         return
     if ensure_label_exists is None:
         return
-    
+
     color = "0e8a16" if label == "karen-pass" else "d93f0b"
     desc = "Karen gate passed" if label == "karen-pass" else "Karen gate failed"
     try:
@@ -103,18 +109,18 @@ def _dispatch_fix_if_eligible(repo, pr_number, verdict):
     """Dispatch a fix attempt if eligible (low effort, not security, under cap)."""
     if not FIX_DISPATCH_AVAILABLE or dispatch_fix is None:
         return
-    
+
     verdict_dict = verdict.to_dict() if hasattr(verdict, "to_dict") else {}
-    
+
     try:
         should_fix, reason = should_attempt_fix(repo, pr_number, verdict_dict)
         if not should_fix:
             logger.debug(f"Skip fix for {repo}#{pr_number}: {reason}")
             return
-        
+
         machine = os.environ.get("STORYPOOL_MACHINE", "mini")
         live_mode = os.environ.get("STORYPOOL_LIVE", "").lower() in ("1", "true", "yes")
-        
+
         logger.info(f"Dispatching fix for {repo}#{pr_number}...")
         result = dispatch_fix(
             repo=repo,
@@ -123,7 +129,7 @@ def _dispatch_fix_if_eligible(repo, pr_number, verdict):
             dry_run=not live_mode,
             machine=machine,
         )
-        
+
         if result.get("dispatched"):
             logger.info(f"Fix dispatched for {repo}#{pr_number}: {result.get('reason')}")
         elif result.get("left_for_jeff") or "left for Jeff" in result.get("reason", ""):
@@ -177,9 +183,11 @@ def poll_and_run(
     config,  # type: KarenConfig
     post_comment=True,  # type: bool
     remove_label_on_complete=True,  # type: bool
+    guard_machine=None,
+    scan=None,
 ):
     # type: (...) -> List[dict]
-    """Poll for PRs with needs-karen label and run gate on them.
+    """Rank the whole labeled queue and admit a bounded set of complete reviews.
 
     Args:
         repos: List of repos to poll in owner/repo format
@@ -191,6 +199,7 @@ def poll_and_run(
         List of results with PR info and verdicts
     """
     results = []
+    candidates = []
 
     for repo_str in repos:
         if "/" not in repo_str:
@@ -198,12 +207,22 @@ def poll_and_run(
             continue
 
         owner, repo = repo_str.split("/", 1)
+        if config.is_blocked_repo(owner, repo):
+            if scan is not None:
+                scan.observed(repo_str)
+            continue
 
         try:
             prs = list_prs_with_label(owner, repo, config.poll_label)
+        except GitHubDeferred:
+            logger.warning("Remaining reviews deferred by GitHub API budget/backoff")
+            raise
         except GitHubError as e:
             logger.error(f"Failed to list PRs for {owner}/{repo}: {e}")
             continue
+
+        if scan is not None:
+            scan.observed(repo_str)
 
         if not prs:
             logger.debug(f"No PRs with {config.poll_label} label in {owner}/{repo}")
@@ -216,88 +235,139 @@ def poll_and_run(
             if not pr_number:
                 continue
 
-            # Check if PR branch is stale and needs update before review
-            is_mergeable, merge_status = check_pr_mergeable(owner, repo, pr_number)
-            if merge_status == "BEHIND":
-                logger.info(f"PR {owner}/{repo}#{pr_number} is behind base - updating branch")
-                update_success, update_msg = update_pr_branch(owner, repo, pr_number)
-                if update_success:
-                    logger.info(f"Updated {owner}/{repo}#{pr_number}: {update_msg}")
-                    # Give GitHub a moment to update status
-                    import time
-                    time.sleep(3)
-                else:
-                    logger.warning(f"Failed to update {owner}/{repo}#{pr_number}: {update_msg}")
-            elif merge_status == "DIRTY":
-                logger.warning(f"PR {owner}/{repo}#{pr_number} has conflicts - needs manual resolution")
-                results.append({
-                    "repo": f"{owner}/{repo}",
-                    "pr": pr_number,
-                    "skipped": True,
-                    "reason": "conflicts with base branch",
-                })
+            if pr_data.get("isDraft"):
+                results.append({"repo": repo_str, "pr": pr_number, "skipped": True,
+                                "reason": "Draft PR awaits author decision"})
                 continue
 
-            logger.info(f"Running gate on {owner}/{repo}#{pr_number}")
+            candidates.append(Candidate(repo_str, pr_data))
+
+    try:
+        queue = ReviewQueue(config)
+        if scan is None:
+            enrich(candidates)
+        else:
+            # One optional batch, aged work first. Unsampled candidates remain
+            # unknown and still require the normal exact-head gate checks.
+            metadata_order = sorted(candidates, key=lambda item: (-queue.deferred.get(item.key, 0), item.key))
+            enrich(metadata_order, max_batches=1)
+        ordered = queue.order(candidates)
+        queue.begin(candidates, observed_repos=scan.observed_repos if scan is not None else None)
+    except GitHubDeferred:
+        logger.warning("Review queue deferred by shared GitHub API budget")
+        raise
+    except OSError:
+        logger.error("Review scheduling state unavailable; cycle deferred")
+        if scan is not None:
+            raise RepoScanError('Review scheduling state unavailable') from None
+        return results
+
+    logger.info("Review queue: %d candidates, %d small CI-green, at most %d admissions",
+                len(candidates), sum(candidate.ci == 'green' and candidate.lines is not None
+                                     and candidate.lines < 300 for candidate in candidates),
+                MAX_REVIEWS_PER_CYCLE)
+
+    admission_deadline = time.monotonic() + ADMISSION_SECONDS
+    attempted = 0
+    for candidate in ordered:
+        if attempted >= MAX_REVIEWS_PER_CYCLE or time.monotonic() >= admission_deadline:
+            logger.info("Review admission window complete; remaining queue deferred")
+            break
+        repo_str, pr_data = candidate.repo, candidate.pr
+        owner, repo = repo_str.split('/', 1)
+        pr_number = pr_data.get('number')
+        from ..node_control import is_draining
+        if is_draining(guard_machine):
+            logger.info("Remaining reviews deferred: node in maintenance")
+            return results
+        if guard_machine:
+            from ..guards import MachineGuards
+            guard = MachineGuards(guard_machine).check_all()
+            if not guard.passed:
+                logger.warning("Remaining reviews deferred: %s", guard.reason)
+                return results
+        try:
+            queue.attempted(candidate)
+        except OSError:
+            logger.error("Review scheduling state unavailable; remaining queue deferred")
+            if scan is not None:
+                raise RepoScanError('Review scheduling state unavailable') from None
+            return results
+        attempted += 1
+        logger.info(f"Running gate on {owner}/{repo}#{pr_number}")
+
+        diagnostics = []
+        try:
+            result = run_gate(
+                owner=owner,
+                repo=repo,
+                pr_number=pr_number,
+                config=config,
+                post_comment=post_comment,
+                expected_sha=pr_data.get("headRefOid", ""),
+            )
+
+            if result.error or not result.sha_verified or not result.verdict_path:
+                diagnostics = sanitize_context_diagnostics(getattr(result, 'context_diagnostics', None))
+                raise RuntimeError("Review did not produce a verified artifact")
+
+            results.append({
+                "repo": f"{owner}/{repo}",
+                "pr": pr_number,
+                "sha": result.verdict.head_sha,
+                "passed": result.verdict.passed,
+                "reason": result.verdict.reason,
+            })
+
+            logger.info(
+                f"{'PASS' if result.verdict.passed else 'FAIL'}: "
+                f"{owner}/{repo}#{pr_number} - {result.verdict.reason[:50]}"
+            )
+
+            if remove_label_on_complete:
+                try:
+                    remove_label(owner, repo, pr_number, config.poll_label)
+                    logger.info(f"Removed {config.poll_label} label from {owner}/{repo}#{pr_number}")
+
+                    result_label = "karen-pass" if result.verdict.passed else "karen-fail"
+                    _ensure_result_label(f"{owner}/{repo}", result_label)
+                    add_label(owner, repo, pr_number, result_label)
+                    remove_label(owner, repo, pr_number,
+                                 "karen-fail" if result.verdict.passed else "karen-pass")
+                except GitHubError as e:
+                    logger.warning(f"Failed to update labels on {owner}/{repo}#{pr_number}: {e}")
 
             try:
-                result = run_gate(
-                    owner=owner,
-                    repo=repo,
-                    pr_number=pr_number,
-                    config=config,
-                    post_comment=post_comment,
-                )
+                from .verdict_push import push
+                logger.info("Verdict push: %s", push(config))
+            except Exception as exc:
+                logger.warning("Verdict push will retry: %s", type(exc).__name__)
 
-                results.append({
-                    "repo": f"{owner}/{repo}",
-                    "pr": pr_number,
-                    "sha": result.verdict.head_sha[:12],
-                    "passed": result.verdict.passed,
-                    "reason": result.verdict.reason,
-                })
+            # Dispatch fix attempt for FAIL verdicts (max 2 attempts, never for security/high)
+            if not result.verdict.passed and FIX_DISPATCH_AVAILABLE:
+                _dispatch_fix_if_eligible(f"{owner}/{repo}", pr_number, result.verdict)
 
-                logger.info(
-                    f"{'PASS' if result.verdict.passed else 'FAIL'}: "
-                    f"{owner}/{repo}#{pr_number} - {result.verdict.reason[:50]}"
-                )
-
-                if remove_label_on_complete:
-                    try:
-                        remove_label(owner, repo, pr_number, config.poll_label)
-                        logger.info(f"Removed {config.poll_label} label from {owner}/{repo}#{pr_number}")
-
-                        result_label = "karen-pass" if result.verdict.passed else "karen-fail"
-                        _ensure_result_label(f"{owner}/{repo}", result_label)
-                        add_label(owner, repo, pr_number, result_label)
-                    except GitHubError as e:
-                        logger.warning(f"Failed to update labels on {owner}/{repo}#{pr_number}: {e}")
-                
-                # Dispatch fix attempt for FAIL verdicts (max 2 attempts, never for security/high)
-                if not result.verdict.passed and FIX_DISPATCH_AVAILABLE:
-                    _dispatch_fix_if_eligible(f"{owner}/{repo}", pr_number, result.verdict)
-
-            except Exception as e:
-                logger.error(f"Failed to run gate on {owner}/{repo}#{pr_number}: {e}")
-                results.append({
-                    "repo": f"{owner}/{repo}",
-                    "pr": pr_number,
-                    "error": str(e),
-                })
-                
-                if remove_label_on_complete:
-                    try:
-                        remove_label(owner, repo, pr_number, config.poll_label)
-                        _ensure_result_label(f"{owner}/{repo}", "karen-fail")
-                        add_label(owner, repo, pr_number, "karen-fail")
-                        logger.info(f"Marked {owner}/{repo}#{pr_number} as karen-fail due to gate error")
-                    except GitHubError as label_err:
-                        logger.warning(f"Failed to update labels after gate error: {label_err}")
+        except GitHubDeferred:
+            if scan is not None and any('sha' in item and 'passed' in item for item in results):
+                scan.deferred_after_review = True
+                return results
+            raise
+        except Exception as e:
+            logger.error(f"Failed to run gate on {owner}/{repo}#{pr_number}: {e}")
+            error_record = {
+                "repo": f"{owner}/{repo}",
+                "pr": pr_number,
+                "error": str(e),
+            }
+            if diagnostics:
+                error_record['context_diagnostics'] = diagnostics
+            results.append(error_record)
 
     return results
 
 
-def run_poll_once(config=None, auto_discover=True, auto_label=True, auto_update=True):
+def _run_poll_once(config=None, auto_discover=True, auto_label=True, auto_update=True,
+                  post_comment=False, remove_label_on_complete=True):
     # type: (Optional[KarenConfig], bool, bool, bool) -> List[dict]
     """Run a single poll cycle.
 
@@ -321,9 +391,9 @@ def run_poll_once(config=None, auto_discover=True, auto_label=True, auto_update=
             update_result = self_update(machine=machine, install_dir=install_dir)
             outcome = update_result.get("outcome", "UNKNOWN")
             reason = update_result.get("reason", "no reason")
-            
+
             if outcome == "UPDATED":
-                logger.info("Self-update UPDATED: %s -> %s (module_copied=%s, reinstalled=%s)", 
+                logger.info("Self-update UPDATED: %s -> %s (module_copied=%s, reinstalled=%s)",
                            update_result.get("old_head", "?"),
                            update_result.get("new_head", "?"),
                            update_result.get("module_copied", False),
@@ -359,6 +429,30 @@ def run_poll_once(config=None, auto_discover=True, auto_label=True, auto_update=
         else:
             repos = ["rupret007/webjam", "rupret007/bob-ops-dashboard"]
 
+    try:
+        from ..github_reads import refresh_quota
+        refresh_quota()
+    except (GitHubDeferred, GitHubReadError):
+        raise
+    except Exception as exc:
+        logger.warning("GitHub quota refresh deferred: %s", type(exc).__name__)
+
+    logger.info("Polling %d active repo(s) before optional housekeeping", len(repos))
+    scan = RepoScan(config, repos)
+    results = poll_and_run(scan.repos, config, post_comment, remove_label_on_complete, machine, scan)
+
+    # Optional housekeeping must not discard completed review outcomes. Persist
+    # these before any further GitHub reads; incomplete discovery never reaches
+    # this point and therefore cannot replace previous poll history.
+    state = load_poll_state(config)
+    state.last_poll = datetime.now(timezone.utc).isoformat()
+    state.prs_checked.extend(results)
+    state.prs_checked = state.prs_checked[-100:]
+    save_poll_state(state, config)
+    if scan.deferred_after_review:
+        logger.warning("GitHub admission deferred; completed review results preserved and housekeeping skipped")
+        return results
+
     undrafted = []  # type: list
     if auto_label and BACKLOG_AVAILABLE:
         logger.info("Auto-undrafting green draft PRs...")
@@ -368,26 +462,31 @@ def run_poll_once(config=None, auto_discover=True, auto_label=True, auto_update=
                 logger.info("Undrafted %d PR(s) with green CI", len(undrafted))
                 for pr in undrafted:
                     logger.info("  Undrafted: %s#%d (%s)", pr["repo"], pr["pr"], pr["title"][:40])
+        except (GitHubDeferred, GitHubReadError):
+            logger.warning("Optional GitHub housekeeping deferred; completed review results preserved")
+            return results
         except Exception as e:
             logger.warning("Auto-undraft failed: %s", e)
-        
+
         logger.info("Auto-labeling queued PRs...")
         try:
             labeled = label_queued_prs(repos=repos, dry_run=False)
             if labeled:
                 logger.info("Labeled %d PR(s) with needs-karen", len(labeled))
+        except (GitHubDeferred, GitHubReadError):
+            logger.warning("Optional GitHub housekeeping deferred; completed review results preserved")
+            return results
         except Exception as e:
             logger.warning("Auto-label failed: %s", e)
 
     logger.info("Polling %d repo(s) for PRs with %s label", len(repos), config.poll_label)
 
-    results = poll_and_run(repos, config)
-
-    state = load_poll_state(config)
-    state.last_poll = datetime.now(timezone.utc).isoformat()
-    state.prs_checked.extend(results)
-    state.prs_checked = state.prs_checked[-100:]
-    save_poll_state(state, config)
+    try:
+        from .verdict_push import push
+        receipt = push(config)
+        logger.info("Verdict push: %s", receipt)
+    except Exception as exc:
+        logger.warning("Verdict push will retry: %s", type(exc).__name__)
 
     if BACKLOG_AVAILABLE:
         logger.info("Writing backlog report...")
@@ -397,22 +496,62 @@ def run_poll_once(config=None, auto_discover=True, auto_label=True, auto_update=
             repo_root_env = os.environ.get("STORYPOOL_INSTALL_DIR")
             repo_root = Path(repo_root_env).expanduser() if repo_root_env else None
             write_backlog_report(backlog, repo_root=repo_root)
-            logger.info("Backlog: %d PRs queued, %d draft_green, %d undrafted this tick", 
+            logger.info("Backlog: %d PRs queued, %d draft_green, %d undrafted this tick",
                        backlog["summary"].get("queued", 0),
                        backlog["summary"].get("draft_green", 0),
                        len(undrafted))
+        except (GitHubDeferred, GitHubReadError):
+            logger.warning("Optional GitHub housekeeping deferred; completed review results preserved")
+            return results
         except Exception as e:
             logger.warning("Backlog report failed: %s", e)
-        
+
         # Write Karen failures report
         if write_karen_fails_report is not None:
             try:
                 fails_path = write_karen_fails_report()
                 logger.info("Wrote Karen failures report to %s", fails_path)
+            except (GitHubDeferred, GitHubReadError):
+                logger.warning("Optional GitHub housekeeping deferred; completed review results preserved")
+                return results
             except Exception as e:
                 logger.warning("Karen failures report failed: %s", e)
 
     return results
+
+
+def run_poll_once(config=None, auto_discover=True, auto_label=True, auto_update=True,
+                  post_comment=False, remove_label_on_complete=True):
+    """One review process at a time; apply Mini guards before model work."""
+    import fcntl
+    from ..guards import MachineGuards
+    config = config or KarenConfig.load()
+    config.get_state_dir().mkdir(parents=True, exist_ok=True)
+    with (config.get_state_dir() / "poller.lock").open("a") as lock:
+        try:
+            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            logger.info("Poll skipped: another review cycle is active")
+            return []
+        # Loaded-code evidence must survive a resource deferral. This starts no
+        # review, provider call or self-update and does not bypass any guard.
+        record_runtime(config)
+        guard = MachineGuards(os.environ.get("STORYPOOL_MACHINE", "mini")).check_all()
+        if not guard.passed:
+            logger.warning("Poll deferred: %s", guard.reason)
+            return []
+        try:
+            return _run_poll_once(config, auto_discover, auto_label, auto_update,
+                                  post_comment, remove_label_on_complete)
+        except GitHubDeferred:
+            logger.warning("Poll cycle deferred by GitHub budget/backoff; remaining housekeeping skipped")
+            return []
+        except RepoScanError:
+            logger.warning("Review scan state unavailable; cycle deferred")
+            return []
+        except GitHubReadError:
+            logger.warning("GitHub discovery unavailable; cycle deferred and previous reports preserved")
+            return []
 
 
 def run_poll_loop(config: Optional[KarenConfig] = None) -> None:
@@ -459,6 +598,7 @@ def main() -> int:
         default=None,
         help="Comma-separated list of repos to poll (owner/repo)",
     )
+    parser.add_argument("--comment", action="store_true", help="Opt in to posting verdict comments")
     parser.add_argument(
         "--no-comment",
         action="store_true",
@@ -515,10 +655,14 @@ def main() -> int:
             auto_discover=not args.no_discover,
             auto_label=not args.no_label,
             auto_update=not args.no_update,
+            post_comment=args.comment and not args.no_comment,
+            remove_label_on_complete=not args.keep_label,
         )
         for r in results:
             if "error" in r:
-                print("X {repo}#{pr}: {error}".format(**r))
+                print("ERROR {repo}#{pr}: {error}".format(**r))
+            elif r.get("skipped"):
+                print("SKIP {repo}#{pr}: {reason}".format(**r))
             elif r.get("passed"):
                 print("PASS {repo}#{pr}@{sha}: {reason}".format(
                     **{**r, "reason": str(r.get("reason", ""))[:50]}))

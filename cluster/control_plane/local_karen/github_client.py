@@ -7,11 +7,16 @@ NEVER merges, pushes, force-pushes, tags, releases, or uses sudo.
 from __future__ import annotations
 
 import json
+import logging
 import subprocess
+import tempfile
+import re
 from dataclasses import dataclass
 from typing import Optional
 
 from .checks import PRInfo
+from ..github_reads import run as budgeted_gh
+from ..github_budget import GitHubDeferred
 
 
 class GitHubError(Exception):
@@ -19,24 +24,20 @@ class GitHubError(Exception):
     pass
 
 
-def _run_gh(args: list[str], timeout: int = 30) -> str:
+def _run_gh(args: list[str], timeout: int = 30, allowed_codes=(0,)) -> str:
     """Run a gh CLI command and return stdout.
 
     Raises GitHubError on failure.
     """
     try:
-        result = subprocess.run(
-            ["gh"] + args,
-            capture_output=True,
-            text=True,
-            timeout=timeout,
-        )
-
-        if result.returncode != 0:
+        result = budgeted_gh(args, timeout=timeout)
+        if result.returncode not in allowed_codes:
             raise GitHubError(f"gh {' '.join(args)} failed: {result.stderr}")
 
         return result.stdout
 
+    except GitHubDeferred:
+        raise
     except subprocess.TimeoutExpired:
         raise GitHubError(f"gh {' '.join(args)} timed out after {timeout}s")
     except FileNotFoundError:
@@ -52,12 +53,19 @@ def _parse_ci_status(ci_data: list[dict]) -> dict[str, str]:
     bucket values: pass, fail, pending, skipping, cancel
     state values: SUCCESS, FAILURE, PENDING, etc.
 
-    We normalize to: success, failure, pending, skipped, cancelled
+    We normalize to: success, failure, pending, skipped, cancelled.
+    Workflow names distinguish checks; duplicate identities retain their worst
+    state because list order alone cannot establish that an attempt supersedes
+    another. Missing workflow identity must never erase blocking evidence.
     """
     ci_status = {}
 
     for check in ci_data:
         name = check.get("name", "unknown")
+        workflow = check.get("workflow")
+        if isinstance(workflow, str) and workflow.strip():
+            name = f"{workflow} / {name}"
+        previous = ci_status.get(name)
         bucket = check.get("bucket", "").lower()
         state = check.get("state", "").lower()
 
@@ -87,6 +95,12 @@ def _parse_ci_status(ci_data: list[dict]) -> dict[str, str]:
         else:
             ci_status[name] = "unknown"
 
+        if previous is not None:
+            severity = {"success": 0, "skipped": 0, "pending": 2,
+                        "unknown": 2, "cancelled": 3, "failure": 4}
+            ci_status[name] = max((previous, ci_status[name]),
+                                  key=lambda value: severity.get(value, 2))
+
     return ci_status
 
 
@@ -99,7 +113,7 @@ def fetch_pr_info(owner: str, repo: str, pr_number: int) -> PRInfo:
     pr_json = _run_gh([
         "pr", "view", str(pr_number),
         "--repo", f"{owner}/{repo}",
-        "--json", "number,title,author,headRefOid,isDraft,changedFiles,deletions,additions,files",
+        "--json", "number,title,body,author,headRefOid,baseRefOid,isDraft,changedFiles,deletions,additions,files",
     ])
     pr_data = json.loads(pr_json)
 
@@ -107,16 +121,23 @@ def fetch_pr_info(owner: str, repo: str, pr_number: int) -> PRInfo:
     if not head_sha:
         raise GitHubError(f"Could not get head SHA for PR #{pr_number}")
 
-    diff = _run_gh([
-        "pr", "diff", str(pr_number),
-        "--repo", f"{owner}/{repo}",
-    ], timeout=60)
+    try:
+        diff = _run_gh([
+            "pr", "diff", str(pr_number), "--repo", f"{owner}/{repo}",
+        ], timeout=60)
+    except GitHubError as exc:
+        if "406" not in str(exc) and "too_large" not in str(exc):
+            raise
+        diff, files_data = fetch_git_diff(owner, repo, head_sha, pr_data.get("baseRefOid", ""))
+        pr_data["files"] = files_data
+    if not verify_sha_current(owner, repo, pr_number, head_sha):
+        raise GitHubError("PR head changed while fetching diff; retry")
 
     ci_json = _run_gh([
         "pr", "checks", str(pr_number),
         "--repo", f"{owner}/{repo}",
-        "--json", "name,state,bucket",
-    ])
+        "--json", "name,state,bucket,workflow",
+    ], allowed_codes=(0, 1, 8))
     ci_data = json.loads(ci_json)
     ci_status = _parse_ci_status(ci_data)
 
@@ -128,8 +149,18 @@ def fetch_pr_info(owner: str, repo: str, pr_number: int) -> PRInfo:
         path = f.get("path", "")
         if path:
             changed_files.append(path)
-            if f.get("deletions", 0) > 0 and f.get("additions", 0) == 0:
+            if f.get("status") == "removed":
                 deleted_files.append(path)
+
+    current_file = None
+    for line in diff.splitlines():
+        if line.startswith("diff --git "):
+            import shlex
+            parts = shlex.split(line)
+            current_file = parts[3][2:] if len(parts) == 4 else None
+        elif line.startswith("deleted file mode ") and current_file:
+            if current_file not in deleted_files:
+                deleted_files.append(current_file)
 
     return PRInfo(
         owner=owner,
@@ -143,6 +174,7 @@ def fetch_pr_info(owner: str, repo: str, pr_number: int) -> PRInfo:
         ci_status=ci_status,
         changed_files=changed_files,
         deleted_files=deleted_files,
+        description=pr_data.get("body", ""),
     )
 
 
@@ -186,24 +218,42 @@ def list_prs_with_label(owner: str, repo: str, label: str) -> list[dict]:
 
     Returns list of PR metadata dicts.
     """
-    result = _run_gh([
-        "pr", "list",
-        "--repo", f"{owner}/{repo}",
-        "--label", label,
-        "--state", "open",
-        "--json", "number,title,author,headRefOid,isDraft",
-    ])
+    from ..github_reads import rest_json, GitHubReadError
+    values = []
+    try:
+        for page in range(1, 11):
+            batch = rest_json(f"repos/{owner}/{repo}/pulls?state=open&per_page=100&page={page}", ttl=15)
+            if not isinstance(batch, list):
+                raise GitHubReadError("Invalid open-PR response")
+            for pr in batch:
+                if any(item.get("name") == label for item in pr.get("labels", [])):
+                    values.append({"number": pr["number"], "title": pr.get("title", ""),
+                                   "author": pr.get("user", {}), "headRefOid": pr.get("head", {}).get("sha", ""),
+                                   "isDraft": pr.get("draft", False)})
+            if len(batch) < 100:
+                return values
+        raise GitHubReadError("Open-PR list exceeds page budget")
+    except GitHubReadError as exc:
+        raise GitHubError(str(exc)) from None
 
-    return json.loads(result)
 
 
 def remove_label(owner: str, repo: str, pr_number: int, label: str) -> None:
     """Remove a label from a PR."""
-    _run_gh([
-        "pr", "edit", str(pr_number),
-        "--repo", f"{owner}/{repo}",
-        "--remove-label", label,
-    ])
+    try:
+        _run_gh([
+            "pr", "edit", str(pr_number),
+            "--repo", f"{owner}/{repo}",
+            "--remove-label", label,
+        ])
+    except GitHubError as exc:
+        missing = (r"(?:label[: ]*['\"]?" + re.escape(label)
+                   + r"['\"]?.*?(?:not found|does not exist)|['\"]"
+                   + re.escape(label) + r"['\"] (?:not found|does not exist))")
+        if not re.search(missing, str(exc), re.IGNORECASE):
+            raise
+        logging.getLogger("karen-poller").debug("Absent label %s; removal is a no-op", label)
+
 
 
 def add_label(owner: str, repo: str, pr_number: int, label: str) -> None:
@@ -298,3 +348,25 @@ def ensure_label_exists(owner: str, repo: str, label: str, color: str = "d4c5f9"
         return result.returncode == 0
     except subprocess.SubprocessError:
         return False
+
+
+def fetch_git_diff(owner, repo, head_sha, base_sha):
+    """Bypass GitHub's diff size cap with immutable objects, never a checkout."""
+    if not all(re.fullmatch(r"[0-9a-f]{40}", sha) for sha in (head_sha, base_sha)):
+        raise GitHubError("Missing full head/base SHA for complete diff")
+    with tempfile.TemporaryDirectory(prefix="karen-diff-") as directory:
+        def git(*args):
+            result = subprocess.run(["git", "-c", "core.hooksPath=/dev/null", *args],
+                                    cwd=directory, capture_output=True, text=True, timeout=180)
+            if result.returncode:
+                raise GitHubError("Pinned Git diff failed: " + " ".join(args[:2]))
+            return result.stdout
+        git("init", "--bare", "-q")
+        git("fetch", "--no-tags", "--filter=blob:none",
+            "https://github.com/{}/{}.git".format(owner, repo), head_sha, base_sha)
+        merge_base = git("merge-base", base_sha, head_sha).strip()
+        diff = git("diff", "--no-ext-diff", "--no-textconv", "--binary", merge_base, head_sha)
+        names = git("diff", "--name-status", "--no-renames", "-z", merge_base, head_sha).split("\0")
+        files = [{"path": names[i+1], "status": "removed" if names[i] == "D" else "modified"}
+                 for i in range(0, len(names)-1, 2)]
+        return diff, files

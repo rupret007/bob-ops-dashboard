@@ -21,6 +21,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
+source "$SCRIPT_DIR/launchd-reload.sh"
 PLIST_SRC="$SCRIPT_DIR/com.storypool.dispatch.plist"
 PLIST_DST="$HOME/Library/LaunchAgents/com.storypool.dispatch.plist"
 LOG_DIR="$HOME/.local/share/storypool/dispatch"
@@ -79,14 +80,10 @@ install() {
     find "$REPO_ROOT/cluster" -name "*.pyc" -delete 2>/dev/null || true
     
     # Unload if already loaded
-    if launchctl list "$LABEL" &>/dev/null; then
-        echo "  Unloading existing agent..."
-        launchctl unload "$PLIST_DST" 2>/dev/null || true
-    fi
     
     # Load the agent
     echo "  Loading agent..."
-    launchctl load "$PLIST_DST"
+    storypool_reload_agent "$PLIST_DST"
     
     echo ""
     echo "StoryPool Dispatcher installed!"

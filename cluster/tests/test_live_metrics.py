@@ -169,8 +169,8 @@ class FailureAndSourcesTests(unittest.IsolatedAsyncioTestCase):
                                                       (10080, now.timestamp()-1, 42, None),
                                                       (10080, now.timestamp()+3600, 101, None)):
                 (day/'session.jsonl').write_text(json.dumps({'type':'event_msg', 'timestamp':now.isoformat(),
-                    'payload':{'type':'token_count', 'rate_limits':{'secondary':{
-                        'window_minutes':minutes,'used_percent':percent,'resets_at':reset}}}}))
+                    'payload':{'type':'token_count', 'rate_limits':{'limit_id':'codex','secondary':{
+                        'window_minutes':minutes,'used_percent':percent,'resets_at':int(reset)}}}}) + '\n')
                 self.assertEqual(weekly_limit(root), expected)
 
 

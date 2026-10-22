@@ -14,13 +14,16 @@ from .local_karen.verdict import load_verdict
 from ..never_touch import is_never_touch
 
 
+class PipelineFinding(RuntimeError):
+    """The pipeline has not yet supplied the required success evidence."""
+
+
 def verify(job, config):
     if not (job.created_at and job.start_time and job.state == 'done'
             and job.outcome == 'commit_pushed' and job.outcome_verified
             and job.outcome_sha and job.outcome_sha != job.head_sha):
-        # Identify the failed stage without echoing worker errors, which can
-        # contain subprocess arguments or captured credentials.
-        raise RuntimeError(
+        # Stage details exclude arbitrary worker output and subprocess arguments.
+        raise PipelineFinding(
             f'Job {job.job_id} ({job.repo}#{job.pr_number}) has not completed '
             f'queued -> running -> pushed: state={job.state}, '
             f'outcome={job.outcome or "none"}, verified={job.outcome_verified}. '
@@ -28,26 +31,29 @@ def verify(job, config):
     current = json.loads(run(['gh', 'pr', 'view', str(job.pr_number), '--repo', job.repo,
                               '--json', 'headRefOid']))['headRefOid']
     if current != job.outcome_sha:
-        raise RuntimeError('Pushed job no longer matches PR head')
+        raise PipelineFinding('Pushed job no longer matches PR head')
     owner, repo = job.repo.split('/')
     verdict = load_verdict(owner, repo, job.pr_number, current, config)
     if not verdict or verdict.head_sha != current:
-        raise RuntimeError('No exact-SHA Karen verdict for pushed job')
+        raise PipelineFinding('No exact-SHA Karen verdict for pushed job')
     print(f'{job.job_id}: queued -> running -> pushed {current} -> {verdict.verdict_type}')
     if not verdict.passed:
-        raise RuntimeError('Karen verdict is FAIL: see verdict findings')
+        raise PipelineFinding('Karen verdict is FAIL: see verdict findings')
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--repo')
     parser.add_argument('--pr', type=int)
+    parser.add_argument('--findings-only', action='store_true')
     args = parser.parse_args()
     if bool(args.repo) != bool(args.pr):
         parser.error('--repo and --pr must be provided together')
-    ledger = get_ledger()
-    config = KarenConfig.load()
+    if args.findings_only and args.repo:
+        parser.error('Findings-only checks cannot enqueue work')
     try:
+        ledger = get_ledger()
+        config = KarenConfig.load()
         if args.repo:
             if is_never_touch(args.repo):
                 raise ValueError('never-touch repository')
@@ -65,16 +71,19 @@ def main():
             # A concurrent dispatch must not replace the job we just ran.
             jobs = [candidate for candidate in jobs if candidate.job_id == job.job_id]
             if not jobs:
-                raise RuntimeError(f'Smoke job {job.job_id} missing from ledger after execution')
+                raise PipelineFinding(f'Smoke job {job.job_id} missing from ledger after execution')
         else:
             jobs = ledger.get_recent_jobs(hours=24)
         if not jobs:
-            raise RuntimeError('No real jobs in the last 24h; run with --repo OWNER/REPO --pr N')
+            raise PipelineFinding('No real jobs in the last 24h; run with --repo OWNER/REPO --pr N')
         verify(max(jobs, key=lambda j: j.created_at), config)
         return 0
-    except Exception as exc:
+    except PipelineFinding as exc:
         print(f'SMOKE FAILED: {type(exc).__name__}: {exc}')
-        return 1
+        return 0 if args.findings_only else 1
+    except Exception as exc:
+        print(f'SMOKE ERROR: {type(exc).__name__}; pipeline check could not execute')
+        return 2
 
 
 if __name__ == '__main__':

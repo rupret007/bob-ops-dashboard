@@ -12,7 +12,7 @@ from cluster.control_plane import watchdog
 
 
 def test_peer_health_requires_configured_url():
-    with mock.patch.dict(watchdog.PEER_URLS, {"nucbox": ""}), \
+    with mock.patch.object(watchdog, "PEER_URLS", {"nucbox": ""}), \
             mock.patch("urllib.request.urlopen") as request:
         assert watchdog.sync_peer_health("mini") is False
         request.assert_not_called()
@@ -24,7 +24,7 @@ def test_peer_health_uses_configured_url_and_preserves_timestamp(tmp_path):
     response.__enter__.return_value.read.return_value = json.dumps({
         "machines": {"nucbox": {"timestamp": timestamp, "state": "green", "detail": "Healthy"}}
     }).encode()
-    with mock.patch.dict(watchdog.PEER_URLS, {"nucbox": "http://peer.example.invalid:8790/"}), \
+    with mock.patch.object(watchdog, "PEER_URLS", {"nucbox": "http://peer.example.invalid:8790/"}), \
             mock.patch.object(watchdog, "LOG_DIR", tmp_path), \
             mock.patch("urllib.request.urlopen", return_value=response) as request:
         assert watchdog.sync_peer_health("mini") is True
@@ -96,6 +96,19 @@ class TestHealthChecks:
         assert result.passed is False
         assert "10" in result.message or "traceback" in result.message.lower()
         assert result.can_repair is True
+
+    @pytest.mark.parametrize("age_minutes,passed", [(61, True), (59, False), (-1, False)])
+    @pytest.mark.parametrize("use_directory", [False, True])
+    def test_traceback_recovery_requires_log_activity_this_hour(self, tmp_path, age_minutes, passed, use_directory):
+        import os
+        log_file = tmp_path / "dashboard.log"
+        log_file.write_text("Traceback (most recent call last):\n" * (watchdog.MAX_TRACEBACKS_PER_HOUR + 1))
+        modified = (datetime.now(timezone.utc) - timedelta(minutes=age_minutes)).timestamp()
+        os.utime(log_file, (modified, modified))
+        result = watchdog.check_tracebacks("dashboard", tmp_path if use_directory else log_file)
+        assert result.passed is passed
+        assert result.can_repair is (not passed)
+        assert result.repair_action == ("" if passed else "restart_service")
 
     @mock.patch("shutil.which", return_value="/usr/local/bin/gh")
     def test_check_gh_available(self, mock_which):
@@ -190,6 +203,16 @@ class TestRepairFunctions:
 
 class TestWatchdogRun:
     """Tests for full watchdog run."""
+
+    @pytest.fixture(autouse=True)
+    def inline_check_runner(self):
+        # These tests exercise result/repair handling with mocked checks. The
+        # subprocess deadline and parallelism have separate integration tests.
+        with mock.patch('cluster.control_plane.watchdog_check.run_check',
+                        side_effect=lambda check, *args: check(*args)), \
+                mock.patch.object(watchdog, 'check_head_lag', return_value=
+                                  watchdog.HealthCheck('head_lag', True, 'current')):
+            yield
 
     @mock.patch.object(watchdog, "check_service_stuck")
     @mock.patch.object(watchdog, "check_tracebacks")
@@ -343,3 +366,69 @@ def test_hourly_conductor_grace_period(tmp_path):
     os.utime(log, (old, old))
     assert watchdog.check_service_stuck('conductor', log).passed
     assert not watchdog.check_service_stuck('dispatch', log).passed
+
+
+def test_store_peer_engine_keeps_only_peer_local_section(tmp_path, monkeypatch):
+    monkeypatch.setattr(watchdog, "LOG_DIR", tmp_path)
+    data = {"timestamp": "t", "jobs": {"nucbox": {"source": "local", "count": 1, "running": [{"job_id": "a"}]},
+                                       "mini": {"source": "peer-sync", "count": 9}},
+            "llm_local": [{"service": "codex", "active": 1}, "junk"]}
+    assert watchdog.store_peer_engine("nucbox", data) is True
+    snap = json.loads((tmp_path / "machines" / "nucbox" / "engine.json").read_text())
+    assert snap["jobs"]["count"] == 1 and snap["llm_local"] == [{"service": "codex", "active": 1}] and snap["synced_at"]
+    assert watchdog.store_peer_engine("mini", data) is False
+    assert not (tmp_path / "machines" / "mini").exists()
+
+
+def test_mini_peer_default_uses_verified_tailnet_https_endpoint():
+    import os
+    import subprocess
+    import sys
+    env = {k: v for k, v in os.environ.items() if k != 'STORYPOOL_MINI_URL'}
+    code = ('from unittest.mock import patch; '
+            'from cluster.control_plane.watchdog import PEER_URLS; '
+            'dns = ".".join(["jeffs-mac-mini", "tail758ab4", "ts", "net"]); '
+            'p = patch("cluster.control_plane.peer_endpoints.peer_node", '
+            'return_value={"DNSName": dns}); p.start(); '
+            'assert PEER_URLS["mini"] == "https://jeffs-mac-mini\x2etail758ab4\x2ets\x2enet:8790"')
+    result = subprocess.run([sys.executable, '-c', code], env=env,
+                            capture_output=True, text=True, timeout=10)
+    assert result.returncode == 0
+
+
+def test_peer_engine_carries_only_remote_guardian_evidence(tmp_path, monkeypatch):
+    monkeypatch.setattr(watchdog, 'LOG_DIR', tmp_path)
+    data = {'timestamp': '2026-10-18T20:00:00+00:00',
+            'jobs': {'mini': {'source': 'local', 'running': []}},
+            'machines': {'mini': {'guardian': {'reloads': 2}},
+                         'nucbox': {'guardian': {'reloads': 99}}}}
+    assert watchdog.store_peer_engine('mini', data)
+    stored = json.loads((tmp_path / 'machines/mini/engine.json').read_text())
+    assert stored['guardian'] == {'reloads': 2}
+
+
+@pytest.fixture(autouse=True)
+def isolated_github_admission(tmp_path, monkeypatch):
+    """Mock admission separately from CLI/label semantics; budget has race tests."""
+    from cluster.control_plane import github_budget
+    monkeypatch.setenv('STORYPOOL_DATA_DIR', str(tmp_path))
+    monkeypatch.setattr(github_budget, 'reserve', lambda resource='core': None)
+    monkeypatch.setattr(github_budget, 'observe', lambda *args, **kwargs: None)
+
+
+def test_peer_health_preserves_lazy_endpoint_discovery(tmp_path):
+    from cluster.control_plane import peer_endpoints
+    response = mock.MagicMock()
+    response.__enter__.return_value.read.return_value = json.dumps({
+        "machines": {"nucbox": {"timestamp": "2026-10-22T00:00:00+00:00",
+                                "state": "green", "detail": "Healthy"}}
+    }).encode()
+    urls = ["http://first.example.invalid:8790", "http://second.example.invalid:8790"]
+    with mock.patch.object(peer_endpoints, "peer_url", side_effect=urls) as resolve, \
+            mock.patch.object(watchdog, "PEER_URLS", peer_endpoints.PeerURLs()), \
+            mock.patch.object(watchdog, "LOG_DIR", tmp_path), \
+            mock.patch("urllib.request.urlopen", return_value=response) as request:
+        assert watchdog.sync_peer_health("mini") is True
+        assert watchdog.sync_peer_health("mini") is True
+    assert resolve.call_args_list == [mock.call("nucbox"), mock.call("nucbox")]
+    assert request.call_args_list == [mock.call(url + "/api/engine", timeout=5) for url in urls]

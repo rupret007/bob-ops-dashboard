@@ -148,7 +148,7 @@ run_self_check() {
     conductor_tmp=$(mktemp)
     local conductor_exit=0
     (cd "$REPO_ROOT" && PYTHONPATH="$REPO_ROOT" python3 -m cluster.control_plane.conductor --json > "$conductor_tmp" 2>&1) || conductor_exit=$?
-    if [[ $conductor_exit -eq 0 ]] && python3 -c "import json,sys; json.load(open(sys.argv[1]))" "$conductor_tmp" 2>/dev/null; then
+    if [[ $conductor_exit -eq 0 ]] && python3 -c "import json,sys; s=json.load(open(sys.argv[1])); sys.exit(0 if isinstance(s,dict) and s.get('counts_complete') is True and s.get('deferred') is False else 1)" "$conductor_tmp" 2>/dev/null; then
         log_pass "conductor tick ran successfully"
     else
         log_fail "conductor tick failed (exit $conductor_exit)"

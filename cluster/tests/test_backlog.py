@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import pytest
+
 import json
 import os
 import subprocess
@@ -10,6 +12,8 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch, MagicMock, Mock
 
+from cluster.control_plane.github_budget import GitHubDeferred
+from cluster.control_plane.github_reads import GitHubReadError
 from cluster.control_plane.backlog import (
     EXCLUDED_REPOS,
     MAX_UNDRAFTS_PER_TICK,
@@ -391,31 +395,52 @@ class TestCollectBacklog(unittest.TestCase):
 class TestEnsureLabelExists(unittest.TestCase):
     """Test label creation."""
 
-    @patch("subprocess.run")
-    def test_creates_label_if_missing(self, mock_run):
+    @patch("cluster.control_plane.backlog.github_reads.run")
+    @patch("cluster.control_plane.backlog.github_reads.labels")
+    def test_creates_label_if_missing(self, mock_labels, mock_run):
         """Should create label if it doesn't exist."""
-        mock_run.side_effect = [
-            MagicMock(returncode=0, stdout="[]"),
-            MagicMock(returncode=0, stdout=""),
-        ]
+        mock_labels.return_value = []
+        mock_run.return_value = MagicMock(returncode=0, stdout="")
         
         result = ensure_label_exists("rupret007/webjam", "needs-karen")
         
         self.assertTrue(result)
-        self.assertEqual(mock_run.call_count, 2)
-
-    @patch("subprocess.run")
-    def test_skips_if_label_exists(self, mock_run):
-        """Should skip creation if label already exists."""
-        mock_run.return_value = MagicMock(
-            returncode=0, 
-            stdout='[{"name": "needs-karen"}]'
+        mock_labels.assert_called_once_with("rupret007/webjam")
+        mock_run.assert_called_once_with(
+            ["label", "create", "needs-karen", "--repo", "rupret007/webjam",
+             "--color", "d4c5f9"], timeout=30,
         )
+
+    @patch("cluster.control_plane.backlog.github_reads.run")
+    @patch("cluster.control_plane.backlog.github_reads.labels")
+    def test_skips_if_label_exists(self, mock_labels, mock_run):
+        """Should skip creation if label already exists."""
+        mock_labels.return_value = [{"name": "needs-karen"}]
         
         result = ensure_label_exists("rupret007/webjam", "needs-karen")
         
         self.assertFalse(result)
-        self.assertEqual(mock_run.call_count, 1)
+        mock_labels.assert_called_once_with("rupret007/webjam")
+        mock_run.assert_not_called()
+
+    @patch("cluster.control_plane.backlog.github_reads.run")
+    @patch("cluster.control_plane.backlog.github_reads.labels")
+    def test_failed_label_read_never_creates_label(self, mock_labels, mock_run):
+        """A deferred or failed read must not authorize a label write."""
+        for error in (GitHubDeferred("budget unavailable"),
+                      GitHubReadError("label read failed")):
+            with self.subTest(error=type(error).__name__):
+                mock_labels.reset_mock()
+                mock_labels.side_effect = error
+
+                if isinstance(error, GitHubDeferred):
+                    with self.assertRaises(GitHubDeferred):
+                        ensure_label_exists("rupret007/webjam", "needs-karen")
+                else:
+                    self.assertFalse(ensure_label_exists("rupret007/webjam", "needs-karen"))
+
+                mock_labels.assert_called_once_with("rupret007/webjam")
+                mock_run.assert_not_called()
 
 
 class TestUndraftGreenPrs(unittest.TestCase):
@@ -544,7 +569,7 @@ class TestUndraftGreenPrs(unittest.TestCase):
         self.assertEqual(len(undrafted), 3)
 
     @patch("cluster.control_plane.backlog.ensure_label_exists")
-    @patch("subprocess.run")
+    @patch("cluster.control_plane.backlog.github_reads.run")
     @patch("cluster.control_plane.backlog.get_open_prs")
     @patch("cluster.control_plane.backlog.discover_repos")
     def test_live_undraft_and_label(self, mock_discover, mock_prs, mock_run, mock_ensure):
@@ -569,10 +594,19 @@ class TestUndraftGreenPrs(unittest.TestCase):
         self.assertEqual(mock_run.call_count, 2)
         
         ready_call = mock_run.call_args_list[0]
-        self.assertIn("ready", ready_call[0][0])
+        self.assertEqual(ready_call, unittest.mock.call(
+            ["pr", "ready", "42", "--repo", "rupret007/webjam"], timeout=30,
+        ))
         
         label_call = mock_run.call_args_list[1]
-        self.assertIn("--add-label", label_call[0][0])
+        self.assertEqual(label_call, unittest.mock.call(
+            ["pr", "edit", "42", "--repo", "rupret007/webjam",
+             "--add-label", "needs-karen"], timeout=30,
+        ))
+        mock_ensure.assert_called_once_with(
+            "rupret007/webjam", "needs-karen", color="d4c5f9",
+            description="Ready for Karen gate review",
+        )
 
 
 class TestFormatBacklogMdWithUndrafted(unittest.TestCase):
@@ -622,3 +656,12 @@ class TestFormatBacklogMdWithUndrafted(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+@pytest.fixture(autouse=True)
+def isolated_github_admission(tmp_path, monkeypatch):
+    """Mock admission separately from CLI/label semantics; budget has race tests."""
+    from cluster.control_plane import github_budget
+    monkeypatch.setenv('STORYPOOL_DATA_DIR', str(tmp_path))
+    monkeypatch.setattr(github_budget, 'reserve', lambda resource='core': None)
+    monkeypatch.setattr(github_budget, 'observe', lambda *args, **kwargs: None)

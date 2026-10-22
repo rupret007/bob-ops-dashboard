@@ -1447,6 +1447,7 @@ for sec in status["sections"]:
     )
 
 
+initial_snapshot_json = json.dumps(status, ensure_ascii=True).replace("<", "\\u003c")
 html = f'''<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -1834,7 +1835,7 @@ html = f'''<!DOCTYPE html>
     · <a href="./status.json">status.json</a></p>
   </footer>
 </div>
-<script id="status-bootstrap" type="application/json">{json.dumps(status, ensure_ascii=True).replace("<", "\\u003c")}</script>
+<script id="status-bootstrap" type="application/json">{initial_snapshot_json}</script>
 <script>
 function focusKey(kind, raw) {{
   var prefix = String(kind || "").replace(/^\s+|\s+$/g, "").toLowerCase();

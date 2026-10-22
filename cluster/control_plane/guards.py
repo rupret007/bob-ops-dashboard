@@ -8,11 +8,14 @@ from __future__ import annotations
 
 import os
 import shutil
+import platform
+import subprocess
+import re
 from dataclasses import dataclass
 from typing import Callable, Optional
 
 MINI_LOAD_LIMIT = 10.0
-MINI_SWAP_LIMIT_PCT = 80.0
+MINI_SWAP_LIMIT_PCT = 90.0
 MINI_DISK_MIN_GB = 15.0
 NUCBOX_LOAD_LIMIT = 12.0
 NUCBOX_MAX_LANES = 7
@@ -36,6 +39,15 @@ def get_load1() -> float:
 
 def get_swap_pct() -> float:
     """Get swap usage percentage (Linux/macOS)."""
+    if platform.system() == "Darwin":
+        try:
+            result = subprocess.run(["/usr/sbin/sysctl", "-n", "vm.swapusage"],
+                                    capture_output=True, text=True, timeout=5, check=True)
+            values = dict(re.findall(r"(total|used)\s*=\s*([0-9.]+)M", result.stdout))
+            total, used = float(values["total"]), float(values["used"])
+            return used / total * 100 if total else 0.0
+        except (OSError, subprocess.SubprocessError, ValueError, KeyError):
+            return 100.0  # Unknown telemetry cannot grant a Mini lane.
     try:
         with open("/proc/meminfo", encoding="utf-8") as f:
             vals: dict[str, int] = {}

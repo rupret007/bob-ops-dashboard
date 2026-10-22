@@ -6,7 +6,7 @@
 # - Lane dispatcher (every 15 min)
 # - LLM conductor (hourly)
 # - Karen gate CLI (karen-gate --dry-run)
-# - Karen poller is NOT loaded (shadow mode only)
+# - Karen poller registration is preserved only when already loaded or live
 #
 # NO SUDO REQUIRED - installs to user directories only
 # Does NOT touch: ~/bob-ops-dashboard (may have local edits)
@@ -26,6 +26,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
+source "$SCRIPT_DIR/launchd-reload.sh"
 
 detect_gh_path() {
     local gh_bin
@@ -115,7 +116,18 @@ clear_pycache() {
     fi
 }
 
+install_guardian() {
+    if PYTHONPATH="$REPO_ROOT" python3 -m cluster.control_plane.health_install --is-authority; then return 0; fi
+    mkdir -p "$HOME/.local/bin" "$HOME/.local/share/storypool" "$HOME/Library/LaunchAgents"
+    sed -e "s|__REPO_PATH__|$REPO_ROOT|g" "$SCRIPT_DIR/storypool-guardian.sh" > "$HOME/.local/bin/storypool-guardian"
+    chmod +x "$HOME/.local/bin/storypool-guardian"
+    local dst="$HOME/Library/LaunchAgents/com.storypool.guardian.plist"
+    sed -e "s|__HOME__|$HOME|g" "$SCRIPT_DIR/com.storypool.guardian.plist" > "$dst"
+    storypool_reload_agent "$dst"
+}
+
 install_shadow() {
+    if PYTHONPATH="$REPO_ROOT" python3 -m cluster.control_plane.health_install --is-authority; then return 0; fi
     log_header "Installing Shadow Runner"
 
     local log_dir="$HOME/.local/share/storypool/shadow"
@@ -138,10 +150,7 @@ install_shadow() {
 
     clear_pycache "$REPO_ROOT/cluster"
 
-    if launchctl list com.storypool.shadow &>/dev/null; then
-        launchctl unload "$plist_dst" 2>/dev/null || true
-    fi
-    launchctl load "$plist_dst"
+    storypool_reload_agent "$plist_dst"
 
     log_info "Shadow runner installed (15 min interval)"
     log_info "PATH: $LAUNCHD_PATH"
@@ -179,10 +188,7 @@ install_dispatcher() {
 
     clear_pycache "$REPO_ROOT/cluster"
 
-    if launchctl list com.storypool.dispatch &>/dev/null; then
-        launchctl unload "$plist_dst" 2>/dev/null || true
-    fi
-    launchctl load "$plist_dst"
+    storypool_reload_agent "$plist_dst"
 
     log_info "Dispatcher installed (15 min interval)"
     log_info "PATH: $LAUNCHD_PATH"
@@ -221,16 +227,15 @@ install_conductor() {
 
     clear_pycache "$REPO_ROOT/cluster"
 
-    if launchctl list com.storypool.conductor &>/dev/null; then
-        launchctl unload "$plist_dst" 2>/dev/null || true
-    fi
-    launchctl load "$plist_dst"
+    storypool_reload_agent "$plist_dst"
+    launchctl kickstart -k "gui/$(id -u)/com.storypool.conductor"
 
     log_info "Conductor installed (hourly)"
     log_info "PATH: $LAUNCHD_PATH"
 }
 
 install_watchdog() {
+    if PYTHONPATH="$REPO_ROOT" python3 -m cluster.control_plane.health_install --is-authority; then return 0; fi
     log_header "Installing Watchdog (self-healing)"
 
     local log_dir="$HOME/.local/share/storypool"
@@ -253,10 +258,7 @@ install_watchdog() {
 
     clear_pycache "$REPO_ROOT/cluster"
 
-    if launchctl list com.storypool.watchdog &>/dev/null; then
-        launchctl unload "$plist_dst" 2>/dev/null || true
-    fi
-    launchctl load "$plist_dst"
+    storypool_reload_agent "$plist_dst"
 
     log_info "Watchdog installed (10 min interval, self-healing)"
     log_info "Logs: ~/.local/share/storypool/watchdog.log"
@@ -285,22 +287,19 @@ install_dashboard() {
 
     clear_pycache "$REPO_ROOT/cluster"
 
-    if launchctl list com.storypool.dashboard &>/dev/null; then
-        launchctl unload "$plist_dst" 2>/dev/null || true
-    fi
-    launchctl load "$plist_dst"
+    storypool_reload_agent "$plist_dst"
 
     log_info "Dashboard installed on http://127.0.0.1:8790/"
     log_info "Accessible over Tailscale"
 }
 
 install_ops_doctor() {
+    if PYTHONPATH="$REPO_ROOT" python3 -m cluster.control_plane.health_install --is-authority; then return 0; fi
     local dst="$HOME/Library/LaunchAgents/com.storypool.ops-doctor.plist"
     mkdir -p "$HOME/Library/LaunchAgents" "$HOME/.local/share/storypool/doctor"
     sed -e "s|__REPO_PATH__|$REPO_ROOT|g" -e "s|__HOME__|$HOME|g" -e "s|__PATH__|$LAUNCHD_PATH|g" \
         "$SCRIPT_DIR/com.storypool.ops-doctor.plist" > "$dst"
-    launchctl unload "$dst" 2>/dev/null || true
-    launchctl load "$dst"
+    storypool_reload_agent "$dst"
 }
 
 install_selfupdate() {
@@ -308,10 +307,7 @@ install_selfupdate() {
     mkdir -p "$HOME/Library/LaunchAgents" "$HOME/.local/share/storypool"
     sed -e "s|__REPO_PATH__|$REPO_ROOT|g" -e "s|__HOME__|$HOME|g" -e "s|__PATH__|$LAUNCHD_PATH|g" \
         "$SCRIPT_DIR/com.storypool.selfupdate.plist" > "$dst"
-    # Keep a running updater loaded until it exits; avoid killing its own reinstall.
-    if ! launchctl list com.storypool.selfupdate >/dev/null 2>&1; then
-        launchctl load "$dst"
-    fi
+    storypool_reload_agent "$dst" --defer-running
 }
 
 install_karen_cli() {
@@ -383,12 +379,19 @@ CONFIG
             -e "s|__HOME__|$HOME|g" \
             -e "s|__PATH__|$LAUNCHD_PATH|g" \
             "$poller_plist_src" > "$poller_plist_dst"
-        log_info "Karen poller plist installed (NOT loaded in shadow mode)"
+        if [[ -f "$HOME/.config/storypool/live" ]]; then
+            storypool_reload_agent "$poller_plist_dst"
+            log_info "Karen poller reload requested (live marker present; RunAtLoad disabled)"
+        elif launchctl list com.storypool.karen-poller &>/dev/null; then
+            storypool_reload_agent "$poller_plist_dst"
+            log_info "Karen poller reload requested (existing registration preserved; RunAtLoad disabled)"
+        else
+            log_info "Karen poller NOT loaded (shadow mode; no live marker or prior registration)"
+        fi
+        log_info "Karen poller plist installed"
         log_info "PATH: $LAUNCHD_PATH"
     fi
     
-    log_info "Karen poller NOT loaded (shadow mode — run karen-gate --dry-run manually)"
-
     if [[ ":$PATH:" != *":$bin_dir:"* ]]; then
         log_warn "Add $bin_dir to your PATH:"
         echo "    echo 'export PATH=\"\$HOME/.local/bin:\$PATH\"' >> ~/.zshrc"
@@ -400,7 +403,7 @@ run_self_check() {
 
     local all_pass=true
 
-    if launchctl list com.storypool.shadow &>/dev/null; then
+    if PYTHONPATH="$REPO_ROOT" python3 -m cluster.control_plane.health_install --is-authority || launchctl list com.storypool.shadow &>/dev/null; then
         log_pass "shadow runner: launchd loaded"
         RESULTS+=("shadow: PASS")
     else
@@ -473,13 +476,17 @@ run_self_check() {
     else
         echo ""
         log_warn "Some components failed — check errors above"
+        return 1
     fi
 }
 
 uninstall_all() {
     log_header "Uninstalling All Components"
 
-    for label in com.storypool.selfupdate com.storypool.ops-doctor com.storypool.shadow com.storypool.dispatch com.storypool.conductor com.storypool.watchdog com.storypool.dashboard com.storypool.karen-poller; do
+    launchctl bootout "gui/$(id -u)/com.storypool.codex-quota" 2>/dev/null || true
+    # Preserve the observer definition and private observations for recovery.
+
+    for label in com.storypool.guardian com.storypool.selfupdate com.storypool.ops-doctor com.storypool.shadow com.storypool.dispatch com.storypool.conductor com.storypool.watchdog com.storypool.dashboard com.storypool.karen-poller; do
         local plist="$HOME/Library/LaunchAgents/$label.plist"
         if launchctl list "$label" &>/dev/null; then
             log_info "Unloading $label..."
@@ -522,6 +529,9 @@ main() {
 
     check_dependencies
     setup_config_dir
+    STORYPOOL_COLLECT_RELOAD_FAILURES=1
+    STORYPOOL_RELOAD_FAILURES=''
+    install_guardian
     install_shadow
     install_dispatcher
     install_conductor
@@ -530,7 +540,20 @@ main() {
     install_selfupdate
     install_dashboard
     install_karen_cli
-    run_self_check
+    PYTHONPATH="$REPO_ROOT" python3 -m cluster.control_plane.codex_quota_install --machine mini
+    PYTHONPATH="$REPO_ROOT" python3 -m cluster.control_plane.health_install --machine mini
+    local self_check_failed=0
+    run_self_check || self_check_failed=1
+
+    if [[ -n "$STORYPOOL_RELOAD_FAILURES" ]]; then
+        log_error "Installation incomplete; these agents failed reload verification:"
+        printf '%s' "$STORYPOOL_RELOAD_FAILURES"
+        return 1
+    fi
+    if [[ "$self_check_failed" == 1 ]]; then
+        log_error "Installation incomplete; self-check failed"
+        return 1
+    fi
 
     echo ""
     log_info "Installation complete!"
@@ -542,4 +565,6 @@ main() {
     echo "    karen-gate --dry-run --repo rupret007/webjam --pr 123"
 }
 
-main "$@"
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+    main "$@"
+fi

@@ -9,6 +9,9 @@ import unittest
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+from cluster.control_plane.budget_tracker import BudgetTracker
+from cluster.control_plane.metrics import MetricsTracker
+
 from cluster.control_plane.conductor import (
     CODEX_WEEKLY_CAP_PCT,
     ActionType,
@@ -261,9 +264,15 @@ class TestConductor(unittest.TestCase):
         self.log_dir = Path(self.tmpdir) / "logs"
         self.verdict_dir = Path(self.tmpdir) / "verdicts"
         self.conductor = Conductor(
+            budget_tracker=BudgetTracker(Path(self.tmpdir) / "budget"),
+            metrics_tracker=MetricsTracker(Path(self.tmpdir) / "metrics"),
             log_dir=self.log_dir,
             verdict_dir=self.verdict_dir,
         )
+
+    def test_budget_and_metrics_are_isolated(self):
+        self.assertEqual(self.conductor.budget.data_dir, Path(self.tmpdir) / "budget")
+        self.assertEqual(self.conductor.metrics.metrics_dir, Path(self.tmpdir) / "metrics")
 
     def test_writes_log_entries(self):
         """Log entries are written to JSONL file."""
@@ -309,7 +318,9 @@ class TestConductor(unittest.TestCase):
             self.assertTrue(allowed)
             self.assertEqual(reason, "ok")
 
-    def test_can_use_codex_over_cap(self):
+    @patch("cluster.control_plane.budget_tracker.read_codex_quota",
+           return_value={"status": "ok", "weekly_pct": 100.0})
+    def test_can_use_codex_over_cap(self, mock_quota):
         """Codex cannot be used when over cap."""
         self.conductor.budget.record("codex", cost_usd=50.0)
         allowed, reason = self.conductor._can_use_codex()
@@ -325,6 +336,8 @@ class TestConductorValidation(unittest.TestCase):
         self.log_dir = Path(self.tmpdir) / "logs"
         self.verdict_dir = Path(self.tmpdir) / "verdicts"
         self.conductor = Conductor(
+            budget_tracker=BudgetTracker(Path(self.tmpdir) / "budget"),
+            metrics_tracker=MetricsTracker(Path(self.tmpdir) / "metrics"),
             log_dir=self.log_dir,
             verdict_dir=self.verdict_dir,
         )
@@ -426,9 +439,10 @@ class TestConductorValidation(unittest.TestCase):
     @patch("cluster.control_plane.conductor._read_verdict")
     def test_validate_merge_accepts_valid(self, mock_read_verdict, mock_get_details):
         """Merge is accepted when all conditions met."""
-        mock_read_verdict.return_value = {"verdict": "KARENPASS", "sha": "abc123"}
+        mock_read_verdict.return_value = {"verdict": "KARENPASS", "sha": "a" * 40, "_latest": True, "review_results": [{"reviewer": "codex", "verdict": "PASS"}, {"reviewer": "gemini", "verdict": "PASS"}]}
         mock_get_details.return_value = {
-            "headRefOid": "abc123",
+            "headRefOid": "a" * 40,
+            "isDraft": False, "state": "OPEN", "mergeStateStatus": "CLEAN",
             "statusCheckRollup": [{"name": "build", "conclusion": "SUCCESS"}],
             "reviews": [{"state": "APPROVED"}],
         }
@@ -437,7 +451,7 @@ class TestConductorValidation(unittest.TestCase):
             action_type=ActionType.MERGE_PR.value,
             repo="owner/repo",
             pr_number=123,
-            head_sha="abc123",
+            head_sha="a" * 40,
         )
         
         result = self.conductor.validate_action(action, self.snapshot)
@@ -553,6 +567,8 @@ class TestConductorExecution(unittest.TestCase):
     def setUp(self):
         self.tmpdir = tempfile.mkdtemp()
         self.conductor = Conductor(
+            budget_tracker=BudgetTracker(Path(self.tmpdir) / "budget"),
+            metrics_tracker=MetricsTracker(Path(self.tmpdir) / "metrics"),
             log_dir=Path(self.tmpdir) / "logs",
             verdict_dir=Path(self.tmpdir) / "verdicts",
         )
@@ -581,21 +597,47 @@ class TestConductorExecution(unittest.TestCase):
         self.assertEqual(result.execution_result, "labeled")
         mock_run.assert_called_once()
 
+    @patch("cluster.control_plane.conductor.ClaimClient.from_env")
+    @patch("cluster.control_plane.conductor.Conductor.validate_action")
+    @patch("cluster.control_plane.github_budget.reserve")
     @patch("subprocess.run")
-    def test_execute_live_merge(self, mock_run):
+    def test_execute_live_merge(self, mock_run, mock_budget, mock_validate, mock_client):
         """Merge action is executed in live mode."""
+        default_query = [
+            "gh", "api", "graphql", "-f",
+            "query=query($owner:String!,$name:String!){repository(owner:$owner,name:$name){\n"
+            "nameWithOwner defaultBranchRef{name target{... on Commit{oid}}}}}",
+            "-f", "owner=test", "-f", "name=repo",
+        ]
         def mock_run_side_effect(cmd, **kwargs):
             result = MagicMock(returncode=0)
+            if cmd == default_query:
+                result.stdout = json.dumps({"data": {"repository": {
+                    "nameWithOwner": "test/repo", "defaultBranchRef": {
+                        "name": "main", "target": {"oid": "c" * 40}}}}})
+                return result
             if "gh" in cmd and "api" in cmd:
-                result.stdout = '{"state": "success"}'
+                if any("check-runs" in value for value in cmd):
+                    result.stdout = '[{"check_runs":[{"id":1,"name":"tests","status":"completed","conclusion":"success"}]}]'
+                else:
+                    result.stdout = '{"state":"success","statuses":[{}]}'
+            elif cmd[:3] == ["gh", "pr", "view"]:
+                if cmd[-1] == 'number,state,isDraft,headRefOid,title,labels':
+                    result.stdout = json.dumps(dict(number=1, state='OPEN', isDraft=False,
+                                                   headRefOid='a'*40, title='Ready', labels=[]))
+                else:
+                    result.stdout = json.dumps({"state":"MERGED", "mergeCommit":{"oid":"b"*40},
+                                               "baseRefName":"main"})
             return result
         mock_run.side_effect = mock_run_side_effect
+        mock_client.return_value.ttl = 300
+        mock_validate.side_effect = lambda proposal, _: ValidatedAction(proposal, True, "Fresh validation")
         
         proposal = ProposedAction(
             action_type="merge_pr", 
             repo="test/repo", 
             pr_number=1,
-            head_sha="abc123",
+            head_sha="aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
         )
         validated = ValidatedAction(proposal, True, "Validated")
         
@@ -607,7 +649,21 @@ class TestConductorExecution(unittest.TestCase):
         self.assertTrue(len(merge_call) > 0)
         call_args = merge_call[0][0][0]
         self.assertIn("--match-head-commit", call_args)
-        self.assertIn("abc123", call_args)
+        self.assertIn("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", call_args)
+        mock_validate.assert_called_once()
+        mock_budget.assert_any_call("graphql")
+        mock_budget.assert_any_call("core")
+        api_calls = [c.args[0] for c in mock_run.call_args_list
+                     if c.args[0][:2] == ["gh", "api"]]
+        self.assertEqual(api_calls, [
+            default_query,
+            ["gh", "api", "--paginate", "--slurp",
+             "repos/test/repo/commits/" + "c" * 40 + "/check-runs?per_page=100"],
+            ["gh", "api", "repos/test/repo/commits/" + "c" * 40 + "/status"],
+            ["gh", "api", "--paginate", "--slurp",
+             "repos/test/repo/commits/" + "b" * 40 + "/check-runs?per_page=100"],
+            ["gh", "api", "repos/test/repo/commits/" + "b" * 40 + "/status"],
+        ])
 
     @patch("subprocess.run")
     def test_execute_handles_error(self, mock_run):
@@ -629,6 +685,8 @@ class TestConductorDigest(unittest.TestCase):
     def setUp(self):
         self.tmpdir = tempfile.mkdtemp()
         self.conductor = Conductor(
+            budget_tracker=BudgetTracker(Path(self.tmpdir) / "budget"),
+            metrics_tracker=MetricsTracker(Path(self.tmpdir) / "metrics"),
             log_dir=Path(self.tmpdir) / "logs",
             verdict_dir=Path(self.tmpdir) / "verdicts",
         )
@@ -677,6 +735,8 @@ class TestConductorRun(unittest.TestCase):
     def setUp(self):
         self.tmpdir = tempfile.mkdtemp()
         self.conductor = Conductor(
+            budget_tracker=BudgetTracker(Path(self.tmpdir) / "budget"),
+            metrics_tracker=MetricsTracker(Path(self.tmpdir) / "metrics"),
             log_dir=Path(self.tmpdir) / "logs",
             verdict_dir=Path(self.tmpdir) / "verdicts",
         )

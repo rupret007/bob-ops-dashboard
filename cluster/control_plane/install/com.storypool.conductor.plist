@@ -9,8 +9,7 @@ Runs every hour to orchestrate PR lifecycle:
 - Merges PRs with KARENPASS verdict (sha-pinned)
 - Notes stuck PRs for attention
 
-Default is shadow/dry-run mode (logs decisions, takes no action).
-Change __LIVE_MODE__ to true to enable live actions.
+Live merge mode; every action remains subject to deterministic safety gates.
 
 NEVER auto-merges repos in cluster/never_touch.py
 NO SUDO, NO FORCE-PUSH, NO TAGS/RELEASES
@@ -29,12 +28,11 @@ Uninstall:    launchctl unload ~/Library/LaunchAgents/com.storypool.conductor.pl
     
     <key>ProgramArguments</key>
     <array>
-        <string>/usr/bin/env</string>
-        <string>python3</string>
+        <!-- Match the qualified Mini health/poller runtime, independent of tool PATH. -->
+        <string>/usr/bin/python3</string>
         <string>-m</string>
         <string>cluster.control_plane.conductor</string>
-        <!-- Remove the comment below to enable live mode -->
-        <!-- <string>--live</string> -->
+        <string>--live</string>
     </array>
     
     <key>WorkingDirectory</key>

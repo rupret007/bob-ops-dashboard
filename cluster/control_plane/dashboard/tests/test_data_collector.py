@@ -200,13 +200,15 @@ class TestDataCollector:
         assert len(merges) == 1
         assert merges[0].pr_number == 1
     
-    def test_collect_providers(self, tmp_path: Path):
+    def test_collect_providers(self, tmp_path: Path, monkeypatch):
         """Should collect provider budgets."""
+        monkeypatch.setattr('cluster.control_plane.dashboard.data_collector.read_codex_quota',
+                            lambda: {'weekly_pct': 50.0})
         metrics_dir = tmp_path / "metrics"
         metrics_dir.mkdir(parents=True)
         
         budget_state = {
-            "codex": {"weekly_pct": 50.0, "weekly_usd": 10.0},
+            "codex": {"weekly_pct": 0.0, "weekly_usd": 10.0},
             "gemini": {"weekly_pct": 10.0, "weekly_usd": 2.0},
         }
         (metrics_dir / "budget-state.json").write_text(json.dumps(budget_state))
@@ -223,6 +225,7 @@ class TestDataCollector:
         codex = next((p for p in providers if p.name == "codex"), None)
         assert codex is not None
         assert codex.weekly_pct == 50.0
+        assert codex.weekly_spend_usd is None
         
         grok = next((p for p in providers if p.name == "grok"), None)
         assert grok is not None

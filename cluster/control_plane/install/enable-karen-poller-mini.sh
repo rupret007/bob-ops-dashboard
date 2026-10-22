@@ -17,6 +17,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
+source "$SCRIPT_DIR/launchd-reload.sh"
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -85,6 +86,7 @@ install_plist() {
     
     sed -e "s|__REPO_PATH__|$REPO_ROOT|g" \
         -e "s|__HOME__|$HOME|g" \
+        -e "s|__PATH__|$PATH|g" \
         "$poller_plist_src" > "$poller_plist_dst"
     
     log_pass "Plist installed to $poller_plist_dst"
@@ -95,8 +97,7 @@ load_poller() {
     
     local poller_plist_dst="$HOME/Library/LaunchAgents/com.storypool.karen-poller.plist"
     
-    launchctl unload "$poller_plist_dst" 2>/dev/null || true
-    launchctl load "$poller_plist_dst"
+    storypool_reload_agent "$poller_plist_dst"
     
     if launchctl list com.storypool.karen-poller &>/dev/null; then
         log_pass "Karen poller loaded (polls every 10 min)"

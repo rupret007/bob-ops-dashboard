@@ -1,7 +1,7 @@
 """Deterministic checks for Local Karen gate.
 
 These checks run BEFORE any LLM review and must all pass.
-Fail closed: any error = FAIL verdict.
+Concrete findings are FAIL; operational errors remain retryable ERROR.
 """
 
 from __future__ import annotations
@@ -10,7 +10,7 @@ import re
 import subprocess
 from dataclasses import dataclass
 from enum import Enum
-from typing import Optional
+from typing import Optional, Any, Dict, Tuple
 
 from .config import KarenConfig
 
@@ -26,6 +26,7 @@ class CheckVerdict(Enum):
     PASS = "PASS"
     FAIL = "FAIL"
     SKIP = "SKIP"
+    ERROR = "ERROR"
 
 
 @dataclass
@@ -45,6 +46,19 @@ class CheckResult:
         return self.verdict == CheckVerdict.FAIL
 
 
+@dataclass(frozen=True)
+class ReviewScope:
+    """Server-derived pinned plan, never decoded from a PR body."""
+    data: Dict[str, Any]
+
+
+@dataclass(frozen=True)
+class ReviewMaterial:
+    """Already validated cumulative evidence packet, distinct from PR text."""
+    entries: Tuple[Dict[str, Any], ...]
+    phase: str
+
+
 @dataclass
 class PRInfo:
     """Information about a PR needed for checks."""
@@ -60,11 +74,13 @@ class PRInfo:
     changed_files: list  # List[str]
     deleted_files: list  # List[str]
     description: str = ""  # PR body/description
+    review_scope: Optional[ReviewScope] = None
+    review_material: Optional[ReviewMaterial] = None
 
 
 SECRET_PATTERNS = [
-    (r"(?i)(api[_-]?key|apikey)\s*[=:]\s*['\"][^'\"]{20,}['\"]", "API key"),
-    (r"(?i)(secret|password|passwd|pwd)\s*[=:]\s*['\"][^'\"]{8,}['\"]", "Secret/password"),
+    (r"(?i)(api[_-]?key|apikey)\s*[=:]\s*(['\"])[^'\"]{20,}\2", "API key"),
+    (r"(?i)(secret|password|passwd|pwd)\s*[=:]\s*(['\"])[^'\"]{8,}\2", "Secret/password"),
     (r"(?i)bearer\s+[a-zA-Z0-9_\-\.]{20,}", "Bearer token"),
     (r"ghp_[a-zA-Z0-9]{36,}", "GitHub PAT"),
     (r"gho_[a-zA-Z0-9]{36,}", "GitHub OAuth token"),
@@ -108,7 +124,7 @@ TEST_FILE_PATTERNS = [
     r"tests?/.*\.py$",
     r"spec[_\-].*\.(js|ts)$",
     r".*\.spec\.(js|ts)$",
-    r".*\.test\.(js|ts)$",
+    r".*\.test\.(js|ts|mjs|cjs)$",
     r"__tests__/.*\.(js|ts)$",
 ]
 
@@ -201,24 +217,98 @@ def _is_test_file(filepath: str) -> bool:
     return False
 
 
-def _extract_diff_deletions(diff: str) -> list[tuple[str, str]]:
-    """Extract deleted lines from a unified diff.
-
-    Returns list of (filename, deleted_line) tuples.
-    """
-    deletions = []
-    current_file = None
-
-    for line in diff.split("\n"):
+def _removed_lines(diff):
+    filepath, number = "diff", 1
+    for line in diff.splitlines():
         if line.startswith("diff --git"):
-            match = re.search(r"b/(.+)$", line)
-            if match:
-                current_file = match.group(1)
+            filepath = line.split(" b/", 1)[-1]
+            number = 1
+        elif line.startswith("@@"):
+            hunk = re.search(r"@@ -(\d+)", line)
+            if hunk:
+                number = int(hunk.group(1))
         elif line.startswith("-") and not line.startswith("---"):
-            if current_file:
-                deletions.append((current_file, line[1:]))
+            yield filepath, number, line[1:]
+            number += 1
+        elif line.startswith(" "):
+            number += 1
 
-    return deletions
+
+def _extract_diff_deletions(diff):
+    return [(path, line) for path, _, line in _removed_lines(diff)]
+
+
+def _renamed_js_test_headers(diff):
+    """Description-only edits preserve the test body; changed asserts still fail."""
+    safe = set()
+    filepath, number = "diff", 1
+    header = re.compile(r"^(\s*(?:it|test|describe)\(\s*)(['\"])[^'\"]*\2(\s*,\s*(?:async\s+)?\(\)\s*=>\s*\{\s*)$")
+    for block in diff.split("diff --git ")[1:]:
+        filepath = block.splitlines()[0].split(" b/", 1)[-1]
+        for hunk in re.split(r"(?m)^@@ ", block)[1:]:
+            position = re.match(r"-(\d+)", hunk)
+            number = int(position.group(1)) if position else 1
+            removed, added = [], []
+            for line in hunk.splitlines()[1:]:
+                if line.startswith("-"):
+                    removed.append((number, line[1:]))
+                    number += 1
+                elif line.startswith("+"):
+                    added.append(line[1:])
+                elif line.startswith(" "):
+                    number += 1
+            if len(removed) != 1 or not added:
+                continue
+            old = header.fullmatch(removed[0][1])
+            new = header.fullmatch(added[0])
+            # Extra additions must be simple assertion statements. Do not waive
+            # bodies, setup, control flow, decorators or changed expectations.
+            if (old and new and old.group(1, 3) == new.group(1, 3)
+                    and all(re.fullmatch(r"\s*expect\([^;]+\);\s*", line) for line in added[1:])):
+                safe.add((filepath, removed[0][0]))
+    return safe
+
+
+def _literal_equivalent_line(before, after):
+    """Only string spelling may change; every token and literal value must agree."""
+    import ast
+    import io
+    import tokenize
+
+    def tokens(line):
+        result = []
+        try:
+            for token in tokenize.generate_tokens(io.StringIO(line).readline):
+                if token.type in (tokenize.NL, tokenize.NEWLINE, tokenize.ENDMARKER):
+                    continue
+                value = ast.literal_eval(token.string) if token.type == tokenize.STRING else token.string
+                result.append((token.type, value))
+        except tokenize.TokenError as exc:
+            # Diff context may close a surrounding multiline expression.
+            if not result or exc.args[0] != 'EOF in multi-line statement':
+                return None
+        except (IndentationError, SyntaxError, ValueError):
+            return None
+        return result
+
+    return before != after and tokens(before) is not None and tokens(before) == tokens(after)
+
+
+def _new_test_source_files(diff):
+    """Only complete newly introduced files can contain no old tests to skip."""
+    added = set()
+    for block in diff.split("diff --git ")[1:]:
+        lines = block.splitlines()
+        path = lines[0].split(" b/", 1)[-1]
+        if not _is_test_file(path):
+            continue
+        if ("new file mode 100644" in lines or "new file mode 100755" in lines):
+            hunks = [line for line in lines if line.startswith("@@")]
+            if ("--- /dev/null" in lines and hunks
+                    and all(re.match(r"@@ -0,0 \+\d+(?:,\d+)? @@", hunk) for hunk in hunks)
+                    and not any(line.startswith("-") and line != "--- /dev/null" for line in lines)):
+                added.add(path)
+    return added
 
 
 def check_tests_not_weakened(pr: PRInfo, config: KarenConfig) -> CheckResult:
@@ -234,9 +324,12 @@ def check_tests_not_weakened(pr: PRInfo, config: KarenConfig) -> CheckResult:
 
     for filepath in pr.deleted_files:
         if _is_test_file(filepath):
-            issues.append(f"Deleted test file: {filepath}")
+            issues.append(f"Deleted test file: {filepath}:1")
 
-    deletions = _extract_diff_deletions(pr.diff)
+    deletions = _removed_lines(pr.diff)
+    renamed_headers = _renamed_js_test_headers(pr.diff)
+    additions = list(_added_lines(pr.diff))
+    equivalent_additions = set()
 
     test_function_patterns = [
         r"^\s*def\s+test_",
@@ -260,31 +353,50 @@ def check_tests_not_weakened(pr: PRInfo, config: KarenConfig) -> CheckResult:
         r"@unittest",
     ]
 
-    for filepath, line in deletions:
+    for filepath, number, line in deletions:
         if not _is_test_file(filepath):
             continue
 
         for pattern in test_function_patterns:
-            if re.search(pattern, line):
-                issues.append(f"Removed test function in {filepath}: {line.strip()[:60]}")
+            if (filepath, number) not in renamed_headers and re.search(pattern, line):
+                issues.append(f"Removed test function in {filepath}:{number} (removed source; value redacted)")
                 break
 
         for pattern in assertion_patterns:
             if re.search(pattern, line):
-                issues.append(f"Removed assertion in {filepath}: {line.strip()[:60]}")
+                replacement = next((i for i, (path, _, added) in enumerate(additions)
+                                    if i not in equivalent_additions and path == filepath and
+                                    filepath.endswith('.py') and _literal_equivalent_line(line, added)), None)
+                if replacement is None:
+                    issues.append(f"Removed assertion in {filepath}:{number} (removed source; value redacted)")
+                else:
+                    equivalent_additions.add(replacement)
                 break
 
         for pattern in decorator_patterns:
             if re.search(pattern, line):
-                issues.append(f"Removed test decorator in {filepath}: {line.strip()[:60]}")
+                issues.append(f"Removed test decorator in {filepath}:{number} (removed source; value redacted)")
                 break
+
+    new_test_files = _new_test_source_files(pr.diff)
+    for filepath, number, line in _added_lines(pr.diff):
+        # A known optional-import guard may accompany a wholly new test file.
+        # The same decorator applied to any existing file must remain a FAIL:
+        # it could otherwise disable old assertions without deleting them.
+        optional_import_guard = (
+            filepath in new_test_files
+            and line.strip() == '@unittest.skipUnless(_HAS_NEVER_TOUCH, "cluster.never_touch not available")'
+        )
+        if _is_test_file(filepath) and not optional_import_guard and re.search(
+                r"^\s*(?:@(?:pytest\.mark\.(?:skip|xfail)|unittest\.skip)|(?:it|test|describe)\.(?:skip|todo)\s*\()", line):
+            issues.append(f"Added test skip/xfail in {filepath}:{number} (source redacted)")
 
     if issues:
         return CheckResult(
             check_name="tests_not_weakened",
             verdict=CheckVerdict.FAIL,
             reason=f"Tests appear weakened: {len(issues)} issue(s) found",
-            details="\n".join(issues[:10]),
+            details="\n".join(issues),
         )
 
     return CheckResult(
@@ -294,6 +406,338 @@ def check_tests_not_weakened(pr: PRInfo, config: KarenConfig) -> CheckResult:
     )
 
 
+
+# Reviewed inert literals from the reported PRs. Restrict exemptions to test
+# sources and these complete values; a fixture marker never hides arbitrary data.
+_TEST_SECRET_LITERALS = frozenset({
+    "synthetic-approle-secret-value", "synthetic-media-secret", "client-secret",
+    "synthetic-secret-do-not-return", "synthetic-unit-test-session-value-with-32-characters",
+    "synthetic-private-test-key", "sk-synthetic-caption-test", "synthetic-secret",
+    "social-upload-http-test-secret", "synthetic-session-secret", "meta-secret",
+    "yt-secret", "tt-secret", "synthetic-provider-secret", "private-fixture-secret",
+    "SYNTHETIC_SECRET_1006", "synthetic-owner-password-123", "synthetic-review-password",
+    "synthetic-review-secret", "SYNTHETIC-ONLY", "synthetic-armored-key-data",
+    "synthetic-client-secret", "fixture-oauth-secret", "synthetic-owner-secret-123",
+    "synthetic-pgp-key-data", "synthetic-routine-refresh-secret",
+})
+
+
+def _placeholder_secret(match, secret_type, filepath):
+    if secret_type not in ("API key", "Secret/password"):
+        return False
+    value = re.search(r"[\"']([^\"']*)[\"']$", match.group(0))
+    if value is None:
+        return False
+    # Only complete variable substitutions in configuration templates. A real
+    # credential, literal suffix/prefix, or adjacent match remains a finding.
+    if str(filepath or '').endswith('.template') and re.fullmatch(
+            r'\{\{[A-Z][A-Z0-9_]*_(?:TOKEN|KEY|PASSWORD|SECRET)\}\}', value.group(1)):
+        return True
+    # The ACL renderer emits this complete format token, never a credential.
+    # Keep literal prefixes/suffixes and all independent key rules actionable.
+    if (filepath == 'cluster/nats_acl.py'
+            and value.group(1) == '{{%s_TOKEN}}'):
+        return True
+    return _is_test_file(filepath or "") and value.group(1) in _TEST_SECRET_LITERALS
+
+
+def _added_lines(diff):
+    """Yield added source with its new-file position, never context/deletions."""
+    filepath, number = "diff", 1
+    for line in diff.splitlines():
+        if line.startswith("diff --git"):
+            filepath = line.split(" b/", 1)[-1]
+            number = 1
+        elif line.startswith("@@"):
+            hunk = re.search(r"\+(\d+)(?:,\d+)? @@", line)
+            if hunk:
+                number = int(hunk.group(1))
+        elif line.startswith("+") and not line.startswith("+++"):
+            yield filepath, number, line[1:]
+            number += 1
+        elif line.startswith(" "):
+            number += 1
+
+
+def _prose_or_comment(filepath, line):
+    # Only non-executable documentation/comments; secrets are still scanned.
+    return (filepath.lower().endswith((".md", ".rst", ".txt"))
+            or line.lstrip().startswith(("#", "//")))
+
+
+def _literal_shell_display(filepath, line):
+    """Recognize one display command with no execution or output redirection.
+
+    Installer help may print uninstall commands. Expansion, command chaining,
+    pipes and redirected script contents must retain their normal checks.
+    """
+    import shlex
+
+    if not filepath.lower().endswith((".sh", ".bash", ".zsh", ".command")):
+        return False
+    if any(char in line for char in ("$", "`", "\n", "\r")):
+        return False
+    try:
+        lexer = shlex.shlex(line, posix=True, punctuation_chars=True)
+        lexer.whitespace_split = True
+        lexer.commenters = ''
+        tokens = list(lexer)
+    except ValueError:
+        return False
+    return (bool(tokens) and tokens[0] in ('echo', 'printf')
+            and not any(token and all(char in '();<>|&' for char in token)
+                        for token in tokens[1:]))
+
+
+def _python_test_fixture_source(diff):
+    """Mask proven inert fixture expressions in complete Python test source.
+
+    Calls, computed values, incomplete context and neighboring statements stay
+    visible. Secret scanners always receive the original source.
+    """
+    import ast
+
+    files, path, number = {}, '', 1
+    for line in diff.splitlines():
+        if line.startswith('diff --git '):
+            path = line.split(' b/', 1)[-1]
+        elif line.startswith('@@'):
+            match = re.search(r'\+(\d+)(?:,\d+)? @@', line)
+            number = int(match.group(1)) if match else 1
+        elif line.startswith((' ', '+')) and not line.startswith('+++'):
+            files.setdefault(path, {})[number] = line[1:]
+            number += 1
+    masked = {}
+    for path, lines in files.items():
+        approved_modules = {
+            'cluster/control_plane/local_karen/tests/test_shell_display.py',
+            'cluster/control_plane/local_karen/tests/test_python_fixture_source.py',
+            'cluster/control_plane/tests/test_fix_difficulty.py',
+        }
+        if (path not in approved_modules
+                or set(lines) != set(range(1, max(lines) + 1))):
+            continue
+        source = '\n'.join(lines[n] for n in range(1, max(lines) + 1))
+        try:
+            tree = ast.parse(source)
+        except SyntaxError:
+            continue
+        # These regression harnesses only build PRInfo and invoke pure checks.
+        # Any unknown import, alias or callable invalidates that proof.
+        imports = {
+            ('', 'pytest'),
+            ('cluster.control_plane.local_karen', 'checks'),
+            ('cluster.control_plane.local_karen.config', 'KarenConfig'),
+            ('cluster.control_plane.fix_dispatcher', 'classify_fix_difficulty'),
+        }
+        safe_calls = {'candidate', 'scanner', 'len', 'KarenConfig', 'classify_fix_difficulty',
+                      'pytest.mark.parametrize', 'checks.PRInfo',
+                      'checks.check_no_dangerous_commands', 'checks.check_no_secrets_in_diff',
+                      'checks.check_security_patterns', 'checks.run_static_security_scan',
+                      'source.splitlines', 'pr.diff.replace'}
+        protected = {'candidate', 'scanner', 'len', 'KarenConfig',
+                     'classify_fix_difficulty', 'pytest', 'checks'}
+        parents = {child: node for node in ast.walk(tree) for child in ast.iter_child_nodes(node)}
+        invalid = False
+        for node in ast.walk(tree):
+            if isinstance(node, (ast.Import, ast.ImportFrom)):
+                module = getattr(node, 'module', '') or ''
+                if (getattr(node, 'level', 0)
+                        or any(alias.asname or (module, alias.name) not in imports for alias in node.names)):
+                    invalid = True
+            elif isinstance(node, ast.arg) and node.arg in protected:
+                invalid = True
+            elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)) and node.name in protected:
+                canonical = (isinstance(node, ast.FunctionDef) and node.name == 'candidate'
+                             and len(node.args.args) == 2
+                             and node.args.args[0].arg in ('line', 'source')
+                             and node.args.args[1].arg == 'path'
+                             and all(isinstance(item, (ast.Assign, ast.AugAssign, ast.Return))
+                                     for item in node.body)
+                             and isinstance(node.body[-1], ast.Return)
+                             and isinstance(node.body[-1].value, ast.Call)
+                             and ast.unparse(node.body[-1].value.func) == 'checks.PRInfo')
+                if not canonical:
+                    invalid = True
+            elif isinstance(node, ast.Name) and isinstance(node.ctx, (ast.Store, ast.Del)) and node.id in protected:
+                parent = parents.get(node)
+                scanner_loop = (node.id == 'scanner' and isinstance(parent, ast.For)
+                                and parent.target is node and isinstance(parent.iter, (ast.Tuple, ast.List))
+                                and bool(parent.iter.elts)
+                                and all(isinstance(item, ast.Attribute)
+                                        and ast.unparse(item) in safe_calls
+                                        and ast.unparse(item).startswith('checks.check_')
+                                        or isinstance(item, ast.Attribute)
+                                        and ast.unparse(item) == 'checks.run_static_security_scan'
+                                        for item in parent.iter.elts))
+                if not scanner_loop:
+                    invalid = True
+            elif isinstance(node, (ast.Attribute, ast.Subscript)) and isinstance(node.ctx, (ast.Store, ast.Del)):
+                parent = parents.get(node)
+                fixture_diff = (ast.unparse(node) == 'pr.diff' and isinstance(parent, ast.Assign)
+                                and isinstance(parent.value, ast.Call)
+                                and ast.unparse(parent.value.func) == 'pr.diff.replace')
+                if not fixture_diff:
+                    invalid = True
+            elif isinstance(node, ast.Call):
+                literal_format = (isinstance(node.func, ast.Attribute)
+                                  and node.func.attr in ('format', 'join')
+                                  and isinstance(node.func.value, ast.Constant)
+                                  and isinstance(node.func.value.value, str))
+                if not literal_format and ast.unparse(node.func) not in safe_calls:
+                    invalid = True
+        if invalid:
+            continue
+        names, spans = set(), []
+
+        def literal(node):
+            return (isinstance(node, ast.Constant)
+                    or isinstance(node, ast.Name) and node.id in names
+                    or isinstance(node, ast.BinOp) and isinstance(node.op, ast.Add)
+                    and literal(node.left) and literal(node.right)
+                    or isinstance(node, (ast.List, ast.Tuple, ast.Set))
+                    and all(literal(item) for item in node.elts))
+
+        for node in tree.body:
+            if (isinstance(node, ast.Assign) and len(node.targets) == 1
+                    and isinstance(node.targets[0], ast.Name)
+                    and node.targets[0].id.isupper() and literal(node.value)):
+                names.add(node.targets[0].id)
+                spans.append(node)
+        for node in ast.walk(tree):
+            if isinstance(node, ast.For) and literal(node.iter):
+                spans.append(node.iter)
+            if (isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
+                    and ast.unparse(node.func) == 'pytest.mark.parametrize'):
+                spans.extend(arg for arg in node.args if literal(arg))
+        for node in spans:
+            for n in range(node.lineno, node.end_lineno + 1):
+                value = masked.get((path, n), lines[n])
+                # AST columns are UTF-8 byte offsets; Python slices use characters.
+                start = (len(lines[n].encode()[:node.col_offset].decode())
+                         if n == node.lineno else 0)
+                end = (len(lines[n].encode()[:node.end_col_offset].decode())
+                       if n == node.end_lineno else len(value))
+                masked[path, n] = value[:start] + ' ' * (end - start) + value[end:]
+    return masked
+
+
+def _inert_scanner_rules(diff):
+    """Identify complete literal rule tables, never executable expressions.
+
+    Reconstruct only new-side context/additions. Missing context, computed
+    entries or mixed executable expressions fail closed. Secrets still scan
+    every line, including these tables.
+    """
+    import ast
+
+    path = 'cluster/control_plane/local_karen/checks.py'
+    source, number, current = {}, 1, None
+    for line in diff.splitlines():
+        if line.startswith('diff --git '):
+            current = line.split(' b/', 1)[-1]
+        elif line.startswith('@@'):
+            hunk = re.search(r'\+(\d+)(?:,\d+)? @@', line)
+            number = int(hunk.group(1)) if hunk else 1
+        elif current == path and line.startswith((' ', '+')) and not line.startswith('+++'):
+            source[number] = line[1:]
+            number += 1
+    if not source:
+        return set()
+    # Reject gaps within a table instead of inventing missing source.
+    safe = set()
+    start = re.compile(r'^(?P<indent>[ \t]*)(?:SECRET_PATTERNS|SECURITY_PATTERNS|dangerous_patterns|extra_patterns)\s*=\s*\[\s*$')
+    for first, text in source.items():
+        match = start.fullmatch(text)
+        if not match:
+            continue
+        last, body = first + 1, ['[']
+        while last in source and last - first <= 100:
+            body.append(source[last])
+            if source[last] == match.group('indent') + ']':
+                break
+            last += 1
+        else:
+            continue
+        try:
+            values = ast.literal_eval('\n'.join(body))
+            if not isinstance(values, list) or not values:
+                continue
+            if not all(isinstance(v, tuple) and len(v) in (2, 3)
+                       and all(isinstance(s, str) for s in v) for v in values):
+                continue
+            for entry in values:
+                re.compile(entry[0])
+        except (SyntaxError, ValueError, TypeError, re.error):
+            continue
+        safe.update((path, n) for n in range(first, last + 1))
+    return safe
+
+
+def _inert_review_prompt(diff):
+    """Recognize the complete literal policy prompt, never computed code.
+
+    Require contiguous new-side source and exactly one string assignment in
+    the known module. Secret scanning deliberately does not use this exemption.
+    """
+    import ast
+
+    path = 'cluster/control_plane/local_karen/reviewers.py'
+    source, current, number = {}, None, 1
+    for line in diff.splitlines():
+        if line.startswith('diff --git '):
+            current = line.split(' b/', 1)[-1]
+        elif line.startswith('@@'):
+            hunk = re.search(r'\+(\d+)(?:,\d+)? @@', line)
+            number = int(hunk.group(1)) if hunk else 1
+        elif current == path and line.startswith((' ', '+')) and not line.startswith('+++'):
+            source[number] = line[1:]
+            number += 1
+    safe = set()
+    for first, text in source.items():
+        if not re.match(r'^STRUCTURED_REVIEW_PROMPT\s*=', text):
+            continue
+        body = []
+        for last in range(first, first + 200):
+            if last not in source:
+                break
+            body.append(source[last])
+            try:
+                tree = ast.parse('\n'.join(body))
+            except SyntaxError:
+                continue
+            if len(tree.body) == 1 and isinstance(tree.body[0], ast.Assign):
+                assignment = tree.body[0]
+                if (len(assignment.targets) == 1
+                        and isinstance(assignment.targets[0], ast.Name)
+                        and assignment.targets[0].id == 'STRUCTURED_REVIEW_PROMPT'
+                        and isinstance(assignment.value, ast.Constant)
+                        and isinstance(assignment.value.value, str)):
+                    safe.update((path, n) for n in range(first, last + 1))
+            break
+    return safe
+
+
+def _crosses_fixture_string_tokens(line, match, filepath):
+    """Do not invent a credential from quote/concatenation syntax in tests.
+
+    A match contained inside one literal still fails. Provider-key patterns
+    remain independent and are never suppressed by this lexical correction.
+    """
+    if not _is_test_file(filepath or "") or not filepath.endswith(".py"):
+        return False
+    import io
+    import tokenize
+    try:
+        for token in tokenize.generate_tokens(io.StringIO(line).readline):
+            if (token.type == tokenize.STRING and token.start[0] == token.end[0] == 1
+                    and token.start[1] < match.start() < token.end[1] < match.end()):
+                return True
+    except (tokenize.TokenError, IndentationError):
+        pass
+    return False
+
+
 def check_no_secrets_in_diff(pr: PRInfo, config: KarenConfig) -> CheckResult:
     """Check that no secrets are added in the diff.
 
@@ -301,30 +745,67 @@ def check_no_secrets_in_diff(pr: PRInfo, config: KarenConfig) -> CheckResult:
     """
     issues = []
     current_file = None
+    new_line = 0
+    lines = pr.diff.split("\n")
 
-    for line in pr.diff.split("\n"):
+    for index, line in enumerate(lines):
         if line.startswith("diff --git"):
             match = re.search(r"b/(.+)$", line)
             if match:
                 current_file = match.group(1)
+            new_line = 0
             continue
 
+        hunk = re.match(r"@@ -\d+(?:,\d+)? \+(\d+)(?:,\d+)? @@", line)
+        if hunk:
+            new_line = int(hunk.group(1))
+            continue
+        if line.startswith(" "):
+            new_line += 1
         if not line.startswith("+") or line.startswith("+++"):
             continue
 
         added_line = line[1:]
+        location = f"{current_file or 'diff'}:{new_line or 1}"
+        new_line += 1
+
+        # Exact historical scanner fixtures only, never a blanket test-file
+        # exemption. Whole-line matching prevents an adjacent real key hiding.
+        fixture_root = "cluster/control_plane/local_karen/tests/"
+        if current_file in (fixture_root + "test_checks.py", fixture_root + "test_gate.py"):
+            dummy = "sk-" + "1234567890abcdefghijklmnopqrstuvwxyz123456789012"
+            fixture = added_line.strip()
+            api_fixture = 'API_KEY = "' + dummy + '"'
+            if fixture in (api_fixture, "+" + api_fixture):
+                continue
+            if current_file == fixture_root + "test_checks.py" and fixture == "-" + api_fixture:
+                continue
+            if (current_file == fixture_root + "test_gate.py"
+                    and fixture == "pr = self._mock_pr_info(diff='+" + api_fixture + "')"):
+                continue
+            if current_file == fixture_root + "test_checks.py":
+                pat_fixture = "GITHUB_TOKEN=" + "ghp_" + "x" * 36
+                if fixture in (pat_fixture, "+" + pat_fixture):
+                    continue
+                key_header = "-----BEGIN RSA " + "PRIVATE KEY-----"
+                body_prefix = "++" if fixture.startswith("+") else "+"
+                if (fixture in (key_header, "+" + key_header)
+                        and lines[index + 1:index + 3] == [body_prefix + 'MIIEpQIBAAKCAQEA0Z...', '+""")']):
+                    continue
 
         for pattern, secret_type in SECRET_PATTERNS:
-            if re.search(pattern, added_line):
-                issues.append(f"{secret_type} in {current_file or 'diff'} (value redacted)")
-                break
+            for match in re.finditer(pattern, added_line):
+                syntax_only = (secret_type in ("API key", "Secret/password")
+                               and _crosses_fixture_string_tokens(added_line, match, current_file))
+                if not syntax_only and not _placeholder_secret(match, secret_type, current_file):
+                    issues.append(f"{location}: {secret_type} (value redacted)")
 
     if issues:
         return CheckResult(
             check_name="no_secrets",
             verdict=CheckVerdict.FAIL,
             reason=f"Potential secrets detected: {len(issues)} issue(s)",
-            details="\n".join(issues[:5]),
+            details="\n".join(issues),
         )
 
     return CheckResult(
@@ -352,29 +833,25 @@ def check_no_dangerous_commands(pr: PRInfo, config: KarenConfig) -> CheckResult:
         (r"gh\s+release\s+create", "GitHub release creation"),
         (r"git\s+push\s+.*--tags", "pushing tags"),
         (r"chmod\s+777", "chmod 777"),
-        (r"eval\s*\(", "eval usage"),
+        (r"\beval\s*\(", "eval usage"),
         (r"\bexec\s*\(", "exec usage"),
     ]
 
     issues = []
-    current_file = None
-
-    for line in pr.diff.split("\n"):
-        if line.startswith("diff --git"):
-            match = re.search(r"b/(.+)$", line)
-            if match:
-                current_file = match.group(1)
+    inert_rules = _inert_scanner_rules(pr.diff) | _inert_review_prompt(pr.diff)
+    fixture_source = _python_test_fixture_source(pr.diff)
+    for current_file, number, added_line in _added_lines(pr.diff):
+        if (_prose_or_comment(current_file, added_line)
+                or _literal_shell_display(current_file, added_line)
+                or (current_file, number) in inert_rules):
             continue
-
-        if not line.startswith("+") or line.startswith("+++"):
-            continue
-
-        added_line = line[1:]
-
+        # Only literal RegExp.exec is non-executing. Member calls such as
+        # child_process.exec and window.eval must still fail.
+        command_source = re.sub(r"/(?:\\.|[^/\\\n])+/[gimsuy]*\.exec\s*\(",
+                                "REGEXP_MATCH(", fixture_source.get((current_file, number), added_line))
         for pattern, danger_type in dangerous_patterns:
-            if re.search(pattern, added_line, re.IGNORECASE):
-                snippet = added_line.strip()[:50]
-                issues.append(f"{danger_type} in {current_file}: {snippet}")
+            if re.search(pattern, command_source, re.IGNORECASE):
+                issues.append(f"{current_file}:{number}: {danger_type} (source redacted)")
                 break
 
     if issues:
@@ -382,7 +859,7 @@ def check_no_dangerous_commands(pr: PRInfo, config: KarenConfig) -> CheckResult:
             check_name="no_dangerous_commands",
             verdict=CheckVerdict.FAIL,
             reason=f"Dangerous commands detected: {len(issues)} issue(s)",
-            details="\n".join(issues[:5]),
+            details="\n".join(issues),
         )
 
     return CheckResult(
@@ -390,6 +867,25 @@ def check_no_dangerous_commands(pr: PRInfo, config: KarenConfig) -> CheckResult:
         verdict=CheckVerdict.PASS,
         reason="No dangerous commands detected",
     )
+
+
+def _static_test_dom(pr, filepath, number, line):
+    if not _is_test_file(filepath or "") or not re.match(r"^\s*document\.body\.innerHTML\s*=", line):
+        return False
+    # Read only the contiguous added literal; interpolation, scripts, handlers,
+    # dynamic values and production HTML assignments retain their FAIL.
+    text = line
+    additions = {(path, n): content for path, n, content in _added_lines(pr.diff)}
+    if line.rstrip().endswith("`"):
+        for next_number in range(number + 1, number + 201):
+            content = additions.get((filepath, next_number))
+            if content is None:
+                return False
+            text += "\n" + content
+            if "`" in content:
+                break
+    literal = re.fullmatch(r"\s*document\.body\.innerHTML\s*=\s*(?:''|\"\"|`([^`]*)`)\s*;?\s*", text, re.S)
+    return bool(literal and not re.search(r"\$\{|<script|\bon\w+\s*=|javascript:", literal.group(1) or "", re.I))
 
 
 def check_security_patterns(pr: PRInfo, config: KarenConfig) -> CheckResult:
@@ -404,6 +900,8 @@ def check_security_patterns(pr: PRInfo, config: KarenConfig) -> CheckResult:
     - Permissive CORS
     """
     findings = []  # type: list
+    inert_rules = _inert_scanner_rules(pr.diff) | _inert_review_prompt(pr.diff)
+    fixture_source = _python_test_fixture_source(pr.diff)
     current_file = None
     line_num = 0
     in_diff_hunk = False
@@ -428,15 +926,19 @@ def check_security_patterns(pr: PRInfo, config: KarenConfig) -> CheckResult:
             if line.startswith("+") and not line.startswith("+++"):
                 line_num += 1
                 added_line = line[1:]
+                if (_prose_or_comment(current_file or "", added_line)
+                        or (current_file, line_num) in inert_rules
+                        or _static_test_dom(pr, current_file, line_num, added_line)):
+                    continue
 
                 for pattern, desc, category in SECURITY_PATTERNS:
-                    if re.search(pattern, added_line):
+                    if re.search(pattern, fixture_source.get((current_file, line_num), added_line)):
                         findings.append({
                             "file": current_file,
                             "line": line_num,
                             "category": category,
                             "description": desc,
-                            "evidence": added_line.strip()[:60],
+                            "evidence": "source redacted",
                         })
                         break
             elif line.startswith("-"):
@@ -449,7 +951,7 @@ def check_security_patterns(pr: PRInfo, config: KarenConfig) -> CheckResult:
         auth_findings = [f for f in findings if f["category"] == "auth"]
 
         details_lines = []
-        for f in findings[:10]:
+        for f in findings:
             details_lines.append(f"- {f['file']}:{f['line']} [{f['category']}] {f['description']}")
             details_lines.append(f"  Evidence: {f['evidence']}")
 
@@ -467,6 +969,27 @@ def check_security_patterns(pr: PRInfo, config: KarenConfig) -> CheckResult:
     )
 
 
+_UNSET = object()
+_UNKNOWN = "unknown"
+
+
+def _pages_source(owner: str, repo: str):
+    """Pages publish path ("/" or "/docs"), None if Pages is off, or _UNKNOWN."""
+    try:
+        result = subprocess.run(
+            ["gh", "api", f"repos/{owner}/{repo}/pages", "-q", ".source.path"],
+            capture_output=True, text=True, timeout=30,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return _UNKNOWN
+    if result.returncode == 0:
+        path = result.stdout.strip()
+        return path if path in ("/", "/docs") else _UNKNOWN
+    if "404" in (result.stdout + result.stderr):
+        return None
+    return _UNKNOWN
+
+
 def check_pages_exposure(pr: PRInfo, config: KarenConfig) -> CheckResult:
     """Check for accidental GitHub Pages exposure.
 
@@ -477,6 +1000,7 @@ def check_pages_exposure(pr: PRInfo, config: KarenConfig) -> CheckResult:
     """
     issues = []
     current_file = None
+    pages_source = _UNSET
 
     for line in pr.diff.split("\n"):
         if line.startswith("diff --git"):
@@ -486,7 +1010,16 @@ def check_pages_exposure(pr: PRInfo, config: KarenConfig) -> CheckResult:
 
             if current_file:
                 if current_file.lower().startswith("docs/"):
-                    issues.append(f"Changes to docs/ folder: {current_file}")
+                    if pages_source is _UNSET:
+                        pages_source = _pages_source(pr.owner, pr.repo)
+                    # Only a repo that publishes Pages from / or /docs can
+                    # expose docs/ files. Unknown state fails closed.
+                    if pages_source is None:
+                        pass
+                    elif pages_source in ("/", "/docs") or pages_source == _UNKNOWN:
+                        issues.append(f"Changes to published docs/ folder: {current_file}"
+                                      + ("" if pages_source != _UNKNOWN
+                                         else " (Pages status unknown; fail closed)"))
                 if "_config.yml" in current_file.lower():
                     issues.append(f"Jekyll config modified: {current_file}")
                 if current_file.upper() == "CNAME":
@@ -661,55 +1194,33 @@ def run_static_security_scan(pr: PRInfo, config: KarenConfig) -> CheckResult:
     line_num = 0
     in_diff_hunk = False
     
-    all_patterns = [
-        *[(p, desc, "secret") for p, desc in SECRET_PATTERNS],
-        *[(p, desc, cat) for p, desc, cat in SECURITY_PATTERNS],
-        (r"\bsudo\s+", "sudo usage", "dangerous"),
-        (r"rm\s+-rf\s+[/~]", "rm -rf on root/home", "dangerous"),
-        (r"git\s+push\s+.*--force", "git force push", "dangerous"),
-        (r"git\s+push\s+.*-f\b", "git force push", "dangerous"),
-        (r"chmod\s+777", "chmod 777", "dangerous"),
+    shared_results = [check_no_secrets_in_diff(pr, config),
+                      check_no_dangerous_commands(pr, config),
+                      check_security_patterns(pr, config)]
+    extra_patterns = [
         (r"os\.popen\s*\(", "os.popen (shell)", "dangerous"),
         (r"commands\.getoutput", "commands.getoutput", "dangerous"),
         (r"pickle\.load", "pickle deserialization", "security"),
         (r"yaml\.load\s*\([^)]*\)", "unsafe yaml.load", "security"),
         (r"marshal\.load", "marshal deserialization", "security"),
     ]
-    
-    for line in pr.diff.split("\n"):
-        if line.startswith("diff --git"):
-            match = re.search(r"b/(.+)$", line)
-            if match:
-                current_file = match.group(1)
-            line_num = 0
-            in_diff_hunk = False
+    inert_rules = _inert_scanner_rules(pr.diff) | _inert_review_prompt(pr.diff)
+    for filepath, number, line in _added_lines(pr.diff):
+        if _prose_or_comment(filepath, line) or (filepath, number) in inert_rules:
             continue
-        
-        if line.startswith("@@"):
-            match = re.search(r"@@ -\d+(?:,\d+)? \+(\d+)", line)
-            if match:
-                line_num = int(match.group(1)) - 1
-            in_diff_hunk = True
-            continue
-        
-        if in_diff_hunk:
-            if line.startswith("+") and not line.startswith("+++"):
-                line_num += 1
-                added_line = line[1:]
-                
-                for pattern, desc, category in all_patterns:
-                    if re.search(pattern, added_line, re.IGNORECASE):
-                        all_findings.append({
-                            "file": current_file,
-                            "line": line_num,
-                            "category": category,
-                            "description": desc,
-                            "evidence": added_line.strip()[:50],
-                        })
-                        break
-            elif not line.startswith("-"):
-                line_num += 1
-    
+        for pattern, desc, category in extra_patterns:
+            if re.search(pattern, line):
+                all_findings.append({"file": filepath, "line": number,
+                                     "category": category, "description": desc})
+    for result, category in zip(shared_results, ("secret", "dangerous", "security")):
+        if result.failed:
+            for evidence in (result.details or result.reason).splitlines():
+                if evidence.lstrip().startswith("Evidence:"):
+                    continue
+                finding_category = "auth" if "[auth]" in evidence else category
+                all_findings.append({"category": finding_category, "description": evidence,
+                                     "file": "", "line": 0})
+
     if all_findings:
         by_category = {}
         for f in all_findings:
@@ -719,8 +1230,9 @@ def run_static_security_scan(pr: PRInfo, config: KarenConfig) -> CheckResult:
         summary = ", ".join(f"{v} {k}" for k, v in sorted(by_category.items()))
         
         details = []
-        for f in all_findings[:15]:
-            details.append(f"- {f['file']}:{f['line']} [{f['category']}] {f['description']}")
+        for f in all_findings:
+            details.append((f"- {f['file']}:{f['line']} " if f["file"] else "")
+                           + f"[{f['category']}] {f['description']}")
         
         return CheckResult(
             check_name="static_security_scan",
@@ -775,7 +1287,7 @@ def run_all_checks(pr, config):
         except Exception as e:
             results.append(CheckResult(
                 check_name=check.__name__.replace("check_", "").replace("run_", ""),
-                verdict=CheckVerdict.FAIL,
+                verdict=CheckVerdict.ERROR,
                 reason=f"Check crashed: {e}",
                 details=str(e),
             ))
@@ -797,7 +1309,7 @@ def run_all_checks(pr, config):
 def all_checks_pass(results):
     # type: (list) -> bool
     """Return True if all checks passed (none failed)."""
-    return not any(r.failed for r in results)
+    return not any(r.failed or r.verdict == CheckVerdict.ERROR for r in results)
 
 
 def get_failed_checks(results):

@@ -19,7 +19,7 @@ jobs:
         with:
           python-version: '3.9'
       - run: python -m pip install -r cluster/requirements.txt pytest
-      - name: Install nats-server
+      - name: Install temporary test broker
         run: |
           set -euo pipefail
           NAT_DIR="${RUNNER_TEMP}/nats-bin"

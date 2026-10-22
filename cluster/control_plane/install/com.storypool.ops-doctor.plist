@@ -20,6 +20,7 @@
 		<string>/usr/bin/python3</string>
 		<string>-m</string>
 		<string>cluster.control_plane.ops_doctor</string>
+		<string>--findings-only</string>
 	</array>
 	<key>RunAtLoad</key>
 	<false/>

@@ -133,7 +133,7 @@ class TestE2EWithFakeGH(unittest.TestCase):
         env = os.environ.copy()
         env["PATH"] = f"{self.tmpdir}:{env.get('PATH', '')}"
 
-        def mock_run_gh(args, timeout=30):
+        def mock_run_gh(args, timeout=30, allowed_codes=(0,)):
             result = subprocess.run(
                 [str(self.fake_gh)] + args,
                 capture_output=True,
@@ -141,7 +141,7 @@ class TestE2EWithFakeGH(unittest.TestCase):
                 timeout=timeout,
                 env=env,
             )
-            if result.returncode != 0:
+            if result.returncode not in allowed_codes:
                 from cluster.control_plane.local_karen.github_client import GitHubError
                 raise GitHubError(f"gh {' '.join(args)} failed: {result.stderr}")
             return result.stdout

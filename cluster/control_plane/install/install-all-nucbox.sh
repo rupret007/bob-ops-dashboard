@@ -105,6 +105,7 @@ clear_pycache() {
 }
 
 install_shadow() {
+    if PYTHONPATH="$REPO_ROOT" python3 -m cluster.control_plane.health_install --is-authority; then return 0; fi
     log_header "Installing Shadow Runner"
 
     local log_dir="$HOME/.local/share/storypool/shadow"
@@ -212,6 +213,15 @@ EOF
     log_info "Conductor installed (hourly, shadow mode)"
 }
 
+install_guardian() {
+    if PYTHONPATH="$REPO_ROOT" python3 -m cluster.control_plane.health_install --is-authority; then return 0; fi
+    mkdir -p "$SYSTEMD_DIR" "$HOME/.local/share/storypool"
+    sed -e "s|__REPO_PATH__|$REPO_ROOT|g" "$SCRIPT_DIR/storypool-guardian.service" > "$SYSTEMD_DIR/storypool-guardian.service"
+    cp "$SCRIPT_DIR/storypool-guardian.timer" "$SYSTEMD_DIR/storypool-guardian.timer"
+    systemctl --user daemon-reload
+    systemctl --user enable --now storypool-guardian.timer
+}
+
 install_selfupdate() {
     log_header "Installing Self-Update Timer"
 
@@ -237,6 +247,7 @@ install_selfupdate() {
 }
 
 install_watchdog() {
+    if PYTHONPATH="$REPO_ROOT" python3 -m cluster.control_plane.health_install --is-authority; then return 0; fi
     log_header "Installing Watchdog (self-healing)"
 
     mkdir -p "$SYSTEMD_DIR"
@@ -261,6 +272,7 @@ install_watchdog() {
 }
 
 install_ops_doctor() {
+    if PYTHONPATH="$REPO_ROOT" python3 -m cluster.control_plane.health_install --is-authority; then return 0; fi
     mkdir -p "$SYSTEMD_DIR" "$HOME/.local/share/storypool/doctor"
     sed "s|__REPO_PATH__|$REPO_ROOT|g" "$SCRIPT_DIR/storypool-ops-doctor.service" > "$SYSTEMD_DIR/storypool-ops-doctor.service"
     cp "$SCRIPT_DIR/storypool-ops-doctor.timer" "$SYSTEMD_DIR/storypool-ops-doctor.timer"
@@ -364,7 +376,7 @@ run_self_check() {
 
     local all_pass=true
 
-    if systemctl --user is-active storypool-shadow.timer &>/dev/null; then
+    if PYTHONPATH="$REPO_ROOT" python3 -m cluster.control_plane.health_install --is-authority || systemctl --user is-active storypool-shadow.timer &>/dev/null; then
         log_pass "shadow runner: timer active"
         RESULTS+=("shadow: PASS")
     else
@@ -458,7 +470,11 @@ run_self_check() {
 uninstall_all() {
     log_header "Uninstalling All Components"
 
-    for unit in storypool-ops-doctor storypool-shadow storypool-dispatch storypool-conductor storypool-selfupdate storypool-karen-poller; do
+    systemctl --user disable --now storypool-codex-quota.timer 2>/dev/null || true
+    systemctl --user stop storypool-codex-quota.service 2>/dev/null || true
+    # Preserve the observer definitions and private observations for recovery.
+
+    for unit in storypool-guardian storypool-ops-doctor storypool-shadow storypool-dispatch storypool-conductor storypool-selfupdate storypool-karen-poller; do
         if systemctl --user is-active "$unit.timer" &>/dev/null; then
             log_info "Stopping $unit.timer..."
             systemctl --user stop "$unit.timer" 2>/dev/null || true
@@ -508,11 +524,14 @@ main() {
     install_shadow
     install_dispatcher
     install_conductor
+    install_guardian
     install_selfupdate
     install_watchdog
     install_ops_doctor
     install_dashboard
     install_karen_cli
+    PYTHONPATH="$REPO_ROOT" python3 -m cluster.control_plane.codex_quota_install --machine nucbox
+    PYTHONPATH="$REPO_ROOT" python3 -m cluster.control_plane.health_install --machine nucbox
     run_self_check
 
     echo ""

@@ -1,0 +1,7 @@
+[Unit]
+Description=Recover disabled or stopped StoryPool timers
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=2min
+[Install]
+WantedBy=timers.target

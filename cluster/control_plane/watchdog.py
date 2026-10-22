@@ -22,10 +22,16 @@ import re
 import shutil
 import subprocess
 import time
+from collections import deque
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field, asdict
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from typing import Optional, List, Dict, Any
+
+from .github_budget import GitHubDeferred
+from .github_reads import GitHubReadError
+from .health_state import authoritative, serialized_recovery
 
 LOG_DIR = Path(
     os.environ.get("STORYPOOL_LOG_DIR", "~/.local/share/storypool")
@@ -66,6 +72,7 @@ class HealthCheck:
     can_repair: bool = True
     repaired: bool = False
     repair_action: str = ""
+    execution_error: bool = False
     
     def to_dict(self) -> dict:
         return asdict(self)
@@ -101,10 +108,11 @@ def _get_machine() -> str:
     return os.environ.get("STORYPOOL_MACHINE", "mini" if os.uname().sysname == "Darwin" else "nucbox")
 
 
-def _write_watchdog_log(entry: dict) -> None:
+def _write_watchdog_log(entry: dict, followup: bool = False) -> None:
     """Append entry to watchdog log."""
     LOG_DIR.mkdir(parents=True, exist_ok=True)
-    with open(WATCHDOG_LOG, "a") as f:
+    log_path = LOG_DIR / "main-ci.jsonl" if followup else WATCHDOG_LOG
+    with open(log_path, "a") as f:
         f.write(json.dumps(entry) + "\n")
 
 
@@ -138,11 +146,9 @@ def _escalate_to_jeff(issue: str, details: str) -> None:
     logger.warning("Escalated to NEEDS_JEFF.md: %s", issue)
 
 
-# Set private peer endpoints in the service environment; absent means no sync.
-PEER_URLS = {
-    "mini": os.environ.get("STORYPOOL_MINI_URL", ""),
-    "nucbox": os.environ.get("STORYPOOL_NUCBOX_URL", ""),
-}
+from .peer_endpoints import PeerURLs, PeerUnavailable
+
+PEER_URLS = PeerURLs()
 
 
 def _dashboard_alive(timeout: float = 3.0) -> bool:
@@ -156,6 +162,56 @@ def _dashboard_alive(timeout: float = 3.0) -> bool:
         return False
 
 
+def store_peer_engine(peer: str, data: dict) -> bool:
+    """Keep the peer's self-reported running jobs and LLM usage for the local dashboard.
+
+    Only the peer's own (source=local) section is kept, so data never echoes back.
+    """
+    jobs = (data.get("jobs") or {}).get(peer) if isinstance(data, dict) else None
+    if not isinstance(jobs, dict) or jobs.get("source") != "local":
+        return False
+    snapshot = {"synced_at": datetime.now(timezone.utc).isoformat(), "machine": peer,
+                "peer_timestamp": data.get("timestamp"), "control": data.get("control", {}),
+                "guardian": data.get("machines", {}).get(peer, {}).get("guardian", {}),
+                "jobs": dict(jobs, running=list(jobs.get("running") or [])[:50]),
+                "llm_local": [g for g in (data.get("llm_local") or []) if isinstance(g, dict)][:20]}
+    resources = data.get("resources")
+    if (isinstance(resources, dict) and resources.get("machine") == peer
+            and resources.get("source") == "local"):
+        snapshot["resources"] = resources
+    flow = data.get('flow_local')
+    if isinstance(flow, dict) and flow.get('machine') == peer:
+        snapshot['flow_local'] = {key: flow.get(key) for key in (
+            'machine', 'last_verdict_at', 'last_success_at', 'stale_alerts')}
+    out = LOG_DIR / "machines" / peer / "engine.json"
+    out.parent.mkdir(parents=True, exist_ok=True)
+    tmp = out.with_suffix(".json.tmp")
+    tmp.write_text(json.dumps(snapshot))
+    tmp.replace(out)
+    return True
+
+
+def _peer_sync_status(peer, ok, failure_kind=None):
+    path = LOG_DIR / 'machines' / peer / 'sync-status.json'
+    path.parent.mkdir(parents=True, exist_ok=True)
+    value = {'timestamp': _now_iso(), 'ok': ok,
+             'detail': 'Peer sync verified' if ok else
+                       'Peer sync failed; check private endpoint configuration and connectivity'}
+    if failure_kind:
+        value['failure_kind'] = failure_kind
+        action = {
+            'address-unavailable': 'peer address unavailable; configure private peers.json',
+            'discovery-unavailable': 'check Tailscale CLI access or configure private peers.json',
+            'identity-missing': 'peer hostname not recognized; configure private peers.json',
+            'identity-ambiguous': 'multiple matching hosts; select one peer in private peers.json',
+        }.get(failure_kind)
+        if action:
+            value['detail'] += '; ' + action
+    temporary = path.with_suffix('.tmp')
+    temporary.write_text(json.dumps(value))
+    temporary.replace(path)
+
+
 def sync_peer_health(machine: str) -> bool:
     """Copy the peer's self-reported health (over Tailscale) into machines/<peer>/watchdog.log.
 
@@ -163,14 +219,17 @@ def sync_peer_health(machine: str) -> bool:
     """
     import urllib.request
     peer = "nucbox" if machine == "mini" else "mini"
-    peer_url = PEER_URLS.get(peer, "").strip().rstrip("/")
-    if not peer_url:
-        return False
     try:
+        peer_url = PEER_URLS[peer].strip().rstrip("/")
+        if not peer_url:
+            _peer_sync_status(peer, False)
+            return False
         with urllib.request.urlopen(peer_url + "/api/engine", timeout=5) as resp:
             data = json.loads(resp.read().decode("utf-8"))
+        store_peer_engine(peer, data)
         info = data.get("machines", {}).get(peer, {})
         if not info.get("timestamp"):
+            _peer_sync_status(peer, False)
             return False
         row = {"timestamp": info["timestamp"], "machine": peer, "source": "peer-sync",
                "checks": [{"name": "peer_reported_health", "passed": info.get("state") != "red",
@@ -179,9 +238,11 @@ def sync_peer_health(machine: str) -> bool:
         out.parent.mkdir(parents=True, exist_ok=True)
         with out.open("a") as f:
             f.write(json.dumps(row) + "\n")
+        _peer_sync_status(peer, True)
         return True
     except Exception as exc:
-        logger.info("peer health sync for %s skipped: %s", peer, exc)
+        _peer_sync_status(peer, False, exc.kind if isinstance(exc, PeerUnavailable) else "transport-or-response")
+        logger.warning("peer health sync for %s failed; check private endpoint configuration and connectivity", peer)
         return False
 
 
@@ -255,7 +316,17 @@ def check_tracebacks(service: str, log_path: Path) -> HealthCheck:
         traceback_count = 0
         
         with open(log_path, "r") as f:
-            lines = f.readlines()[-500:]
+            # Quiet services can retain historical, untimestamped stderr for days.
+            # An unchanged file cannot contain a new failure in this hour. Fresh
+            # or future-dated logs still use the existing conservative threshold.
+            if os.fstat(f.fileno()).st_mtime < cutoff.timestamp():
+                return HealthCheck(
+                    name=f"{service}_tracebacks",
+                    passed=True,
+                    message="0 new tracebacks: log unchanged for more than one hour",
+                    can_repair=False,
+                )
+            lines = deque(f, maxlen=500)
             for line in lines:
                 if "Traceback" in line or "Error:" in line or "Exception:" in line:
                     traceback_count += 1
@@ -358,20 +429,8 @@ def check_codex_in_path() -> HealthCheck:
 def check_labels_exist(repo: str) -> HealthCheck:
     """Check if required labels exist in a repo."""
     try:
-        result = subprocess.run(
-            ["gh", "label", "list", "--repo", repo, "--json", "name"],
-            capture_output=True,
-            text=True,
-            timeout=30,
-        )
-        if result.returncode != 0:
-            return HealthCheck(
-                name=f"labels_{repo.replace('/', '_')}",
-                passed=True,
-                message=f"Could not list labels: {result.stderr[:100]}",
-            )
-        
-        labels = json.loads(result.stdout)
+        from .github_reads import labels as read_labels
+        labels = read_labels(repo)
         label_names = {lbl.get("name", "") for lbl in labels}
         
         missing = [lbl for lbl in REQUIRED_LABELS if lbl not in label_names]
@@ -390,11 +449,15 @@ def check_labels_exist(repo: str) -> HealthCheck:
             passed=True,
             message="All required labels exist",
         )
-    except (subprocess.SubprocessError, json.JSONDecodeError) as e:
+    except GitHubDeferred:
+        logger.warning("GitHub label check deferred by API budget/backoff")
+        return HealthCheck(name=f"labels_{repo.replace('/', '_')}", passed=True,
+                           can_repair=False, message="WARNING: label check deferred by GitHub API budget; labels unverified")
+    except (OSError, subprocess.SubprocessError, json.JSONDecodeError, GitHubReadError):
         return HealthCheck(
             name=f"labels_{repo.replace('/', '_')}",
-            passed=True,
-            message=f"Could not check labels: {e}",
+            passed=False, can_repair=False, execution_error=True,
+            message="Could not execute label check",
         )
 
 
@@ -417,8 +480,8 @@ def check_head_lag() -> HealthCheck:
     if lag_info.get("error"):
         return HealthCheck(
             name="head_lag",
-            passed=True,
-            message=f"Could not check: {lag_info['error']}",
+            passed=False, can_repair=False, execution_error=True,
+            message="Could not execute install head check",
         )
     
     if not lag_info.get("lagging"):
@@ -480,6 +543,9 @@ def check_install_stale() -> HealthCheck:
             text=True,
             timeout=30,
         )
+        if result.returncode:
+            return HealthCheck('install_stale', False, 'Install fetch check failed',
+                               can_repair=False, execution_error=True)
         
         result = subprocess.run(
             ["git", "rev-list", "--count", "HEAD..origin/cursor/storypool-all-in-one-47c7"],
@@ -500,19 +566,23 @@ def check_install_stale() -> HealthCheck:
                     repair_action="self_update",
                 )
         
+        if result.returncode:
+            return HealthCheck('install_stale', False, 'Install revision check failed',
+                               can_repair=False, execution_error=True)
         return HealthCheck(
             name="install_stale",
             passed=True,
             message="Install is up to date",
         )
-    except (subprocess.SubprocessError, ValueError) as e:
+    except (OSError, subprocess.SubprocessError, ValueError):
         return HealthCheck(
             name="install_stale",
-            passed=True,
-            message=f"Could not check: {e}",
+            passed=False, can_repair=False, execution_error=True,
+            message="Could not execute install revision check",
         )
 
 
+@serialized_recovery
 def repair_restart_service(service: str, machine: str) -> bool:
     """Restart a stuck service."""
     try:
@@ -521,27 +591,28 @@ def repair_restart_service(service: str, machine: str) -> bool:
             if service == "poller":
                 label = "com.storypool.karen-poller"
             
-            subprocess.run(
+            result = subprocess.run(
                 ["launchctl", "kickstart", "-k", f"gui/{os.getuid()}/{label}"],
                 capture_output=True,
                 timeout=30,
             )
             logger.info("Restarted %s via launchctl", service)
-            return True
+            return result.returncode == 0
         else:
             unit = f"storypool-{service}"
-            subprocess.run(
+            result = subprocess.run(
                 ["systemctl", "--user", "restart", f"{unit}.service"],
                 capture_output=True,
                 timeout=30,
             )
             logger.info("Restarted %s via systemctl", service)
-            return True
-    except subprocess.SubprocessError as e:
+            return result.returncode == 0
+    except (OSError, subprocess.SubprocessError) as e:
         logger.error("Failed to restart %s: %s", service, e)
         return False
 
 
+@serialized_recovery
 def repair_create_labels(repo: str) -> bool:
     """Create missing labels in a repo."""
     label_specs = {
@@ -569,6 +640,7 @@ def repair_create_labels(repo: str) -> bool:
     return created > 0
 
 
+@serialized_recovery
 def repair_self_update(machine: str) -> bool:
     """Trigger self-update."""
     try:
@@ -583,7 +655,7 @@ def repair_self_update(machine: str) -> bool:
         return False
 
 
-def run_watchdog(machine: Optional[str] = None) -> WatchdogResult:
+def run_watchdog(machine: Optional[str] = None, check_only: bool = False) -> WatchdogResult:
     """Run all watchdog checks and attempt repairs."""
     if machine is None:
         machine = _get_machine()
@@ -593,25 +665,37 @@ def run_watchdog(machine: Optional[str] = None) -> WatchdogResult:
         machine=machine,
     )
     
+    from .node_control import is_draining
+    if is_draining(machine):
+        result.checks.append(HealthCheck(name="maintenance", passed=True,
+                            message="Operator maintenance; repairs suspended", can_repair=False))
+        _write_watchdog_log(result.to_dict())
+        return result
+
+    from .watchdog_check import run_check
+    tasks = []
     for service, log_path in SERVICE_LOG_FILES.items():
         if service == "poller" and machine == "nucbox":
             continue
         
-        stuck_check = check_service_stuck(service, log_path)
-        result.checks.append(stuck_check)
-        
-        traceback_check = check_tracebacks(service, log_path)
-        result.checks.append(traceback_check)
-    
-    result.checks.append(check_gh_in_path())
-    result.checks.append(check_codex_in_path())
+        tasks.extend([(check_service_stuck, service, log_path),
+                      (check_tracebacks, service, log_path)])
+    tasks.extend([(check_gh_in_path,), (check_codex_in_path,)])
     
     sample_repos = ["rupret007/webjam", "rupret007/bob-ops-dashboard"]
     for repo in sample_repos[:1]:
-        result.checks.append(check_labels_exist(repo))
+        tasks.append((check_labels_exist, repo))
     
-    result.checks.append(check_install_stale())
-    result.checks.append(check_head_lag())
+    tasks.extend([(check_install_stale,), (check_head_lag,)])
+    # Four bounded subprocesses at a time. Repairs stay sequential and outside
+    # the pool so a timed-out check cannot later perform a repair.
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        pending = [pool.submit(run_check, *task) for task in tasks]
+        result.checks.extend(future.result() for future in pending)
+
+    if check_only:
+        _write_watchdog_log(result.to_dict())
+        return result
     
     for check in result.checks:
         if not check.passed:
@@ -651,11 +735,27 @@ def main() -> int:
     parser.add_argument("--machine", choices=["mini", "nucbox"], default=None)
     parser.add_argument("--json", action="store_true", help="Output as JSON")
     parser.add_argument("--check-only", action="store_true", help="Don't attempt repairs")
+    parser.add_argument("--findings-only", action="store_true",
+                        help="Report findings without repairs; execution errors still fail")
     
     args = parser.parse_args()
+    if authoritative() and not (args.check_only or args.findings_only):
+        return 0
     
-    result = run_watchdog(machine=args.machine)
+    check_only = args.check_only or args.findings_only
+    result = run_watchdog(machine=args.machine, check_only=check_only)
     sync_peer_health(result.machine)
+    if not check_only:
+        from .node_control import is_draining
+        if not is_draining():
+            from .main_ci import reconcile_recent
+            from .coordination import CoordinationError
+            try:
+                _write_watchdog_log({"timestamp": _now_iso(), "action": "main_ci_followup",
+                                     "results": reconcile_recent()}, followup=True)
+            except (CoordinationError, OSError, subprocess.SubprocessError, ValueError):
+                _write_watchdog_log({"timestamp": _now_iso(), "action": "main_ci_followup",
+                                     "status": "deferred"}, followup=True)
     
     if args.json:
         print(json.dumps(result.to_dict(), indent=2))
@@ -671,6 +771,10 @@ def main() -> int:
             status = "✓" if check.passed else ("⚠ REPAIRED" if check.repaired else "✗")
             print(f"  {status} {check.name}: {check.message}")
     
+    if any(c.execution_error for c in result.checks):
+        return 2
+    if args.findings_only:
+        return 0
     return 0 if all(c.passed or c.repaired for c in result.checks) else 1
 
 

@@ -1,15 +1,16 @@
 #!/usr/bin/env python3
-"""LLM-in-the-loop Conductor service for StoryPool control plane.
+"""Deterministic merge and LLM-assisted Conductor service for StoryPool control plane.
 
 Hourly orchestrator that uses a reasoning model (Codex primary, Gemini fallback)
 to propose actions, while deterministic rails validate every proposal.
 
 Each hourly tick:
 1. Build state snapshot (queue, PRs, CI, verdicts, lanes, guards, budgets, errors)
-2. Ask reasoning model to propose actions and flag anomalies
-3. Validate each proposal against deterministic rails
-4. Execute validated actions (in live mode) or log what would happen (shadow mode)
-5. Generate twice-daily digest for human review
+2. Evaluate every PR through the deterministic merge gate
+3. Ask reasoning model for optional actions and anomaly reports
+4. Validate each proposal against deterministic rails
+5. Execute validated actions (in live mode) or log what would happen (shadow mode)
+6. Generate the scheduled digest for human review
 
 LLM Provider Priority:
 - Primary: Codex CLI (codex exec, NucBox via CODEX_HOST=nuc, low effort default)
@@ -24,9 +25,8 @@ Deterministic Rails (model CANNOT override):
 - Budget caps (Codex 75% weekly, etc.)
 - No sudo, no force-push, no tags/releases, no sends
 
-Fail-safe: If model unavailable or returns invalid output:
-- Pause (no actions)
-- Write alert file
+If the model is unavailable, optional proposals pause and an alert is written.
+Deterministic merge admission continues with every safety gate enforced.
 
 Runs in shadow/dry-run mode by default; use --live to execute.
 """
@@ -34,9 +34,11 @@ Runs in shadow/dry-run mode by default; use --live to execute.
 from __future__ import annotations
 
 import json
+import math
 import os
 import re
 import subprocess
+import tempfile
 import time
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone, timedelta
@@ -44,18 +46,26 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, Optional
 
-from ..never_touch import check_merge_allowed, NEVER_TOUCH_REPOS
+from ..never_touch import check_merge_allowed, is_never_touch, NEVER_TOUCH_REPOS, guard_pr_merge
+from .coordination import ClaimClient, CoordinationError, Lease
 from .budget_tracker import BudgetTracker
-from .dispatcher import _get_open_prs, _run_gh, REPOS
+from .dispatcher import REPOS
+from . import github_reads
+from .github_budget import GitHubDeferred
+from .backlog import (get_open_prs as _get_open_prs, _run_gh,
+                      ensure_label_exists, MANUAL_READINESS_REPOS, MAX_UNDRAFTS_PER_TICK)
 from .guards import MachineGuards, mini_guards_pass, nucbox_guards_pass
+from .reporting_telemetry import machine_guard_snapshot, lane_budget_snapshot, format_budget, format_machine
 from .metrics import MetricsTracker
+from .pr_ci import ci_status_from_pr as _ci_status_from_pr
+from .release_holds import explicitly_held
 
 CONDUCTOR_LOG_DIR = Path(
     os.environ.get("STORYPOOL_CONDUCTOR_LOG_DIR", "~/.local/share/storypool/conductor")
 ).expanduser()
 
 VERDICT_DIR = Path(
-    os.environ.get("STORYPOOL_VERDICT_DIR", "~/.local/share/storypool/verdicts")
+    os.environ.get("STORYPOOL_VERDICT_DIR", "~/.local/share/karen/verdicts")
 ).expanduser()
 
 CODEX_WEEKLY_CAP_PCT = 75.0
@@ -141,6 +151,7 @@ class StateSnapshot:
     budget_summary: dict  # Dict[str, dict]
     recent_errors: list  # List[dict]
     never_touch_repos: list  # List[str]
+    improvement: dict = field(default_factory=dict)
     
     def to_dict(self) -> dict:
         return asdict(self)
@@ -178,19 +189,14 @@ class StateSnapshot:
         lines.extend([
             "",
             "## Machine Guards",
-            f"- Mini: load={self.machine_guards.get('mini', {}).get('load', '?')}, "
-            f"swap={self.machine_guards.get('mini', {}).get('swap', '?')}%, "
-            f"disk={self.machine_guards.get('mini', {}).get('disk', '?')}GB",
-            f"- NucBox: load={self.machine_guards.get('nucbox', {}).get('load', '?')}, "
-            f"lanes={self.machine_guards.get('nucbox', {}).get('lanes', '?')}/7",
+            format_machine('Mini', self.machine_guards.get('mini', {})),
+            format_machine('NucBox', self.machine_guards.get('nucbox', {})),
             "",
             "## Budget Summary",
         ])
         
         for provider, data in self.budget_summary.items():
-            pct = data.get("weekly_pct", 0)
-            cost = data.get("cost_usd", 0)
-            lines.append(f"- {provider}: ${cost:.2f} ({pct:.1f}% weekly)")
+            lines.append(format_budget(provider, data))
         
         lines.extend([
             "",
@@ -202,6 +208,11 @@ class StateSnapshot:
         
         for err in self.recent_errors[:5]:
             lines.append(f"- {err.get('timestamp', '?')}: {err.get('message', '?')[:80]}")
+
+        if self.improvement:
+            lines.extend(['', '## Measured improvement feedback',
+                          json.dumps(self.improvement, sort_keys=True),
+                          'Finish existing work first. Feedback does not authorize new actions or weaken any gate.'])
         
         return "\n".join(lines)
 
@@ -256,31 +267,10 @@ def _get_pr_details(repo: str, pr_number: int) -> Optional[dict]:
     pr = _run_gh(
         ["pr", "view", str(pr_number), "--repo", repo, "--json",
          "number,title,author,headRefOid,isDraft,url,body,files,additions,deletions,"
-         "reviewDecision,statusCheckRollup,reviews,labels,mergeStateStatus"],
+         "reviewDecision,statusCheckRollup,reviews,labels,mergeStateStatus,state"],
         default=None
     )
     return pr if isinstance(pr, dict) else None
-
-
-def _ci_status_from_pr(pr: dict) -> dict[str, str]:
-    """Extract CI status from PR statusCheckRollup."""
-    checks = pr.get("statusCheckRollup") or []
-    result = {}
-    for check in checks:
-        if not isinstance(check, dict):
-            continue
-        name = check.get("name") or check.get("context") or "unknown"
-        state = check.get("conclusion") or check.get("state") or "pending"
-        state = state.lower() if isinstance(state, str) else "pending"
-        if state in ("success", "neutral", "skipped"):
-            result[name] = "success"
-        elif state in ("failure", "error", "timed_out", "cancelled", "action_required"):
-            result[name] = "failure"
-        elif state in ("pending", "queued", "in_progress", "waiting"):
-            result[name] = "pending"
-        else:
-            result[name] = state
-    return result
 
 
 def _has_label(pr: dict, label_name: str) -> bool:
@@ -289,10 +279,65 @@ def _has_label(pr: dict, label_name: str) -> bool:
     return any(lbl.get("name") == label_name for lbl in labels if isinstance(lbl, dict))
 
 
-def _is_approved(pr: dict) -> bool:
-    """Check if PR has an approved review."""
+def _is_approved(pr: dict, verdict: Optional[dict] = None) -> bool:
+    """Karen's independent exact-head votes satisfy Jeff's merge approval rule."""
+    if verdict is not None:
+        sha = pr.get("headRefOid", "")
+        votes = verdict.get("review_results") or []
+        reviewers = {v.get("reviewer") for v in votes
+                     if isinstance(v, dict) and isinstance(v.get("reviewer"), str)
+                     and v.get("verdict") == "PASS"}
+        return bool(re.fullmatch(r"[0-9a-f]{40}", sha)
+                    and verdict.get("sha") == sha and verdict.get("_latest")
+                    and verdict.get("verdict") == "KARENPASS"
+                    and len(reviewers - {None, ""}) >= 2
+                    and all(isinstance(v, dict) and v.get("verdict") == "PASS" for v in votes))
     reviews = pr.get("reviews") or []
     return any(r.get("state", "").upper() == "APPROVED" for r in reviews if isinstance(r, dict))
+
+
+def _read_flat_verdict(root: Path, repo: str, pr_number: int, head_sha: str) -> Optional[dict]:
+    """Read trusted local Karen artifacts; LATEST is required, newest outcome wins.
+
+    Historical FAIL/PASS files remain on disk after re-review. Compare embedded
+    timestamps, never filenames or mtime. A malformed LATEST fails closed.
+    """
+    if not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", repo):
+        return None
+    prefix = f"{repo.replace('/', '_')}_{pr_number}_{head_sha[:12]}_"
+    latest = root / (prefix + "LATEST.json")
+    if not latest.is_file():
+        return None
+    candidates = []
+    latest_passed = False
+    for suffix in ("LATEST", "KARENFAIL", "KARENPASS"):
+        path = root / (prefix + suffix + ".json")
+        if not path.is_file():
+            continue
+        try:
+            v = json.loads(path.read_text())
+            if (not isinstance(v, dict) or v.get("head_sha") != head_sha
+                    or f"{v.get('owner')}/{v.get('repo')}" != repo
+                    or v.get("pr_number") != pr_number):
+                return None
+            ts = datetime.fromisoformat(v["timestamp"].replace("Z", "+00:00"))
+            if ts.tzinfo is None:
+                return None
+            passed = v.get("passed") is True or v.get("passed") == "True"
+            complete = v.get("status", "COMPLETE") == "COMPLETE"
+            if suffix == "LATEST":
+                latest_passed = passed and complete
+            normalized = {**v, "sha": head_sha, "repo": repo,
+                          "verdict": "KARENPASS" if passed and complete else "KARENFAIL",
+                          "_latest": True}
+            # On equal timestamps, a disagreement fails closed.
+            candidates.append((ts.timestamp(), not (passed and complete), suffix == "LATEST", normalized))
+        except (OSError, ValueError, KeyError, TypeError):
+            return None
+    result = max(candidates, key=lambda item: item[:3])[3] if candidates else None
+    if result and not latest_passed:
+        result["verdict"] = "KARENFAIL"
+    return result
 
 
 def _get_verdict_file(repo: str, pr_number: int, head_sha: str) -> Path:
@@ -302,9 +347,16 @@ def _get_verdict_file(repo: str, pr_number: int, head_sha: str) -> Path:
     return VERDICT_DIR / safe_repo / f"pr-{pr_number}-{head_sha[:12]}.json"
 
 
-def _read_verdict(repo: str, pr_number: int, head_sha: str) -> Optional[dict]:
+def _read_verdict(repo: str, pr_number: int, head_sha: str, root: Optional[Path] = None) -> Optional[dict]:
     """Read the Karen verdict file for a specific PR and SHA."""
-    verdict_file = _get_verdict_file(repo, pr_number, head_sha)
+    if not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", repo):
+        return None
+    root = root if root is not None else VERDICT_DIR
+    flat = _read_flat_verdict(root, repo, pr_number, head_sha)
+    prefix = f"{repo.replace('/', '_')}_{pr_number}_{head_sha[:12]}_LATEST.json"
+    if flat is not None or (root / prefix).exists():
+        return flat
+    verdict_file = root / repo.replace("/", "_") / f"pr-{pr_number}-{head_sha[:12]}.json"
     if not verdict_file.is_file():
         return None
     try:
@@ -313,7 +365,7 @@ def _read_verdict(repo: str, pr_number: int, head_sha: str) -> Optional[dict]:
             return None
         if verdict.get("sha") != head_sha:
             return None
-        return verdict
+        return {**verdict, "_latest": False}
     except (json.JSONDecodeError, OSError):
         return None
 
@@ -323,6 +375,15 @@ def _list_verdicts(verdict_dir: Path) -> list[dict]:
     verdicts = []
     if not verdict_dir.is_dir():
         return verdicts
+    for path in verdict_dir.glob("*_LATEST.json"):
+        try:
+            v = json.loads(path.read_text())
+            normalized = _read_flat_verdict(verdict_dir, f"{v['owner']}/{v['repo']}",
+                                            v['pr_number'], v['head_sha'])
+            if normalized:
+                verdicts.append(normalized)
+        except (OSError, ValueError, KeyError, TypeError):
+            continue
     for repo_dir in verdict_dir.iterdir():
         if not repo_dir.is_dir():
             continue
@@ -696,6 +757,8 @@ class Conductor:
     def _can_use_codex(self) -> tuple[bool, str]:
         """Check if Codex is within budget cap."""
         pct = self.budget.weekly_pct("codex")
+        if pct is None:
+            return False, "Codex weekly plan quota unknown; fresh rate-limit observation required"
         if pct >= CODEX_WEEKLY_CAP_PCT:
             return False, "Codex at {:.1f}% of weekly cap (limit {}%)".format(pct, CODEX_WEEKLY_CAP_PCT)
         return True, "ok"
@@ -709,18 +772,45 @@ class Conductor:
         return self.log_dir / "merge-state.json"
     
     def _load_merge_state(self) -> dict:
-        """Load merge tracking state."""
+        """Load safeguards; damaged history must never reset merge admission."""
         state_file = self._merge_state_file()
-        if not state_file.is_file():
-            return {"merges": [], "consecutive_ci_failures": 0, "paused": False, "pause_reason": ""}
+        empty = {"merges": [], "consecutive_ci_failures": 0,
+                 "paused": False, "pause_reason": ""}
         try:
-            return json.loads(state_file.read_text())
-        except (json.JSONDecodeError, IOError):
-            return {"merges": [], "consecutive_ci_failures": 0, "paused": False, "pause_reason": ""}
+            state = json.loads(state_file.read_text())
+            if (not isinstance(state, dict)
+                    or type(state.get("paused")) is not bool
+                    or not isinstance(state.get("pause_reason"), str)
+                    or type(state.get("consecutive_ci_failures")) is not int
+                    or state["consecutive_ci_failures"] < 0
+                    or not isinstance(state.get("merges"), list)):
+                raise ValueError("Invalid merge safeguards")
+            for merge in state["merges"]:
+                ts = merge.get("ts") if isinstance(merge, dict) else None
+                if (type(ts) not in (int, float) or not math.isfinite(ts) or ts < 0):
+                    raise ValueError("Invalid merge timestamp")
+            return state
+        except FileNotFoundError:
+            if not state_file.is_symlink():
+                return empty
+        except (OSError, ValueError, OverflowError):
+            pass
+        return {**empty, "paused": True, "_state_error": True,
+                "pause_reason": "Merge safety state unavailable; restore valid history before resuming"}
     
     def _save_merge_state(self, state: dict) -> None:
-        """Save merge tracking state."""
-        self._merge_state_file().write_text(json.dumps(state, indent=2))
+        """Atomically publish complete safeguards, preserving history on failure."""
+        if state.get("_state_error"):
+            raise ValueError("Merge safety state unavailable; refusing to overwrite history")
+        fd, temp = tempfile.mkstemp(dir=str(self.log_dir), prefix=".merge-state-", suffix=".tmp")
+        try:
+            with os.fdopen(fd, "w") as stream:
+                json.dump(state, stream, indent=2, allow_nan=False)
+                stream.flush()
+                os.fsync(stream.fileno())
+            os.replace(temp, str(self._merge_state_file()))
+        finally:
+            Path(temp).unlink(missing_ok=True)
     
     def _check_merge_rate_limit(self) -> tuple[bool, str]:
         """Check if we're within merge rate limits.
@@ -774,87 +864,28 @@ class Conductor:
         
         Returns (passing, status).
         """
-        try:
-            result = subprocess.run(
-                ["gh", "api", "/repos/{}/commits/main/status".format(repo)],
-                capture_output=True, text=True, timeout=30,
-            )
-            if result.returncode != 0:
-                return True, "unknown"
-            
-            data = json.loads(result.stdout)
-            state = data.get("state", "unknown")
-            return state in ("success", "pending"), state
-        except (subprocess.SubprocessError, json.JSONDecodeError):
-            return True, "unknown"
-    
+        from .main_ci import check_ci
+        return check_ci(repo)
+
     def _create_revert_pr(self, repo: str, merge_sha: str, pr_number: int) -> Optional[str]:
         """Create a revert PR for a failed merge.
         
         Returns the revert PR URL if created, None if failed.
         NEVER force-pushes - only creates a revert commit as a new PR.
         """
+        from .main_ci import merged_pr, open_revert
         try:
-            result = subprocess.run(
-                ["gh", "api", f"/repos/{repo}/git/commits/{merge_sha}"],
-                capture_output=True, text=True, timeout=30,
-            )
-            if result.returncode != 0:
-                self._write_log({"action": "revert_failed", "reason": "could not fetch merge commit"})
-                return None
-            
-            commit_data = json.loads(result.stdout)
-            commit_message = commit_data.get("message", "")
-            
-            revert_branch = f"revert-{merge_sha[:8]}"
-            revert_title = f"Revert: {commit_message.split(chr(10))[0][:60]}"
-            revert_body = f"""## Auto-generated revert PR
-
-This PR reverts commit {merge_sha[:12]} which broke main CI.
-
-**Original PR:** #{pr_number}
-**Original commit message:**
-```
-{commit_message[:500]}
-```
-
-**Reason:** Main CI failed after merge - auto-pause triggered.
-
----
-*This revert PR requires Karen gate review before merge.*
-"""
-            
-            create_result = subprocess.run(
-                ["gh", "pr", "create", "--repo", repo,
-                 "--title", revert_title,
-                 "--body", revert_body,
-                 "--head", revert_branch,
-                 "--base", "main",
-                 "--label", "needs-karen"],
-                capture_output=True, text=True, timeout=60,
-                input=f"git revert {merge_sha} --no-edit && git push origin HEAD:{revert_branch}\n",
-            )
-            
-            subprocess.run(
-                ["gh", "api", "--method", "POST",
-                 f"/repos/{repo}/git/refs",
-                 "-f", f"ref=refs/heads/{revert_branch}",
-                 "-f", f"sha={merge_sha}~1"],
-                capture_output=True, text=True, timeout=30,
-            )
-            
-            self._write_log({
-                "action": "revert_pr_created",
-                "repo": repo,
-                "merge_sha": merge_sha[:12],
-                "revert_branch": revert_branch,
-            })
-            
-            return create_result.stdout.strip() if create_result.returncode == 0 else None
-        except (subprocess.SubprocessError, json.JSONDecodeError) as e:
-            self._write_log({"action": "revert_failed", "reason": str(e)[:100]})
+            details = merged_pr(repo, pr_number)
+            actual_sha = (details.get("mergeCommit") or {}).get("oid", "")
+            client = ClaimClient.from_env()
+            claim = client.acquire(repo, pr_number, details["headRefOid"],
+                                   os.environ.get("STORYPOOL_MACHINE", "unknown"))
+            with Lease(client, claim) as lease:
+                return open_revert(repo, pr_number, actual_sha, details["baseRefName"], lease)
+        except (CoordinationError, OSError, subprocess.SubprocessError, ValueError, KeyError):
+            self._write_log({"action": "revert_deferred", "repo": repo, "pr": pr_number})
             return None
-    
+
     def _record_ci_result(self, repo: str, passed: bool, merge_sha: str = "", pr_number: int = 0) -> None:
         """Record CI result after merge, auto-pause and create revert PR if failures."""
         state = self._load_merge_state()
@@ -912,39 +943,27 @@ This PR reverts commit {merge_sha[:12]} which broke main CI.
         open_prs = []
         ci_statuses = {}
         
-        for repo in REPOS:
+        discovered = _run_gh(["repo", "list", "rupret007", "--limit", "1000",
+                              "--json", "nameWithOwner,isArchived"], default=[])
+        repos = sorted(set(REPOS) | {r["nameWithOwner"] for r in discovered
+                       if isinstance(r, dict) and r.get("nameWithOwner") and not r.get("isArchived")})
+        repos = [repo for repo in repos if not is_never_touch(repo)]
+        for repo in repos:
             prs = _get_open_prs(repo)
             for pr in prs:
                 pr["repo"] = repo
                 pr["is_priority"] = _is_priority_repo(repo)
                 open_prs.append(pr)
                 
-                details = _get_pr_details(repo, pr.get("number"))
-                if details:
-                    ci = _ci_status_from_pr(details)
-                    ci_statuses[f"{repo}/{pr.get('number')}"] = ci
+                # Discovery is context only; use its rollup and reserve live
+                # uncached reads for admission and the exact-head merge gate.
+                ci_statuses[f"{repo}/{pr.get('number')}"] = _ci_status_from_pr(pr)
         
         open_prs = _sort_prs_by_priority(open_prs)
         
-        mini_guards = MachineGuards("mini")
-        nucbox_guards = MachineGuards("nucbox")
-        
-        machine_guards = {
-            "mini": {
-                "load": mini_guards.check_load().value,
-                "swap": mini_guards.check_swap().value,
-                "disk": mini_guards.check_disk().value,
-                "passed": mini_guards.check_all().passed,
-            },
-            "nucbox": {
-                "load": nucbox_guards.check_load().value,
-                "lanes": nucbox_guards.check_lanes().value,
-                "passed": nucbox_guards.check_all().passed,
-            },
-        }
-        
-        budget_summary = self.budget.summary()
-        
+        machine_guards = machine_guard_snapshot(self.log_dir.parent)
+        budget_summary = lane_budget_snapshot(self.budget, self.log_dir.parent, self.verdict_dir)
+
         verdicts = _list_verdicts(self.verdict_dir)
         
         recent_errors = _read_recent_errors(self.log_dir)
@@ -965,7 +984,7 @@ This PR reverts commit {merge_sha[:12]} which broke main CI.
         
         return StateSnapshot(
             timestamp=_now_iso(),
-            repos=REPOS,
+            repos=repos,
             open_prs=open_prs,
             ci_statuses=ci_statuses,
             karen_verdicts=verdicts,
@@ -1027,24 +1046,37 @@ This PR reverts commit {merge_sha[:12]} which broke main CI.
             if not merge_allowed:
                 return ValidatedAction(action, False, "RAIL: {}".format(reason))
             
-            verdict = _read_verdict(repo, pr_number, head_sha) if pr_number else None
+            verdict = (_read_verdict(repo, pr_number, head_sha, self.verdict_dir)
+                       if pr_number else None)
             if not verdict or verdict.get("verdict") != "KARENPASS":
                 return ValidatedAction(action, False, 
                     f"RAIL: No KARENPASS verdict for {repo}#{pr_number} at SHA {head_sha[:8]}")
             
             pr_details = _get_pr_details(repo, pr_number) if pr_number else None
+            if not pr_details:
+                return ValidatedAction(action, False, "RAIL: Cannot fetch PR details")
             if pr_details:
+                if explicitly_held(pr_details):
+                    return ValidatedAction(action, False, "RAIL: PR has an explicit release hold")
+                if pr_details.get("state") in ("MERGED", "CLOSED"):
+                    return ValidatedAction(action, False, "RAIL: PR is no longer open")
                 current_sha = pr_details.get("headRefOid", "")
                 if current_sha != head_sha:
                     return ValidatedAction(action, False,
                         f"RAIL: SHA mismatch - verdict for {head_sha[:8]}, current is {current_sha[:8]}")
                 
                 ci_status = _ci_status_from_pr(pr_details)
-                if not all(s == "success" for s in ci_status.values()):
+                if not ci_status or not all(s == "success" for s in ci_status.values()):
                     return ValidatedAction(action, False, "RAIL: CI not passing")
                 
-                if not _is_approved(pr_details):
-                    return ValidatedAction(action, False, "RAIL: PR not approved")
+                if pr_details.get("state") != "OPEN":
+                    return ValidatedAction(action, False, "RAIL: PR is no longer open")
+                if pr_details.get("isDraft", True):
+                    return ValidatedAction(action, False, "RAIL: PR is still a draft")
+                if pr_details.get("mergeStateStatus") != "CLEAN":
+                    return ValidatedAction(action, False, "RAIL: PR mergeability is not CLEAN")
+                if not _is_approved(pr_details, verdict):
+                    return ValidatedAction(action, False, "RAIL: Karen requires two agreeing reviewers at the full head SHA")
         
         elif action.action_type == ActionType.LABEL_NEEDS_KAREN.value:
             pr_details = _get_pr_details(repo, pr_number) if pr_number else None
@@ -1089,32 +1121,57 @@ This PR reverts commit {merge_sha[:12]} which broke main CI.
         
         try:
             if action.action_type == ActionType.MERGE_PR.value:
-                merge_start = time.time()
+                client = ClaimClient.from_env()
+                claim = client.acquire(action.repo, action.pr_number, action.head_sha,
+                                       os.environ.get("STORYPOOL_MACHINE", "nucbox"))
+                with Lease(client, claim) as lease:
+                    # A proposal can wait behind another owner. Recheck the
+                    # exact-SHA Karen gate under ownership, immediately before ship.
+                    fresh = self.validate_action(action, None)
+                    if not fresh.validated:
+                        validated.executed = False
+                        validated.execution_result = fresh.validation_reason
+                        return validated
+                    # A red/pending/unknown main pauses this repository on both
+                    # hosts, independent of local counters or an LLM proposal.
+                    main_ok, main_status = self._check_main_ci_after_merge(action.repo)
+                    if not main_ok:
+                        validated.execution_result = "deferred: main CI " + main_status
+                        return validated
+                    lease.renew()
+                    # Main-CI checks may take time; re-read the current hold and
+                    # full head under ownership immediately before release.
+                    try:
+                        guard_pr_merge(action.repo, action.pr_number, action.head_sha)
+                    except PermissionError:
+                        validated.execution_result = "deferred: current release admission refused"
+                        return validated
+                    merge_start = time.time()
                 
-                subprocess.run(
-                    ["gh", "pr", "merge", str(action.pr_number), "--repo", action.repo,
-                     "--squash", "--delete-branch", "--match-head-commit", action.head_sha],
-                    capture_output=True, timeout=60, check=True,
-                )
-                validated.executed = True
-                validated.execution_result = "merged"
+                    subprocess.run(
+                        ["gh", "pr", "merge", str(action.pr_number), "--repo", action.repo,
+                         "--squash", "--delete-branch", "--match-head-commit", action.head_sha],
+                        capture_output=True, timeout=60, check=True,
+                    )
+                    validated.executed = True
+                    validated.execution_result = "merged"
                 
-                self._record_merge(action.repo, action.pr_number, action.head_sha)
+                    self._record_merge(action.repo, action.pr_number, action.head_sha)
                 
-                merge_duration_hours = (time.time() - merge_start) / 3600
-                time_to_merge = action.extra.get("time_to_merge_hours", merge_duration_hours)
-                self.metrics.record_merge(time_to_merge, successful=True)
+                    merge_duration_hours = (time.time() - merge_start) / 3600
+                    time_to_merge = action.extra.get("time_to_merge_hours", merge_duration_hours)
+                    self.metrics.record_merge(time_to_merge, successful=True)
                 
-                time.sleep(10)
-                ci_ok, ci_status = self._check_main_ci_after_merge(action.repo)
-                self._record_ci_result(
-                    action.repo, ci_ok,
-                    merge_sha=action.head_sha,
-                    pr_number=action.pr_number,
-                )
-                if not ci_ok:
-                    validated.execution_result = "merged (CI: {})".format(ci_status)
-                
+                    # GitHub retains the durable receipt. Watchdog revisits it
+                    # on its existing cadence if checks have not completed yet.
+                    from .main_ci import merged_pr, observe
+                    try:
+                        details = merged_pr(action.repo, action.pr_number)
+                        status = observe(action.repo, action.pr_number, details, lease)
+                        validated.execution_result = "merged (main CI: {})".format(status)
+                    except (CoordinationError, OSError, subprocess.SubprocessError, ValueError, KeyError):
+                        validated.execution_result = "merged (main CI follow-up pending)"
+
             elif action.action_type == ActionType.LABEL_NEEDS_KAREN.value:
                 subprocess.run(
                     ["gh", "pr", "edit", str(action.pr_number), "--repo", action.repo,
@@ -1128,6 +1185,10 @@ This PR reverts commit {merge_sha[:12]} which broke main CI.
                 validated.executed = True
                 validated.execution_result = "logged"
                 
+        except CoordinationError as e:
+            # Contention/outage is a deferral, not a failed merge outcome.
+            validated.executed = False
+            validated.execution_result = "deferred: " + str(e)
         except subprocess.SubprocessError as e:
             validated.executed = False
             validated.execution_result = f"error: {str(e)[:100]}"
@@ -1222,6 +1283,20 @@ This PR reverts commit {merge_sha[:12]} which broke main CI.
             f"Generated: {now.strftime('%Y-%m-%d %H:%M UTC')} ({ct_hour}:00 CT)",
             "",
         ]
+
+        if snapshot.improvement:
+            feedback = snapshot.improvement
+            measured = feedback.get('metrics', {})
+            lines.extend(['## Improvement evidence', '',
+                'Verified jobs: {}/{} terminal jobs in 24h; success rate: {}.'.format(
+                    measured.get('verified_jobs', 'unknown'), measured.get('terminal_jobs', 'unknown'),
+                    measured.get('verified_job_percent') if measured.get('verified_job_percent') is not None else 'unknown'),
+                'Backlog: {}; inactive for 48h: {}; overdue sessions: {}.'.format(
+                    measured.get('backlog', 'unknown'), measured.get('inactive_prs_48h', 'unknown'),
+                    measured.get('overdue_sessions', 'unknown')),
+                'Job outcome trend: {}. Overall success remains unproven.'.format(
+                    feedback.get('job_outcome_trend', 'unknown')), '',
+                *['- ' + item for item in feedback.get('recommendations', [])], ''])
         
         lines.extend([
             "## Merged (last 24h)",
@@ -1307,19 +1382,14 @@ This PR reverts commit {merge_sha[:12]} which broke main CI.
             "",
             "## System State",
             f"- Open PRs: {len(snapshot.open_prs)} ({len(priority_prs)} priority, {stuck_prs} stuck)",
-            f"- Mini: load={snapshot.machine_guards.get('mini', {}).get('load', '?')}, "
-            f"passed={snapshot.machine_guards.get('mini', {}).get('passed', '?')}",
-            f"- NucBox: load={snapshot.machine_guards.get('nucbox', {}).get('load', '?')}, "
-            f"passed={snapshot.machine_guards.get('nucbox', {}).get('passed', '?')}",
+            format_machine('Mini', snapshot.machine_guards.get('mini', {})),
+            format_machine('NucBox', snapshot.machine_guards.get('nucbox', {})),
             "",
             "## Budget",
         ])
         
         for provider, data in snapshot.budget_summary.items():
-            pct = data.get("weekly_pct", 0)
-            cost = data.get("cost_usd", 0)
-            cap = "⚠️" if pct > 70 else "✓"
-            lines.append(f"- {provider}: ${cost:.2f} ({pct:.1f}%) {cap}")
+            lines.append(format_budget(provider, data))
         
         lines.extend([
             "",
@@ -1346,7 +1416,136 @@ This PR reverts commit {merge_sha[:12]} which broke main CI.
         
         return stuck
     
+    def deterministic_review_pass(self, snapshot: StateSnapshot, live: bool = False) -> list:
+        """Feed green heads to Karen independently of model proposals/approval.
+
+        Readiness is not merge approval. Serialize it with fix/review/merge work,
+        recheck the full head and CI under the shared lease, and keep manual
+        Web Bob readiness parked. Karen independently pins the discovered head.
+        """
+        results = []
+        for pr in snapshot.open_prs:
+            if len(results) >= MAX_UNDRAFTS_PER_TICK:
+                break
+            repo, number, sha = pr.get("repo", ""), pr.get("number"), pr.get("headRefOid", "")
+            if (not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", repo)
+                    or explicitly_held(pr)
+                    or is_never_touch(repo) or type(number) is not int or number < 1
+                    or not re.fullmatch(r"[0-9a-f]{40}", sha)
+                    or (pr.get("isDraft") and repo.lower() in MANUAL_READINESS_REPOS)):
+                continue
+            ci = _ci_status_from_pr(pr)
+            if not ci or any(state != "success" for state in ci.values()):
+                continue
+            from .ci_review_refresh import ci_failure_for_head
+            ci_refresh = False
+            existing_verdict = _read_verdict(repo, number, sha, self.verdict_dir)
+            if not pr.get("isDraft") and existing_verdict:
+                ci_refresh = ci_failure_for_head(repo, number, sha, self.verdict_dir)
+            if not pr.get("isDraft") and (_has_label(pr, "needs-karen")
+                    or (existing_verdict and not ci_refresh)):
+                continue
+            action = ProposedAction(ActionType.UNDRAFT_PR.value if pr.get("isDraft")
+                                    else ActionType.LABEL_NEEDS_KAREN.value,
+                                    repo=repo, pr_number=number, head_sha=sha,
+                                    reason="Deterministic CI-green exact-head Karen admission")
+            result = ValidatedAction(action, True, "Review admission; merge gate unchanged")
+            if not live:
+                result.execution_result = "shadow_mode"
+            else:
+                try:
+                    client = ClaimClient.from_env()
+                    claim = client.acquire(repo, number, sha,
+                                           os.environ.get("STORYPOOL_MACHINE", "nucbox"))
+                    with Lease(client, claim) as lease:
+                        def fresh_head():
+                            details = _get_pr_details(repo, number)
+                            ci = _ci_status_from_pr(details or {})
+                            if (not details or details.get("state") != "OPEN"
+                                    or type(details.get("isDraft")) is not bool
+                                    or details.get("headRefOid") != sha
+                                    or not ci or any(state != "success" for state in ci.values())):
+                                raise ValueError("Current head or green CI changed; review deferred")
+                            if explicitly_held(details):
+                                raise ValueError("PR has an explicit release hold")
+                            return details
+
+                        details = fresh_head()
+                        if ci_refresh and not ci_failure_for_head(repo, number, sha, self.verdict_dir):
+                            raise ValueError("Karen evidence changed; review refresh deferred")
+                        if details.get("isDraft"):
+                            if repo.lower() in MANUAL_READINESS_REPOS:
+                                raise ValueError("Manual Web Bob readiness awaits Jeff")
+                            lease.renew()
+                            ready = github_reads.run(["pr", "ready", str(number), "--repo", repo])
+                            if ready.returncode:
+                                raise ValueError("Undraft failed; review deferred")
+                            details = fresh_head()
+                            if details.get("isDraft", True):
+                                raise ValueError("PR is still a draft; review deferred")
+                        if not _has_label(details, "needs-karen"):
+                            ensure_label_exists(repo, "needs-karen", color="d4c5f9",
+                                                description="Ready for Karen gate review")
+                            lease.renew()
+                            label = github_reads.run(["pr", "edit", str(number), "--repo", repo,
+                                                      "--add-label", "needs-karen"])
+                            if label.returncode:
+                                raise ValueError("Karen label failed; retry admission next cycle")
+                        result.executed = True
+                        result.execution_result = "queued for Karen at " + sha
+                except GitHubDeferred:
+                    # Account-wide admission applies to the rest of this cycle,
+                    # not just this candidate. Lease exits before propagation.
+                    raise
+                except (CoordinationError, subprocess.SubprocessError,
+                        OSError, ValueError) as exc:
+                    result.execution_result = "deferred: " + str(exc)
+            self._write_log({"action": "deterministic_review", "proposal": action.to_dict(),
+                             "validated": result.validated, "executed": result.executed,
+                             "result": result.execution_result})
+            results.append(result)
+        return results
+
+    def deterministic_merge_pass(self, snapshot: StateSnapshot, live: bool = False) -> list:
+        """Evaluate every open PR independently of model availability/proposals."""
+        results = []
+        for pr in snapshot.open_prs:
+            repo, number, sha = pr.get("repo"), pr.get("number"), pr.get("headRefOid", "")
+            if not repo or not number or pr.get("isDraft") or not check_merge_allowed(repo)[0]:
+                continue
+            action = ProposedAction(ActionType.MERGE_PR.value, repo=repo,
+                                    pr_number=number, head_sha=sha,
+                                    reason="Deterministic exact-head Karen merge gate")
+            result = self.validate_action(action, snapshot)
+            if result.validated:
+                result = self.execute_action(result, live=live)
+            self._write_log({"action": "deterministic_merge", "proposal": action.to_dict(),
+                             "validated": result.validated, "executed": result.executed,
+                             "reason": result.validation_reason, "result": result.execution_result})
+            results.append(result)
+        return results
+
     def run(self, live: bool = False) -> dict:
+        """Stop this cycle on GitHub admission deferral without a false PR failure."""
+        try:
+            return self._run_cycle(live=live)
+        except GitHubDeferred as exc:
+            # Earlier actions may already have completed. Preserve their logs;
+            # unknown partial totals must not become zero executions/rejections.
+            summary = {
+                'timestamp': _now_iso(), 'live': live, 'deferred': True,
+                'deferred_reason': 'GitHub API admission deferred',
+                'deferred_code': exc.code, 'retry_after': exc.retry_after,
+                'counts_complete': False, 'llm_available': None,
+                'llm_unavailable_reason': 'GitHub API admission deferred; cycle incomplete',
+                'proposals_count': None, 'validated_count': None,
+                'rejected_count': None, 'executed_count': None, 'anomalies': None,
+            }
+            self._write_status(summary)
+            self._write_log({'action': 'cycle_deferred', 'summary': summary})
+            return summary
+
+    def _run_cycle(self, live: bool = False) -> dict:
         """Run a conductor cycle.
         
         1. Build state snapshot
@@ -1355,14 +1554,24 @@ This PR reverts commit {merge_sha[:12]} which broke main CI.
         4. Execute validated actions (if live mode)
         5. Write digest
         """
+        from .node_control import is_draining
+        if is_draining():
+            return {"timestamp": _now_iso(), "machine": os.environ.get("STORYPOOL_MACHINE", "unknown"), "live": live,
+                    "maintenance": True, "actions_executed": 0}
         self._write_log({"action": "cycle_start", "live": live})
         
         snapshot = self.build_state_snapshot()
+        from .improvement import refresh
+        try:
+            snapshot.improvement = refresh(self.log_dir.parent, snapshot.open_prs)
+        except (OSError, ValueError, TypeError):
+            snapshot.improvement = {'coverage': 'unavailable', 'success': 'unproven'}
+            self._write_log({'action': 'improvement_evidence_unavailable'})
         
+        validated_actions = self.deterministic_review_pass(snapshot, live=live)
+        validated_actions.extend(self.deterministic_merge_pass(snapshot, live=live))
         has_anomalies = len(snapshot.recent_errors) > 5
         proposals = self.get_llm_proposals(snapshot, high_effort=has_anomalies)
-        
-        validated_actions = []
         
         llm_unavailable_reason = ""
         
@@ -1393,7 +1602,7 @@ This PR reverts commit {merge_sha[:12]} which broke main CI.
             
             llm_unavailable_reason = "; ".join(reasons)
             self._write_alert(
-                "LLM unavailable - pausing conductor: {}".format(llm_unavailable_reason),
+                "LLM unavailable - optional proposals paused: {}".format(llm_unavailable_reason),
                 {
                     "codex_available": codex_avail,
                     "codex_reason": codex_reason if not codex_avail else codex_budget_reason,
@@ -1423,7 +1632,9 @@ This PR reverts commit {merge_sha[:12]} which broke main CI.
                     continue
                 
                 validated = self.validate_action(action, snapshot)
-                
+                if action.action_type == ActionType.MERGE_PR.value and validated.validated:
+                    validated = ValidatedAction(action, False, "Merges handled by deterministic pass")
+
                 self._write_log({
                     "action": "validate_proposal",
                     "proposal": action.to_dict(),
@@ -1447,6 +1658,8 @@ This PR reverts commit {merge_sha[:12]} which broke main CI.
         summary = {
             "timestamp": _now_iso(),
             "live": live,
+            "counts_complete": True,
+            "deferred": False,
             "llm_available": proposals is not None,
             "llm_unavailable_reason": llm_unavailable_reason if proposals is None else "",
             "proposals_count": len(proposals.get("proposed_actions", [])) if proposals else 0,
@@ -1464,6 +1677,10 @@ This PR reverts commit {merge_sha[:12]} which broke main CI.
 
 def main() -> int:
     """CLI entry point for conductor."""
+    from .node_control import is_draining
+    if is_draining():
+        print("Node in maintenance; conductor deferred")
+        return 0
     import argparse
     
     parser = argparse.ArgumentParser(

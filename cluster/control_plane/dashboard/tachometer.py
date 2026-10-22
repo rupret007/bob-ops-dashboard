@@ -2,9 +2,13 @@
 from __future__ import annotations
 
 import json
+import os
+import re
 import time
 from datetime import datetime, timezone
 from pathlib import Path
+
+from ..codex_quota import read_codex_quota
 
 
 def tail(path, limit=262144):
@@ -37,6 +41,24 @@ def stamp(value):
         return 0
 
 
+def blocked_snapshot(value):
+    """Validate the persisted display projection before using identity fields."""
+    if not isinstance(value, dict):
+        return None
+    repo = value.get('repo')
+    sha = value.get('head_sha')
+    number = value.get('pr_number')
+    reason = value.get('reason')
+    timestamp = value.get('timestamp')
+    if (not isinstance(repo, str) or not re.fullmatch(r'[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+', repo)
+            or type(number) is not int or number < 1
+            or not isinstance(sha, str) or not re.fullmatch(r'[0-9a-fA-F]{40}', sha)
+            or not isinstance(reason, str) or not reason.strip() or len(reason) > 4096
+            or not isinstance(timestamp, str) or stamp(timestamp) <= 0):
+        return None
+    return dict(repo=repo, pr_number=number, head_sha=sha, reason=reason, timestamp=timestamp)
+
+
 def rows(path):
     for line in tail(path, 2097152):
         try:
@@ -47,9 +69,122 @@ def rows(path):
             continue
 
 
+def review_state(value):
+    """Normalize display state only; this is never a trusted merge verdict."""
+    if value.get('status', 'COMPLETE') != 'COMPLETE':
+        return 'ERROR'
+    passed = value.get('passed')
+    if passed is True or passed == 'True':
+        return 'PASS'
+    if passed is False or passed == 'False':
+        return 'FAIL'
+    return 'ERROR'
+
+
+def observed_reviews(directory):
+    """Count a synced LATEST copy and its result as one review attempt.
+
+    Different full heads and retry timestamps remain distinct. The collector
+    does not authenticate artifacts or grant merge approval.
+    """
+    unique = {}
+    rank = {'PASS': 0, 'ERROR': 1, 'FAIL': 2}
+    for path in list(directory.rglob('*.json'))[:2000]:
+        if path.is_symlink():
+            continue
+        value = read_json(path)
+        if not isinstance(value, dict) or not stamp(value.get('timestamp')):
+            continue
+        identity = (str(value.get('owner', '')), str(value.get('repo', '')),
+                    str(value.get('pr_number', value.get('pr', ''))),
+                    str(value.get('head_sha', value.get('sha', ''))), value['timestamp'])
+        previous = unique.get(identity)
+        if previous is None or rank[review_state(value)] > rank[review_state(previous)]:
+            unique[identity] = value
+    return list(unique.values())
+
+
+LLM_SERVICES = ('codex', 'claude', 'gemini', 'minimax', 'cursor', 'grok')
+PEER_FRESH_SEC = 900
+
+
+def service_of(name):
+    name = str(name or '').lower()
+    return next((p for p in LLM_SERVICES if p in name), None)
+
+
+def pid_state(pid):
+    """Signal 0 only checks existence; it never touches the process."""
+    try:
+        pid = int(pid)
+    except (TypeError, ValueError):
+        return None
+    if pid <= 0:
+        return None
+    try:
+        os.kill(pid, 0)
+        return True
+    except ProcessLookupError:
+        return False
+    except OSError:
+        return None
+
+
+def provider_rules():
+    try:
+        from ..dispatcher import PROVIDER_RULES
+        return PROVIDER_RULES
+    except Exception:
+        return {}
+
+
+def running_row(job, now):
+    start = stamp(job.get('start_time'))
+    return {'job_id': job.get('job_id', ''), 'repo': job.get('repo', ''), 'pr_number': job.get('pr_number'),
+            'provider': job.get('provider') or None, 'model': job.get('model') or None,
+            'start_time': job.get('start_time') or None,
+            'elapsed_sec': int(now - start) if start else None, 'process': None}
+
+
+def merge_llm(local, peers):
+    merged = []
+    for gauge in local:
+        out = dict(gauge, machines=[m for m in [gauge.get('machine')] if m])
+        for peer in peers:
+            other = next((g for g in peer if g.get('service') == gauge['service']), None)
+            if not other:
+                continue
+            out['machines'].append(other.get('machine'))
+            for key in ('active', 'calls_hour', 'jobs_hour', 'reviews_hour'):
+                if other.get(key) is not None:
+                    out[key] = (out.get(key) or 0) + other[key]
+            quota = other.get('quota')
+            if gauge['service'] == 'codex':
+                quota = quota if isinstance(quota, dict) else {}
+                pct = quota.get('weekly_pct')
+                observed = stamp(quota.get('observed_at'))
+                now = time.time()
+                if (quota.get('source') == 'codex_session_rate_limits' and quota.get('status') == 'ok'
+                        and type(pct) in (int, float) and 0 <= pct <= 100
+                        and type(quota.get('resets_at')) is int and quota['resets_at'] > now
+                        and 0 <= now - observed <= 3600
+                        and observed > stamp((out.get('quota') or {}).get('observed_at'))):
+                    out.update(weekly_pct=pct, quota=quota)
+            elif other.get('weekly_pct') is not None and (out.get('weekly_pct') is None or other['weekly_pct'] > out['weekly_pct']):
+                out['weekly_pct'] = other['weekly_pct']
+            if out.get('max_concurrent') is None and other.get('max_concurrent') is not None:
+                out['max_concurrent'] = other['max_concurrent']
+        out.pop('machine', None)
+        merged.append(out)
+    return merged
+
+
 class EngineCollector:
-    def __init__(self, data_dir, karen_dir, machine):
+    def __init__(self, data_dir, karen_dir, machine, budget_file=None):
         self.data_dir = Path(data_dir)
+        self.budget_file = Path(budget_file) if budget_file else Path(
+            os.environ.get('STORYPOOL_DATA_DIR', '~/.config/storypool')).expanduser() / 'budget_usage.json'
+
         self.karen_dir = Path(karen_dir)
         self.machine = machine
         self._cached = None
@@ -57,7 +192,8 @@ class EngineCollector:
 
     def collect(self):
         # Browsers can poll independently without rescanning files per client.
-        if self._cached is not None and time.monotonic() - self._at < 2:
+        # _at == 0 means invalidated (macOS monotonic starts near 0 per process).
+        if self._cached is not None and self._at and time.monotonic() - self._at < 2:
             return self._cached
         self._cached = self._collect()
         self._at = time.monotonic()
@@ -78,24 +214,92 @@ class EngineCollector:
             events.append({'timestamp': event_time or job.get('updated_at') or job.get('created_at', ''),
                            'text': '{} #{}: {}'.format(job.get('repo', ''), job.get('pr_number', ''), job.get('state', 'unknown'))})
         latest = [j for j in jobs.values() if j.get('machine', self.machine) == self.machine]
+        heads = {}
+        for job in latest:
+            key = (job.get('repo'), job.get('pr_number'))
+            if stamp(job.get('created_at')) >= stamp(heads.get(key, {}).get('created_at')):
+                heads[key] = job
+        blocked = [dict(repo=j.get('repo'), pr_number=j.get('pr_number'), head_sha=j.get('head_sha'),
+                        reason=j.get('error'), timestamp=j.get('end_time'))
+                   for j in heads.values() if j.get('state') == 'failed' and j.get('retryable') is False]
+        # Dispatch owns durable blocker snapshots. An outage, midnight, or log
+        # rotation cannot silently remove a shared exact-head block from view.
+        for path in (self.data_dir / 'dispatch' / 'blocked-fixes').glob('*.json'):
+            if path.is_symlink():
+                continue
+            value = blocked_snapshot(read_json(path))
+            if value is None:
+                continue
+            key = (value['repo'], value['pr_number'])
+            observed = heads.get(key, {})
+            if (observed.get('head_sha') != value.get('head_sha')
+                    and stamp(observed.get('created_at')) > stamp(value.get('timestamp'))):
+                continue
+            blocked = [b for b in blocked if (b['repo'], b['pr_number']) != key]
+            blocked.append(value)
+        dispatch_rows = list(rows(self.data_dir / 'dispatch' / ('dispatch-' + now.strftime('%Y-%m-%d') + '.jsonl')))
+        for d in dispatch_rows[-100:]:
+            if d.get('action') == 'skip_blocked' and stamp(d.get('timestamp')) >= hour:
+                key = (d.get('repo'), d.get('pr_number'))
+                if heads.get(key, {}).get('head_sha', d.get('head_sha')) == d.get('head_sha'):
+                    blocked = [b for b in blocked if (b['repo'], b['pr_number']) != key]
+                    blocked.append(dict(repo=d.get('repo'), pr_number=d.get('pr_number'),
+                        head_sha=d.get('head_sha'), reason=d.get('reason'), timestamp=d.get('timestamp')))
+        # A newer observed full head supersedes every prior blocker, including
+        # an old same-day dispatch row when no job exists at the new head yet.
+        observed_heads = {key: (stamp(j.get('created_at')), j.get('head_sha'))
+                          for key, j in heads.items()}
+        for d in dispatch_rows:
+            if not d.get('live') or not d.get('head_sha'):
+                continue
+            key = (d.get('repo'), d.get('pr_number'))
+            observed = (stamp(d.get('timestamp')), d.get('head_sha'))
+            if observed[0] >= observed_heads.get(key, (0, ''))[0]:
+                observed_heads[key] = observed
+        blocked = [b for b in blocked if not (
+            observed_heads.get((b['repo'], b['pr_number']), (0, b['head_sha']))[0] > stamp(b.get('timestamp'))
+            and observed_heads[(b['repo'], b['pr_number'])][1] != b['head_sha'])]
         completed = [j for j in latest if j.get('state') == 'done' and j.get('outcome_verified')]
         jobs_hour = sum(stamp(j.get('end_time')) >= hour for j in completed)
         running = sum(j.get('state') == 'running' and stamp(j.get('lease_expires')) > now.timestamp() for j in latest)
-        verdicts = []
         verdict_dir = self.karen_dir / 'verdicts'
         if not verdict_dir.is_dir():
             verdict_dir = self.data_dir / 'verdicts'
-        # Read real verdict files; LATEST symlinks must not double-count reviews.
-        for path in list(verdict_dir.rglob('*.json'))[:2000]:
-            if path.is_symlink():
+        verdicts = observed_reviews(verdict_dir)
+        last_review = max((stamp(v.get('timestamp')) for v in verdicts), default=0)
+        review_age = int(now.timestamp() - last_review) if 0 < last_review <= now.timestamp() else None
+        review_evidence = {'age_seconds': review_age,
+                           'state': 'recent' if review_age is not None and review_age < 900 else 'stale',
+                           'reason': 'Recent Karen verdict evidence is available on this dashboard.'
+                           if review_age is not None and review_age < 900 else
+                           'No recent Karen verdict evidence here. Check the poller and verdict sync; this does not prove either machine is down.'}
+        # Report scanner stops separately from model votes. Only the latest
+        # observed head per PR counts, so old findings do not inflate the banner.
+        from ..local_karen.verdict import Verdict
+        from ..local_karen.verdict_push import deterministic_security_failure
+        latest_observed = {}
+        for value in verdicts:
+            key = (value.get('owner'), value.get('repo'), value.get('pr_number'))
+            if stamp(value.get('timestamp')) > stamp(latest_observed.get(key, {}).get('timestamp')):
+                latest_observed[key] = value
+        latest_counts = {state: sum(review_state(v) == state for v in latest_observed.values())
+                         for state in ('PASS', 'FAIL', 'ERROR')}
+        review_evidence['latest_counts'] = latest_counts
+        review_evidence['reason'] += ' Latest observed PR results: {} PASS, {} FAIL, {} ERROR.'.format(
+            latest_counts['PASS'], latest_counts['FAIL'], latest_counts['ERROR'])
+        security_stops = 0
+        for value in latest_observed.values():
+            try:
+                security_stops += bool(deterministic_security_failure(Verdict.from_dict(value)))
+            except (TypeError, ValueError):
                 continue
-            value = read_json(path)
-            if not isinstance(value, dict):
-                continue
-            verdicts.append(value)
+        security_evidence = {'count': security_stops,
+                             'reason': '{} latest observed PR findings stopped at the security scan before model review. Check redacted file/line evidence; merge and automatic repair remain blocked.'.format(security_stops)
+                             if security_stops else 'No scanner-only security blocks in the latest observed PR findings.'}
+        for value in verdicts:
             events.append({'timestamp': value.get('timestamp', ''), 'text': 'Karen {} #{}: {}'.format(
-                value.get('repo', ''), value.get('pr', value.get('pr_number', '')), 'PASS' if value.get('passed') else 'FAIL')})
-        recent = [v for v in verdicts if stamp(v.get('timestamp')) >= hour]
+                value.get('repo', ''), value.get('pr', value.get('pr_number', '')), review_state(value))})
+        recent = [v for v in verdicts if stamp(v.get('timestamp')) >= hour and review_state(v) != 'ERROR']
         attempts = [j for j in latest if j.get('state') in ('done', 'failed', 'expired') and stamp(j.get('end_time')) >= hour]
         merge_state = read_json(self.data_dir / 'conductor' / 'merge-state.json')
         merge_rows = merge_state.get('merges', []) if isinstance(merge_state, dict) else []
@@ -108,18 +312,52 @@ class EngineCollector:
                 backlog_count = metrics.get('total_open_prs')
         health = {}
         capacity = None
+        from ..health_state import machine_health
+        unified = machine_health(self.data_dir, self.machine, now.timestamp())
         for machine in ('mini', 'nucbox'):
+            if unified is not None:
+                health[machine] = unified[machine]
+                continue
             # Remote health uses synced watchdog evidence, never local load under a remote name.
             path = self.data_dir / 'watchdog.log' if machine == self.machine else self.data_dir / 'machines' / machine / 'watchdog.log'
             evidence = list(rows(path))
+            evidence = [row for row in evidence if isinstance(row.get("checks"), list)]
             last = evidence[-1] if evidence else {}
             age = now.timestamp() - stamp(last.get('timestamp'))
             checks = last.get('checks', [])
             fresh = bool(checks) and 0 <= age < 1800
             failed = [c for c in checks if not c.get('passed') and not c.get('repaired')]
             state = ('red' if failed else 'green') if fresh else 'yellow'
+            peer = read_json(self.data_dir / 'machines' / machine / 'engine.json') or {}
+            sync_age = max(0, int(now.timestamp() - stamp(peer.get('synced_at')))) if peer.get('synced_at') else None
+            detail = 'stale or unavailable' if not fresh else '{} failed checks'.format(len(failed))
+            if machine != self.machine and not fresh and peer.get('synced_at'):
+                detail = 'peer sync stale' if sync_age >= PEER_FRESH_SEC else 'peer reachable; health report stale'
+            reported_state = state
+            sync_status = (read_json(self.data_dir / 'machines' / machine / 'sync-status.json') or {}) if machine != self.machine else {}
+            # Watchdog checks can still be recent after peer contact stops. Do
+            # not present that old green report as current cluster health.
+            # A newer snapshot supersedes a previous failed sync attempt.
+            sync_failed = (sync_status.get('ok') is False and
+                           stamp(sync_status.get('timestamp')) >= stamp(peer.get('synced_at')))
+            sync_issue = ('peer sync failed' if sync_failed else
+                          'peer sync stale' if sync_age is not None and sync_age >= PEER_FRESH_SEC else None)
+            if machine != self.machine and state == 'yellow' and sync_failed:
+                detail = 'peer sync failed; latest machine health unconfirmed'
+            if machine != self.machine and state == 'green':
+                if sync_failed:
+                    state, detail = 'yellow', 'peer sync failed; last health report was green'
+                elif sync_age is not None and sync_age >= PEER_FRESH_SEC:
+                    state, detail = 'yellow', 'peer sync stale; last health report was green'
             health[machine] = {'state': state, 'timestamp': last.get('timestamp'),
-                               'detail': 'stale or unavailable' if not fresh else '{} failed checks'.format(len(failed))}
+                               'reported_state': reported_state, 'peer_sync': sync_status,
+                               'sync_issue': sync_issue if machine != self.machine else None,
+                               'detail': detail, 'sync_age_seconds': sync_age if machine != self.machine else None,
+                               'guardian': (read_json(self.data_dir / 'guardian-status.json') or {})
+                               if machine == self.machine else peer.get('guardian', {})}
+            if health[machine]['guardian'].get('dashboard', {}).get('ok') is False:
+                health[machine]['state'] = 'red'
+                health[machine]['detail'] = 'dashboard HTTP restart failed; needs Jeff'
         dispatch = read_json(self.data_dir / 'dispatch' / 'dispatch-status.json')
         if isinstance(dispatch, dict):
             decisions = dispatch.get('summary', {}).get('decisions', [])
@@ -132,18 +370,144 @@ class EngineCollector:
         if capacity is None and self.machine == 'nucbox':
             from ..guards import NUCBOX_MAX_LANES
             capacity = NUCBOX_MAX_LANES
-        overall = 'red' if any(v['state'] == 'red' for v in health.values()) else ('green' if all(v['state'] == 'green' for v in health.values()) else 'yellow')
+        from ..node_control import read_control
+        control = read_control(self.data_dir)
+        for name in health:
+            peer = read_json(self.data_dir / 'machines' / name / 'engine.json') or {}
+            node = control if name == self.machine else peer.get('control', {})
+            if node.get('maintenance'):
+                health[name].update(state='maintenance', detail=node.get('reason', 'Operator maintenance'))
+        overall = 'red' if any(v['state'] == 'red' for v in health.values()) else ('green' if all(v['state'] in ('green', 'maintenance') for v in health.values()) else 'yellow')
+        admission = {'state': 'unknown', 'reason': 'Work admission has no recent dispatcher report.'}
+        if isinstance(dispatch, dict) and now.timestamp() - 900 <= stamp(dispatch.get('timestamp')) <= now.timestamp() + 60:
+            decisions = dispatch.get('summary', {}).get('decisions', [])
+            paused = any(d.get('action') == 'dispatch_failed' and 'coordination' in str(d.get('reason', '')).lower()
+                         for d in decisions if isinstance(d, dict))
+            admission = {'state': 'paused' if paused else 'ready',
+                         'reason': 'New fixes paused: shared coordination unavailable. Verify broker permissions and retry storage.'
+                         if paused else 'Latest dispatcher report has no coordination blocker.'}
+            if paused and overall == 'green':
+                overall = 'yellow'
+        job_view, llm_local, llm = self._jobs_and_llm(latest, verdicts, verdict_dir.is_dir(), now.timestamp(), capacity)
+        from .engine_flow import stale_alerts, flow_reasons
+        current = now.timestamp()
+        flow_local = dict(machine=self.machine,
+            last_verdict_at=max((stamp(v.get('timestamp')) for v in verdicts
+                if review_state(v) != 'ERROR'
+                and re.fullmatch(r'[0-9a-fA-F]{40}', str(v.get('head_sha', v.get('sha', ''))))
+                and 0 < stamp(v.get('timestamp')) <= current), default=None),
+            last_success_at=max((stamp(j.get('end_time')) for j in latest
+                if j.get('state') == 'done' and j.get('outcome_verified') is True
+                and 0 < stamp(j.get('end_time')) <= current), default=None),
+            stale_alerts=stale_alerts(self.data_dir, current, tail))
+        peers = {}
+        for name in health:
+            if name != self.machine:
+                peer = read_json(self.data_dir / 'machines' / name / 'engine.json') or {}
+                peers[name] = peer if (0 <= current - stamp(peer.get('synced_at')) < PEER_FRESH_SEC
+                    and 0 <= current - stamp(peer.get('peer_timestamp')) < PEER_FRESH_SEC) else {}
+        reasons = flow_reasons(flow_local, peers, current)
+        reasons += [name + ': ' + value['detail'] for name, value in health.items()
+                    if value['state'] not in ('green', 'maintenance')]
+        if admission['state'] == 'paused':
+            reasons.append(admission['reason'])
+        if reasons and overall == 'green':
+            overall = 'yellow'
         monitor = [line for line in tail(self.data_dir / 'MONITOR.md', 32768) if line.strip()]
+        from ..local_karen.runtime_status import public_status
+        from ..local_karen.config import KarenConfig
+        runtime = public_status(KarenConfig(state_dir=str(self.karen_dir)))
         def gauge(label, value, maximum=None, unit=''):
             return {'label': label, 'value': value, 'max': maximum, 'unit': unit}
-        return {'timestamp': now.isoformat(), 'engine': overall, 'machines': health,
+        from ..github_budget import snapshot as github_snapshot
+        from ..reporting_telemetry import local_resources
+        return {'timestamp': now.isoformat(), 'engine': overall,
+                'engine_reason': '; '.join(reasons) if reasons else 'Work is flowing: recent Karen verdict and verified successful job; no stale NEEDS_JEFF.',
+                'flow_local': flow_local, 'github_api': github_snapshot(self.data_dir), 'machines': health, 'admission': admission,
+                'resources': local_resources(self.data_dir, self.machine, now.timestamp()),
+                'review_evidence': review_evidence,
+                'karen_runtime': runtime,
+                'security_evidence': security_evidence,
                 'gauges': [gauge('Active lanes', running, capacity), gauge('Verified jobs / hour', jobs_hour),
                            gauge('Karen reviews / hour', len(recent)),
-                           gauge('PASS rate · last hour', round(100 * sum(bool(v.get('passed')) for v in recent) / len(recent), 1) if recent else None, 100, '%'),
+                           gauge('PASS rate · last hour', round(100 * sum(review_state(v) == 'PASS' for v in recent) / len(recent), 1) if recent else None, 100, '%'),
                            gauge('Merges today · UTC', merges if merge_state is not None else None, 30),
                            gauge('Fix success · last hour', round(100 * sum(j.get('state') == 'done' and bool(j.get('outcome_verified')) for j in attempts) / len(attempts), 1) if attempts else None, 100, '%'),
                            gauge('Backlog remaining', backlog_count)],
+                'blocked_fixes': blocked,
+                'jobs': job_view, 'llm_local': llm_local, 'llm': llm, 'control': control, 'local_machine': self.machine,
+                'audit': tail(self.data_dir / 'HANDOFF.md', 16384)[-20:],
                 'activity': sorted(events, key=lambda e: stamp(e['timestamp']), reverse=True)[:15],
                 'monitor': monitor[-1] if monitor else 'No monitor status yet',
                 'parity': next(iter(tail(self.data_dir / 'PARITY.md', 32768)), 'Parity audit unavailable'),
-                'notes': 'Local ledger tail (2 MiB); up to 2000 verdict files. Backlog is the last conductor snapshot. Unknown values display —. Rates use a rolling hour; merge day uses UTC (the gate enforces its cap over a rolling 24h).'}
+                'notes': 'Local ledger tail (2 MiB); up to 2000 verdict files, with synced copies counted once. Karen rates describe observed completed reviews; errors are retries, and these counts do not grant merge approval. Backlog is the last conductor snapshot. Unknown values display —. Rates use a rolling hour; merge day uses UTC (the gate enforces its cap over a rolling 24h).'}
+
+    def _jobs_and_llm(self, latest, verdicts, have_verdicts, now, capacity):
+        """Running jobs per machine plus per-LLM usage, from ledgers and verdicts only."""
+        have_ledger = (self.data_dir / 'jobs').is_dir()
+        hour = now - 3600
+        live = [j for j in latest if j.get('state') == 'running' and stamp(j.get('lease_expires')) > now]
+        rows_now = []
+        for job in sorted(live, key=lambda j: stamp(j.get('start_time'))):
+            row = running_row(job, now)
+            row['process'] = pid_state(job.get('pid'))
+            rows_now.append(row)
+        counted = [r for r in rows_now if r['process'] is not False]
+        from ..guards import NUCBOX_MAX_LANES
+        local = {'source': 'local' if have_ledger else 'unavailable', 'synced_at': None,
+                 'count': len(counted) if have_ledger else None, 'running': rows_now,
+                 'capacity': capacity if capacity is not None else (NUCBOX_MAX_LANES if self.machine == 'nucbox' else None),
+                 'reserved_codex': 2 if self.machine == 'nucbox' else None}
+        names = {'mini', 'nucbox', self.machine}
+        machines_dir = self.data_dir / 'machines'
+        if machines_dir.is_dir():
+            names.update(p.name for p in machines_dir.iterdir() if p.is_dir())
+        view, peers = {}, []
+        for name in sorted(names):
+            if name == self.machine:
+                view[name] = local
+                continue
+            snap = read_json(machines_dir / name / 'engine.json')
+            jobs = snap.get('jobs') if isinstance(snap, dict) else None
+            age = now - stamp(snap.get('synced_at')) if isinstance(snap, dict) else None
+            if not isinstance(jobs, dict) or age is None or not 0 <= age < PEER_FRESH_SEC:
+                view[name] = {'source': 'unavailable', 'synced_at': snap.get('synced_at') if isinstance(snap, dict) else None,
+                              'count': None, 'running': [], 'capacity': None, 'reserved_codex': None}
+                continue
+            running = [dict(r, elapsed_sec=int(now - stamp(r.get('start_time'))) if stamp(r.get('start_time')) else None)
+                       for r in jobs.get('running') or [] if isinstance(r, dict)]
+            view[name] = dict(jobs, source='peer-sync', synced_at=snap.get('synced_at'), running=running)
+            peers.append([dict(g, machine=name) for g in snap.get('llm_local') or [] if isinstance(g, dict)])
+        rules = provider_rules()
+        budget = read_json(self.budget_file)
+        usage = budget.get('usage', {}) if isinstance(budget, dict) else {}
+        weekly = read_codex_quota(now=now)
+        llm_local = []
+        for service in LLM_SERVICES:
+            rule = rules.get(service, {})
+            jobs_hour = sum(service_of(j.get('provider')) == service and
+                            stamp(j.get('start_time') or j.get('created_at')) >= hour for j in latest) if have_ledger else None
+            reviews_hour = None
+            if have_verdicts:
+                reviews_hour = 0
+                for verdict in verdicts:
+                    if stamp(verdict.get('timestamp')) < hour:
+                        continue
+                    results = verdict.get('review_results')
+                    for result in results if isinstance(results, list) else []:
+                        if isinstance(result, dict) and service_of(result.get('reviewer')) == service:
+                            reviews_hour += 1
+            calls = None if jobs_hour is None and reviews_hour is None else (jobs_hour or 0) + (reviews_hour or 0)
+            week = usage.get(service) if isinstance(usage, dict) else None
+            pct = None
+            if service == 'codex':
+                pct = weekly['weekly_pct']
+            llm_local.append({'service': service, 'machine': self.machine,
+                              'active': sum(r['provider'] == service for r in counted) if have_ledger else None,
+                              'max_concurrent': rule.get('max_concurrent'),
+                              'calls_hour': calls, 'jobs_hour': jobs_hour, 'reviews_hour': reviews_hour,
+                              'weekly_calls': week.get('calls') if isinstance(week, dict) else None,
+                              'weekly_pct': pct, 'weekly_cap_pct': rule.get('weekly_cap_pct'),
+                              'quota': weekly if service == 'codex' else None,
+                              'conserve': service == 'grok'})
+        return view, llm_local, merge_llm(llm_local, peers)

@@ -13,6 +13,7 @@ from __future__ import annotations
 import fcntl
 import json
 import os
+import sys
 import subprocess
 import time
 from dataclasses import dataclass, field, asdict
@@ -47,6 +48,7 @@ class Job:
     head_sha: str
     provider: str  # codex, cursor, gemini, etc.
     machine: str  # mini, nucbox
+    model: str = ""  # provider model/effort label recorded by the worker from its real argv
     
     state: str = JobState.QUEUED.value
     
@@ -62,9 +64,13 @@ class Job:
     outcome_sha: str = ""
     
     error: str = ""
+    failure_code: str = ""
+    retryable: bool = True
     
     created_at: str = ""
     updated_at: str = ""
+    cluster_claim: dict = field(default_factory=dict)
+    failure_stage: str = ""
     
     def to_dict(self) -> dict:
         return asdict(self)
@@ -90,8 +96,36 @@ class Job:
         try:
             os.kill(self.pid, 0)
             return True
+        except PermissionError:
+            # The process exists but belongs to another user/namespace.
+            return True
         except (OSError, ProcessLookupError):
-            return False
+            pass
+        # A checker in a different PID namespace (e.g. a sandboxed monitor)
+        # cannot see the worker. Linux workers run as transient systemd units,
+        # so ask systemd; if systemd cannot answer, do not declare the worker
+        # dead (the lease expiry still bounds a truly dead job).
+        unit_state = _systemd_job_unit_state(self.job_id)
+        if unit_state is None:
+            return sys.platform == "linux"
+        return unit_state in ("active", "activating", "reloading")
+
+
+def _systemd_job_unit_state(job_id: str) -> Optional[str]:
+    """Return systemd's state for a worker unit, or None when unknown."""
+    if sys.platform != "linux" or not job_id:
+        return None
+    try:
+        result = subprocess.run(
+            ["systemctl", "--user", "is-active", f"storypool-job-{job_id}.service"],
+            capture_output=True, text=True, timeout=10,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    state = (result.stdout or "").strip()
+    if state in ("active", "activating", "reloading", "inactive", "failed", "deactivating"):
+        return state
+    return None
 
 
 def _now_iso() -> str:
@@ -248,20 +282,33 @@ class JobLedger:
         
         return self._with_lock(_create)
     
-    def start_job(self, job_id: str, pid: int) -> Optional[Job]:
-        """Mark job as running with PID."""
+    def start_job(self, job_id: str, pid: int, model: str = "") -> Optional[Job]:
+        """Mark job as running with PID (and the model label the worker will run)."""
         def _start():
             jobs = self._load_jobs()
             for job in jobs:
                 if job.job_id == job_id:
                     job.state = JobState.RUNNING.value
                     job.pid = pid
+                    if model:
+                        job.model = model
                     job.start_time = _now_iso()
                     self._save_jobs(jobs)
                     return job
             return None
         
         return self._with_lock(_start)
+
+    def attach_cluster_claim(self, job_id: str, claim: dict) -> None:
+        def attach():
+            jobs = self._load_jobs()
+            for job in jobs:
+                if job.job_id == job_id:
+                    job.cluster_claim = claim
+                    self._save_jobs(jobs)
+                    return
+            raise ValueError('Job missing while attaching cluster claim')
+        self._with_lock(attach)
     
     def complete_job(
         self,
@@ -289,7 +336,8 @@ class JobLedger:
         
         return self._with_lock(_complete)
     
-    def fail_job(self, job_id: str, error: str) -> Optional[Job]:
+    def fail_job(self, job_id: str, error: str, failure_code: str = "", retryable: bool = True,
+                 failure_stage: str = "") -> Optional[Job]:
         """Mark job as failed with error."""
         def _fail():
             jobs = self._load_jobs()
@@ -298,6 +346,9 @@ class JobLedger:
                     job.state = JobState.FAILED.value
                     job.end_time = _now_iso()
                     job.error = error
+                    job.failure_code = failure_code
+                    job.failure_stage = failure_stage
+                    job.retryable = retryable
                     self._save_jobs(jobs)
                     return job
             return None
@@ -321,10 +372,20 @@ class JobLedger:
                 should_expire = False
                 reason = ""
                 
-                if job.state == JobState.RUNNING.value and not job.is_process_running():
+                running = job.is_process_running()
+                if job.state == JobState.RUNNING.value and not running:
                     should_expire = True
                     reason = "worker-died"
                 elif not job.has_valid_lease():
+                    if running:
+                        # Time alone cannot free a lane while its old worker can
+                        # still act. Native runtime limits stop the owned unit;
+                        # only a later confirmed exit releases local admission.
+                        if job.error != 'stale-worker-still-running':
+                            job.error = 'stale-worker-still-running'
+                            job.failure_code = 'stale-session'
+                            changed = True
+                        continue
                     should_expire = True
                     reason = "lease expired"
                 
@@ -333,6 +394,10 @@ class JobLedger:
                                  else JobState.EXPIRED.value)
                     job.end_time = _now_iso()
                     job.error = reason
+                    # Classify this new terminal observation, never guess an
+                    # underlying provider/test failure or backfill old rows.
+                    job.failure_code = 'worker-died' if reason == 'worker-died' else 'lease-expired'
+                    job.failure_stage = 'supervisor' if reason == 'worker-died' else 'coordination'
                     expired.append(job)
                     changed = True
             
