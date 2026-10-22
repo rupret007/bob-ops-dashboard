@@ -1033,18 +1033,9 @@ for iss in issues:
     if decision in ("approve", "deny"):
         resolved.add(pid)
     if apply_decisions:
-        try:
-            subprocess.check_call(
-                [
-                    "gh", "issue", "close", str(iss["number"]),
-                    "-R", "rupret007/bob-ops-dashboard",
-                    "--comment", f"Recorded as {decision} for Bob.",
-                ],
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-            )
-        except Exception:
-            pass
+        from cluster.never_touch._dashboard import close_decision_issue
+
+        close_decision_issue(iss["number"], decision)
 
 standing = [
     {
@@ -4073,8 +4064,10 @@ fi
 if [[ $PUSH -eq 1 ]]; then
   WORK="$(mktemp -d)"
   gh repo clone "$OWNER/bob-ops-dashboard" "$WORK" -- --quiet
-  mkdir -p "$WORK/.github/workflows"
+  mkdir -p "$WORK/.github/workflows" "$WORK/cluster/never_touch"
   cp "$ROOT/index.html" "$ROOT/status.json" "$ROOT/README.md" "$ROOT/refresh.sh" "$WORK/"
+  # Underscore-prefixed package files stay out of Jekyll's public Pages output.
+  cp "$ROOT/cluster/never_touch/"{__init__,__main__,_dashboard}.py "$WORK/cluster/never_touch/"
   [[ -f "$ROOT/llm-work-now.json" ]] && cp "$ROOT/llm-work-now.json" "$WORK/"
   [[ -f "$ROOT/harden-window.json" ]] && cp "$ROOT/harden-window.json" "$WORK/"
   [[ -f "$ROOT/write_harden_window.py" ]] && cp "$ROOT/write_harden_window.py" "$WORK/"
@@ -4107,6 +4100,7 @@ if [[ $PUSH -eq 1 ]]; then
   [[ -f llm-work-now.json ]] && PAGES_ARTIFACTS+=(llm-work-now.json)
   [[ -f harden-window.json ]] && PAGES_ARTIFACTS+=(harden-window.json)
   git add "${PAGES_ARTIFACTS[@]}" README.md refresh.sh
+  git add cluster/never_touch/__init__.py cluster/never_touch/__main__.py cluster/never_touch/_dashboard.py
   [[ -f write_harden_window.py ]] && git add write_harden_window.py
   [[ -f board_meta.py ]] && git add board_meta.py
   [[ -f probe-agents-status.sh ]] && git add probe-agents-status.sh
@@ -4129,6 +4123,7 @@ if [[ $PUSH -eq 1 ]]; then
     # Race-safe vs concurrent Actions refresh / other --push (mirror workflow).
     pushed=0
     for attempt in 1 2 3 4 5; do
+      python3 "$ROOT/cluster/never_touch/__init__.py" push --remote origin
       if git push origin HEAD:main; then
         echo "Pushed on attempt ${attempt}."
         pushed=1

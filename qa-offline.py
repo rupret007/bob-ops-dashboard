@@ -13,6 +13,7 @@ from pathlib import Path
 from offline_qa_fixtures import (
     assert_fixture_calls,
     fixture_environment,
+    has_repository_ancestor,
     prepare_generator,
 )
 
@@ -28,7 +29,7 @@ def validate_output_directory(value: str | None) -> Path | None:
     temp_roots = {Path(tempfile.gettempdir()).resolve(), Path("/tmp").resolve()}
     if not any(output != temp_root and output.is_relative_to(temp_root) for temp_root in temp_roots):
         raise ValueError("--output-dir must be a child of a system temporary directory")
-    if output.is_relative_to(ROOT) or any((parent / ".git").exists() for parent in (output, *output.parents)):
+    if output.is_relative_to(ROOT) or has_repository_ancestor(output):
         raise ValueError("--output-dir must not be inside a repository")
     if output.exists() and (not output.is_dir() or any(output.iterdir())):
         raise ValueError("--output-dir must be absent or an empty temporary directory")
