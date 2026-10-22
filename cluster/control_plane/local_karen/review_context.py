@@ -39,26 +39,33 @@ def _review_with_requested_context(owner, invoke, part, original_pr, source_cont
         context, automatic_code = [], 'changed_unavailable'
     if len(context) > MAX_CONTEXT_FILES or max(context_size(context)) > MAX_CONTEXT_SIZE:
         context, automatic_code = [], 'context_budget'
-    initial_sources = 0
+    initial_sources, prefill_error = 0, None
+    required_context = list(context)
     if source_context is not None:
         from .source_context import PinnedSourceContext, SourceUnavailable, MAX_FILE_BYTES
         if type(source_context) is PinnedSourceContext:
             original = original_pr or part
-            if ((part.owner, part.repo, part.number, part.head_sha) !=
-                    (original.owner, original.repo, original.number, original.head_sha)):
-                raise SourceUnavailable('source_identity_or_path')
-            # Share already proven implementation facts before a judge decides;
-            # never fetch extra source or share another judge's answer. Reserve
-            # one entry and a complete-file allowance for a subsequent request.
-            for path in source_context.cached_changed_paths(original):
-                source = source_context.cached(part, path)
-                if source is None:
-                    continue
-                packet = context + [source]
-                if (len(packet) < MAX_CONTEXT_FILES and
-                        max(context_size(packet)) <= MAX_CONTEXT_SIZE - MAX_FILE_BYTES):
-                    context.append(source)
-                    initial_sources += 1
+            try:
+                if ((part.owner, part.repo, part.number, part.head_sha) !=
+                        (original.owner, original.repo, original.number, original.head_sha)):
+                    raise SourceUnavailable('source_identity_or_path')
+                # Wide changes keep every slot for explicit integration requests.
+                # Only already proven facts are optional; no new source is read.
+                paths = (source_context.cached_changed_paths(original)
+                         if len(original.changed_files) < MAX_CONTEXT_FILES else ())
+                for path in paths:
+                    source = source_context.cached(part, path)
+                    if source is None:
+                        continue
+                    packet = context + [source]
+                    if (len(packet) < MAX_CONTEXT_FILES and
+                            max(context_size(packet)) <= MAX_CONTEXT_SIZE - MAX_FILE_BYTES):
+                        context.append(source)
+                        initial_sources += 1
+            except SourceUnavailable as exc:
+                # Preserve the one-invocation error contract without supplying
+                # corrupted evidence or letting that invocation grant approval.
+                context, initial_sources, prefill_error = required_context, 0, exc.code
     raw, serialized = context_size(context)
     automatic = dict(code=automatic_code, changed_files=sum('diff' in item for item in context),
                      raw_size=raw, serialized_size=serialized)
@@ -68,9 +75,20 @@ def _review_with_requested_context(owner, invoke, part, original_pr, source_cont
                 automatic_code, len(context), raw, serialized)
     supplied_part = owner._context_part(part, context, 'Supplemental changed-file context') if context else part
     result = owner._validate_chunk_result(invoke(supplied_part), original_pr)
-    result = owner.replace(result, scope=dict(result.scope or {}, initial_context=automatic))
+    scope = dict(result.scope or {}, initial_context=automatic)
+    if initial_sources:
+        scope['source_context'] = [{k: v for k, v in item.items() if k != 'source'}
+                                   for item in context if 'source' in item]
+        scope['reused_source_files'] = initial_sources
+    result = owner.replace(result, scope=scope)
     counts = tuple(len(paths) if isinstance(paths, list) else None
                    for paths in (result.requested_files, result.requested_source_files))
+    if prefill_error:
+        error = owner.replace(result, verdict=owner.ReviewVerdict.ERROR,
+            reason='Cached source evidence is unavailable; retry required', raw_response='', findings=None,
+            requested_files=[], requested_source_files=[],
+            scope=dict(scope, context_incomplete=True, source_context_error=prefill_error))
+        return owner._context_resolution(error, 'source_unavailable', counts), [error]
     if not (result.requested_files or result.requested_source_files):
         result = owner._context_resolution(result, 'not_requested', counts)
         return result, [result]
@@ -123,7 +141,7 @@ def _review_with_requested_context(owner, invoke, part, original_pr, source_cont
         if max(context_size(context)) > MAX_CONTEXT_SIZE:
             result = owner._context_resolution(result, 'context_budget', counts)
             return result, [result]
-    reused_sources = []
+    reused_sources = [item['path'] for item in context if 'source' in item]
     if result.requested_source_files or (source_context is not None and result.requested_files):
         from .source_context import PinnedSourceContext, SourceUnavailable
         resolver = source_context or PinnedSourceContext(original_pr)

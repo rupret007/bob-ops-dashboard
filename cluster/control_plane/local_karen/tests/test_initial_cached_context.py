@@ -71,7 +71,7 @@ def test_repeated_source_request_does_not_duplicate_initial_fact(proven):
 
 
 @pytest.mark.parametrize('damage', ['source', 'head', 'pr'])
-def test_unproven_or_wrong_identity_never_reaches_judge(proven, damage):
+def test_unproven_or_wrong_identity_facts_cannot_reach_or_approve(proven, damage):
     pr, resolver, source, calls = proven
     part = pr
     if damage == 'source':
@@ -81,9 +81,14 @@ def test_unproven_or_wrong_identity_never_reaches_judge(proven, damage):
     else:
         part = replace(pr, number=2)
     seen = []
-    with pytest.raises(s.SourceUnavailable):
-        r._review_with_requested_context(lambda value: seen.append(value), part, pr, resolver)
-    assert seen == [] and len(calls) == 3
+    def invoke(value):
+        seen.append(value)
+        assert value.review_material is None or not value.review_material.entries
+        return replace(answer(), verdict=r.ReviewVerdict.PASS)
+    result, _ = r._review_with_requested_context(invoke, part, pr, resolver)
+    assert not result.passed and result.verdict == r.ReviewVerdict.ERROR
+    assert result.scope['context_incomplete'] and result.scope['source_context_error']
+    assert len(seen) == 1 and len(calls) == 3
 
 
 @pytest.mark.parametrize('budget', ['entries', 'bytes'])
