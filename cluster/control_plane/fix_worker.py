@@ -24,6 +24,7 @@ from .local_karen.verdict import load_verdict
 from .worker_runtime import (qualified_runtime, RuntimeUnqualified, MODULE_RUNNER,
                              test_files, outside_standard_tests)
 from . import cursor_worker
+from .release_holds import explicitly_held
 
 
 CODEX_EFFORT = 'xhigh'
@@ -196,6 +197,22 @@ def _private_workspace():
         os.umask(previous)
 
 
+def _repair_pr_metadata(repo, pr_number, head_sha):
+    pr = json.loads(run(['gh', 'pr', 'view', str(pr_number), '--repo', repo,
+                        '--json', 'headRefName,headRefOid,isCrossRepository,state,title,labels']))
+    if (not isinstance(pr, dict) or pr.get('state') != 'OPEN'
+            or pr.get('isCrossRepository') is not False
+            or not isinstance(pr.get('headRefName'), str)
+            or not pr['headRefName'] or pr['headRefName'] in ('main', 'master')
+            or not isinstance(pr.get('title'), str) or not isinstance(pr.get('labels'), list)
+            or not all(isinstance(label, dict) and isinstance(label.get('name'), str)
+                       for label in pr['labels']) or explicitly_held(pr)):
+        raise PreflightFailure('protected-pr')
+    if pr.get('headRefOid') != head_sha:
+        raise PreflightFailure('head-changed')
+    return pr
+
+
 def _fix_pr(repo, pr_number, head_sha, findings):
     _stage('provider')
     cursor = _provider.get() == 'cursor'
@@ -205,13 +222,8 @@ def _fix_pr(repo, pr_number, head_sha, findings):
     if not cursor and not codex:
         raise RuntimeError('codex CLI not found (expected ~/bin/codex)')
     _stage('git')
-    pr = json.loads(run(['gh', 'pr', 'view', str(pr_number), '--repo', repo,
-                         '--json', 'headRefName,headRefOid,isCrossRepository,state']))
+    pr = _repair_pr_metadata(repo, pr_number, head_sha)
     branch = pr['headRefName']
-    if pr['state'] != 'OPEN' or pr['isCrossRepository'] or branch in ('main', 'master'):
-        raise PreflightFailure('protected-pr')
-    if pr['headRefOid'] != head_sha:
-        raise PreflightFailure('head-changed')
     with _private_workspace() as temp:
         checkout = Path(temp) / 'repo'
         tree = Path(temp) / 'worktree'
@@ -315,6 +327,8 @@ def _fix_pr(repo, pr_number, head_sha, findings):
         run(['git', 'commit', '-m', f'fix: address Karen findings for PR #{pr_number}'], tree)
         sha = run(['git', 'rev-parse', 'HEAD'], tree)
         _stage('push')
+        if _repair_pr_metadata(repo, pr_number, head_sha)['headRefName'] != branch:
+            raise PreflightFailure('protected-pr')
         run(['git', 'push', 'origin', f'HEAD:refs/heads/{branch}'], tree)
         _stage('verification')
         remote = run(['git', 'ls-remote', 'origin', f'refs/heads/{branch}'], tree).split()[0]

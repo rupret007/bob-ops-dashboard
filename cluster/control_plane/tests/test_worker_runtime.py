@@ -330,7 +330,7 @@ def test_worker_uses_identical_env_and_rechecks_before_testing(qualified, drift)
     def command(args, cwd=None, **kwargs):
         calls.append((args, kwargs))
         if args[:3] == ['gh', 'pr', 'view']:
-            return json.dumps(dict(headRefName='fix/fixture', headRefOid=q.head, state='OPEN', isCrossRepository=False))
+            return json.dumps(dict(headRefName='fix/fixture', headRefOid=q.head, state='OPEN', isCrossRepository=False, title='Ready', labels=[]))
         if args[:3] == ['git', 'worktree', 'add']:
             shutil.copytree(q.tree, args[-2])
         if args[0] == '/fixture/codex':
@@ -416,7 +416,7 @@ def test_runtime_race_after_reservation_keeps_exact_head_attempt_count(qualified
         calls.append(args)
         if args[:3] == ['gh', 'pr', 'view']:
             return json.dumps(dict(headRefName='fix/fixture', headRefOid=q.head,
-                                   state='OPEN', isCrossRepository=False))
+                                   state='OPEN', isCrossRepository=False, title='Ready', labels=[]))
         if args[:3] == ['git', 'worktree', 'add']:
             shutil.copytree(q.tree, args[-2])
         return ''
@@ -567,7 +567,7 @@ def test_worker_inherits_native_umask_but_creates_private_checkout_before_provid
     def command(args, cwd=None, **kwargs):
         if args[:3] == ['gh', 'pr', 'view']:
             return json.dumps(dict(headRefName='fix/fixture', headRefOid=q.head,
-                                   state='OPEN', isCrossRepository=False))
+                                   state='OPEN', isCrossRepository=False, title='Ready', labels=[]))
         if args[0] == '/fixture/codex':
             providers.append(args)
             raise ProviderReached()  # No model, tests, commit, push, or network executes.
