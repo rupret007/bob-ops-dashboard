@@ -382,7 +382,8 @@ def run_poll_loop(config: Optional[KarenConfig]=None) -> None:
 
 
 def main() -> int:
-    from .poller_runtime import main as implementation
+    # The public, zero-argument entry point stays on this module.
+    from .poller_runtime import run_cli as implementation
     return implementation(sys.modules[__name__])
 
 

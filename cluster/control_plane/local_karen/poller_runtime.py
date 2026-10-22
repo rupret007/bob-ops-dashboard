@@ -178,7 +178,7 @@ def run_poll_loop(controller, config: Optional[KarenConfig]=None) -> None:
         controller.logger.info(f'Sleeping for {config.poll_interval_minutes} minutes')
         controller.time.sleep(interval_sec)
 
-def main(controller) -> int:
+def run_cli(controller) -> int:
     """CLI entry point for poller."""
     import argparse
     parser = argparse.ArgumentParser(prog='karen-poller', description='Poll for PRs with needs-karen label and run gate')
