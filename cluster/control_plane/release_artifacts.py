@@ -96,18 +96,22 @@ def _unique(pairs):
     return result
 
 
-def _git(repo, args, *, data=None, missing_config=False):
+def _git(repo, args, *, data=None, missing_config=False, limit=4*1024*1024):
     # Object reads do not apply checkout filters, archive substitutions or
     # hooks. Ignore replace refs and inherited configuration injection.
     env = {k:v for k,v in os.environ.items() if not k.startswith('GIT_')}
     env.update(GIT_CONFIG_NOSYSTEM='1', GIT_CONFIG_GLOBAL=os.devnull,
                GIT_NO_REPLACE_OBJECTS='1', GIT_NO_LAZY_FETCH='1',
                GIT_ATTR_NOSYSTEM='1', GIT_TERMINAL_PROMPT='0')
-    result = subprocess.run(['git', '-c', 'core.hooksPath='+os.devnull,
-        '-C', str(repo), *args], input=data, env=env, capture_output=True, timeout=30)
-    absent = missing_config and result.returncode == 1 and not result.stdout
-    _require((result.returncode == 0 or absent) and not result.stderr.strip(), 'Release object read failed')
-    return result.stdout
+    from .release_object_io import capture, GitReadError
+    try:
+        code, output, errors = capture(['git', '-c', 'core.hooksPath='+os.devnull,
+            '-C', str(repo), *args], data=data, env=env, limit=limit, timeout=30)
+    except GitReadError as error:
+        raise ArtifactError(str(error)) from None
+    absent = missing_config and code == 1 and not output
+    _require((code == 0 or absent) and not errors.strip(), 'Release object read failed')
+    return output
 
 
 def _objects(repo, head):
@@ -115,10 +119,10 @@ def _objects(repo, head):
     # promisor configuration before an object lookup can trigger a fetch.
     _require(not _git(repo, ['config', '--name-only', '--get-regexp',
         r'^(extensions\.partialclone|remote\..*\.(promisor|partialclonefilter))$'],
-        missing_config=True), 'Partial repository object reads are unsupported')
-    _require(_git(repo, ['rev-parse', '--verify', head+'^{commit}']).decode().strip() == head,
+        missing_config=True, limit=16384), 'Partial repository object reads are unsupported')
+    _require(_git(repo, ['rev-parse', '--verify', head+'^{commit}'], limit=41).decode().strip() == head,
              'Release head is not its exact commit')
-    tree = _git(repo, ['rev-parse', head+'^{tree}']).decode().strip()
+    tree = _git(repo, ['rev-parse', head+'^{tree}'], limit=41).decode().strip()
     _require(_hex(tree, 40), 'Release tree is invalid')
     listing = _git(repo, ['ls-tree', '-r', '-l', '-z', '--full-tree', head])
     _require(0 < len(listing) <= 4*1024*1024 and listing.endswith(b'\0'),
@@ -242,7 +246,8 @@ def build(repo, head, store, *, allowed):
         tree, files = _objects(repo, head); _held(allowed)
         # The sizes above bound this local Git object's complete batch output.
         output = _git(repo, ['cat-file','--batch'],
-                      data=b''.join(v['oid'].encode()+b'\n' for v in files.values()))
+                      data=b''.join(v['oid'].encode()+b'\n' for v in files.values()),
+                      limit=MAX_TOTAL+MAX_FILES*128)
         _require(len(output) <= MAX_TOTAL+MAX_FILES*128, 'Release blob output exceeds limit')
         for name, metadata, data in _blobs(files, output):
             metadata['sha256'] = hashlib.sha256(data).hexdigest()

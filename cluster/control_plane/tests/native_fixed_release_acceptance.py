@@ -64,6 +64,10 @@ def actual(tmp_path_factory):
     for candidate in candidates:
         if not candidate.is_dir():continue
         try:
+            # This must run before even the fixture's commit-type probes:
+            # historical Git may ignore GIT_NO_LAZY_FETCH on a promisor repo.
+            for head in [BEFORE,AFTER]:
+                artifacts._objects(candidate,head)
             assert all(artifacts._git(candidate,['cat-file','-t',head]).strip()==b'commit'
                        for head in [BEFORE,AFTER])
         except (artifacts.ArtifactError,AssertionError):continue

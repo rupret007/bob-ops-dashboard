@@ -230,3 +230,82 @@ def test_partial_clone_never_invokes_a_promisor_fetch(source, tmp_path, monkeypa
         artifacts.build(partial.resolve(), head, store, allowed=lambda: True)
     assert not marker.exists(), 'Source preparation invoked a promisor fetch'
     assert not (store/head).exists() and not list(store.glob('.stage-*'))
+
+
+def owned_git_program(tmp_path, monkeypatch, program):
+    directory = tmp_path/'bounded-git-bin'; directory.mkdir()
+    executable = directory/'git'
+    executable.write_text('#!'+sys.executable+'\n'+program)
+    executable.chmod(0o755)
+    monkeypatch.setenv('PATH', str(directory)+os.pathsep+os.environ['PATH'])
+
+
+@pytest.mark.parametrize('channel', [1, 2])
+def test_git_output_limit_stops_the_actual_producer_before_buffering_its_tail(
+        source, tmp_path, monkeypatch, channel):
+    repo, _, _ = source
+    marker = tmp_path/'unbounded-tail-produced'
+    pidfile = tmp_path/'bounded-child-pid'
+    owned_git_program(tmp_path, monkeypatch,
+        'import os\nfrom pathlib import Path\n'
+        'Path('+repr(str(pidfile))+').write_text(str(os.getpid()))\n'
+        'for _ in range(96): os.write('+str(channel)+", b'x'*65536)\n"
+        'Path('+repr(str(marker))+').write_text("tail")\n')
+    with pytest.raises(artifacts.ArtifactError, match='output exceeds limit'):
+        artifacts._git(repo, ['ls-tree', '-r', 'synthetic-bounded-output'])
+    assert not marker.exists(), 'Git output was buffered through its unbounded tail'
+    with pytest.raises(ProcessLookupError):
+        os.kill(int(pidfile.read_text()), 0)
+
+
+def test_git_output_at_the_original_inventory_limit_is_complete(source, tmp_path, monkeypatch):
+    repo, _, _ = source
+    owned_git_program(tmp_path, monkeypatch,
+        "import os\nfor _ in range(64): os.write(1, b'x'*65536)\n")
+    assert artifacts._git(repo, ['ls-tree', '-r', 'synthetic-boundary']) == b'x'*(4*1024*1024)
+
+
+def test_git_batch_pipe_reads_output_while_writing_its_complete_input(source, tmp_path, monkeypatch):
+    repo, _, _ = source
+    payload = (b'0'*40+b'\n')*5000
+    owned_git_program(tmp_path, monkeypatch,
+        "import hashlib,os,sys\nos.write(1,b'p'*131072)\n"
+        "raw=sys.stdin.buffer.read()\nos.write(1,hashlib.sha256(raw).hexdigest().encode())\n")
+    assert artifacts._git(repo, ['cat-file', '--batch'], data=payload) == (
+        b'p'*131072+hashlib.sha256(payload).hexdigest().encode())
+
+
+def test_native_acceptance_checks_promisor_configuration_before_its_object_probe(
+        source, tmp_path, tmp_path_factory, monkeypatch):
+    import importlib.util
+    import shutil
+    repo, _, _ = source
+    upstream = tmp_path/'fixture-upstream.git'
+    git(repo, 'clone', '--bare', '--no-local', str(repo), str(upstream))
+    git(upstream, 'config', 'uploadpack.allowFilter', 'true')
+    home = tmp_path/'owned-home'; home.mkdir()
+    partial = home/'storypool-install'
+    git(repo, 'clone', '--filter=blob:none', '--no-checkout', upstream.as_uri(), str(partial))
+    marker = tmp_path/'fixture-fetch-attempted'
+    directory = tmp_path/'fixture-owned-bin'; directory.mkdir()
+    helper = directory/'git-remote-artifact-probe'
+    helper.write_text('#!/bin/sh\nprintf attempted > '+shlex.quote(str(marker))+'\nexit 1\n')
+    helper.chmod(0o755)
+    git(partial, 'config', 'remote.origin.url', 'artifact-probe::probe')
+    git(partial, 'config', 'protocol.artifact-probe.allow', 'always')
+    real_git = shutil.which('git'); assert real_git
+    # Reproduce historical Git's lack of GIT_NO_LAZY_FETCH support while
+    # retaining real Git object lookup and the owned no-network fetch probe.
+    executable = directory/'git'
+    executable.write_text('#!'+sys.executable+'\nimport os,sys\n'
+        'env=dict(os.environ);env.pop("GIT_NO_LAZY_FETCH",None)\n'
+        'os.execve('+repr(real_git)+', ['+repr(real_git)+',*sys.argv[1:]],env)\n')
+    executable.chmod(0o755)
+    monkeypatch.setenv('PATH', str(directory)+os.pathsep+os.environ['PATH'])
+    monkeypatch.setattr(Path, 'home', classmethod(lambda cls: home))
+    path = Path(artifacts.__file__).parent/'tests/native_fixed_release_acceptance.py'
+    spec = importlib.util.spec_from_file_location('owned_native_artifact_fixture', path)
+    native = importlib.util.module_from_spec(spec); spec.loader.exec_module(native)
+    with pytest.raises(AssertionError, match='Exact already-fetched Git objects are unavailable'):
+        native.actual.__wrapped__(tmp_path_factory)
+    assert not marker.exists(), 'The acceptance fixture fetched before its partial-clone guard'
