@@ -375,9 +375,20 @@ class EngineCollector:
         for name in health:
             peer = read_json(self.data_dir / 'machines' / name / 'engine.json') or {}
             node = control if name == self.machine else peer.get('control', {})
-            if node.get('maintenance'):
-                health[name].update(state='maintenance', detail=node.get('reason', 'Operator maintenance'))
-        overall = 'red' if any(v['state'] == 'red' for v in health.values()) else ('green' if all(v['state'] in ('green', 'maintenance') for v in health.values()) else 'yellow')
+            health[name]['maintenance'] = node.get('maintenance') is True
+            health[name]['display_state'] = health[name]['state']
+            if health[name]['maintenance']:
+                if health[name]['state'] == 'green':
+                    health[name].update(state='maintenance', display_state='maintenance',
+                                        detail=node.get('reason', 'Operator maintenance'))
+                else:
+                    health[name]['detail'] += '; maintenance requested'
+                    if unified is None:
+                        # Older control clients use state to acknowledge draining.
+                        # Display and engine severity still retain the health result.
+                        health[name]['state'] = 'maintenance'
+        states = [v.get('display_state', v['state']) for v in health.values()]
+        overall = 'red' if 'red' in states else ('green' if all(s in ('green', 'maintenance') for s in states) else 'yellow')
         admission = {'state': 'unknown', 'reason': 'Work admission has no recent dispatcher report.'}
         if isinstance(dispatch, dict) and now.timestamp() - 900 <= stamp(dispatch.get('timestamp')) <= now.timestamp() + 60:
             decisions = dispatch.get('summary', {}).get('decisions', [])
@@ -408,7 +419,7 @@ class EngineCollector:
                     and 0 <= current - stamp(peer.get('peer_timestamp')) < PEER_FRESH_SEC) else {}
         reasons = flow_reasons(flow_local, peers, current)
         reasons += [name + ': ' + value['detail'] for name, value in health.items()
-                    if value['state'] not in ('green', 'maintenance')]
+                    if value.get('display_state', value['state']) not in ('green', 'maintenance')]
         if admission['state'] == 'paused':
             reasons.append(admission['reason'])
         if reasons and overall == 'green':
