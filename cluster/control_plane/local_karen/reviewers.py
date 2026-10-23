@@ -29,7 +29,7 @@ from .config import KarenConfig
 from .deadline import remaining_timeout
 from .context_api import ReviewTier, ReviewVerdict, ReviewFindings, ReviewResult
 from .context_api import _diff_line_locations, _grounded_chunk_failure, _validate_chunk_result
-from .checks import PRInfo, ReviewScope, ReviewMaterial
+from .check_types import PRInfo, ReviewScope, ReviewMaterial
 from ..codex_quota import read_codex_quota
 from ..codex_quota_remote import read_remote_codex_quota
 from ..ssh_transport import SSHTransport
