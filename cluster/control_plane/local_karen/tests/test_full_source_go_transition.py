@@ -127,3 +127,34 @@ def test_proof_rejects_any_source_where_required_old_version_rejection_fails(loc
         for mapping in (old, new):
             mapping[location] += '# old version: 1.26.9\n'
     assert prove_transition(old, new) is None
+
+
+@pytest.mark.parametrize('tail', [
+    "if 'cross_network' in locals():\n        return",
+    "assert 'cross_network' not in locals()",
+    "assert 'cross_network' not in __builtins__['locals']()",
+    'global ROOT',
+    'def nested():\n        return locals()',
+    "assert True, locals()",
+    'assert custom_check()',
+])
+def test_new_local_cannot_change_existing_tail_control_flow_or_observation(tail):
+    old, new = sources()
+    for mapping in (old, new):
+        mapping[TEST] = mapping[TEST].replace("    assert '1.25.12'", '    ' + tail + "\n    assert '1.25.12'")
+    assert prove_transition(old, new) is None
+
+
+def test_parseable_but_uncompilable_unchanged_source_is_rejected():
+    old, new = sources()
+    for mapping in (old, new): mapping[TEST] += 'return\n'
+    assert ast.parse(old[TEST]) and ast.parse(new[TEST])
+    assert prove_transition(old, new) is None
+
+
+def test_actual_module_floor_regex_assertion_remains_supported():
+    old, new = sources()
+    for mapping in (old, new):
+        mapping[TEST] = 'import re\n' + mapping[TEST].replace(
+            "assert 'go 1.25.13' in 'go 1.25.13'", "assert re.search(r'(?m)^go 1\\.25\\.13$', TRANSPORT_GO_MOD)")
+    assert prove_transition(old, new) is not None

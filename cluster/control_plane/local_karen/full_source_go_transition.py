@@ -21,6 +21,7 @@ PIN = re.compile(r'(?m)^\s*go-version: "(' + VERSION + r')"\s*$')
 
 
 def _ast(text):
+    compile(text.encode('utf-8'), '<source-proof>', 'exec', dont_inherit=True)
     return ast.dump(ast.parse(text.encode('utf-8')), include_attributes=False)
 
 
@@ -56,6 +57,7 @@ def prove_transition(old, new):
         if any(t.type == tokenize.NAME and unicodedata.normalize('NFKC', t.string) == 'cross_network'
                for t in tokenize.generate_tokens(io.StringIO(old[TEST]).readline)):
             return None
+        _ast(old[TEST])  # Validate compilation scopes without executing source.
         tree = ast.parse(old[TEST].encode('utf-8'))
         # Python's parser recognizes some Unicode identifiers that tokenize
         # splits into multiple tokens. Its identifier fields are normalized.
@@ -74,6 +76,26 @@ def prove_transition(old, new):
         if len(targets) != 1:
             return None
         target = targets[0]
+        # A new local must not change later branching or namespace inspection.
+        # Keep this oracle's tail to literal/global assertions and its existing
+        # standard regex check; arbitrary calls cannot be proven independent.
+        allowed = (ast.Assert, ast.Compare, ast.Constant, ast.Name, ast.Load,
+                   ast.In, ast.NotIn, ast.Eq, ast.NotEq, ast.Call, ast.Attribute)
+        for statement in target.body[1:]:
+            if not isinstance(statement, ast.Assert) or statement.msg is not None:
+                return None
+            for node in ast.walk(statement):
+                if not isinstance(node, allowed):
+                    return None
+                if isinstance(node, ast.Name) and node.id not in ('WORKFLOW', 'TRANSPORT_GO_MOD', 're'):
+                    return None
+                if isinstance(node, ast.Attribute) and ast.dump(node) != ast.dump(ast.parse('re.search').body[0].value):
+                    return None
+                if isinstance(node, ast.Call) and (node.keywords or len(node.args) != 2
+                        or not isinstance(node.func, ast.Attribute)
+                        or not isinstance(node.args[0], ast.Constant) or type(node.args[0].value) is not str
+                        or ast.dump(node.args[1]) != ast.dump(ast.parse('TRANSPORT_GO_MOD').body[0].value)):
+                    return None
         replacement = ast.parse(
             "assert WORKFLOW.count('go-version: \"" + after + "\"') == 2\n"
             "cross_network = (ROOT / '.github' / 'workflows' / 'cross-network-acceptance.yml').read_text(encoding='utf-8')\n"
