@@ -21,7 +21,7 @@ PIN = re.compile(r'(?m)^\s*go-version: "(' + VERSION + r')"\s*$')
 
 
 def _ast(text):
-    return ast.dump(ast.parse(text), include_attributes=False)
+    return ast.dump(ast.parse(text.encode('utf-8')), include_attributes=False)
 
 
 def prove_transition(old, new):
@@ -50,11 +50,13 @@ def prove_transition(old, new):
                     or [m.group(1) for m in PIN.finditer(old[path])] != [before] * count
                     or new[path] != old[path].replace(old_pin, new_pin)):
                 return None
+        if before in new[CI] + new[NETWORK]:
+            return None  # The required old-version rejection must actually pass.
         # Inspect the complete old module, including bindings outside the hunk.
         if any(t.type == tokenize.NAME and unicodedata.normalize('NFKC', t.string) == 'cross_network'
                for t in tokenize.generate_tokens(io.StringIO(old[TEST]).readline)):
             return None
-        tree = ast.parse(old[TEST])
+        tree = ast.parse(old[TEST].encode('utf-8'))
         # Python's parser recognizes some Unicode identifiers that tokenize
         # splits into multiple tokens. Its identifier fields are normalized.
         for node in ast.walk(tree):

@@ -107,3 +107,23 @@ def test_notes():
         '    assert WORKFLOW.count(\'go-version: "1.26.9"\') == 2\n', '')
     assert ast.parse(old[TEST]) and ast.parse(new[TEST])
     assert prove_transition(old, new) is None
+
+
+def test_encoding_cookie_cannot_hide_executable_code_from_source_proof():
+    old, new = sources()
+    new[TEST] = '# coding: unicode_escape\n# note\\ninjected_call()\n' + new[TEST]
+    assert ast.dump(ast.parse(new[TEST])) == ast.dump(ast.parse(sources()[1][TEST]))
+    assert ast.dump(ast.parse(new[TEST].encode('utf-8'))) != ast.dump(ast.parse(new[TEST]))
+    assert prove_transition(old, new) is None
+
+
+@pytest.mark.parametrize('location', ['version_prefix', CI, NETWORK])
+def test_proof_rejects_any_source_where_required_old_version_rejection_fails(location):
+    old, new = sources()
+    if location == 'version_prefix':
+        old = {p: text.replace('1.26.9', '1.26.1') for p, text in old.items()}
+        new = {p: text.replace("assert '1.26.9'", "assert '1.26.1'") for p, text in new.items()}
+    else:
+        for mapping in (old, new):
+            mapping[location] += '# old version: 1.26.9\n'
+    assert prove_transition(old, new) is None
