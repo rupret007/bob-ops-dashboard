@@ -72,6 +72,7 @@ ADMITTED_BASE = '0b65227dd8e20fa6e291b591b469b917c7d3bd40'
 
 
 POLICY_FILES = frozenset({
+    'cluster/control_plane/local_karen/assertion_guard.py',
     'cluster/control_plane/local_karen/assertion_policy.py',
     'cluster/control_plane/local_karen/check_types.py',
     'cluster/control_plane/local_karen/contract_policy.py',
