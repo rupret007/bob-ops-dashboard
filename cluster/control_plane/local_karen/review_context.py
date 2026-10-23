@@ -23,13 +23,23 @@ def _context_keys(entries):
     return {('diff' if 'diff' in item else 'source', item['path']) for item in entries}
 
 
+def _packet_checked_invoke(invoke, part):
+    from .packet_scope import packet_limits
+    packet_limits(part)
+    result = invoke(part)
+    packet_limits(part)
+    return result
+
+
 def _repack_partial_context(part, original_pr, entries, wanted, requested_paths):
     """Omit optional seeds only when required pinned evidence needs their space."""
-    from .chunk_context import MAX_CONTEXT_FILES, MAX_CONTEXT_SIZE, context_size, _file_sections
+    from .chunk_context import context_size, _file_sections
+    from .packet_scope import packet_limits
+    max_files, max_size = packet_limits(part)
 
     def fits(packet):
-        return (len(_context_keys(packet) | set(wanted)) <= MAX_CONTEXT_FILES
-                and max(context_size(packet)) <= MAX_CONTEXT_SIZE)
+        return (len(_context_keys(packet) | set(wanted)) <= max_files
+                and max(context_size(packet)) <= max_size)
 
     if fits(entries) or original_pr is None or not part.diff:
         return entries
@@ -65,8 +75,9 @@ def _repack_partial_context(part, original_pr, entries, wanted, requested_paths)
 def _review_with_requested_context(owner, invoke, part, original_pr, source_context=None,
                                    initial_context=None):
     """One follow-up with changed diffs or separately proven immutable source."""
-    from .chunk_context import (MAX_CONTEXT_FILES, MAX_CONTEXT_SIZE, context_size, _file_sections,
-                                requested_file_diff)
+    from .chunk_context import context_size, _file_sections, requested_file_diff
+    from .packet_scope import packet_limits
+    max_files, max_size = packet_limits(part)
     context, automatic_code = initial_context or ([], 'not_applicable')
     context = list(context)
     # Context is server-owned state, never reconstructed from model/PR prose.
@@ -80,7 +91,7 @@ def _review_with_requested_context(owner, invoke, part, original_pr, source_cont
                 or item['diff'] != requested_file_diff(original_pr, item['path'], part.head_sha)
                 for item in context)):
         context, automatic_code = [], 'changed_unavailable'
-    if len(context) > MAX_CONTEXT_FILES or max(context_size(context)) > MAX_CONTEXT_SIZE:
+    if len(context) > max_files or max(context_size(context)) > max_size:
         context, automatic_code = [], 'context_budget'
     raw, serialized = context_size(context)
     automatic = dict(code=automatic_code, changed_files=len(context),
@@ -88,7 +99,7 @@ def _review_with_requested_context(owner, invoke, part, original_pr, source_cont
     owner.logger.info('Initial review context: code=%s; changed_files=%s; raw_size=%s; serialized_size=%s',
                 automatic_code, len(context), raw, serialized)
     supplied_part = owner._context_part(part, context, 'Supplemental changed-file context') if context else part
-    result = owner._validate_chunk_result(invoke(supplied_part), original_pr)
+    result = owner._validate_chunk_result(_packet_checked_invoke(invoke, supplied_part), original_pr)
     result = owner.replace(result, scope=dict(result.scope or {}, initial_context=automatic))
     counts = tuple(len(paths) if isinstance(paths, list) else None
                    for paths in (result.requested_files, result.requested_source_files))
@@ -140,7 +151,7 @@ def _review_with_requested_context(owner, invoke, part, original_pr, source_cont
         keys = _context_keys(context)
 
     repack()
-    if len(keys | set(wanted)) > MAX_CONTEXT_FILES:
+    if len(keys | set(wanted)) > max_files:
         result = owner._context_resolution(result, 'context_budget', counts)
         return result, [result]
     for path in result.requested_files:
@@ -153,7 +164,7 @@ def _review_with_requested_context(owner, invoke, part, original_pr, source_cont
         context.append({"path": path, "diff": supplied})
         keys.add(('diff', path))
         repack()
-        if max(context_size(context)) > MAX_CONTEXT_SIZE:
+        if max(context_size(context)) > max_size:
             result = owner._context_resolution(result, 'context_budget', counts)
             return result, [result]
     reused_sources = []
@@ -167,7 +178,7 @@ def _review_with_requested_context(owner, invoke, part, original_pr, source_cont
                         context.append({'path': path, 'diff': source_diffs[path]})
                         keys.add(('diff', path))
                         repack()
-                        if max(context_size(context)) > MAX_CONTEXT_SIZE:
+                        if max(context_size(context)) > max_size:
                             result = owner._context_resolution(result, 'context_budget', counts)
                             return result, [result]
                     continue
@@ -177,7 +188,7 @@ def _review_with_requested_context(owner, invoke, part, original_pr, source_cont
                 context.append(source)
                 keys.add(('source', path))
                 repack()
-                if max(context_size(context)) > MAX_CONTEXT_SIZE:
+                if max(context_size(context)) > max_size:
                     raise SourceUnavailable('source_budget')
             # A changed diff omits unchanged imports/initialization. Reuse only
             # source already proven by this review's resolver; never fetch extra
@@ -197,7 +208,7 @@ def _review_with_requested_context(owner, invoke, part, original_pr, source_cont
                     if source is None:
                         continue
                     packet = context + [source]
-                    if len(packet) <= MAX_CONTEXT_FILES and max(context_size(packet)) <= MAX_CONTEXT_SIZE:
+                    if len(packet) <= max_files and max(context_size(packet)) <= max_size:
                         context.append(source)
                         keys.add(('source', path))
                         reused_sources.append(path)
@@ -225,7 +236,7 @@ def _review_with_requested_context(owner, invoke, part, original_pr, source_cont
     review_checkpoint()
     if source_diffs:
         owner.logger.info('Source requests routed to changed diffs: count=%s', len(source_diffs))
-    result = owner._validate_chunk_result(invoke(followup), original_pr)
+    result = owner._validate_chunk_result(_packet_checked_invoke(invoke, followup), original_pr)
     scope = dict(result.scope or {}, initial_context=automatic)
     if omitted_optional:
         scope['followup_omitted_optional_count'] = omitted_optional

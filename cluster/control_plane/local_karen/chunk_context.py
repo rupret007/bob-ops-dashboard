@@ -223,6 +223,8 @@ def automatic_complement(pr: PRInfo, chunks: Sequence[str], index: int):
     integration evidence still requires review; packets confer no authority.
     This only reads the pinned input, without source/file/API IO.
     """
+    from .packet_scope import packet_limits
+    max_files, max_size = packet_limits(pr)
     if (not 1 <= index <= len(chunks) or ''.join(chunks) != pr.diff
             or not re.fullmatch(r'[0-9a-fA-F]{40}', pr.head_sha or '')):
         raise ValueError('Automatic context requires the complete exact-head chunk plan')
@@ -241,7 +243,7 @@ def automatic_complement(pr: PRInfo, chunks: Sequence[str], index: int):
     missing = partial or [item['path'] for item in manifest if any(
         s['path'] == item['path'] and not (start <= s['start'] and s['end'] <= end)
         for s in sections)]
-    if len(missing) > MAX_CONTEXT_FILES:
+    if len(missing) > max_files:
         return [], 'partial_file' if partial else 'context_budget'
     entries = []
     for path in missing:
@@ -249,7 +251,7 @@ def automatic_complement(pr: PRInfo, chunks: Sequence[str], index: int):
         if supplied is None:
             return [], 'changed_unavailable'
         entries.append(dict(path=path, diff=supplied))
-        if max(context_size(entries)) > MAX_CONTEXT_SIZE:
+        if max(context_size(entries)) > max_size:
             return [], 'partial_file' if partial else 'context_budget'
     if partial:
         # One other file can be obtained in the existing single follow-up.
@@ -268,8 +270,8 @@ def automatic_complement(pr: PRInfo, chunks: Sequence[str], index: int):
                 other.append(dict(path=path, diff=supplied))
         if len(other) > 1:
             for item in sorted(other, key=lambda item: (len(item['diff']), item['path'])):
-                if len(entries) >= MAX_CONTEXT_FILES - 1:
+                if len(entries) >= max_files - 1:
                     break
-                if max(context_size(entries + [item])) <= MAX_CONTEXT_SIZE:
+                if max(context_size(entries + [item])) <= max_size:
                     entries.append(item)
     return entries, ('partial_file_supplied' if partial else 'supplied') if entries else 'not_needed'
