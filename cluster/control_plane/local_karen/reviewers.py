@@ -28,7 +28,7 @@ from typing import Optional, List, Dict, Tuple, Any, Type
 
 from .config import KarenConfig
 from .deadline import remaining_timeout
-from .checks import PRInfo, ReviewScope, ReviewMaterial
+from .check_types import PRInfo, ReviewScope, ReviewMaterial
 from ..codex_quota import read_codex_quota
 from ..codex_quota_remote import read_remote_codex_quota
 from ..ssh_transport import SSHTransport
@@ -1585,6 +1585,7 @@ def _context_part(part, entries, label):
 
 def _review_with_requested_context(invoke, part, original_pr, source_context=None,
                                    initial_context=None):
+    """Public five-input facade; inject this module as the handler owner."""
     from . import review_context
     import sys
     return review_context._review_with_requested_context(sys.modules[__name__], invoke, part, original_pr, source_context, initial_context)

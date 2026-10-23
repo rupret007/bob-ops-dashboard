@@ -412,19 +412,19 @@ def copy_karen_module(repo_dir: Path, module_dir: Optional[Path] = None) -> bool
         dst_control_plane.mkdir(parents=True, exist_ok=True)
         # Poller optional imports depend on the complete control plane, not just
         # local_karen. Keep the installed package self-contained.
+        ignore_bytecode = shutil.ignore_patterns("__pycache__", "*.pyc", "*.pyc.*", ".pytest_cache")
         shutil.copytree(repo_dir / "cluster" / "control_plane", dst_control_plane,
-                        dirs_exist_ok=True,
-                        ignore=shutil.ignore_patterns("__pycache__", "*.pyc", ".pytest_cache"))
+                        dirs_exist_ok=True, ignore=ignore_bytecode)
 
         
         if dst_karen.exists():
             shutil.rmtree(dst_karen)
-        shutil.copytree(src_karen, dst_karen)
+        shutil.copytree(src_karen, dst_karen, ignore=ignore_bytecode)
         
         if src_dashboard.is_dir():
             if dst_dashboard.exists():
                 shutil.rmtree(dst_dashboard)
-            shutil.copytree(src_dashboard, dst_dashboard)
+            shutil.copytree(src_dashboard, dst_dashboard, ignore=ignore_bytecode)
         
         if src_backlog.is_file():
             shutil.copy2(src_backlog, dst_control_plane / "backlog.py")

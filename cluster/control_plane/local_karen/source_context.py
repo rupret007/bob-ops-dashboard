@@ -5,9 +5,11 @@ import base64
 import hashlib
 import json
 import re
+import subprocess
 import time
 
 from ..github_reads import run as budgeted_gh
+from ..github_budget import GitHubDeferred
 from .checks import SECRET_PATTERNS
 from .deadline import remaining_timeout
 
@@ -33,13 +35,17 @@ class SourceUnavailable(RuntimeError):
                        'blob_identity source_encoding blob_hash source_nontext source_private').split())
     METADATA_REASONS = frozenset(('source_entry_missing source_parent_metadata source_type_or_mode '
                                   'source_size_invalid source_file_limit source_total_limit source_blob_sha').split())
+    READ_REASONS = frozenset(('minute_exhausted background_exhausted github_deferred cli_failed '
+                              'timeout fetch_deadline invalid_json unexpected_error').split())
 
-    def __init__(self, code, *, metadata_reason=None):
+    def __init__(self, code, *, metadata_reason=None, read_reason=None):
         self.code = code if code in self.CODES else 'source_unavailable'
         # Optional operational detail must not change the established error API.
         self.metadata_reason = (metadata_reason if self.code == 'source_metadata'
                                 and type(metadata_reason) is str and metadata_reason in self.METADATA_REASONS
                                 else None)
+        self.read_reason = (read_reason if self.code == 'source_read'
+                            and type(read_reason) is str and read_reason in self.READ_REASONS else None)
         super().__init__(self.code)
 
 
@@ -58,7 +64,33 @@ class PinnedSourceContext:
         self.identity = (pr.owner, pr.repo, pr.head_sha)
         self.calls, self.bytes = 0, 0
         self.tree, self.tree_sha, self.sources = None, None, {}
+        self._source_proofs = {}
         self.seconds = 30.0
+
+    def cached_changed_paths(self, pr):
+        """Expose only previously proven paths that belong to this PR's change."""
+        if self.identity != (pr.owner, pr.repo, pr.head_sha):
+            raise SourceUnavailable('source_identity_or_path')
+        return tuple(path for path in self._source_proofs if path in pr.changed_files)
+
+    def cached(self, pr, path):
+        """Return only unchanged, previously verified source for this identity."""
+        if not isinstance(path, str):
+            raise SourceUnavailable('source_identity_or_path')
+        if path not in self.sources:
+            return None
+        if (self.identity != (pr.owner, pr.repo, pr.head_sha) or not safe_source_path(path)):
+            raise SourceUnavailable('source_identity_or_path')
+        try:
+            source = self.sources[path]
+            if type(source) is not dict:
+                raise SourceUnavailable('blob_identity')
+            digest = hashlib.sha256(json.dumps(source, sort_keys=True).encode()).hexdigest()
+            if self._source_proofs[path] != (self.identity, self.tree_sha, digest):
+                raise SourceUnavailable('blob_identity')
+        except (KeyError, TypeError, ValueError):
+            raise SourceUnavailable('blob_identity') from None
+        return dict(source)
 
     def _json(self, suffix, maximum):
         from .gate import review_checkpoint
@@ -71,8 +103,10 @@ class PinnedSourceContext:
         try:
             result = budgeted_gh(['api', '--method', 'GET', 'repos/{}/{}/git/{}'.format(owner, repo, suffix)],
                                  timeout=remaining_timeout(min(10, self.seconds)))
-            if result.returncode or time.monotonic() - started > self.seconds:
-                raise SourceUnavailable('source_read')
+            if result.returncode:
+                raise SourceUnavailable('source_read', read_reason='cli_failed')
+            if time.monotonic() - started > self.seconds:
+                raise SourceUnavailable('source_read', read_reason='fetch_deadline')
             if len(result.stdout.encode('utf-8')) > maximum:
                 raise SourceUnavailable('response_size')
             value = json.loads(result.stdout)
@@ -81,8 +115,16 @@ class PinnedSourceContext:
             return value
         except SourceUnavailable:
             raise
+        except GitHubDeferred as exc:
+            detail = {'minute-exhausted': 'minute_exhausted',
+                      'background-exhausted': 'background_exhausted'}.get(exc.code, 'github_deferred')
+            raise SourceUnavailable('source_read', read_reason=detail) from None
+        except subprocess.TimeoutExpired:
+            raise SourceUnavailable('source_read', read_reason='timeout') from None
+        except json.JSONDecodeError:
+            raise SourceUnavailable('source_read', read_reason='invalid_json') from None
         except Exception:
-            raise SourceUnavailable('source_read') from None
+            raise SourceUnavailable('source_read', read_reason='unexpected_error') from None
         finally:
             self.seconds -= max(0, time.monotonic() - started)
 
@@ -96,7 +138,7 @@ class PinnedSourceContext:
                 or not isinstance(head, str) or not re.fullmatch(r'[0-9a-f]{40}', head) or not safe_source_path(path)):
             raise SourceUnavailable('source_identity_or_path')
         if path in self.sources:
-            return self.sources[path]
+            return self.cached(pr, path)
         if self.tree is None:
             commit = self._json('commits/' + head, 65536)
             tree_sha = commit.get('tree', {}).get('sha') if isinstance(commit.get('tree'), dict) else None
@@ -153,4 +195,6 @@ class PinnedSourceContext:
         self.bytes += size
         source = dict(path=path, head_sha=head, tree_sha=self.tree_sha, blob_sha=sha, bytes=size, source=text)
         self.sources[path] = source
-        return source
+        self._source_proofs[path] = (self.identity, self.tree_sha,
+            hashlib.sha256(json.dumps(source, sort_keys=True).encode()).hexdigest())
+        return dict(source)

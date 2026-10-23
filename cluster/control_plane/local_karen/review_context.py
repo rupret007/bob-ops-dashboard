@@ -19,6 +19,49 @@ def _context_part(owner, part, entries, label):
         tuple(dict(item) for item in entries), phase))
 
 
+def _context_keys(entries):
+    return {('diff' if 'diff' in item else 'source', item['path']) for item in entries}
+
+
+def _repack_partial_context(part, original_pr, entries, wanted, requested_paths):
+    """Omit optional seeds only when required pinned evidence needs their space."""
+    from .chunk_context import MAX_CONTEXT_FILES, MAX_CONTEXT_SIZE, context_size, _file_sections
+
+    def fits(packet):
+        return (len(_context_keys(packet) | set(wanted)) <= MAX_CONTEXT_FILES
+                and max(context_size(packet)) <= MAX_CONTEXT_SIZE)
+
+    if fits(entries) or original_pr is None or not part.diff:
+        return entries
+    if ((part.owner, part.repo, part.number, part.head_sha) !=
+            (original_pr.owner, original_pr.repo, original_pr.number, original_pr.head_sha)):
+        return entries
+    start = original_pr.diff.find(part.diff)
+    if start < 0 or original_pr.diff.find(part.diff, start + 1) >= 0:
+        return entries
+    end = start + len(part.diff)
+    sections = _file_sections(original_pr.diff)
+    current = {item['path'] for item in sections
+               if item['start'] < end and item['end'] > start and item['path']}
+    partial = {item['path'] for item in sections
+               if item['start'] < end and item['end'] > start
+               and not (start <= item['start'] and item['end'] <= end) and item['path']}
+    # Whole integration packets keep their existing retention contract. A
+    # partial-file packet must still include every required current-file diff.
+    present = {item['path'] for item in entries if 'diff' in item}
+    if not partial or not partial <= present:
+        return entries
+    required = current | set(requested_paths)
+    retained = list(entries)
+    for index in range(len(retained) - 1, -1, -1):
+        if fits(retained):
+            break
+        item = retained[index]
+        if 'diff' in item and item['path'] not in required:
+            del retained[index]
+    return retained
+
+
 def _review_with_requested_context(owner, invoke, part, original_pr, source_context=None,
                                    initial_context=None):
     """One follow-up with changed diffs or separately proven immutable source."""
@@ -86,6 +129,17 @@ def _review_with_requested_context(owner, invoke, part, original_pr, source_cont
     wanted = list(dict.fromkeys([('diff', path) for path in result.requested_files] +
                                [('diff' if path in source_diffs else 'source', path)
                                 for path in result.requested_source_files]))
+    requested_paths = set(result.requested_files + result.requested_source_files)
+    omitted_optional = 0
+
+    def repack():
+        nonlocal context, keys, omitted_optional
+        retained = _repack_partial_context(part, original_pr, context, wanted, requested_paths)
+        omitted_optional += len(context) - len(retained)
+        context = retained
+        keys = _context_keys(context)
+
+    repack()
     if len(keys | set(wanted)) > MAX_CONTEXT_FILES:
         result = owner._context_resolution(result, 'context_budget', counts)
         return result, [result]
@@ -98,10 +152,12 @@ def _review_with_requested_context(owner, invoke, part, original_pr, source_cont
             return result, [result]
         context.append({"path": path, "diff": supplied})
         keys.add(('diff', path))
+        repack()
         if max(context_size(context)) > MAX_CONTEXT_SIZE:
             result = owner._context_resolution(result, 'context_budget', counts)
             return result, [result]
-    if result.requested_source_files:
+    reused_sources = []
+    if result.requested_source_files or (source_context is not None and result.requested_files):
         from .source_context import PinnedSourceContext, SourceUnavailable
         resolver = source_context or PinnedSourceContext(original_pr)
         try:
@@ -110,6 +166,7 @@ def _review_with_requested_context(owner, invoke, part, original_pr, source_cont
                     if ('diff', path) not in keys:
                         context.append({'path': path, 'diff': source_diffs[path]})
                         keys.add(('diff', path))
+                        repack()
                         if max(context_size(context)) > MAX_CONTEXT_SIZE:
                             result = owner._context_resolution(result, 'context_budget', counts)
                             return result, [result]
@@ -119,8 +176,31 @@ def _review_with_requested_context(owner, invoke, part, original_pr, source_cont
                 source = resolver.fetch(part, path)
                 context.append(source)
                 keys.add(('source', path))
+                repack()
                 if max(context_size(context)) > MAX_CONTEXT_SIZE:
                     raise SourceUnavailable('source_budget')
+            # A changed diff omits unchanged imports/initialization. Reuse only
+            # source already proven by this review's resolver; never fetch extra
+            # material, displace requested evidence or grant another budget.
+            if type(resolver) is PinnedSourceContext:
+                # Independent judges share verified source facts, never votes.
+                # Requested material is already present and cannot be displaced.
+                paths = dict.fromkeys(result.requested_files + list(resolver.cached_changed_paths(original_pr)))
+                for path in paths:
+                    if ('source', path) in keys:
+                        continue
+                    if (path in resolver.sources and
+                            (part.owner, part.repo, part.number, part.head_sha) !=
+                            (original_pr.owner, original_pr.repo, original_pr.number, original_pr.head_sha)):
+                        raise SourceUnavailable('source_identity_or_path')
+                    source = resolver.cached(part, path)
+                    if source is None:
+                        continue
+                    packet = context + [source]
+                    if len(packet) <= MAX_CONTEXT_FILES and max(context_size(packet)) <= MAX_CONTEXT_SIZE:
+                        context.append(source)
+                        keys.add(('source', path))
+                        reused_sources.append(path)
         except SourceUnavailable as exc:
             # SourceUnavailable enforces a fixed code allowlist; do not expose
             # requested paths, model reasons, source values or exception text.
@@ -131,10 +211,17 @@ def _review_with_requested_context(owner, invoke, part, original_pr, source_cont
             if (exc.code == 'source_metadata' and type(detail) is str
                     and detail in SourceUnavailable.METADATA_REASONS):
                 scope['source_metadata_reason'] = detail
+            scope.pop('source_read_reason', None)
+            detail = getattr(exc, 'read_reason', None)
+            if (exc.code == 'source_read' and type(detail) is str
+                    and detail in SourceUnavailable.READ_REASONS):
+                scope['source_read_reason'] = detail
             result = owner._context_resolution(owner.replace(result, scope=scope), 'source_unavailable', counts)
             return result, [result]
     label = ('Requested changed-file context' if result.requested_files or source_diffs
              else 'Requested immutable source context')
+    if reused_sources:
+        label = 'Requested changed-file and cached source context'
     # Build from the base description, replacing rather than appending the
     # initial packet. Every invocation has one cumulative bounded packet.
     followup = owner._context_part(part, context, label)
@@ -145,11 +232,15 @@ def _review_with_requested_context(owner, invoke, part, original_pr, source_cont
         owner.logger.info('Source requests routed to changed diffs: count=%s', len(source_diffs))
     result = owner._validate_chunk_result(invoke(followup), original_pr)
     scope = dict(result.scope or {}, initial_context=automatic)
+    if omitted_optional:
+        scope['followup_omitted_optional_count'] = omitted_optional
     if source_diffs:
         scope['source_requests_answered_with_diff'] = len(source_diffs)
-    if initial.requested_source_files:
+    if initial.requested_source_files or reused_sources:
         scope['source_context'] = [{k: v for k, v in item.items() if k != 'source'}
                                    for item in context if 'source' in item]
+    if reused_sources:
+        scope['reused_source_files'] = len(reused_sources)
     scope["context_attempts"] = [{"requested_files": initial.requested_files,
                                   "requested_source_files": initial.requested_source_files,
                                   "verdict": initial.verdict.value,

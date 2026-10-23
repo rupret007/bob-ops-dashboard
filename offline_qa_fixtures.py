@@ -96,8 +96,19 @@ def require_temporary_child(root: Path) -> Path:
     temp_roots = {Path(tempfile.gettempdir()).resolve(), Path("/tmp").resolve()}
     if not any(resolved != base and resolved.is_relative_to(base) for base in temp_roots):
         raise ValueError("Fixture files must stay in a child of a temporary directory")
-    if any((parent / ".git").exists() for parent in (resolved, *resolved.parents)):
-        raise ValueError("Fixture files must not overwrite a repository")
+    # A sandbox may expose an empty .git sentinel at a temporary root.
+    # Keep checking ancestors so a nested TMPDIR cannot hide a repository.
+    for parent in (resolved, *resolved.parents):
+        marker = parent / ".git"
+        if marker.exists():
+            if (
+                parent in temp_roots
+                and marker.is_dir()
+                and not marker.is_symlink()
+                and not any(marker.iterdir())
+            ):
+                continue
+            raise ValueError("Fixture files must not overwrite a repository")
     return resolved
 
 
