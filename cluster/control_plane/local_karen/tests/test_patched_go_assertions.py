@@ -21,6 +21,45 @@ def test_complete_correlated_forward_patch_retains_the_lane_count_and_rejects_ol
     assert checked(DIFF).passed
 
 
+@pytest.mark.parametrize('pin', ['1.26.9', '1.26.10'])
+@pytest.mark.parametrize('component', range(3))
+def test_oversized_version_components_fail_without_raising(pin, component):
+    parts = pin.split('.')
+    parts[component] = '9' * 4301
+    diff = DIFF.replace(pin, '.'.join(parts))
+    assert not checked(diff).passed
+
+
+@pytest.mark.parametrize('binding', [
+    '    cross_network = WORKFLOW\n',
+    '    global cross_network\n',
+    '    import workflow_snapshot as cross_network\n',
+    '    def cross_network():\n        return WORKFLOW\n',
+])
+def test_existing_cross_network_bindings_are_not_rebound(binding):
+    diff = DIFF.replace(
+        ' def test_transport_uses_the_reviewed_patched_go_toolchain_everywhere() -> None:\n',
+        ' def test_transport_uses_the_reviewed_patched_go_toolchain_everywhere() -> None:\n'
+        + ''.join(' ' + line for line in binding.splitlines(keepends=True)))
+    lines = len(binding.splitlines())
+    diff = diff.replace('@@ -750,7 +750,12 @@',
+                        f'@@ -750,{7 + lines} +750,{12 + lines} @@')
+    diff = diff.replace('     assert "1.25.12" not in WORKFLOW',
+                        '     assert "1.25.12" not in cross_network')
+    assert diff != DIFF
+    assert not checked(diff).passed
+
+
+@pytest.mark.parametrize('name', ['cross_network', 'ｃｒｏｓｓ_ｎｅｔｗｏｒｋ'])
+def test_existing_cross_network_parameter_is_not_rebound(name):
+    diff = DIFF.replace('toolchain_everywhere() -> None:',
+                        f'toolchain_everywhere({name}) -> None:')
+    diff = diff.replace('     assert "1.25.12" not in WORKFLOW',
+                        f'     assert "1.25.12" not in {name}')
+    assert diff != DIFF
+    assert not checked(diff).passed
+
+
 @pytest.mark.parametrize('mutation', [
     'downgrade', 'minor_change', 'same_version', 'count_lowered', 'or_true',
     'missing_network_pin', 'one_stale_CI_pin', 'missing_old_rejection',
@@ -89,6 +128,35 @@ def test_nonexecuting_replacements_do_not_exempt_an_executable_assertion(context
     diff = workflows + header + ''.join(unified_diff(
         before.splitlines(keepends=True), after.splitlines(keepends=True),
         fromfile='a/' + path, tofile='b/' + path, n=20))
+    assert len([row for row in policy._removed_lines(diff) if row[0] == path]) == 1
+    assert diff.split(header)[1].count('\n@@ ') == 1
+    assert not checked(diff).passed
+
+
+@pytest.mark.parametrize('delimiter', ['"""', "'''"])
+def test_docstring_replacement_with_only_three_context_lines_is_not_exempted(delimiter):
+    path = 'tests/test_desktop_installer_workflow.py'
+    header = f'diff --git a/{path} b/{path}\n'
+    workflows, test_diff = DIFF.split(header)
+    replacement = ''.join(line[1:] + '\n' for line in test_diff.splitlines()
+                          if line.startswith('+') and not line.startswith('+++'))
+    opening = ('def test_compiler_pins():\n'
+               f'    {delimiter}Compiler pin notes.\n'
+               '\n\n\n\n'
+               'def test_documented_pins():\n')
+    closing = f'    # {delimiter}\n'
+    old = f'    assert WORKFLOW.count({OLD!r}) == 2\n'
+    tail = '    assert "1.25.12" not in WORKFLOW\n'
+    before = opening + closing + old + tail
+    after = opening + replacement + closing + tail
+    # Both are valid complete tests, but the new checks are only docstring text.
+    compile(before, path, 'exec')
+    compile(after, path, 'exec')
+    diff = workflows + header + ''.join(unified_diff(
+        before.splitlines(keepends=True), after.splitlines(keepends=True),
+        fromfile='a/' + path, tofile='b/' + path, n=3))
+    assert f'{delimiter}Compiler pin notes.' not in diff
+    assert f' # {delimiter}\n' in diff
     assert len([row for row in policy._removed_lines(diff) if row[0] == path]) == 1
     assert diff.split(header)[1].count('\n@@ ') == 1
     assert not checked(diff).passed

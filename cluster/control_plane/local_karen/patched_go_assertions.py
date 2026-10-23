@@ -1,8 +1,11 @@
 """Recognize the correlated, stricter oracle for a forward Go patch update."""
 import ast
 from collections import Counter
+import io
 import re
 import textwrap
+import tokenize
+from unicodedata import normalize
 
 CI = '.github/workflows/ci.yml'
 NETWORK = '.github/workflows/cross-network-acceptance.yml'
@@ -15,14 +18,25 @@ def _replacements_keep_test_context(block, number, before, after):
     if not hunk:
         return False
     rows = block[hunk.end():].splitlines()
+    changed = [i for i, row in enumerate(rows) if row.startswith(('-', '+'))]
+    # ASTs discard comments, including a string delimiter whose opener is outside
+    # the hunk. Never move the replacement across even one unchanged source line.
+    if not changed or changed[-1] - changed[0] + 1 != len(changed):
+        return False
+    old_source = '\n'.join(row[1:] for row in rows if row.startswith((' ', '-')))
+    new_source = '\n'.join(row[1:] for row in rows if row.startswith((' ', '+')))
     try:
+        # The new local must not replace an existing binding or change a later
+        # reference. Tokens also cover parameters, imports and global declarations.
+        if any(token.type == tokenize.NAME
+               and normalize('NFKC', token.string) == 'cross_network'
+               for token in tokenize.generate_tokens(io.StringIO(old_source).readline)):
+            return False
         # Preserve indentation and surrounding strings/control flow. Incomplete
         # context cannot establish an executable replacement, so fail closed.
-        old_tree = ast.parse('\n'.join(row[1:] for row in rows
-                                       if row.startswith((' ', '-'))))
-        new_tree = ast.parse('\n'.join(row[1:] for row in rows
-                                       if row.startswith((' ', '+'))))
-    except (SyntaxError, ValueError):
+        old_tree = ast.parse(old_source)
+        new_tree = ast.parse(new_source)
+    except (SyntaxError, ValueError, tokenize.TokenError):
         return False
     removed_line = number - int(hunk.group(1)) + 1
     for test in old_tree.body:
@@ -66,8 +80,11 @@ def patched_go_assertions(diff, deletions, additions):
     old_match, new_match = PIN.fullmatch(old_pin), PIN.fullmatch(new_pin)
     if not old_match or not new_match:
         return set()
-    previous = tuple(map(int, old_match.groups()))
-    current = tuple(map(int, new_match.groups()))
+    try:
+        previous = tuple(map(int, old_match.groups()))
+        current = tuple(map(int, new_match.groups()))
+    except ValueError:
+        return set()
     if previous[:2] != current[:2] or current[2] <= previous[2]:
         return set()
     version = '.'.join(map(str, previous))
