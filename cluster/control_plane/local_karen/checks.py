@@ -13,6 +13,7 @@ from enum import Enum
 from typing import Optional, Any, Dict, Tuple
 
 from .config import KarenConfig
+# Public compatibility exports retain the exact canonical class objects.
 from .check_types import CheckVerdict, CheckResult, ReviewScope, ReviewMaterial, PRInfo
 from .assertion_policy import (TEST_FILE_PATTERNS, _is_test_file, _removed_lines,
     _extract_diff_deletions, _renamed_js_test_headers, _literal_equivalent_line,

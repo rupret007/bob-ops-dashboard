@@ -28,7 +28,7 @@ from typing import Optional, List, Dict, Tuple, Any, Type
 
 from .config import KarenConfig
 from .deadline import remaining_timeout
-from .checks import PRInfo, ReviewScope, ReviewMaterial
+from .check_types import PRInfo, ReviewScope, ReviewMaterial
 from ..codex_quota import read_codex_quota
 from ..codex_quota_remote import read_remote_codex_quota
 from ..ssh_transport import SSHTransport
