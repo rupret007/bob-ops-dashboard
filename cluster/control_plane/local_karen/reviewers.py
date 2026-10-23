@@ -1594,10 +1594,15 @@ def _review_with_requested_context(invoke, part, original_pr, source_context=Non
 def run_review_chain(pr, config, require_two_pass=True):
     """Require both independent votes across every chunk of the exact-head diff."""
     from .source_context import PinnedSourceContext
-    from .chunk_context import automatic_complement, build_review_scope
+    from .chunk_context import automatic_complement, build_review_scope, small_whole_review_scope
     source_context = PinnedSourceContext(pr)
     if len(pr.diff) <= REVIEW_DIFF_LIMIT:
-        return _run_review_chain_single(pr, config, require_two_pass, source_context=source_context)
+        part = pr
+        if pr.review_scope is None:
+            context = small_whole_review_scope(pr, REVIEW_DIFF_LIMIT)
+            if context is not None:
+                part = replace(pr, review_scope=context)
+        return _run_review_chain_single(part, config, require_two_pass, source_context=source_context)
 
     chunks = split_review_diff(pr.diff)
     tier = classify_risk_tier(pr)
