@@ -166,10 +166,12 @@ def check_tests_not_weakened(pr: PRInfo, config: KarenConfig) -> CheckResult:
         if _is_test_file(filepath):
             issues.append(f"Deleted test file: {filepath}:1")
 
-    deletions = _removed_lines(pr.diff)
+    deletions = list(_removed_lines(pr.diff))
     renamed_headers = _renamed_js_test_headers(pr.diff)
     additions = list(_added_lines(pr.diff))
     equivalent_additions = set()
+    from .patched_go_assertions import patched_go_assertions
+    patched_go = patched_go_assertions(pr.diff, deletions, additions)
 
     test_function_patterns = [
         r"^\s*def\s+test_",
@@ -207,9 +209,9 @@ def check_tests_not_weakened(pr: PRInfo, config: KarenConfig) -> CheckResult:
                 replacement = next((i for i, (path, _, added) in enumerate(additions)
                                     if i not in equivalent_additions and path == filepath and
                                     filepath.endswith('.py') and _literal_equivalent_line(line, added)), None)
-                if replacement is None:
+                if replacement is None and (filepath, number) not in patched_go:
                     issues.append(f"Removed assertion in {filepath}:{number} (removed source; value redacted)")
-                else:
+                elif replacement is not None:
                     equivalent_additions.add(replacement)
                 break
 
