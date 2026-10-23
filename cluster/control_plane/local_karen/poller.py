@@ -15,11 +15,14 @@ Each tick:
 from __future__ import annotations
 
 # Snapshot before loading any local review modules that an update could replace.
-from .runtime_status import record_runtime
+from .runtime_status import record_runtime, LOADED_HASHES
 
+import hashlib
 import json
 import logging
 import os
+import re
+import subprocess
 import sys
 import time
 from dataclasses import dataclass
@@ -297,6 +300,8 @@ def poll_and_run(
         logger.info(f"Running gate on {owner}/{repo}#{pr_number}")
 
         diagnostics = []
+        attempted_at = datetime.now(timezone.utc).isoformat()
+        error_code = 'review_execution_error'
         try:
             result = run_gate(
                 owner=owner,
@@ -309,6 +314,7 @@ def poll_and_run(
 
             if result.error or not result.sha_verified or not result.verdict_path:
                 diagnostics = sanitize_context_diagnostics(getattr(result, 'context_diagnostics', None))
+                error_code = 'unverified_artifact'
                 raise RuntimeError("Review did not produce a verified artifact")
 
             results.append({
@@ -353,12 +359,26 @@ def poll_and_run(
                 return results
             raise
         except Exception as e:
-            logger.error(f"Failed to run gate on {owner}/{repo}#{pr_number}: {e}")
+            if isinstance(e, (subprocess.TimeoutExpired, TimeoutError)):
+                error_code = 'review_timeout'
+            elif isinstance(e, GitHubError):
+                error_code = 'github_error'
+            elif isinstance(e, (AttributeError, TypeError, ValueError)):
+                error_code = 'invalid_review_result'
+            logger.error('Failed to run gate on %s/%s#%s: %s', owner, repo, pr_number, error_code)
             error_record = {
                 "repo": f"{owner}/{repo}",
                 "pr": pr_number,
-                "error": str(e),
+                "error": "Review did not produce a verified artifact",
+                "error_code": error_code,
+                "attempted_at": attempted_at,
+                "review_source_sha256": hashlib.sha256(json.dumps(
+                    LOADED_HASHES, sort_keys=True, separators=(',', ':')).encode()).hexdigest(),
             }
+            # This identifies queued work, never a verified review outcome.
+            expected = pr_data.get('headRefOid')
+            if type(expected) is str and re.fullmatch('[0-9a-f]{40}', expected):
+                error_record['expected_head_sha'] = expected
             if diagnostics:
                 error_record['context_diagnostics'] = diagnostics
             results.append(error_record)
