@@ -94,6 +94,51 @@ def test_missing_file_or_mid_hunk_fragment_stays_unknown(diff):
     assert pipeline_data(replace(whole(), diff=diff))['review_scope'] is None
 
 
+@pytest.mark.parametrize('hunk', [
+    '@@ -1 +1,2 @@\n-old\n+new\n',
+    '@@ -1,2 +1 @@\n-old\n+new\n',
+    '@@ -1,2 +1,2 @@\n-old\n+new\n',
+    '@@ -1 +1 @@\n-old\n',
+    '@@ -1 +1 @@\n',
+    '@@ -1 +1 @@\n-old\n+ne',
+    '@@ -1 +1',
+    '',
+    '@@ -1 +1 @@\n-old\n+new\n@@ -4 +4,2 @@\n-old\n+new\n',
+])
+@pytest.mark.parametrize('other_file', ['', section('other.py')])
+def test_truncated_hunks_with_every_file_header_stay_unknown(hunk, other_file):
+    header = section('f.py').split('@@ ', 1)[0]
+    pr = replace(whole(), diff=other_file + header + hunk,
+                 changed_files=['f.py'] + (['other.py'] if other_file else []))
+    # Every manifest path is present, even though the supplied diff is incomplete.
+    assert all(item['diff_available'] for item in c.file_manifest(pr))
+    assert pipeline_data(pr)['review_scope'] is None
+
+
+def test_later_file_hunks_cannot_complete_an_earlier_truncated_hunk():
+    diff = section('first.py').replace('@@ -1 +1 @@', '@@ -1 +1,2 @@')
+    pr = replace(whole(), diff=diff + section('last.py'))
+    assert all(item['diff_available'] for item in c.file_manifest(pr))
+    assert pipeline_data(pr)['review_scope'] is None
+
+
+@pytest.mark.parametrize('hunk', [
+    '@@ -1 +1 @@\n-old\n+new\n',
+    '@@ -1,1 +1,1 @@ function\n-old\n+new\n',
+    '@@ -0,0 +1,2 @@\n+first\n+second\n',
+    '@@ -1,2 +0,0 @@\n-first\n-second\n',
+    '@@ -1,3 +1,3 @@\n before\n-old\n+new\n after\n',
+    '@@ -1 +1 @@\n-old\n+new\n@@ -4 +4 @@\n-old\n+new\n',
+    '@@ -1 +1 @@\n-old\n\\ No newline at end of file\n'
+    '+new\n\\ No newline at end of file\n',
+    '@@ -1 +1 @@\n-old\n+++content resembling a file header\n',
+])
+def test_complete_hunks_still_receive_whole_review_scope(hunk):
+    header = section('f.py').split('@@ ', 1)[0]
+    pr = replace(whole(), diff=header + hunk, changed_files=['f.py'])
+    assert pipeline_data(pr)['review_scope'] is not None
+
+
 def test_large_direct_input_is_not_reclassified_as_a_small_whole_review():
     pr = replace(whole(), diff=section('first.py') + '+' * r.REVIEW_DIFF_LIMIT,
                  changed_files=['first.py'])
