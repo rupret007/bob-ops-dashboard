@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-10-23T06:15:47.789103-05:00",
-  "generated_at_display": "Fri Oct 23, 2026 \u00b7 6:15 AM CDT",
+  "generated_at": "2026-10-23T06:30:54.741084-05:00",
+  "generated_at_display": "Fri Oct 23, 2026 \u00b7 6:30 AM CDT",
   "timezone": "America/Chicago",
   "owner": "rupret007",
   "dashboard": "bob-ops-dashboard",
@@ -52,8 +52,8 @@
           "tip_sha": "5606106",
           "tip_date": "2026-10-19T19:49:03Z",
           "open_prs": 8,
-          "open_pr_url": "https://github.com/rupret007/webjam/pull/398",
-          "open_pr_number": 398,
+          "open_pr_url": "https://github.com/rupret007/webjam/pull/396",
+          "open_pr_number": 396,
           "open_pr_draft": false,
           "open_pr_stack": [],
           "pr_listing_complete": true,
@@ -495,8 +495,8 @@
           "status": "yellow",
           "chip": "Yellow",
           "default_branch": "main",
-          "tip_sha": "4acaf72",
-          "tip_date": "2026-10-23T11:00:47Z",
+          "tip_sha": "a12a77e",
+          "tip_date": "2026-10-23T11:16:04Z",
           "open_prs": 19,
           "open_pr_url": "https://github.com/rupret007/bob-ops-dashboard/pull/110",
           "open_pr_number": 110,
@@ -900,7 +900,7 @@
     "barker"
   ],
   "publish_notes": "Public board -- no secrets or customer paths. Private repositories stay high-level; AI Music Vault stays private-content-boundary only.",
-  "refresh_started_ms": 1792754109922,
+  "refresh_started_ms": 1792755012672,
   "agents_source": "file:stale->unknown",
   "agents": [
     {
@@ -1099,7 +1099,7 @@
     }
   ],
   "llm_work_now_freshness": {
-    "generated_at": "2026-10-23 06:15 CT",
+    "generated_at": "2026-10-23 06:30 CT",
     "warn_ttl_sec": 1200,
     "warnings": [],
     "ok": true
@@ -1130,7 +1130,7 @@
     ],
     "scorecards": {
       "v": "scorecards/v1",
-      "generated_at": "2026-10-23T11:15:49.502721+00:00",
+      "generated_at": "2026-10-23T11:30:56.357504+00:00",
       "windows": {
         "24h": {
           "providers": {
