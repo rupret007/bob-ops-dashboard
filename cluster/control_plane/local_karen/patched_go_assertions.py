@@ -9,6 +9,35 @@ NETWORK = '.github/workflows/cross-network-acceptance.yml'
 PIN = re.compile(r'go-version: "(\d+)\.(\d+)\.(\d+)"')
 
 
+def _replacements_keep_test_context(block, number, before, after):
+    """Require an in-place replacement in the same executable test body."""
+    hunk = re.search(r'(?m)^@@ -(\d+)(?:,\d+)? \+\d+(?:,\d+)? @@[^\n]*\n', block)
+    if not hunk:
+        return False
+    rows = block[hunk.end():].splitlines()
+    try:
+        # Preserve indentation and surrounding strings/control flow. Incomplete
+        # context cannot establish an executable replacement, so fail closed.
+        old_tree = ast.parse('\n'.join(row[1:] for row in rows
+                                       if row.startswith((' ', '-'))))
+        new_tree = ast.parse('\n'.join(row[1:] for row in rows
+                                       if row.startswith((' ', '+'))))
+    except (SyntaxError, ValueError):
+        return False
+    removed_line = number - int(hunk.group(1)) + 1
+    for test in old_tree.body:
+        if not isinstance(test, ast.FunctionDef) or not test.name.startswith('test_'):
+            continue
+        for index, statement in enumerate(test.body):
+            if (statement.lineno == removed_line
+                    and ast.dump(statement) == ast.dump(before[0])):
+                # The entire hunk must agree after this one substitution. Moving
+                # assertions into a string, helper, branch or past a return fails.
+                test.body[index:index + 1] = after
+                return ast.dump(old_tree) == ast.dump(new_tree)
+    return False
+
+
 def patched_go_assertions(diff, deletions, additions):
     """Return old assertion locations only for the complete pinned transition.
 
@@ -67,5 +96,7 @@ def patched_go_assertions(diff, deletions, additions):
     blocks = diff.split('diff --git ')[1:]
     target = [b for b in blocks if b.splitlines()[0].endswith(' b/' + path)]
     if len(target) != 1 or len(re.findall(r'(?m)^@@ ', target[0])) != 1:
+        return set()
+    if not _replacements_keep_test_context(target[0], number, before, after):
         return set()
     return {(path, number)}

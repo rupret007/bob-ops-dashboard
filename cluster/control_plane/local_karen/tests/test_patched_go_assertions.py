@@ -1,4 +1,5 @@
 """Keep compiler-pin correction narrow and retain every other integrity guard."""
+from difflib import unified_diff
 from pathlib import Path
 import pytest
 from cluster.control_plane.local_karen import assertion_policy as policy
@@ -26,6 +27,7 @@ def test_complete_correlated_forward_patch_retains_the_lane_count_and_rejects_ol
     'missing_network_count', 'different_workflow_read', 'added_extra_statement',
     'missing_CI_pin', 'zero_network_count', 'unrelated_test_removal',
     'old_security_assertion_removed', 'added_skip', 'second_test_hunk',
+    'second_test_hunk_insertion_only',
 ])
 def test_incomplete_or_weaker_updates_are_not_exempted(mutation):
     diff = DIFF
@@ -47,12 +49,48 @@ def test_incomplete_or_weaker_updates_are_not_exempted(mutation):
     elif mutation == 'unrelated_test_removal': diff += '\ndiff --git a/tests/test_security.py b/tests/test_security.py\n--- a/tests/test_security.py\n+++ b/tests/test_security.py\n@@ -1 +0,0 @@\n-assert signature_valid\n'
     elif mutation == 'old_security_assertion_removed': diff = diff.replace('     assert "1.25.12" not in WORKFLOW', '-    assert "1.25.12" not in WORKFLOW')
     elif mutation == 'added_skip': diff = diff.replace('+    assert WORKFLOW.count(', '+    @pytest.mark.skip\n+    assert WORKFLOW.count(')
-    elif mutation == 'second_test_hunk':
+    elif mutation in ('second_test_hunk', 'second_test_hunk_insertion_only'):
         start = diff.index('diff --git a/tests/')
         end = diff.find('\ndiff --git ', start + 1)
         if end == -1: end = len(diff)
-        diff = diff[:end] + '\n@@ -900 +905 @@\n-old = 1\n+old = 2\n' + diff[end:]
+        hunk = ('\n@@ -900 +905 @@\n-old = 1\n+old = 2\n'
+                if mutation == 'second_test_hunk' else
+                '\n@@ -900,0 +906 @@\n+# Separate insertion-only hunk.\n')
+        diff = diff[:end] + hunk + diff[end:]
     assert diff != DIFF
+    assert not checked(diff).passed
+
+
+@pytest.mark.parametrize('context', ['docstring', 'uncalled_function',
+                                    'unreachable_branch', 'after_return'])
+def test_nonexecuting_replacements_do_not_exempt_an_executable_assertion(context):
+    path = 'tests/test_desktop_installer_workflow.py'
+    header = f'diff --git a/{path} b/{path}\n'
+    workflows, test_diff = DIFF.split(header)
+    replacement = ''.join(line[1:] + '\n' for line in test_diff.splitlines()
+                          if line.startswith('+') and not line.startswith('+++'))
+    function = 'def test_compiler_pins():\n'
+    old = f'    assert WORKFLOW.count({OLD!r}) == 2\n'
+    tail = '    assert "1.25.12" not in WORKFLOW\n'
+    if context == 'docstring':
+        opening, closing = '    """Compiler pin notes.\n', '    """\n'
+        before = function + opening + closing + old + tail
+        after = function + opening + replacement + closing + tail
+    elif context in ('uncalled_function', 'unreachable_branch'):
+        opening = ('    def pin_notes():\n' if context == 'uncalled_function'
+                   else '    if False:\n')
+        closing = '        pass\n'
+        before = function + opening + closing + old + tail
+        nested = ''.join('    ' + line for line in replacement.splitlines(keepends=True))
+        after = function + opening + nested + closing + tail
+    else:
+        before = function + old + '    return\n' + tail
+        after = function + '    return\n' + replacement + tail
+    diff = workflows + header + ''.join(unified_diff(
+        before.splitlines(keepends=True), after.splitlines(keepends=True),
+        fromfile='a/' + path, tofile='b/' + path, n=20))
+    assert len([row for row in policy._removed_lines(diff) if row[0] == path]) == 1
+    assert diff.split(header)[1].count('\n@@ ') == 1
     assert not checked(diff).passed
 
 
