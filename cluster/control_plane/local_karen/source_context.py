@@ -61,6 +61,24 @@ class PinnedSourceContext:
         self._source_proofs = {}
         self.seconds = 30.0
 
+    def _capacity(self, pr, path):
+        from .packet_scope import source_capacity
+        try:
+            capacity = source_capacity(pr, path)
+        except ValueError:
+            raise SourceUnavailable('source_budget') from None
+        return capacity or (MAX_FILE_BYTES, MAX_SOURCE_BYTES, None)
+
+    def _source_bounds(self, pr, path, size, sha):
+        file_bytes, source_bytes, pinned = self._capacity(pr, path)
+        if size > file_bytes:
+            raise SourceUnavailable('source_metadata', metadata_reason='source_file_limit')
+        if self.bytes > source_bytes:
+            raise SourceUnavailable('source_metadata', metadata_reason='source_total_limit')
+        if pinned is not None and (pinned['bytes'] != size or pinned['blob_sha'] != sha):
+            raise SourceUnavailable('blob_identity')
+        return file_bytes, source_bytes, pinned
+
     def cached_changed_paths(self, pr):
         """Expose only previously proven paths that belong to this PR's change."""
         if self.identity != (pr.owner, pr.repo, pr.head_sha):
@@ -82,6 +100,9 @@ class PinnedSourceContext:
             digest = hashlib.sha256(json.dumps(source, sort_keys=True).encode()).hexdigest()
             if self._source_proofs[path] != (self.identity, self.tree_sha, digest):
                 raise SourceUnavailable('blob_identity')
+            _, _, pinned = self._source_bounds(pr, path, source['bytes'], source['blob_sha'])
+            if pinned is not None and hashlib.sha256(source['source'].encode()).hexdigest() != pinned['sha256']:
+                raise SourceUnavailable('blob_hash')
         except (KeyError, TypeError, ValueError):
             raise SourceUnavailable('blob_identity') from None
         return dict(source)
@@ -121,6 +142,7 @@ class PinnedSourceContext:
                 or repo in ('.', '..')
                 or not isinstance(head, str) or not re.fullmatch(r'[0-9a-f]{40}', head) or not safe_source_path(path)):
             raise SourceUnavailable('source_identity_or_path')
+        self._capacity(pr, path)  # Expired scopes refuse before any object read.
         if path in self.sources:
             return self.cached(pr, path)
         if self.tree is None:
@@ -153,13 +175,12 @@ class PinnedSourceContext:
             raise SourceUnavailable('source_metadata', metadata_reason='source_type_or_mode')
         if type(size) is not int or size < 0:
             raise SourceUnavailable('source_metadata', metadata_reason='source_size_invalid')
-        if size > MAX_FILE_BYTES:
-            raise SourceUnavailable('source_metadata', metadata_reason='source_file_limit')
-        if self.bytes + size > MAX_SOURCE_BYTES:
+        file_bytes, source_bytes, pinned = self._source_bounds(pr, path, size, sha)
+        if self.bytes + size > source_bytes:
             raise SourceUnavailable('source_metadata', metadata_reason='source_total_limit')
         if not isinstance(sha, str) or not re.fullmatch(r'[0-9a-f]{40}', sha):
             raise SourceUnavailable('source_metadata', metadata_reason='source_blob_sha')
-        blob = self._json('blobs/' + sha, MAX_FILE_BYTES * 2 + 2048)
+        blob = self._json('blobs/' + sha, file_bytes * 2 + 2048)
         if blob.get('sha') != sha or type(blob.get('size')) is not int or blob['size'] != size or blob.get('encoding') != 'base64':
             raise SourceUnavailable('blob_identity')
         try:
@@ -170,12 +191,19 @@ class PinnedSourceContext:
         digest = hashlib.sha1(b'blob ' + str(len(raw)).encode() + b'\0' + raw).hexdigest()
         if len(raw) != size or digest != sha:
             raise SourceUnavailable('blob_hash')
+        if pinned is not None and hashlib.sha256(raw).hexdigest() != pinned['sha256']:
+            raise SourceUnavailable('blob_hash')
         if any(not c.isprintable() and c not in '\n\r\t' for c in text):
             raise SourceUnavailable('source_nontext')
         # Do not redact partial evidence and pretend the complete file was seen.
         # No fixture exceptions: unchanged source has not passed the diff scan.
         if PRIVATE_TEXT.search(text) or any(re.search(pattern, text) for pattern, _ in SECRET_PATTERNS):
             raise SourceUnavailable('source_private')
+        # A remote read can outlive the intent or leave its scope. Recheck the
+        # authority and all bounds before sharing or retaining the response.
+        _, current_source_bytes, current_pin = self._source_bounds(pr, path, size, sha)
+        if self.bytes + size > current_source_bytes or current_pin != pinned:
+            raise SourceUnavailable('source_budget')
         self.bytes += size
         source = dict(path=path, head_sha=head, tree_sha=self.tree_sha, blob_sha=sha, bytes=size, source=text)
         self.sources[path] = source
