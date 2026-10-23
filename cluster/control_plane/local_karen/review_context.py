@@ -211,6 +211,11 @@ def _review_with_requested_context(owner, invoke, part, original_pr, source_cont
             if (exc.code == 'source_metadata' and type(detail) is str
                     and detail in SourceUnavailable.METADATA_REASONS):
                 scope['source_metadata_reason'] = detail
+            scope.pop('source_read_reason', None)
+            detail = getattr(exc, 'read_reason', None)
+            if (exc.code == 'source_read' and type(detail) is str
+                    and detail in SourceUnavailable.READ_REASONS):
+                scope['source_read_reason'] = detail
             result = owner._context_resolution(owner.replace(result, scope=scope), 'source_unavailable', counts)
             return result, [result]
     label = ('Requested changed-file context' if result.requested_files or source_diffs
