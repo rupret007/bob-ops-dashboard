@@ -23,6 +23,8 @@ def test_errors_never_save_or_post(tmp_path):
              patch.object(gate, 'run_review_chain') as review, \
              patch.object(gate, 'verify_sha_current', return_value=True) as sha, \
              patch.object(gate, 'save_verdict') as save, \
+             patch.object(gate.ClaimClient, 'from_env'), patch.object(gate, 'Lease'), \
+             patch.object(gate, 'run_all_checks', return_value=[]), patch.object(gate, '_metrics'), \
              patch.object(github_client, 'post_verdict_comment') as post:
             vote = ReviewResult('codex', ReviewVerdict.PASS, 'Inspected complete diff')
             review.return_value = (vote, [vote])
@@ -36,6 +38,15 @@ def test_errors_never_save_or_post(tmp_path):
             assert result.verdict_path is None
             post.assert_not_called()
             if error != 'save': save.assert_not_called()
+            fetch.assert_called_once_with('owner', 'repo', 1)
+            if error == 'fetch':
+                review.assert_not_called()
+            else:
+                review.assert_called_once()
+            if error in ('sha', 'save'):
+                sha.assert_called_once()
+            if error == 'save':
+                save.assert_called_once()
 
 
 def test_poller_error_keeps_retry_label(tmp_path):
@@ -43,7 +54,9 @@ def test_poller_error_keeps_retry_label(tmp_path):
          patch.object(poller, 'run_gate', side_effect=RuntimeError('review unavailable')), \
          patch.object(poller, 'add_label') as add, patch.object(poller, 'remove_label') as remove:
         results = poller.poll_and_run(['owner/repo'], KarenConfig(state_dir=str(tmp_path)))
-    assert results[0]['error'] == 'review unavailable'
+    assert results[0]['error'] == 'Review did not produce a verified artifact'
+    assert results[0]['error_code'] == 'review_execution_error'
+    assert 'review unavailable' not in json.dumps(results)
     add.assert_not_called()
     remove.assert_not_called()
 
