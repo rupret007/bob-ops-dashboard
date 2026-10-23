@@ -7,7 +7,7 @@ import logging
 import re
 from typing import Any, Dict, List, Optional
 
-from .checks import ReviewScope, ReviewMaterial
+from .check_types import ReviewScope, ReviewMaterial
 
 logger = logging.getLogger("cluster.control_plane.local_karen.reviewers")
 
