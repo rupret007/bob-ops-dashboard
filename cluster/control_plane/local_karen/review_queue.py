@@ -59,7 +59,7 @@ def enrich(candidates, max_batches=None):
         query = 'query{' + ''.join(fields) + '}'
         try:
             response = github_reads.run(['api', 'graphql', '-f', 'query=' + query],
-                                        timeout=min(remaining, 10), resource='graphql')
+                                        timeout=min(remaining, 10), resource='graphql', background=True)
             if response.returncode:
                 continue
             data = json.loads(response.stdout).get('data') or {}

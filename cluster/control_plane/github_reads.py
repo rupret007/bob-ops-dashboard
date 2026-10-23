@@ -73,7 +73,8 @@ def rest_json(endpoint, ttl=60):
         if 'value' in cached and 0 <= time.time() - cached.get('at', 0) < ttl:
             return cached['value']
         resource = 'search' if endpoint.startswith('search/') else 'core'
-        budget.reserve(resource)
+        # Cached discovery is background work; gate reads use uncached run().
+        budget.reserve(resource, background=True)
         args = ['gh', 'api', '--include', '--method', 'GET', endpoint]
         if cached.get('etag'):
             args += ['--header', 'If-None-Match: ' + cached['etag']]
