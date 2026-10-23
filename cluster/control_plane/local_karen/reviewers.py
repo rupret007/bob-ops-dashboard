@@ -1585,6 +1585,7 @@ def _context_part(part, entries, label):
 
 def _review_with_requested_context(invoke, part, original_pr, source_context=None,
                                    initial_context=None):
+    """Public five-input facade; inject this module as the handler owner."""
     from . import review_context
     import sys
     return review_context._review_with_requested_context(sys.modules[__name__], invoke, part, original_pr, source_context, initial_context)
