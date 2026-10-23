@@ -5,9 +5,11 @@ import base64
 import hashlib
 import json
 import re
+import subprocess
 import time
 
 from ..github_reads import run as budgeted_gh
+from ..github_budget import GitHubDeferred
 from .checks import SECRET_PATTERNS
 from .deadline import remaining_timeout
 
@@ -33,13 +35,17 @@ class SourceUnavailable(RuntimeError):
                        'blob_identity source_encoding blob_hash source_nontext source_private').split())
     METADATA_REASONS = frozenset(('source_entry_missing source_parent_metadata source_type_or_mode '
                                   'source_size_invalid source_file_limit source_total_limit source_blob_sha').split())
+    READ_REASONS = frozenset(('minute_exhausted background_exhausted github_deferred cli_failed '
+                              'timeout fetch_deadline invalid_json unexpected_error').split())
 
-    def __init__(self, code, *, metadata_reason=None):
+    def __init__(self, code, *, metadata_reason=None, read_reason=None):
         self.code = code if code in self.CODES else 'source_unavailable'
         # Optional operational detail must not change the established error API.
         self.metadata_reason = (metadata_reason if self.code == 'source_metadata'
                                 and type(metadata_reason) is str and metadata_reason in self.METADATA_REASONS
                                 else None)
+        self.read_reason = (read_reason if self.code == 'source_read'
+                            and type(read_reason) is str and read_reason in self.READ_REASONS else None)
         super().__init__(self.code)
 
 
@@ -97,8 +103,10 @@ class PinnedSourceContext:
         try:
             result = budgeted_gh(['api', '--method', 'GET', 'repos/{}/{}/git/{}'.format(owner, repo, suffix)],
                                  timeout=remaining_timeout(min(10, self.seconds)))
-            if result.returncode or time.monotonic() - started > self.seconds:
-                raise SourceUnavailable('source_read')
+            if result.returncode:
+                raise SourceUnavailable('source_read', read_reason='cli_failed')
+            if time.monotonic() - started > self.seconds:
+                raise SourceUnavailable('source_read', read_reason='fetch_deadline')
             if len(result.stdout.encode('utf-8')) > maximum:
                 raise SourceUnavailable('response_size')
             value = json.loads(result.stdout)
@@ -107,8 +115,16 @@ class PinnedSourceContext:
             return value
         except SourceUnavailable:
             raise
+        except GitHubDeferred as exc:
+            detail = {'minute-exhausted': 'minute_exhausted',
+                      'background-exhausted': 'background_exhausted'}.get(exc.code, 'github_deferred')
+            raise SourceUnavailable('source_read', read_reason=detail) from None
+        except subprocess.TimeoutExpired:
+            raise SourceUnavailable('source_read', read_reason='timeout') from None
+        except json.JSONDecodeError:
+            raise SourceUnavailable('source_read', read_reason='invalid_json') from None
         except Exception:
-            raise SourceUnavailable('source_read') from None
+            raise SourceUnavailable('source_read', read_reason='unexpected_error') from None
         finally:
             self.seconds -= max(0, time.monotonic() - started)
 
