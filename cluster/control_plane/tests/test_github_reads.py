@@ -98,6 +98,8 @@ def test_dashboard_exposes_safe_numeric_quota_without_network(api, tmp_path, mon
     # Host telemetry is unrelated to the API-only mock; never run a subprocess.
     monkeypatch.setattr('cluster.control_plane.reporting_telemetry.local_resources',
                         lambda *args: {'machine': 'nucbox', 'fresh': False, 'passed': False})
+    monkeypatch.setattr('cluster.control_plane.dashboard.tachometer.read_codex_quota',
+                        lambda **kwargs: {'status': 'unknown', 'weekly_pct': None})
     (tmp_path/'github-api-budget.json').write_text(json.dumps({'status':'ok','updated_at':1000,
         'resources':{'core':{'remaining':4200,'limit':5000,'reset':9999999999},
                      'graphql':{'remaining':3100,'limit':5000,'reset':9999999999}},
