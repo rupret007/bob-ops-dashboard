@@ -93,3 +93,12 @@ def test_priority_does_not_bypass_account_quota_reserve(full_background, backgro
             reads.run(['api', 'repos/owner/repo/git/commits/' + 'a' * 40])
     assert len(state['requests']) == 24
     cli.assert_not_called()
+
+
+@pytest.mark.parametrize('bad', [None, 0, 1, {}, 'foreground'])
+def test_cached_priority_requires_an_actual_boolean_before_any_admission(full_background, bad):
+    state, cli = full_background
+    with pytest.raises(budget.GitHubDeferred, match='priority invalid'):
+        reads.rest_json('repos/owner/repo/labels', background=bad)
+    assert len(state['requests']) == 24
+    cli.assert_not_called()
