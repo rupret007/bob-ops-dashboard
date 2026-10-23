@@ -56,8 +56,10 @@ def run(args, timeout=30, resource=None, deadline=None, *, background=False):
     return result
 
 
-def rest_json(endpoint, ttl=60):
+def rest_json(endpoint, ttl=60, *, background=True):
     """Serialize same-endpoint reads across local services, with ETag refresh."""
+    if type(background) is not bool:
+        raise budget.GitHubDeferred('GitHub request priority invalid; requests paused')
     if not isinstance(endpoint, str) or not re.fullmatch(r'[A-Za-z0-9_./?=&%+:-]+', endpoint) or endpoint.startswith(('/', 'http')):
         raise ValueError('Expected a relative GitHub API endpoint')
     root = Path(os.environ.get('STORYPOOL_DATA_DIR', '~/.local/share/storypool')).expanduser() / 'github-cache'
@@ -73,8 +75,11 @@ def rest_json(endpoint, ttl=60):
         if 'value' in cached and 0 <= time.time() - cached.get('at', 0) < ttl:
             return cached['value']
         resource = 'search' if endpoint.startswith('search/') else 'core'
-        # Cached discovery is background work; gate reads use uncached run().
-        budget.reserve(resource, background=True)
+        # General observations yield; bounded review admission can opt in.
+        if background:
+            budget.reserve(resource, background=True)
+        else:
+            budget.reserve(resource)
         args = ['gh', 'api', '--include', '--method', 'GET', endpoint]
         if cached.get('etag'):
             args += ['--header', 'If-None-Match: ' + cached['etag']]
@@ -148,7 +153,7 @@ def labels(repo):
 
 
 def refresh_quota():
-    data = rest_json('rate_limit', ttl=300)
+    data = rest_json('rate_limit', ttl=300, background=False)
     for resource in ('core', 'graphql', 'search'):
         values = data.get('resources', {}).get(resource, {})
         budget.observe({'x-ratelimit-' + name: str(values[name])

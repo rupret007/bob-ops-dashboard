@@ -222,7 +222,8 @@ def list_prs_with_label(owner: str, repo: str, label: str) -> list[dict]:
     values = []
     try:
         for page in range(1, 11):
-            batch = rest_json(f"repos/{owner}/{repo}/pulls?state=open&per_page=100&page={page}", ttl=15)
+            batch = rest_json(f"repos/{owner}/{repo}/pulls?state=open&per_page=100&page={page}",
+                              ttl=15, background=False)
             if not isinstance(batch, list):
                 raise GitHubReadError("Invalid open-PR response")
             for pr in batch:

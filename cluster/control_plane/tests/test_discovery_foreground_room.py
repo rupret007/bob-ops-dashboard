@@ -28,8 +28,6 @@ def full_background(tmp_path, monkeypatch):
     lambda: reads.rest_json('repos/owner/repo/labels'),
     lambda: reads.active_repos('owner'),
     lambda: reads.labels('owner/repo'),
-    reads.refresh_quota,
-    lambda: github_client.list_prs_with_label('owner', 'repo', 'needs-karen'),
 ])
 def test_each_cached_discovery_path_yields_before_cli(full_background, operation):
     state, cli = full_background
@@ -40,15 +38,25 @@ def test_each_cached_discovery_path_yields_before_cli(full_background, operation
     cli.assert_not_called()
 
 
-def test_scheduling_metadata_yields_before_cli_or_changing_priority(full_background):
+def test_bounded_admission_metadata_keeps_foreground_access(full_background):
     state, cli = full_background
     candidate = review_queue.Candidate('owner/repo', dict(number=1, headRefOid='a' * 40))
-    with pytest.raises(budget.GitHubDeferred) as error:
-        review_queue.enrich([candidate])
-    assert error.value.code == 'background-exhausted'
+    review_queue.enrich([candidate], max_batches=1)
     assert candidate.lines is None and candidate.ci == 'unknown'
-    assert len(state['requests']) == 24 and state['foreground_requests'] == []
-    cli.assert_not_called()
+    assert len(state['requests']) == 25 and state['foreground_requests'] == [1000]
+    cli.assert_called_once()
+
+
+@pytest.mark.parametrize('operation', [
+    reads.refresh_quota,
+    lambda: github_client.list_prs_with_label('owner', 'repo', 'needs-karen'),
+])
+def test_quota_and_review_listing_keep_reserved_foreground_room(full_background, operation):
+    state, cli = full_background
+    cli.return_value.stdout = json.dumps([] if operation.__name__ == '<lambda>' else {})
+    operation()
+    assert len(state['requests']) == 25 and state['foreground_requests'] == [1000]
+    cli.assert_called_once()
 
 
 def test_cached_discovery_hit_does_not_need_a_new_reservation(full_background):
