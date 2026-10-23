@@ -101,6 +101,11 @@ def test_scoped_review_still_refuses_other_limits_and_private_source(tmp_path, m
         assert reader.call_count == 0
     elif kind == 'private':
         assert result.scope['source_context_error'] == 'source_private'
+    elif kind in ('file', 'source_total'):
+        assert result.scope['source_context_error'] == 'source_metadata'
+        assert result.scope['source_metadata_reason'] == (
+            'source_file_limit' if kind == 'file' else 'source_total_limit')
+        assert reader.call_count == (2 if kind == 'file' else 5)
     else:
         assert result.scope['source_context_error'] == 'source_budget'
 
