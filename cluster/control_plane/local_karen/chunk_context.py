@@ -10,7 +10,7 @@ import json
 import re
 from typing import Any, Dict, List, Optional, Sequence
 
-from .checks import PRInfo, ReviewScope
+from .check_types import PRInfo, ReviewScope
 
 MAX_CONTEXT_FILES = 4
 MAX_CONTEXT_SIZE = 48000
@@ -179,6 +179,18 @@ def build_review_scope(pr: PRInfo, chunks: Sequence[str], index: int) -> ReviewS
     for name in ('title', 'body', 'context_request_example'):
         data.pop(name)
     return ReviewScope(data)
+
+
+def small_whole_review_scope(pr: PRInfo, limit: int) -> Optional[ReviewScope]:
+    """Describe a small whole input; incomplete identities/files stay unknown."""
+    if (len(pr.diff) > limit or not pr.diff.startswith('diff --git ')
+            or not isinstance(pr.head_sha, str)
+            or not re.fullmatch(r'[0-9a-fA-F]{40}', pr.head_sha)):
+        return None
+    manifest = file_manifest(pr)
+    if not manifest or any(not item['diff_available'] for item in manifest):
+        return None
+    return build_review_scope(pr, [pr.diff], 1)
 
 
 def build_chunk_context(pr: PRInfo, chunks: Sequence[str], index: int) -> str:

@@ -243,13 +243,17 @@ def build_review_prompt(pr: PRInfo) -> str:
         raise ValueError('Review scope must be server-derived typed data')
     if pr.review_material is not None and not isinstance(pr.review_material, ReviewMaterial):
         raise ValueError('Review material must be validated typed data')
+    scope = pr.review_scope
+    if scope is None:
+        from .chunk_context import small_whole_review_scope
+        scope = small_whole_review_scope(pr, REVIEW_DIFF_LIMIT)
     material = pr.review_material
     data = {
         'pull_request': {'owner': pr.owner, 'repo': pr.repo, 'number': pr.number,
                          'title': pr.title, 'author': pr.author, 'description': pr.description},
         'pinned_head_sha': pr.head_sha,
         'changed_files': list(pr.changed_files),
-        'review_scope': pr.review_scope.data if pr.review_scope is not None else None,
+        'review_scope': scope.data if scope is not None else None,
         'chunk_under_review': {'diff': pr.diff, 'characters': len(pr.diff)},
         'supplemental_material': {'phase': material.phase if material else 'none',
                                   'entries': list(material.entries) if material else []},
