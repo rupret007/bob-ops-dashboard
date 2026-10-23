@@ -5,7 +5,7 @@ from unittest.mock import Mock, patch
 import pytest
 
 from cluster.control_plane.local_karen import context_api as a, reviewers as r
-from cluster.control_plane.local_karen.checks import PRInfo, ReviewMaterial, ReviewScope
+from cluster.control_plane.local_karen.check_types import PRInfo, ReviewMaterial, ReviewScope
 
 
 def test_provider_facade_exports_the_canonical_context_objects():
