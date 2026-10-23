@@ -243,17 +243,13 @@ def build_review_prompt(pr: PRInfo) -> str:
         raise ValueError('Review scope must be server-derived typed data')
     if pr.review_material is not None and not isinstance(pr.review_material, ReviewMaterial):
         raise ValueError('Review material must be validated typed data')
-    scope = pr.review_scope
-    if scope is None:
-        from .chunk_context import small_whole_review_scope
-        scope = small_whole_review_scope(pr, REVIEW_DIFF_LIMIT)
     material = pr.review_material
     data = {
         'pull_request': {'owner': pr.owner, 'repo': pr.repo, 'number': pr.number,
                          'title': pr.title, 'author': pr.author, 'description': pr.description},
         'pinned_head_sha': pr.head_sha,
         'changed_files': list(pr.changed_files),
-        'review_scope': scope.data if scope is not None else None,
+        'review_scope': pr.review_scope.data if pr.review_scope is not None else None,
         'chunk_under_review': {'diff': pr.diff, 'characters': len(pr.diff)},
         'supplemental_material': {'phase': material.phase if material else 'none',
                                   'entries': list(material.entries) if material else []},
@@ -1598,10 +1594,15 @@ def _review_with_requested_context(invoke, part, original_pr, source_context=Non
 def run_review_chain(pr, config, require_two_pass=True):
     """Require both independent votes across every chunk of the exact-head diff."""
     from .source_context import PinnedSourceContext
-    from .chunk_context import automatic_complement, build_review_scope
+    from .chunk_context import automatic_complement, build_review_scope, small_whole_review_scope
     source_context = PinnedSourceContext(pr)
     if len(pr.diff) <= REVIEW_DIFF_LIMIT:
-        return _run_review_chain_single(pr, config, require_two_pass, source_context=source_context)
+        part = pr
+        if pr.review_scope is None:
+            context = small_whole_review_scope(pr, REVIEW_DIFF_LIMIT)
+            if context is not None:
+                part = replace(pr, review_scope=context)
+        return _run_review_chain_single(part, config, require_two_pass, source_context=source_context)
 
     chunks = split_review_diff(pr.diff)
     tier = classify_risk_tier(pr)

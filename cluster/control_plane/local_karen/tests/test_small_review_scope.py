@@ -27,9 +27,20 @@ def data(pr):
     return json.JSONDecoder().raw_decode(prompt.split(r.REVIEW_INPUT_MARKER, 1)[1])[0]
 
 
+def pipeline_data(pr):
+    captured = []
+    def observe(part, *args, **kwargs):
+        captured.append(data(part))
+        return r.ReviewResult('fixture', r.ReviewVerdict.ERROR, 'Observe coverage only'), []
+    with patch.object(r, '_run_review_chain_single', side_effect=observe):
+        r.run_review_chain(pr, KarenConfig())
+    assert len(captured) == 1
+    return captured[0]
+
+
 def test_small_whole_prompt_has_exact_coverage_without_mutating_the_input():
     pr = whole()
-    value = data(pr)
+    value = pipeline_data(pr)
     scope = value['review_scope']
     assert scope is not None
     assert scope['head_sha'] == pr.head_sha
@@ -61,28 +72,33 @@ def test_both_public_review_paths_receive_scope_without_overriding_a_refusal():
     assert all(value['review_scope'] is not None for value in captured)
     assert captured[0]['review_scope'] == captured[1]['review_scope']
     assert outcome.verdict == r.ReviewVerdict.BORDERLINE and not outcome.passed
-    assert primary.review.call_args.args[0] is pr and pr.review_scope is None
+    assert primary.review.call_args.args[0] is not pr and pr.review_scope is None
+    assert primary.review.call_args.args[0].diff == pr.diff
 
 
 def test_existing_chunk_scope_is_preserved_without_reclassifying_the_fragment():
     pr = whole()
     scope = c.build_review_scope(pr, [section('first.py'), section('last.py')], 1)
     part = replace(pr, diff=section('first.py'), review_scope=scope)
-    assert data(part)['review_scope'] == scope.data
+    assert pipeline_data(part)['review_scope'] == scope.data
     assert part.review_scope is scope and scope.data['other_chunks']
 
 
 @pytest.mark.parametrize('head', ['', None, 'short', 'g' * 40])
 def test_incomplete_identity_is_not_attested(head):
-    assert data(replace(whole(), head_sha=head))['review_scope'] is None
+    assert pipeline_data(replace(whole(), head_sha=head))['review_scope'] is None
 
 
 @pytest.mark.parametrize('diff', [section('first.py'), section('first.py')[-20:]])
 def test_missing_file_or_mid_hunk_fragment_stays_unknown(diff):
-    assert data(replace(whole(), diff=diff))['review_scope'] is None
+    assert pipeline_data(replace(whole(), diff=diff))['review_scope'] is None
 
 
 def test_large_direct_input_is_not_reclassified_as_a_small_whole_review():
     pr = replace(whole(), diff=section('first.py') + '+' * r.REVIEW_DIFF_LIMIT,
                  changed_files=['first.py'])
     assert data(pr)['review_scope'] is None
+
+
+def test_serializer_alone_never_invents_whole_pr_coverage():
+    assert data(whole())['review_scope'] is None
