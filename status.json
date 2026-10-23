@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-10-23T14:01:52.793025-05:00",
-  "generated_at_display": "Fri Oct 23, 2026 \u00b7 2:01 PM CDT",
+  "generated_at": "2026-10-23T14:16:54.653520-05:00",
+  "generated_at_display": "Fri Oct 23, 2026 \u00b7 2:16 PM CDT",
   "timezone": "America/Chicago",
   "owner": "rupret007",
   "dashboard": "bob-ops-dashboard",
@@ -51,9 +51,9 @@
           "default_branch": "master",
           "tip_sha": "5606106",
           "tip_date": "2026-10-19T19:49:03Z",
-          "open_prs": 8,
-          "open_pr_url": "https://github.com/rupret007/webjam/pull/398",
-          "open_pr_number": 398,
+          "open_prs": 7,
+          "open_pr_url": "https://github.com/rupret007/webjam/pull/399",
+          "open_pr_number": 399,
           "open_pr_draft": false,
           "open_pr_stack": [],
           "pr_listing_complete": true,
@@ -495,11 +495,11 @@
           "status": "yellow",
           "chip": "Yellow",
           "default_branch": "main",
-          "tip_sha": "f0325d7",
-          "tip_date": "2026-10-23T18:47:03Z",
-          "open_prs": 19,
-          "open_pr_url": "https://github.com/rupret007/bob-ops-dashboard/pull/110",
-          "open_pr_number": 110,
+          "tip_sha": "c2a97d3",
+          "tip_date": "2026-10-23T19:02:05Z",
+          "open_prs": 20,
+          "open_pr_url": "https://github.com/rupret007/bob-ops-dashboard/pull/156",
+          "open_pr_number": 156,
           "open_pr_draft": false,
           "open_pr_stack": [],
           "pr_listing_complete": true,
@@ -900,7 +900,7 @@
     "barker"
   ],
   "publish_notes": "Public board -- no secrets or customer paths. Private repositories stay high-level; AI Music Vault stays private-content-boundary only.",
-  "refresh_started_ms": 1792782077376,
+  "refresh_started_ms": 1792782979471,
   "agents_source": "file:stale->unknown",
   "agents": [
     {
@@ -1099,7 +1099,7 @@
     }
   ],
   "llm_work_now_freshness": {
-    "generated_at": "2026-10-23 14:01 CT",
+    "generated_at": "2026-10-23 14:16 CT",
     "warn_ttl_sec": 1200,
     "warnings": [],
     "ok": true
@@ -1130,7 +1130,7 @@
     ],
     "scorecards": {
       "v": "scorecards/v1",
-      "generated_at": "2026-10-23T19:01:54.451814+00:00",
+      "generated_at": "2026-10-23T19:16:56.054142+00:00",
       "windows": {
         "24h": {
           "providers": {
