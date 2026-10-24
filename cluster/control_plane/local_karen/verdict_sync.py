@@ -124,7 +124,7 @@ def start_share_thread(verdict_dir=None, bind=None, port=None):
 
 def pull(source=None, verdict_dir=None, timeout=10):
     # type: (Optional[str], Optional[Path], int) -> int
-    """Fetch the Mini's verdicts and store valid ones locally. Returns files written."""
+    """Fetch valid verdicts without replacing conflicting local evidence."""
     source = source or os.environ.get("STORYPOOL_VERDICT_SOURCE")
     if not source:
         from ..peer_endpoints import peer_node
@@ -159,12 +159,22 @@ def pull(source=None, verdict_dir=None, timeout=10):
                 if dest.read_text() == text:
                     continue
             except OSError:
-                pass
+                logger.warning("Existing shared verdict unreadable; preserving %r", name)
+                continue
+            logger.warning("Shared verdict conflicts with local evidence; preserving %r", name)
+            continue
         fd, tmp = tempfile.mkstemp(dir=str(verdict_dir), prefix=".sync-")
-        with os.fdopen(fd, "w") as fh:
-            fh.write(text)
-        os.replace(tmp, str(dest))
-        written += 1
+        try:
+            with os.fdopen(fd, "w") as fh:
+                fh.write(text)
+            try:
+                os.link(tmp, str(dest))
+            except FileExistsError:
+                logger.warning("Verdict published during sync; preserving %r", name)
+                continue
+            written += 1
+        finally:
+            os.unlink(tmp)
     return written
 
 
