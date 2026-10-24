@@ -21,11 +21,25 @@ def environment():
     return {key: value for key, value in os.environ.items() if key in ENVIRONMENT}
 
 
-def available():
+def _executable():
     executable = shutil.which('cursor-agent')
     if not executable:
-        return False
+        raise RuntimeError('Cursor worker unavailable')
+    current = Path(executable).resolve()
+    if (current.name == 'cursor-agent' and current.parent.name != VERSION
+            and current.parent.parent.name == 'versions'):
+        pinned = current.parent.parent / VERSION / 'cursor-agent'
+        if (not pinned.is_symlink() and pinned.is_file()
+                and pinned.resolve() == pinned and os.access(pinned, os.X_OK)):
+            info = pinned.stat()
+            if info.st_uid == os.getuid() and not info.st_mode & 0o022:
+                return str(pinned)
+    return executable
+
+
+def available():
     try:
+        executable = _executable()
         result = subprocess.run([executable, '--version'], env=environment(),
                                 capture_output=True, text=True, timeout=20)
         if result.returncode or result.stdout.strip() != VERSION:
@@ -34,15 +48,12 @@ def available():
                                 env=environment(), capture_output=True, text=True, timeout=20)
         value = json.loads(result.stdout)
         return result.returncode == 0 and isinstance(value, dict) and value.get('isAuthenticated') is True
-    except (OSError, subprocess.SubprocessError, ValueError):
+    except (OSError, subprocess.SubprocessError, ValueError, RuntimeError):
         return False
 
 
 def command():
-    executable = shutil.which('cursor-agent')
-    if not executable:
-        raise RuntimeError('Cursor worker unavailable')
-    executable = Path(executable).resolve()
+    executable = Path(_executable()).resolve()
     if executable.parent.name != VERSION: raise RuntimeError('Cursor runtime requires qualification')
     return [str(executable), '--print', '--trust', '--sandbox', 'enabled', '--output-format', 'json']
 
