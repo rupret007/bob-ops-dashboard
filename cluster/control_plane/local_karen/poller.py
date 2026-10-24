@@ -20,6 +20,7 @@ from .runtime_status import record_runtime
 import json
 import logging
 import os
+import re
 import sys
 import time
 from dataclasses import dataclass
@@ -81,6 +82,11 @@ logging.basicConfig(
     datefmt="%Y-%m-%d %H:%M:%S",
 )
 logger = logging.getLogger("karen-poller")
+
+def _full_head(value):
+    """Operational pins contain only a complete GitHub commit identity."""
+    return value if isinstance(value, str) and re.fullmatch(r'[0-9a-f]{40}', value) else None
+
 
 # Cache of repos where we've ensured result labels exist
 _result_labels_ensured = set()  # type: set
@@ -296,6 +302,8 @@ def poll_and_run(
         attempted += 1
         logger.info(f"Running gate on {owner}/{repo}#{pr_number}")
 
+        attempted_sha = pr_data.get("headRefOid", "")
+        error_stage = 'gate'
         diagnostics = []
         try:
             result = run_gate(
@@ -304,9 +312,10 @@ def poll_and_run(
                 pr_number=pr_number,
                 config=config,
                 post_comment=post_comment,
-                expected_sha=pr_data.get("headRefOid", ""),
+                expected_sha=attempted_sha,
             )
 
+            error_stage = 'artifact_verification'
             if result.error or not result.sha_verified or not result.verdict_path:
                 diagnostics = sanitize_context_diagnostics(getattr(result, 'context_diagnostics', None))
                 raise RuntimeError("Review did not produce a verified artifact")
@@ -318,6 +327,7 @@ def poll_and_run(
                 "passed": result.verdict.passed,
                 "reason": result.verdict.reason,
             })
+            error_stage = 'post_review'
 
             logger.info(
                 f"{'PASS' if result.verdict.passed else 'FAIL'}: "
@@ -357,6 +367,9 @@ def poll_and_run(
             error_record = {
                 "repo": f"{owner}/{repo}",
                 "pr": pr_number,
+                "sha": _full_head(attempted_sha),
+                "status": "ERROR",
+                "stage": error_stage,
                 "error": str(e),
             }
             if diagnostics:
@@ -660,7 +673,9 @@ def main() -> int:
         )
         for r in results:
             if "error" in r:
-                print("ERROR {repo}#{pr}: {error}".format(**r))
+                head = _full_head(r.get("sha"))
+                print("ERROR {repo}#{pr}{sha}: {error}".format(
+                    **{**r, "sha": "@" + head if head else ""}))
             elif r.get("skipped"):
                 print("SKIP {repo}#{pr}: {reason}".format(**r))
             elif r.get("passed"):
