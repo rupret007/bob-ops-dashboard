@@ -25,6 +25,7 @@ from pathlib import Path
 from typing import Dict, Optional
 
 from .verdict import Verdict, _verdict_filename
+from .verdict_history import store_lock
 
 logger = logging.getLogger(__name__)
 
@@ -146,6 +147,11 @@ def pull(source=None, verdict_dir=None, timeout=10):
     if not isinstance(entries, dict):
         raise ValueError("verdict share response malformed")
     verdict_dir.mkdir(parents=True, exist_ok=True)
+    with store_lock(verdict_dir):
+        return _pull_locked(entries, verdict_dir)
+
+
+def _pull_locked(entries, verdict_dir):
     written = 0
     for name, text in entries.items():
         if validate_entry(name, text) is None:
