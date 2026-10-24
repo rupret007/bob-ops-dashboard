@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-10-24T03:48:43.045412-05:00",
-  "generated_at_display": "Sat Oct 24, 2026 \u00b7 3:48 AM CDT",
+  "generated_at": "2026-10-24T04:03:40.562841-05:00",
+  "generated_at_display": "Sat Oct 24, 2026 \u00b7 4:03 AM CDT",
   "timezone": "America/Chicago",
   "owner": "rupret007",
   "dashboard": "bob-ops-dashboard",
@@ -199,14 +199,14 @@
           "url": "https://github.com/rupret007/RadDadSite",
           "repo_url": "https://github.com/rupret007/RadDadSite",
           "private": false,
-          "status": "green",
-          "chip": "Green",
+          "status": "yellow",
+          "chip": "Yellow",
           "default_branch": "main",
           "tip_sha": "704ec6b",
           "tip_date": "2026-10-14T12:41:58Z",
-          "open_prs": 0,
-          "open_pr_url": null,
-          "open_pr_number": null,
+          "open_prs": 1,
+          "open_pr_url": "https://github.com/rupret007/RadDadSite/pull/65",
+          "open_pr_number": 65,
           "open_pr_draft": false,
           "open_pr_stack": [],
           "pr_listing_complete": true,
@@ -495,8 +495,8 @@
           "status": "yellow",
           "chip": "Yellow",
           "default_branch": "main",
-          "tip_sha": "c3c7457",
-          "tip_date": "2026-10-24T08:33:45Z",
+          "tip_sha": "9c56f2e",
+          "tip_date": "2026-10-24T08:48:57Z",
           "open_prs": 17,
           "open_pr_url": "https://github.com/rupret007/bob-ops-dashboard/pull/88",
           "open_pr_number": 88,
@@ -900,7 +900,7 @@
     "barker"
   ],
   "publish_notes": "Public board -- no secrets or customer paths. Private repositories stay high-level; AI Music Vault stays private-content-boundary only.",
-  "refresh_started_ms": 1792831685266,
+  "refresh_started_ms": 1792832586358,
   "agents_source": "file:stale->unknown",
   "agents": [
     {
@@ -1099,7 +1099,7 @@
     }
   ],
   "llm_work_now_freshness": {
-    "generated_at": "2026-10-24 03:48 CT",
+    "generated_at": "2026-10-24 04:03 CT",
     "warn_ttl_sec": 1200,
     "warnings": [],
     "ok": true
@@ -1130,7 +1130,7 @@
     ],
     "scorecards": {
       "v": "scorecards/v1",
-      "generated_at": "2026-10-24T08:48:44.442127+00:00",
+      "generated_at": "2026-10-24T09:03:41.936844+00:00",
       "windows": {
         "24h": {
           "providers": {
