@@ -21,6 +21,19 @@ def environment():
     return {key: value for key, value in os.environ.items() if key in ENVIRONMENT}
 
 
+def _trusted_parents(path):
+    for directory in path.parents:
+        try:
+            info = directory.stat()
+        except OSError:
+            return False
+        if not stat.S_ISDIR(info.st_mode) or info.st_uid not in (0, os.getuid()):
+            return False
+        if info.st_mode & 0o022 and not (info.st_uid == 0 and info.st_mode & stat.S_ISVTX):
+            return False
+    return True
+
+
 def _executable():
     executable = shutil.which('cursor-agent')
     if not executable:
@@ -30,7 +43,8 @@ def _executable():
             and current.parent.parent.name == 'versions'):
         pinned = current.parent.parent / VERSION / 'cursor-agent'
         if (not pinned.is_symlink() and pinned.is_file()
-                and pinned.resolve() == pinned and os.access(pinned, os.X_OK)):
+                and pinned.resolve() == pinned and os.access(pinned, os.X_OK)
+                and _trusted_parents(pinned)):
             info = pinned.stat()
             if info.st_uid == os.getuid() and not info.st_mode & 0o022:
                 return str(pinned)

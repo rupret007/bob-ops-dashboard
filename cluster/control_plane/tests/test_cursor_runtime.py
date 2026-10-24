@@ -102,3 +102,28 @@ def test_unrelated_layout_is_not_searched_for_siblings(tmp_path, monkeypatch):
     with pytest.raises(RuntimeError):
         cursor.command()
     assert pinned.is_file()
+
+
+@pytest.mark.parametrize('level', [0, 1, 2])
+@pytest.mark.parametrize('unsafe', ['group-write', 'world-write', 'other-owner'])
+def test_unsafe_containing_directories_cannot_select_pinned_binary(tmp_path, monkeypatch, level, unsafe):
+    _, _, pinned = installation(tmp_path, monkeypatch)
+    directory = pinned.parents[level]
+    if unsafe != 'other-owner':
+        directory.chmod(0o775 if unsafe == 'group-write' else 0o777)
+    original = Path.stat
+    def changed_owner(path, *args, **kwargs):
+        info = original(path, *args, **kwargs)
+        if unsafe == 'other-owner' and path == directory:
+            fields = list(info)
+            fields[4] = os.getuid() + 1
+            return os.stat_result(fields)
+        return info
+    with patch.object(Path, 'stat', changed_owner), patch.object(
+            cursor.subprocess, 'run', return_value=
+            subprocess.CompletedProcess([], 0, 'unqualified')) as run:
+        assert not cursor.available()
+        assert Path(run.call_args.args[0][0]).resolve() != pinned
+        assert run.call_count == 1
+        with pytest.raises(RuntimeError):
+            cursor.command()
