@@ -214,7 +214,12 @@ def findings_for_pr(repo, pr_number, head_sha):
     from .local_karen.verdict_push import reviewed
     if not reviewed(verdict):
         return []
-    return extract_findings_from_verdict(verdict.to_dict())
+    from .fix_dispatcher import classify_fix_difficulty, HIGH_EFFORT_TIERS
+    payload = verdict.to_dict()
+    # Lane workers must retain the legacy fix loop's human-review boundary.
+    if classify_fix_difficulty(payload) in HIGH_EFFORT_TIERS:
+        return []
+    return extract_findings_from_verdict(payload)
 
 
 def execute(job_id):
