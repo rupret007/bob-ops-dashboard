@@ -79,3 +79,45 @@ def test_nonmodule_is_not_complete_source():
 
 def test_namespace_must_be_imported_not_assumed_from_ambient_globals():
     assert not readonly_oracle_bindings(ast.parse(SOURCE.replace('import re\n', '')))
+
+
+@pytest.mark.parametrize('addition', [
+    pytest.param("def unused():\n    exec = None\ndef test_capture():\n    match exec:\n        case len:\n            return len('source')",
+                 marks=pytest.mark.skipif(not hasattr(ast, 'Match'), reason='Python 3.10 pattern syntax')),
+    pytest.param("def unused():\n    object = None\n    namespace = None\ndef test_inspection():\n    match re.search:\n        case object(__globals__=namespace):\n            namespace['search'] = None",
+                 marks=pytest.mark.skipif(not hasattr(ast, 'Match'), reason='Python 3.10 pattern syntax')),
+    "def unused():\n    hidden = None\ndef test_cross_scope():\n    return hidden",
+    "def unused(hidden):\n    return hidden\ndef test_cross_argument_scope():\n    return hidden",
+    "def unused():\n    eval = None\ndef test_builtin_fallback():\n    return eval",
+    "eval = eval",
+    "def helper(eval):\n    return eval",
+    "def test_local_builtin():\n    eval = None",
+    "def test_comprehension():\n    return [part for part in WORKFLOW]",
+    "def test_assignment_expression():\n    return (match := WORKFLOW)",
+    "def test_injected_keywords():\n    return re.search(**dict())",
+])
+def test_unproven_grammar_and_scope_bindings_are_refused(addition):
+    # Parse only: no submitted attack, builtin or test body is executed.
+    assert not readonly_oracle_bindings(ast.parse(SOURCE + addition + '\n'))
+
+
+def test_independent_helper_scopes_and_local_dictionary_updates_remain_supported():
+    source = SOURCE + '''
+def first(value):
+    result = value.split()
+    return result
+def second(value):
+    result = dict()
+    result['value'] = value
+    return result
+'''
+    assert readonly_oracle_bindings(ast.parse(source))
+
+
+def test_unknown_ast_statement_cannot_silently_grant_a_binding_premise():
+    class FutureStatement(ast.stmt):
+        _fields = ()
+
+    tree = ast.parse(SOURCE)
+    tree.body.append(FutureStatement())
+    assert not readonly_oracle_bindings(tree)
