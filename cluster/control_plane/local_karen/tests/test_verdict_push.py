@@ -109,7 +109,7 @@ def security_verdict():
     from cluster.control_plane.local_karen.checks import PRInfo, check_no_secrets_in_diff
     from cluster.control_plane.local_karen.verdict import create_verdict
     diff = ('diff --git a/config.py b/config.py\n@@ -0,0 +1 @@\n+'
-            + 'TOKEN=' + 'ghp_' + 'B7c9' * 9 + '\n')
+            + 'TOKEN' + '=' + 'ghp_' + 'B7c9' * 9 + '\n')
     pr = PRInfo('owner', 'repo', 1, 'a' * 40, '', '', False, diff, {}, ['config.py'], [])
     check = check_no_secrets_in_diff(pr, KarenConfig())
     value = create_verdict(pr, [check], [], False,
