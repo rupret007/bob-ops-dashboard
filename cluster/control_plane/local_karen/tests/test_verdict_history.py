@@ -169,3 +169,24 @@ def test_all_writers_serialize_through_existing_store_lock(stored, monkeypatch, 
                             lambda *args, **kwargs: io.BytesIO(json.dumps({'verdicts': {name: value.to_json()}}).encode()))
         assert sync.pull('http://localhost/fixture', directory) == 1
     assert locked
+
+
+@pytest.mark.parametrize('writer', ['save', 'pull'])
+@pytest.mark.parametrize('mask', [0o000, 0o002, 0o077])
+def test_first_write_creates_private_store_with_permissive_umask(tmp_path, monkeypatch, writer, mask):
+    directory = tmp_path / 'new-store'
+    value = observation(False, 1000)
+    name = storage._verdict_filename('owner', 'repo', 1, value.head_sha) + '_KARENFAIL.json'
+    monkeypatch.setattr(sync.urllib.request, 'urlopen',
+                        lambda *args, **kwargs: io.BytesIO(json.dumps({'verdicts': {name: value.to_json()}}).encode()))
+    previous = os.umask(mask)
+    try:
+        if writer == 'save':
+            storage.save_verdict(value, KarenConfig(verdict_dir=str(directory)))
+        else:
+            assert sync.pull('http://localhost/fixture', directory) == 1
+    finally:
+        os.umask(previous)
+    assert directory.stat().st_mode & 0o777 == 0o700
+    assert storage.load_verdict('owner', 'repo', 1, value.head_sha,
+                               KarenConfig(verdict_dir=str(directory))).to_dict() == value.to_dict()

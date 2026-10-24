@@ -146,7 +146,6 @@ def pull(source=None, verdict_dir=None, timeout=10):
     entries = json.loads(raw.decode()).get("verdicts", {})
     if not isinstance(entries, dict):
         raise ValueError("verdict share response malformed")
-    verdict_dir.mkdir(parents=True, exist_ok=True)
     with store_lock(verdict_dir):
         return _pull_locked(entries, verdict_dir)
 

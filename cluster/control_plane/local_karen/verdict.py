@@ -88,7 +88,6 @@ def save_verdict(verdict: Verdict, config: KarenConfig) -> Path:
     if verdict.status != "COMPLETE" or verdict.reason.strip().lower() in ("", "unknown"):
         raise ValueError("An error or unknown reason is not a verdict")
     verdict_dir = config.get_verdict_dir()
-    verdict_dir.mkdir(parents=True, exist_ok=True)
     with store_lock(verdict_dir) as root:
         return _save_locked(verdict, verdict_dir, root)
 
