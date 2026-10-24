@@ -8,7 +8,6 @@ older decision. No endpoint can execute a command or trigger a dispatch.
 from __future__ import annotations
 
 import base64
-import fcntl
 import hashlib
 import json
 import os
@@ -21,6 +20,7 @@ from pathlib import Path
 
 from .config import KarenConfig
 from .verdict_sync import MAX_BYTES, collect_verdicts, validate_entry
+from .verdict_history import archive_observation, delivery_lock, store_lock
 
 PUSH_PATH = '/api/karen/verdicts'
 PUBLIC_KEY = Path(__file__).with_name('mini-verdict-public.pem')
@@ -122,8 +122,7 @@ def receive(body, signature, verdict_dir=None, public_key=PUBLIC_KEY, now=None):
     directory = Path(verdict_dir or KarenConfig.load().get_verdict_dir())
     directory.mkdir(parents=True, exist_ok=True, mode=0o700)
     accepted = []
-    with (directory / '.push.lock').open('a') as lock:
-        fcntl.flock(lock, fcntl.LOCK_EX)
+    with store_lock(directory) as root, delivery_lock(root):
         for name, content, verdict in validated:
             # Compare both outcomes; a newer FAIL must supersede an older PASS.
             prefix = name.rsplit('_', 1)[0]
@@ -137,6 +136,9 @@ def receive(body, signature, verdict_dir=None, public_key=PUBLIC_KEY, now=None):
                     if existing and existing.timestamp > verdict.timestamp:
                         raise ValueError('older verdict cannot replace current decision')
             dest = directory / name
+            for path in siblings:
+                archive_observation(root, path.name,
+                                    content.encode() if path == dest else None)
             fd, temp = tempfile.mkstemp(dir=str(directory), prefix='.push-')
             with os.fdopen(fd, 'w') as stream:
                 stream.write(content)

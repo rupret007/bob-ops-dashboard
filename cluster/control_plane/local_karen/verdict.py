@@ -18,6 +18,7 @@ from typing import Optional
 from .config import KarenConfig
 from .checks import CheckResult, PRInfo
 from .reviewers import ReviewResult, ReviewVerdict
+from .verdict_history import archive_observation, store_lock
 
 
 @dataclass
@@ -87,13 +88,18 @@ def save_verdict(verdict: Verdict, config: KarenConfig) -> Path:
     if verdict.status != "COMPLETE" or verdict.reason.strip().lower() in ("", "unknown"):
         raise ValueError("An error or unknown reason is not a verdict")
     verdict_dir = config.get_verdict_dir()
-    verdict_dir.mkdir(parents=True, exist_ok=True)
+    with store_lock(verdict_dir) as root:
+        return _save_locked(verdict, verdict_dir, root)
+
+
+def _save_locked(verdict, verdict_dir, root):
 
     base_name = _verdict_filename(
         verdict.owner, verdict.repo, verdict.pr_number, verdict.head_sha
     )
     filename = f"{base_name}_{verdict.verdict_type}.json"
     path = verdict_dir / filename
+    archive_observation(root, filename, verdict.to_json().encode())
 
     import tempfile
     fd, temp = tempfile.mkstemp(dir=str(verdict_dir), prefix=".verdict-")
