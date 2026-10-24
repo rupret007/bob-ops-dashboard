@@ -5,12 +5,26 @@ standard library. It does not prove external import provenance or grant review
 authority. Unknown imports, calls and mutations are refused in complete source.
 """
 import ast
+import builtins as _builtins
 
 
 def readonly_oracle_bindings(tree):
     """Refuse module code that can replace or introspect its oracle bindings."""
     if not isinstance(tree, ast.Module):
         return False
+    # Unknown syntax is not evidence of a fixed binding. In particular, pattern
+    # captures are strings, not Name(Store), and class patterns inspect objects.
+    grammar = {'Module', 'Expr', 'Constant', 'Import', 'ImportFrom', 'alias',
+               'Assign', 'FunctionDef', 'arguments', 'arg', 'Assert', 'Return',
+               'For', 'If', 'Name', 'Attribute', 'Subscript', 'Call', 'BinOp',
+               'Compare', 'JoinedStr', 'FormattedValue', 'Tuple', 'Dict', 'Set',
+               'List', 'Slice', 'keyword', 'Load', 'Store', 'Div', 'Add', 'Eq',
+               'NotEq', 'In', 'NotIn', 'Is', 'IsNot', 'Lt', 'LtE', 'Gt', 'GtE',
+               'UnaryOp', 'Not', 'USub', 'UAdd', 'BoolOp', 'And', 'Or', 'IfExp'}
+    grammar = {getattr(ast, name) for name in grammar}
+    if any(type(n) not in grammar for n in ast.walk(tree)):
+        return False
+    builtin_names = set(vars(_builtins))
     methods = {'read_text', 'resolve', 'is_file', 'count', 'index', 'find',
                'startswith', 'partition', 'casefold', 'split', 'splitlines',
                'items', 'group', 'join', 'lower'}
@@ -56,12 +70,17 @@ def readonly_oracle_bindings(tree):
                 return False
         else:
             return False
-        if name in bindings or name in builtins or name.startswith('__'):
+        if name in bindings or name in builtin_names or name.startswith('__'):
             return False
         bindings.add(name)
     protected = bindings | builtins | {'Path', 'os', 're', '__file__'}
-    known = protected | {n.id for n in ast.walk(tree) if isinstance(n, ast.Name) and isinstance(n.ctx, ast.Store)}
-    known |= {n.arg for n in ast.walk(tree) if isinstance(n, ast.arg)}
+    known_by_node = {id(n): protected for n in ast.walk(tree)}
+    for function in (n for n in tree.body if isinstance(n, ast.FunctionDef)):
+        nodes = list(ast.walk(function))
+        local = {n.id for n in nodes if isinstance(n, ast.Name) and isinstance(n.ctx, ast.Store)}
+        local |= {n.arg for n in nodes if isinstance(n, ast.arg)}
+        for node in nodes:
+            known_by_node[id(node)] = protected | local
     parents = {id(child): parent for parent in ast.walk(tree) for child in ast.iter_child_nodes(parent)}
     for node in ast.walk(tree):
         if isinstance(node, (ast.ClassDef, ast.AsyncFunctionDef, ast.Lambda, ast.Global,
@@ -72,10 +91,12 @@ def readonly_oracle_bindings(tree):
             return False
         if isinstance(node, (ast.Import, ast.ImportFrom)) and id(node) not in imports:
             return False
-        if isinstance(node, ast.arg) and node.arg in protected:
+        if isinstance(node, ast.arg) and node.arg in protected | builtin_names:
             return False
         if isinstance(node, ast.Name):
-            if node.id not in known or node.id.startswith('__') and node.id != '__file__':
+            if node.id not in known_by_node[id(node)] or node.id.startswith('__') and node.id != '__file__':
+                return False
+            if isinstance(node.ctx, ast.Store) and node.id in builtin_names:
                 return False
             if not isinstance(node.ctx, ast.Load) and node.id in protected and id(node) not in stores:
                 return False
@@ -97,6 +118,8 @@ def readonly_oracle_bindings(tree):
                 if node.value.id == 'os' and node.attr not in {'access', 'X_OK'}:
                     return False
         if isinstance(node, ast.Call):
+            if any(keyword.arg is None for keyword in node.keywords):
+                return False
             if isinstance(node.func, ast.Name):
                 if node.func.id not in functions | {'Path', 'set', 'len', 'dict'}:
                     return False
