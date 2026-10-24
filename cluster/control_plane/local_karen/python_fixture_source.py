@@ -61,7 +61,7 @@ def _python_test_fixture_source(diff):
                       'checks.check_security_patterns', 'checks.run_static_security_scan',
                       'source.splitlines', 'pr.diff.replace'}
         protected = {'candidate', 'scanner', 'len', 'KarenConfig',
-                     'classify_fix_difficulty', 'pytest', 'checks'}
+                     'classify_fix_difficulty', 'pytest', 'pytestmark', 'checks'}
 
         def inline_data(node):
             return (isinstance(node, ast.Constant)
@@ -70,19 +70,21 @@ def _python_test_fixture_source(diff):
                     or isinstance(node, ast.BinOp) and isinstance(node.op, ast.Add)
                     and inline_data(node.left) and inline_data(node.right))
 
+        def pure_parameterization(node):
+            return (isinstance(node, ast.Call)
+                    and ast.unparse(node.func) == 'pytest.mark.parametrize'
+                    and len(node.args) == 2 and not node.keywords
+                    and isinstance(node.args[0], ast.Constant)
+                    and isinstance(node.args[0].value, str)
+                    and inline_data(node.args[1]))
+
         parents = {child: node for node in ast.walk(tree) for child in ast.iter_child_nodes(node)}
         invalid = False
         for node in ast.walk(tree):
             if isinstance(node, ast.FunctionDef):
                 parameters = set()
                 for decorator in node.decorator_list:
-                    pure = (isinstance(decorator, ast.Call)
-                            and ast.unparse(decorator.func) == 'pytest.mark.parametrize'
-                            and len(decorator.args) == 2 and not decorator.keywords
-                            and isinstance(decorator.args[0], ast.Constant)
-                            and isinstance(decorator.args[0].value, str)
-                            and inline_data(decorator.args[1]))
-                    if not pure:
+                    if not pure_parameterization(decorator):
                         invalid = True
                     else:
                         parameters.update(name.strip() for name in decorator.args[0].value.split(','))
@@ -136,6 +138,9 @@ def _python_test_fixture_source(diff):
                 if not fixture_diff:
                     invalid = True
             elif isinstance(node, ast.Call):
+                if (ast.unparse(node.func) == 'pytest.mark.parametrize'
+                        and not pure_parameterization(node)):
+                    invalid = True
                 literal_format = (isinstance(node.func, ast.Attribute)
                                   and node.func.attr in ('format', 'join')
                                   and isinstance(node.func.value, ast.Constant)

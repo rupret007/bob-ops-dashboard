@@ -85,6 +85,17 @@ def pytest_generate_tests(source):
     '''VALUE = "synthetic fixture"
 test_executor = exec
 ''',
+    '''import pytest
+VALUE = "synthetic fixture"
+pytestmark = pytest.mark.parametrize('source', [VALUE], ids=exec)
+@pytest.mark.parametrize('source', ['safe'])
+def test_fixture(source):
+    return None
+''',
+    '''import pytest
+VALUE = "synthetic fixture"
+marker = pytest.mark.parametrize('source', ['synthetic fixture'], ids=exec)
+''',
 ])
 def test_unknown_fixture_grammar_proves_no_masking_for_any_literal(source):
     # This is independent of scanner patterns: no literal may be masked when
