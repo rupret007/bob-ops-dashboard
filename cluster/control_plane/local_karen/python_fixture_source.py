@@ -62,9 +62,36 @@ def _python_test_fixture_source(diff):
                       'source.splitlines', 'pr.diff.replace'}
         protected = {'candidate', 'scanner', 'len', 'KarenConfig',
                      'classify_fix_difficulty', 'pytest', 'checks'}
+
+        def inline_data(node):
+            return (isinstance(node, ast.Constant)
+                    or isinstance(node, (ast.List, ast.Tuple, ast.Set))
+                    and all(inline_data(item) for item in node.elts)
+                    or isinstance(node, ast.BinOp) and isinstance(node.op, ast.Add)
+                    and inline_data(node.left) and inline_data(node.right))
+
         parents = {child: node for node in ast.walk(tree) for child in ast.iter_child_nodes(node)}
         invalid = False
         for node in ast.walk(tree):
+            if isinstance(node, ast.FunctionDef):
+                parameters = set()
+                for decorator in node.decorator_list:
+                    pure = (isinstance(decorator, ast.Call)
+                            and ast.unparse(decorator.func) == 'pytest.mark.parametrize'
+                            and len(decorator.args) == 2 and not decorator.keywords
+                            and isinstance(decorator.args[0], ast.Constant)
+                            and isinstance(decorator.args[0].value, str)
+                            and inline_data(decorator.args[1]))
+                    if not pure:
+                        invalid = True
+                    else:
+                        parameters.update(name.strip() for name in decorator.args[0].value.split(','))
+                args = node.args
+                if args.posonlyargs or args.kwonlyargs or args.vararg or args.kwarg:
+                    invalid = True
+                if node.name != 'candidate' and (not node.name.startswith('test_')
+                        or args.defaults or {arg.arg for arg in args.args} != parameters):
+                    invalid = True
             if isinstance(node, (ast.Import, ast.ImportFrom)):
                 module = getattr(node, 'module', '') or ''
                 if (getattr(node, 'level', 0)
@@ -74,6 +101,7 @@ def _python_test_fixture_source(diff):
                 invalid = True
             elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)) and node.name in protected:
                 canonical = (isinstance(node, ast.FunctionDef) and node.name == 'candidate'
+                             and not node.decorator_list and all(inline_data(item) for item in node.args.defaults)
                              and len(node.args.args) == 2
                              and node.args.args[0].arg in ('line', 'source')
                              and node.args.args[1].arg == 'path'
@@ -97,6 +125,9 @@ def _python_test_fixture_source(diff):
                                         for item in parent.iter.elts))
                 if not scanner_loop:
                     invalid = True
+            elif (isinstance(node, ast.Name) and isinstance(node.ctx, (ast.Store, ast.Del))
+                  and node.id.startswith(('__', 'test_', 'pytest_'))):
+                invalid = True
             elif isinstance(node, (ast.Attribute, ast.Subscript)) and isinstance(node.ctx, (ast.Store, ast.Del)):
                 parent = parents.get(node)
                 fixture_diff = (ast.unparse(node) == 'pr.diff' and isinstance(parent, ast.Assign)

@@ -43,6 +43,48 @@ try:
 except Exception as scanner:
     scanner(VALUE)
 ''',
+    '''VALUE = "synthetic fixture"
+def redirect(fn):
+    return exec
+@redirect
+def candidate(source, path):
+    return checks.PRInfo()
+candidate(VALUE)
+''',
+    '''VALUE = "synthetic fixture"
+@exec
+@VALUE.format
+def test_fixture():
+    return None
+''',
+    '''import pytest
+VALUE = "synthetic fixture"
+@pytest.mark.parametrize('source', ['synthetic fixture'], ids=exec)
+def test_fixture(source):
+    return None
+''',
+    '''import pytest
+VALUE = "synthetic fixture"
+@pytest.mark.parametrize('source', ['synthetic fixture'], indirect=True)
+def test_fixture(source):
+    return None
+''',
+    '''VALUE = "synthetic fixture"
+def test_fixture(source):
+    source.splitlines(VALUE)
+''',
+    '''VALUE = "synthetic fixture"
+__builtins__ = {'len': exec}
+def test_fixture():
+    len(VALUE)
+''',
+    '''VALUE = "synthetic fixture"
+def pytest_generate_tests(source):
+    source.splitlines(VALUE)
+''',
+    '''VALUE = "synthetic fixture"
+test_executor = exec
+''',
 ])
 def test_unknown_fixture_grammar_proves_no_masking_for_any_literal(source):
     # This is independent of scanner patterns: no literal may be masked when
